@@ -171,14 +171,16 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
             .operation_guard_wait()
             .await?;
 
-        let snapshot_spec = snapshot.lock().clone();
-
         // Abort creation if we have reached max transactions limit.
-        if snapshot_spec.metadata().transactions().len() > utils::SNAPSHOT_MAX_TRANSACTION_LIMIT {
+        if snapshot.as_ref().metadata().transactions().len() > utils::SNAPSHOT_MAX_TRANSACTION_LIMIT
+        {
             return Err(SvcError::SnapshotMaxTransactions {
                 snap_id: snapshot.uuid().to_string(),
             });
         }
+
+        // Try to prune 1 stale transaction, if present..
+        snapshot.prune(registry, Some(1)).await.ok();
 
         let prepare_snapshot = snapshot.snapshot_params(&replica)?;
         snapshot
@@ -197,16 +199,10 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
             .await;
         if let Ok(ref result) = result {
             *prepare_snapshot.completer.lock().unwrap() = Some(result.clone());
-        }
-
-        // If we encounter any error cleanup the transaction.
-        if result.is_err() {
-            let current_txn_id = snapshot_spec.metadata().txn_id();
-            let all_transactions = snapshot_spec.metadata().transactions();
-            let updated_transactions =
-                destroy_transaction(all_transactions, registry, current_txn_id).await;
-            snapshot.lock().set_transactions(updated_transactions);
-            snapshot.update();
+        } else {
+            // If we encounter any error cleanup the transaction.
+            let result = snapshot.undo_transaction(registry).await;
+            *prepare_snapshot.completer.lock().unwrap() = Some(result);
         }
 
         snapshot
@@ -226,14 +222,14 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
         let volume_snapshot = request.volume_snapshot.lock().clone();
 
         // Create a map to track the transactions upon deletion.
-        let updated_transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> =
-            destroy_transactions(volume_snapshot.metadata().transactions(), registry, None).await;
+        let transactions = volume_snapshot.metadata().transactions().clone();
+        let updated_transactions = Self::destroy_transactions(transactions, registry, None).await;
 
         if updated_transactions.is_empty() {
             // If there we no errors remove the persisted spec and complete destroy.
             self.lock().set_transactions(updated_transactions);
             self.update();
-            self.complete_destroy(Ok(()), registry).await?;
+            self.complete_destroy(Ok(()), registry).await
         } else {
             // If errors were encountered then update the persisted spec with updated transactions.
             self.lock().set_transactions(updated_transactions);
@@ -244,9 +240,8 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
                 }),
                 registry,
             )
-            .await?;
+            .await
         }
-        Ok(())
     }
 }
 
@@ -257,24 +252,15 @@ impl ResourcePruning for OperationGuardArc<VolumeSnapshot> {
         registry: &Registry,
         max_prune_limit: Option<usize>,
     ) -> Result<(), SvcError> {
-        let spec = self.lock().clone();
-
         // If the transaction is the only transaction or there are no transactions, then no cleanup
         // is needed. Also if no nodes are online don't attempt.
-        if spec.metadata().transactions().len() <= 1
-            || !check_nodes_availability(
-                spec.metadata()
-                    .stale_transactions()
-                    .into_values()
-                    .flatten()
-                    .collect(),
-                registry,
-            )
-            .await
+        if self.as_ref().metadata().transactions().len() <= 1
+            || !self.check_nodes_availability(registry).await
         {
             return Ok(());
         }
 
+        let spec = self.lock().clone();
         let mut spec_clone = self
             .start_update(
                 registry,
@@ -283,22 +269,16 @@ impl ResourcePruning for OperationGuardArc<VolumeSnapshot> {
             )
             .await?;
 
+        let data_set = spec.metadata().stale_transactions();
         // Create a map to track the remaining stale transactions upon cleanup.
-        let remaining_stale_transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> =
-            destroy_transactions(
-                &spec.metadata().stale_transactions(),
-                registry,
-                max_prune_limit,
-            )
-            .await;
+        let remaining_stale_transactions =
+            Self::destroy_transactions(data_set, registry, max_prune_limit).await;
 
         self.lock()
-            .set_transactions_after_stale_cleanup(&remaining_stale_transactions);
-        spec_clone.set_transactions_after_stale_cleanup(&remaining_stale_transactions);
+            .set_stale_transactions(remaining_stale_transactions.clone());
+        spec_clone.set_stale_transactions(remaining_stale_transactions);
 
-        self.complete_update(registry, Ok(()), spec_clone).await?;
-
-        Ok(())
+        self.complete_update(registry, Ok(()), spec_clone).await
     }
 }
 
@@ -407,7 +387,7 @@ impl OperationGuardArc<VolumeSnapshot> {
         }
 
         replica_snap.complete_vol(replica_timestamp);
-        Ok(VolumeSnapshotCreateResult::new(replica_snap, timestamp))
+        Ok(VolumeSnapshotCreateResult::new_ok(replica_snap, timestamp))
     }
     async fn snapshot_replica<N: ReplicaSnapshotApi>(
         &self,
@@ -427,15 +407,15 @@ impl OperationGuardArc<VolumeSnapshot> {
         let timestamp = response.timestamp();
         replica_snap.1.complete_vol(timestamp.into());
 
-        Ok(VolumeSnapshotCreateResult::new(
+        Ok(VolumeSnapshotCreateResult::new_ok(
             replica_snap.1,
             timestamp.into(),
         ))
     }
 
     async fn destroy_replica_snapshot(
-        replica_snapshot: &ReplicaSnapshot,
         registry: &Registry,
+        replica_snapshot: &ReplicaSnapshot,
     ) -> Result<(), SvcError> {
         let specs = registry.specs();
         let source = replica_snapshot.spec().source_id();
@@ -456,100 +436,75 @@ impl OperationGuardArc<VolumeSnapshot> {
 
         Ok(())
     }
-}
 
-async fn destroy_transactions(
-    data_set: &HashMap<SnapshotTxId, Vec<ReplicaSnapshot>>,
-    registry: &Registry,
-    max_prune_limit: Option<usize>,
-) -> HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> {
-    let mut final_transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> = HashMap::new();
+    async fn check_nodes_availability(&self, registry: &Registry) -> bool {
+        let txns = self.as_ref().metadata().stale_transactions_ref();
+        let mut nodes: HashSet<NodeId> = HashSet::new();
 
-    for (txn_id, snap_list) in data_set.iter().take(max_prune_limit.unwrap_or(usize::MAX)) {
-        for snap in snap_list {
-            if let Err(err) =
-                OperationGuardArc::<VolumeSnapshot>::destroy_replica_snapshot(snap, registry).await
-            {
-                if !matches!(err.tonic_code(), tonic::Code::NotFound) {
-                    let mut snap = snap.clone();
-                    snap.set_status_deleting();
-                    final_transactions
-                        .entry(txn_id.clone())
-                        .or_insert_with(Vec::new)
-                        .push(snap);
+        // Get the list of nodes from the list of replica_snaps.
+        for snap in txns.flat_map(|(_, v)| v) {
+            if let Ok(pool_spec) = registry.specs().pool(snap.spec().source_id().pool_id()) {
+                nodes.insert(pool_spec.node);
+            }
+        }
+        // If at least one node is online return true.
+        for node in nodes {
+            if let Ok(node_wrapper) = registry.node_wrapper(&node).await {
+                if node_wrapper.read().await.is_online() {
+                    return true;
                 }
             }
         }
+        false
     }
 
-    // If the limit is exceeded, include the remaining elements in final_transactions
-    if let Some(limit) = max_prune_limit {
-        for (remaining_txn_id, remaining_snap_list) in data_set.iter().skip(limit) {
-            final_transactions
-                .entry(remaining_txn_id.clone())
-                .or_insert_with(Vec::new)
-                .extend_from_slice(remaining_snap_list);
-        }
+    async fn undo_transaction(&self, registry: &Registry) -> VolumeSnapshotCreateResult {
+        let txn_id = self.as_ref().metadata().txn_id();
+        let txns = self.as_ref().metadata().transactions();
+        let failed = Self::destroy_transaction(registry, txns, txn_id).await;
+        VolumeSnapshotCreateResult::new_err(failed)
     }
 
-    final_transactions
-}
-
-async fn destroy_transaction(
-    data_set: &HashMap<SnapshotTxId, Vec<ReplicaSnapshot>>,
-    registry: &Registry,
-    txn_id_to_delete: &SnapshotTxId,
-) -> HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> {
-    let mut final_transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> = HashMap::new();
-
-    // Iterate over the transactions in the data_set, if it doesn't match the txn_id, just add it
-    // back, else delete it.
-    for (txn_id, snap_list) in data_set {
-        if txn_id != txn_id_to_delete {
-            final_transactions
-                .entry(txn_id.clone())
-                .or_insert_with(Vec::new)
-                .extend_from_slice(snap_list);
-            continue;
+    async fn destroy_transactions(
+        mut transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>>,
+        registry: &Registry,
+        max_prune_limit: Option<usize>,
+    ) -> HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> {
+        for snapshots in transactions
+            .values_mut()
+            .take(max_prune_limit.unwrap_or(usize::MAX))
+        {
+            *snapshots = Self::destroy_transaction_snapshots(registry, snapshots).await;
         }
+        transactions.retain(|_, failed_snaps| !failed_snaps.is_empty());
+        transactions
+    }
 
-        for snap in snap_list {
-            if let Err(err) =
-                OperationGuardArc::<VolumeSnapshot>::destroy_replica_snapshot(snap, registry).await
-            {
-                if !matches!(err.tonic_code(), tonic::Code::NotFound) {
-                    let mut snap = snap.clone();
-                    snap.set_status_deleting();
-                    final_transactions
-                        .entry(txn_id.clone())
-                        .or_insert_with(Vec::new)
-                        .push(snap);
+    async fn destroy_transaction(
+        registry: &Registry,
+        transactions: &HashMap<SnapshotTxId, Vec<ReplicaSnapshot>>,
+        txn_delete: &SnapshotTxId,
+    ) -> Vec<ReplicaSnapshot> {
+        let Some((_, snapshots)) = transactions.iter().find(|(txn, _)| txn == &txn_delete) else {
+            return Vec::new();
+        };
+        Self::destroy_transaction_snapshots(registry, snapshots).await
+    }
+
+    async fn destroy_transaction_snapshots(
+        registry: &Registry,
+        snapshots: &Vec<ReplicaSnapshot>,
+    ) -> Vec<ReplicaSnapshot> {
+        let mut failed = vec![];
+        for snapshot in snapshots {
+            if let Err(err) = Self::destroy_replica_snapshot(registry, snapshot).await {
+                if err.tonic_code() != tonic::Code::NotFound {
+                    let mut snapshot = snapshot.clone();
+                    snapshot.set_status_deleting();
+                    failed.push(snapshot);
                 }
             }
         }
+        failed
     }
-
-    final_transactions
-}
-
-async fn check_nodes_availability(
-    replica_snaps: Vec<ReplicaSnapshot>,
-    registry: &Registry,
-) -> bool {
-    let mut nodes: HashSet<NodeId> = HashSet::new();
-    // Get the list of nodes from the list of replica_snaps.
-    for snap in replica_snaps {
-        if let Ok(pool_spec) = registry.specs().pool(snap.spec().source_id().pool_id()) {
-            nodes.insert(pool_spec.node);
-        }
-    }
-    // If at least one node is online return true.
-    for node in nodes {
-        if let Ok(node_wrapper) = registry.node_wrapper(&node).await {
-            if node_wrapper.read().await.is_online() {
-                return true;
-            }
-        }
-    }
-    false
 }

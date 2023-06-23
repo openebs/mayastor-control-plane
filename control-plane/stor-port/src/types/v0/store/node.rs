@@ -582,13 +582,13 @@ impl SpecTransaction<NodeOperation> for NodeSpec {
 
     fn log_op(&self, operation: &NodeOperation) -> (bool, bool) {
         match operation {
-            NodeOperation::Cordon(_) => (false, false),
-            NodeOperation::Uncordon(_) => (false, false),
-            NodeOperation::Drain(_) => (false, false),
-            NodeOperation::AddDrainingVolumes(_) => (false, false),
-            NodeOperation::RemoveDrainingVolumes(_) => (false, false),
-            NodeOperation::RemoveAllDrainingVolumes() => (false, false),
-            NodeOperation::SetDrained() => (false, false),
+            NodeOperation::Cordon(_) => (false, true),
+            NodeOperation::Uncordon(_) => (false, true),
+            NodeOperation::Drain(_) => (false, true),
+            NodeOperation::AddDrainingVolumes(_) => (false, true),
+            NodeOperation::RemoveDrainingVolumes(_) => (false, true),
+            NodeOperation::RemoveAllDrainingVolumes() => (false, true),
+            NodeOperation::SetDrained() => (false, true),
         }
     }
 

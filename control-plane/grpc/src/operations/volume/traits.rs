@@ -288,6 +288,7 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
                 .publish_context
                 .map(|map_wrapper| map_wrapper.map),
             affinity_group: volume_spec.affinity_group.into_opt(),
+            runtime_info: Default::default(),
         };
         Ok(volume_spec)
     }

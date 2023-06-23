@@ -131,6 +131,7 @@ fn test_deserialization_v1_to_v2() {
                 )),
                 publish_context: None,
                 affinity_group: None,
+                runtime_info: Default::default(),
             }),
         },
         TestEntry {

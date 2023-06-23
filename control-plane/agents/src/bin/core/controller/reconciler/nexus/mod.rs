@@ -541,7 +541,7 @@ pub(super) async fn faulted_nexus_remover(
         return PollResult::Ok(PollerState::Idle);
     };
 
-    if nexus_state.status != NexusStatus::Faulted {
+    if nexus_state.status != NexusStatus::Faulted && nexus_state.status != NexusStatus::Shutdown {
         return PollResult::Ok(PollerState::Idle);
     }
 

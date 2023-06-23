@@ -365,6 +365,9 @@ impl Service {
 
         let spec = guarded_node.drain(&self.registry, label.clone()).await?;
         let state = self.registry.node_state(&id).await.ok();
+
+        self.registry.notify(PollTriggerEvent::NodeDrain).await;
+
         Ok(Node::new(id, Some(spec), state))
     }
 }

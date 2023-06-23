@@ -234,7 +234,17 @@ pub(crate) trait GuardedOperationsHelper:
     {
         match on_fail {
             OnCreateFail::LeaveAsIs => {
-                self.lock().clear_op();
+                let mut spec_clone = self.lock().clone();
+                spec_clone.clear_op();
+                let stored = registry.store_obj(&spec_clone).await;
+                match stored {
+                    Ok(_) => {
+                        self.lock().clear_op();
+                    }
+                    Err(_) => {
+                        self.lock().set_op_result(false);
+                    }
+                }
                 error
             }
             OnCreateFail::SetDeleting => {
@@ -913,12 +923,19 @@ impl ResourceSpecsLocked {
         }
 
         // patch up the missing replica nexus owners
-        let nexuses = self.nexuses();
-        for replica in self.replicas() {
-            nexuses
-                .iter()
+        for replica in self.read().replicas.values() {
+            self.read()
+                .nexuses
+                .values()
                 .filter(|n| n.lock().contains_replica(replica.uuid()))
                 .for_each(|n| replica.lock().owners.add_owner(&n.lock().uuid));
+        }
+        // add runtime information for volume snapshots
+        for snapshot in self.read().volume_snapshots.values() {
+            let volume_id = snapshot.immutable_ref().spec().source_id();
+            if let Some(volume) = self.read().volumes.get(volume_id) {
+                volume.lock().runtime_info.insert_snapshot(snapshot.uuid());
+            }
         }
 
         // Remove all entries of v1 key prefix.
