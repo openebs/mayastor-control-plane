@@ -186,7 +186,7 @@ async fn snapshot_timeout() {
             .with_req_timeout(timeout)
             .with_min_req_timeout(None)
     }
-    let req_timeout = Duration::from_millis(350);
+    let req_timeout = Duration::from_millis(800);
     let grpc_timeout = Duration::from_millis(250);
 
     let cluster = ClusterBuilder::builder()
@@ -203,7 +203,6 @@ async fn snapshot_timeout() {
         .unwrap();
 
     let vol_cli = cluster.grpc_client().volume();
-
     let volume = vol_cli
         .create(
             &CreateVolume {
@@ -217,12 +216,11 @@ async fn snapshot_timeout() {
         .await
         .unwrap();
 
-    let snapshot = SnapshotId::new();
-
+    let snapshot_id = SnapshotId::new();
     cluster.composer().pause(&cluster.node(1)).await.unwrap();
     let replica_snapshot = vol_cli
         .create_snapshot(
-            &CreateVolumeSnapshot::new(volume.uuid(), snapshot.clone()),
+            &CreateVolumeSnapshot::new(volume.uuid(), snapshot_id.clone()),
             None,
         )
         .await
@@ -234,17 +232,82 @@ async fn snapshot_timeout() {
     cluster.composer().restart("core").await.unwrap();
     cluster.volume_service_liveness(None).await.unwrap();
 
+    let snapshots = vol_cli
+        .get_snapshots(Filter::Snapshot(snapshot_id.clone()), false, None, None)
+        .await
+        .unwrap();
+    let snapshot = &snapshots.entries[0];
+
+    assert_eq!(snapshot.meta().txn_id().as_str(), "1");
+    assert_eq!(snapshot.meta().transactions().len(), 1);
+    let tx = snapshot.meta().transactions().get("1").unwrap();
+    assert_eq!(tx[0].status().to_string().as_str(), "Deleting");
+
     let grpc = cluster.grpc_client();
     wait_node_online(&grpc.node(), cluster.node(1))
         .await
         .unwrap();
 
-    let replica_snapshot = vol_cli
-        .create_snapshot(
-            &CreateVolumeSnapshot::new(volume.uuid(), snapshot.clone()),
+    let snapshot = vol_cli
+        .create_snapshot(&CreateVolumeSnapshot::new(volume.uuid(), snapshot_id), None)
+        .await
+        .unwrap();
+    tracing::info!("Replica Snapshot: {replica_snapshot:?}");
+
+    assert_eq!(snapshot.meta().txn_id().as_str(), "2");
+    assert_eq!(snapshot.meta().transactions().len(), 2);
+    let tx = snapshot.meta().transactions().get("1").unwrap();
+    assert_eq!(tx[0].status().to_string().as_str(), "Deleting");
+    let tx = snapshot.meta().transactions().get("2").unwrap();
+    assert_eq!(tx[0].status().to_string().as_str(), "Created");
+
+    let grpc = cluster
+        .new_grpc_client(grpc_timeout_opts(req_timeout))
+        .await;
+    let vol_cli_req = grpc.volume();
+    let volume = vol_cli_req
+        .publish(
+            &PublishVolume {
+                uuid: volume.uuid().clone(),
+                target_node: Some(cluster.node(0)),
+                ..Default::default()
+            },
             None,
         )
         .await
         .unwrap();
-    tracing::info!("Replica Snapshot: {replica_snapshot:?}");
+
+    let snapshot_id = SnapshotId::new();
+    cluster.composer().pause(&cluster.node(0)).await.unwrap();
+    let replica_snapshot = vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume.uuid(), snapshot_id.clone()),
+            None,
+        )
+        .await
+        .expect_err("timeout");
+    tracing::info!("Replica Snapshot Error: {replica_snapshot:?}");
+    tokio::time::sleep(req_timeout).await;
+
+    cluster.composer().thaw(&cluster.node(0)).await.unwrap();
+
+    let snapshots = vol_cli
+        .get_snapshots(Filter::Snapshot(snapshot_id.clone()), false, None, None)
+        .await
+        .unwrap();
+    let snapshot = &snapshots.entries[0];
+
+    assert_eq!(snapshot.meta().txn_id().as_str(), "1");
+    assert!(snapshot.meta().transactions().is_empty());
+
+    let snapshot = vol_cli
+        .create_snapshot(&CreateVolumeSnapshot::new(volume.uuid(), snapshot_id), None)
+        .await
+        .unwrap();
+    tracing::info!("Snapshot: {snapshot:?}");
+
+    assert_eq!(snapshot.meta().txn_id().as_str(), "2");
+    assert_eq!(snapshot.meta().transactions().len(), 1);
+    let tx = snapshot.meta().transactions().get("2").unwrap();
+    assert_eq!(tx[0].status().to_string().as_str(), "Created");
 }

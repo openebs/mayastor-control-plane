@@ -179,6 +179,9 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
             });
         }
 
+        // Try to prune 1 stale transaction, if present..
+        snapshot.prune(registry, Some(1)).await.ok();
+
         let prepare_snapshot = snapshot.snapshot_params(&replica)?;
         snapshot
             .start_create_update(
