@@ -178,6 +178,7 @@ pub type VolumeSnapshotCompleter = Arc<std::sync::Mutex<Option<VolumeSnapshotCre
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct VolumeSnapshotCreateInfo {
     txn_id: SnapshotTxId,
+    // todo: support multi-replica snapshot
     replica: ReplicaSnapshot,
     #[serde(skip, default)]
     complete: VolumeSnapshotCompleter,
@@ -215,19 +216,34 @@ impl PartialEq<VolumeSnapshotCreateInfo> for VolumeSnapshot {
     }
 }
 
-/// The replica snapshot results from the creation operation.
+/// The replica snapshot created from the creation operation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VolumeSnapshotCreateResult {
     /// The resulting replicas including their success status.
     /// todo: add support for multiple replica snapshots.
-    pub replica: ReplicaSnapshot,
+    replicas: Vec<ReplicaSnapshot>,
     /// The actual timestamp returned by the dataplane.
-    pub timestamp: DateTime<Utc>,
+    timestamp: DateTime<Utc>,
 }
 impl VolumeSnapshotCreateResult {
     /// Create a new `Self` based on the given parameters.
-    pub fn new(replica: ReplicaSnapshot, timestamp: DateTime<Utc>) -> Self {
-        Self { replica, timestamp }
+    pub fn new_ok(replica: ReplicaSnapshot, timestamp: DateTime<Utc>) -> Self {
+        Self {
+            replicas: vec![replica],
+            timestamp,
+        }
+    }
+    /// Create a new `Self` based on the given parameters.
+    pub fn new_err(replicas: Vec<ReplicaSnapshot>) -> Self {
+        Self {
+            replicas,
+            timestamp: Default::default(),
+        }
+    }
+    /// The the size of the replica snapshots.
+    pub fn size(&self) -> u64 {
+        let first = self.replicas.first();
+        first.map(|r| r.meta().size()).unwrap_or_default()
     }
 }
 
@@ -254,14 +270,13 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
                 self.status = SpecStatus::Deleted;
             }
             VolumeSnapshotOperation::Create(info) => {
-                self.metadata.txn_id = info.txn_id.clone();
                 if let Some(result) = info.complete.lock().unwrap().as_ref() {
-                    self.metadata.size = result.replica.meta().size();
+                    self.metadata.size = result.size();
                     self.metadata.timestamp = Some(result.timestamp);
                     // replace-in-place the logged replica specs.
                     self.metadata
                         .transactions
-                        .insert(info.txn_id, vec![result.replica.clone()]);
+                        .insert(info.txn_id, result.replicas.clone());
                     self.status = SpecStatus::Created(());
                 } else {
                     // means we've restarted with the op in progress... and the snapshot was not
@@ -279,11 +294,20 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
         };
         match op.operation {
             VolumeSnapshotOperation::Create(mut info) => {
-                self.metadata.txn_id = info.txn_id.clone();
-                info.replica.set_status_deleting();
-                self.metadata
-                    .transactions
-                    .insert(info.txn_id, vec![info.replica]);
+                if let Some(result) = info.complete.lock().unwrap().as_ref() {
+                    if result.replicas.is_empty() {
+                        self.metadata.transactions.remove(&info.txn_id);
+                    } else {
+                        self.metadata
+                            .transactions
+                            .insert(info.txn_id, result.replicas.clone());
+                    }
+                } else {
+                    info.replica.set_status_deleting();
+                    self.metadata
+                        .transactions
+                        .insert(info.txn_id, vec![info.replica]);
+                }
             }
             VolumeSnapshotOperation::Destroy => {}
             VolumeSnapshotOperation::CleanupStaleTransactions => {}
@@ -291,10 +315,16 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
     }
 
     fn start_op(&mut self, operation: VolumeSnapshotOperation) {
+        if let VolumeSnapshotOperation::Create(info) = &operation {
+            self.metadata.txn_id = info.txn_id.clone();
+            self.metadata
+                .transactions
+                .insert(info.txn_id.clone(), vec![info.replica.clone()]);
+        }
         self.metadata.operation = Some(VolumeSnapshotOperationState {
             operation,
             result: None,
-        })
+        });
     }
 
     fn set_op_result(&mut self, result: bool) {

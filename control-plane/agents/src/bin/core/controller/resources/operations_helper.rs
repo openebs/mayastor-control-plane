@@ -234,7 +234,17 @@ pub(crate) trait GuardedOperationsHelper:
     {
         match on_fail {
             OnCreateFail::LeaveAsIs => {
-                self.lock().clear_op();
+                let mut spec_clone = self.lock().clone();
+                spec_clone.clear_op();
+                let stored = registry.store_obj(&spec_clone).await;
+                match stored {
+                    Ok(_) => {
+                        self.lock().clear_op();
+                    }
+                    Err(_) => {
+                        self.lock().set_op_result(false);
+                    }
+                }
                 error
             }
             OnCreateFail::SetDeleting => {
