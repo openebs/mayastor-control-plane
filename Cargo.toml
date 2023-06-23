@@ -25,6 +25,7 @@ members = [
     "utils/weighted-scoring",
     "utils/deployer-cluster",
     "tests/io-engine",
+    "utils/dependencies/mbus-api",
 ]
 exclude = [
     "utils/dependencies/*",
