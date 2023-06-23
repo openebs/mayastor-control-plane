@@ -187,13 +187,37 @@ async fn get_snapshots() {
             .expect("Snapshot creation failed");
     }
 
-    // Get snapshots - non paginated.
-    test_cluster
+    // Get all snapshots - non paginated.
+    let snapshots = test_cluster
         .rest_v00()
         .snapshots_api()
         .get_volumes_snapshots(0, None, None, Some(0))
         .await
         .expect("Listing the snapshots failed");
+    assert_eq!(snapshots.entries.len(), snap_uuids.len());
+
+    // Get all snapshots by volume id - non paginated.
+    let snapshots = test_cluster
+        .rest_v00()
+        .snapshots_api()
+        .get_volumes_snapshots(0, None, Some(&vol.spec.uuid), Some(0))
+        .await
+        .expect("Listing the snapshots failed");
+    assert_eq!(snapshots.entries.len(), snap_uuids.len());
+
+    // Get one snapshot by snapshot id.
+    let snapid = Uuid::parse_str(snap_uuids[0]).ok().unwrap();
+    let snapshot = test_cluster
+        .rest_v00()
+        .snapshots_api()
+        .get_volumes_snapshots(0, Some(&snapid), None, Some(0))
+        .await
+        .expect("Listing the snapshots failed");
+    assert_eq!(snapshot.entries.len(), 1);
+    assert_eq!(
+        snapshot.entries.first().unwrap().definition.spec.uuid,
+        snapid
+    );
 
     // Get snapshots - paginated.
     // Get max_entries at a time, and num_iter times.
