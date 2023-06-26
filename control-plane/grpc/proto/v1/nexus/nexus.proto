@@ -319,8 +319,9 @@ message RebuildHistoryReply {
 }
 
 message RebuildHistory {
-  string nexus = 1;                          // uuid of the nexus
-  repeated RebuildHistoryRecord records = 2; // List of all the rebuild records across all the child
+  string uuid = 1;                           // uuid of the nexus
+  string name  = 2;                          // name of the nexus
+  repeated RebuildHistoryRecord records = 3; // List of all the rebuild records across all the child
 }
 
 message RebuildHistoryRecord {

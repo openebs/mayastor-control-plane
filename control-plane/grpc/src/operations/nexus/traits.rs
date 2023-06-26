@@ -301,7 +301,8 @@ impl TryFrom<RebuildHistory> for nexus::RebuildHistory {
 
     fn try_from(value: RebuildHistory) -> Result<Self, Self::Error> {
         Ok(Self {
-            nexus: value.uuid.to_string(),
+            uuid: value.uuid.to_string(),
+            name: value.name.to_string(),
             records: value
                 .records
                 .into_iter()
@@ -337,9 +338,10 @@ impl TryFrom<nexus::RebuildHistory> for RebuildHistory {
     type Error = ReplyError;
     fn try_from(value: nexus::RebuildHistory) -> Result<Self, Self::Error> {
         let history = RebuildHistory {
-            uuid: NexusId::try_from(value.nexus.as_str()).map_err(|err| {
+            uuid: NexusId::try_from(value.uuid).map_err(|err| {
                 ReplyError::invalid_argument(ResourceKind::Nexus, "nexus_id", err.to_string())
             })?,
+            name: value.name.clone(),
             records: value
                 .records
                 .into_iter()

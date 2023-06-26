@@ -4,13 +4,12 @@ mod pool;
 mod replica;
 mod translation;
 
-use crate::controller::io_engine::{ApiVersion, GrpcContext, NexusChildRebuildApi};
+use crate::controller::io_engine::{
+    types::RebuildHistoryResp, ApiVersion, GrpcContext, NexusChildRebuildApi,
+};
 use agents::errors::{GrpcConnect, SvcError};
 use rpc::io_engine::IoEngineClientV0;
-use std::collections::HashMap;
-use stor_port::types::v0::transport::{
-    GetRebuildRecord, ListRebuildRecord, NexusId, RebuildHistory,
-};
+use stor_port::types::v0::transport::{GetRebuildRecord, ListRebuildRecord, RebuildHistory};
 
 use snafu::ResultExt;
 use stor_port::transport_api::ResourceKind;
@@ -65,7 +64,7 @@ impl NexusChildRebuildApi for RpcClient {
     async fn list_rebuild_record(
         &self,
         _request: &ListRebuildRecord,
-    ) -> Result<HashMap<NexusId, RebuildHistory>, SvcError> {
+    ) -> Result<RebuildHistoryResp, SvcError> {
         Err(SvcError::Unimplemented {
             resource: ResourceKind::Nexus,
             request: "get_rebuild_history".to_string(),

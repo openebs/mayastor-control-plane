@@ -4,7 +4,7 @@ use super::{
 };
 use crate::controller::io_engine::{
     translation::TryIoEngineToAgent,
-    types::{CreateNexusSnapshot, CreateNexusSnapshotResp},
+    types::{CreateNexusSnapshot, CreateNexusSnapshotResp, RebuildHistoryResp},
 };
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::nexus::ListNexusOptions;
@@ -359,7 +359,7 @@ impl crate::controller::io_engine::NexusChildRebuildApi for super::RpcClient {
     async fn list_rebuild_record(
         &self,
         request: &ListRebuildRecord,
-    ) -> Result<HashMap<NexusId, RebuildHistory>, SvcError> {
+    ) -> Result<RebuildHistoryResp, SvcError> {
         let response = self
             .nexus()
             .list_rebuild_history(request.to_rpc())
@@ -368,15 +368,20 @@ impl crate::controller::io_engine::NexusChildRebuildApi for super::RpcClient {
                 resource: ResourceKind::Nexus,
                 request: "get_rebuild_history",
             })?;
-        let mut rebuild_map: HashMap<NexusId, RebuildHistory> = HashMap::new();
-        for (nexus, rebuild_record) in response.into_inner().histories.iter() {
+        let mut histories: HashMap<NexusId, RebuildHistory> = HashMap::new();
+        let response = response.into_inner();
+        let end_time = response.end_time;
+        for (nexus, rebuild_record) in response.histories.iter() {
             let nex = NexusId::try_from(nexus.as_str()).map_err(|_| SvcError::InvalidUuid {
                 uuid: nexus.to_owned(),
                 kind: ResourceKind::Nexus,
             })?;
             let history = rebuild_record.try_to_agent()?;
-            let _ = rebuild_map.insert(nex, history);
+            let _ = histories.insert(nex, history);
         }
-        Ok(rebuild_map)
+        Ok(RebuildHistoryResp {
+            end_time,
+            histories,
+        })
     }
 }

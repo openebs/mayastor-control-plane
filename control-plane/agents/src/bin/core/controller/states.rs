@@ -1,16 +1,18 @@
 use crate::controller::resources::{resource_map::ResourceMap, ResourceMutex};
 use stor_port::types::v0::{
-    store::{nexus::NexusState, pool::PoolState, replica::ReplicaState},
-    transport::{self, Nexus, NexusId, PoolId, RebuildHistory, Replica, ReplicaId},
+    store::{
+        nexus::NexusState, pool::PoolState, replica::ReplicaState, snapshots::ReplicaSnapshotState,
+    },
+    transport::{
+        self, Nexus, NexusId, PoolId, RebuildHistory, Replica, ReplicaId, ReplicaSnapshot,
+        SnapshotId,
+    },
 };
 
 use indexmap::map::Values;
+use itertools::Itertools;
 use parking_lot::RwLock;
 use std::{collections::HashMap, ops::Deref, sync::Arc};
-use stor_port::types::v0::{
-    store::snapshots::ReplicaSnapshotState,
-    transport::{ReplicaSnapshot, SnapshotId},
-};
 
 /// Locked Resource States.
 #[derive(Clone, Default, Debug)]
@@ -38,6 +40,7 @@ pub(crate) struct ResourceStates {
     replicas: ResourceMap<ReplicaId, ReplicaState>,
     snapshots: ResourceMap<SnapshotId, ReplicaSnapshotState>,
     rebuild_history: ResourceMap<NexusId, RebuildHistory>,
+    rebuild_history_since: Option<prost_types::Timestamp>,
 }
 
 /// Add/Update or remove resource from the registry.
@@ -56,7 +59,7 @@ impl ResourceStates {
         replicas: Vec<Replica>,
         nexuses: Vec<Nexus>,
         snapshots: Vec<ReplicaSnapshot>,
-        rebuild_histories: HashMap<NexusId, RebuildHistory>,
+        rebuild_histories: RebuildHistoryState,
     ) {
         self.update_replicas(replicas);
         self.update_pools(pools);
@@ -192,15 +195,44 @@ impl ResourceStates {
     }
 
     /// This updates rebuild history resource map.
-    pub(crate) fn update_rebuild_history(&mut self, histories: HashMap<NexusId, RebuildHistory>) {
-        self.rebuild_history.clear();
-        let l: Vec<RebuildHistory> = histories.into_values().collect();
-        self.rebuild_history.populate(l);
+    pub(crate) fn update_rebuild_history(&mut self, state: RebuildHistoryState) {
+        if state.start_time.is_none() {
+            self.rebuild_history.clear();
+            self.rebuild_history
+                .populate(state.history.into_values().collect::<Vec<_>>());
+        } else {
+            // for now, retain only if the nexus is still alive, in the future we may
+            // want to persist even after the nexus is gone so we can keep track of
+            // rebuilds per volume.
+            self.rebuild_history
+                .retain(|k, _| state.history.contains_key(k));
+
+            let max_entries = state.max_entries as usize;
+            self.rebuild_history.update(state.history, |existing, new| {
+                let mut existing = existing.lock();
+                existing.records.extend(new.records);
+                if existing.records.len() > max_entries {
+                    let records = existing
+                        .records
+                        .drain(..)
+                        .sorted_by(|a, b| b.end_time.cmp(&a.end_time))
+                        .take(max_entries)
+                        .collect::<Vec<_>>();
+                    existing.records = records;
+                }
+            });
+        }
+        self.rebuild_history_since = state.end_time;
     }
 
     /// Get a rebuild history with the given ID.
     pub(crate) fn rebuild_history(&self, id: &NexusId) -> Option<&ResourceMutex<RebuildHistory>> {
         self.rebuild_history.get(id)
+    }
+
+    /// Get a rebuild history with the given ID.
+    pub(crate) fn rebuild_history_time(&self) -> Option<prost_types::Timestamp> {
+        self.rebuild_history_since.clone()
     }
 
     /// Clear all state information.
@@ -209,6 +241,7 @@ impl ResourceStates {
         self.pools.clear();
         self.replicas.clear();
         self.snapshots.clear();
+        self.rebuild_history_since = None;
         self.rebuild_history.clear();
     }
 
@@ -223,4 +256,197 @@ impl ResourceStates {
             .map(|s| s.lock().clone())
             .collect()
     }
+}
+
+/// Rebuild History State fetched from dataplane.
+#[derive(Default, Clone)]
+pub(crate) struct RebuildHistoryState {
+    /// Maximum number of entries to keep per nexus.
+    pub(crate) max_entries: u32,
+    /// The start_time used to fetch the rebuilds.
+    pub(crate) start_time: Option<prost_types::Timestamp>,
+    /// The end_time returned by the dataplane.
+    /// Future fetches must use this as start_time.
+    pub(crate) end_time: Option<prost_types::Timestamp>,
+    /// The actual rebuild history.
+    pub(crate) history: HashMap<NexusId, RebuildHistory>,
+}
+
+#[tokio::test]
+async fn rebuild_updates() {
+    use std::ops::Add;
+    use stor_port::types::v0::transport::RebuildRecord;
+
+    fn nexus_id(id: &str) -> NexusId {
+        id.try_into().unwrap()
+    }
+    fn from_time(end_time: std::time::SystemTime) -> RebuildRecord {
+        RebuildRecord {
+            child_uri: Default::default(),
+            src_uri: Default::default(),
+            state: Default::default(),
+            blocks_total: 0,
+            blocks_recovered: 0,
+            blocks_transferred: 0,
+            blocks_remaining: 0,
+            blocks_per_task: 0,
+            block_size: 0,
+            is_partial: false,
+            start_time: std::time::SystemTime::now(),
+            end_time,
+        }
+    }
+
+    fn make_rebuilds(
+        start_time: bool,
+        nexus: &NexusId,
+        records: Vec<RebuildRecord>,
+        nexus2: &NexusId,
+    ) -> RebuildHistoryState {
+        let time = std::time::SystemTime::now();
+        let start_time = start_time.then(|| prost_types::Timestamp::from(time));
+        RebuildHistoryState {
+            max_entries: 8,
+            start_time,
+            end_time: Some(time.into()),
+            history: HashMap::from([
+                (
+                    nexus.clone(),
+                    RebuildHistory {
+                        uuid: nexus.clone(),
+                        name: "".to_string(),
+                        records,
+                    },
+                ),
+                (
+                    nexus2.clone(),
+                    RebuildHistory {
+                        uuid: nexus2.clone(),
+                        name: "".to_string(),
+                        records: vec![],
+                    },
+                ),
+            ]),
+        }
+    }
+
+    let mut states = ResourceStates::default();
+    assert_eq!(states.rebuild_history.len(), 0);
+
+    let nexus = nexus_id("f8aabd1b-14fc-4680-b68f-bff71d779b00");
+    let nexus2 = nexus_id("f8aabd1b-14fc-4680-b68f-bff71d779b01");
+
+    let rebuilds = RebuildHistoryState {
+        max_entries: 8,
+        start_time: None,
+        end_time: None,
+        history: HashMap::from([
+            (
+                nexus.clone(),
+                RebuildHistory {
+                    uuid: nexus.clone(),
+                    ..Default::default()
+                },
+            ),
+            (
+                nexus2.clone(),
+                RebuildHistory {
+                    uuid: nexus2.clone(),
+                    ..Default::default()
+                },
+            ),
+        ]),
+    };
+
+    states.update_rebuild_history(rebuilds.clone());
+    assert_eq!(states.rebuild_history.len(), 2);
+    states.update_rebuild_history(rebuilds);
+    let history = states.rebuild_history(&nexus).cloned().unwrap();
+    assert_eq!(history.lock().records.len(), 0);
+    let history = states.rebuild_history(&nexus2).cloned().unwrap();
+    assert_eq!(history.lock().records.len(), 0);
+
+    let time = std::time::SystemTime::now();
+    let rebuilds = make_rebuilds(true, &nexus, vec![from_time(time)], &nexus2);
+    states.update_rebuild_history(rebuilds);
+    assert_eq!(states.rebuild_history.len(), 2);
+    let history = states.rebuild_history(&nexus).cloned().unwrap();
+    assert_eq!(history.lock().records.len(), 1);
+
+    let time = std::time::SystemTime::now();
+    let rebuilds = make_rebuilds(true, &nexus, vec![from_time(time)], &nexus2);
+    states.update_rebuild_history(rebuilds);
+    assert_eq!(states.rebuild_history.len(), 2);
+    let history = states.rebuild_history(&nexus).cloned().unwrap();
+    assert_eq!(history.lock().records.len(), 2);
+
+    let time = std::time::SystemTime::now();
+    let rebuilds = make_rebuilds(
+        true,
+        &nexus,
+        vec![from_time(time), from_time(time)],
+        &nexus2,
+    );
+    states.update_rebuild_history(rebuilds);
+    assert_eq!(states.rebuild_history.len(), 2);
+    let history = states.rebuild_history(&nexus).cloned().unwrap();
+    assert_eq!(history.lock().records.len(), 4);
+
+    let rebuilds = make_rebuilds(true, &nexus, vec![], &nexus2);
+    states.update_rebuild_history(rebuilds);
+    assert_eq!(states.rebuild_history.len(), 2);
+    let history = states.rebuild_history(&nexus).cloned().unwrap();
+    assert_eq!(history.lock().records.len(), 4);
+
+    let time = std::time::SystemTime::now();
+    let rebuilds = make_rebuilds(
+        true,
+        &nexus,
+        vec![
+            from_time(time),
+            from_time(time.add(std::time::Duration::from_millis(1))),
+            from_time(time.add(std::time::Duration::from_millis(2))),
+            from_time(time.add(std::time::Duration::from_millis(3))),
+            from_time(time.add(std::time::Duration::from_millis(4))),
+            from_time(time.add(std::time::Duration::from_millis(5))),
+        ],
+        &nexus2,
+    );
+    states.update_rebuild_history(rebuilds);
+    assert_eq!(states.rebuild_history.len(), 2);
+    let history = states.rebuild_history(&nexus).cloned().unwrap();
+    assert_eq!(history.lock().records.len(), 8);
+
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let time = std::time::SystemTime::now();
+    let rebuilds = make_rebuilds(
+        true,
+        &nexus,
+        vec![from_time(time)].into_iter().cycle().take(10).collect(),
+        &nexus2,
+    );
+    states.update_rebuild_history(rebuilds);
+    assert_eq!(states.rebuild_history.len(), 2);
+    let history = states.rebuild_history(&nexus).cloned().unwrap();
+    assert_eq!(history.lock().records.len(), 8);
+    history.lock().records.iter().for_each(|r| {
+        assert_eq!(r.end_time, time);
+    });
+
+    let time = std::time::SystemTime::now();
+    let rebuilds = RebuildHistoryState {
+        max_entries: 8,
+        start_time: Some(time.into()),
+        end_time: Some(time.into()),
+        history: HashMap::from([(
+            nexus2.clone(),
+            RebuildHistory {
+                uuid: nexus2,
+                name: "".to_string(),
+                records: vec![],
+            },
+        )]),
+    };
+    states.update_rebuild_history(rebuilds);
+    assert_eq!(states.rebuild_history.len(), 1);
 }

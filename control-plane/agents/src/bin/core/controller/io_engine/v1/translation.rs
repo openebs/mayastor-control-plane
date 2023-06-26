@@ -656,6 +656,7 @@ impl AgentToIoEngine for transport::ListRebuildRecord {
     fn to_rpc(&self) -> Self::IoEngineMessage {
         v1::nexus::ListRebuildHistoryRequest {
             count: self.count(),
+            since_end_time: self.since_time_ref().cloned(),
         }
     }
 }
@@ -665,10 +666,11 @@ impl TryIoEngineToAgent for v1::nexus::RebuildHistoryResponse {
     /// This converts gRPC rebuild history object into Control plane object.
     fn try_to_agent(&self) -> Result<Self::AgentMessage, SvcError> {
         Ok(Self::AgentMessage {
-            uuid: NexusId::try_from(self.nexus.as_str()).map_err(|_| SvcError::InvalidUuid {
-                uuid: self.nexus.to_owned(),
+            uuid: NexusId::try_from(self.uuid.as_str()).map_err(|_| SvcError::InvalidUuid {
+                uuid: self.uuid.to_owned(),
                 kind: ResourceKind::Nexus,
             })?,
+            name: self.name.clone(),
             records: self
                 .records
                 .iter()
@@ -682,21 +684,13 @@ impl TryFrom<ExternalType<v1::nexus::RebuildHistoryRecord>> for transport::Rebui
     type Error = SvcError;
     fn try_from(value: ExternalType<v1::nexus::RebuildHistoryRecord>) -> Result<Self, Self::Error> {
         Ok(Self {
-            child_uri: transport::ChildUri::try_from(value.0.child_uri.as_str()).map_err(|_| {
-                SvcError::InvalidUuid {
-                    uuid: value.0.child_uri.to_owned(),
-                    kind: ResourceKind::Child,
-                }
-            })?,
-            src_uri: transport::ChildUri::try_from(value.0.src_uri.as_str()).map_err(|_| {
-                SvcError::InvalidUuid {
-                    uuid: value.0.src_uri.to_owned(),
-                    kind: ResourceKind::Child,
-                }
-            })?,
+            child_uri: transport::ChildUri::try_from(value.0.child_uri)
+                .map_err(|_| SvcError::InvalidArguments {})?,
+            src_uri: transport::ChildUri::try_from(value.0.src_uri)
+                .map_err(|_| SvcError::InvalidArguments {})?,
             state: v1::nexus::RebuildJobState::from_i32(value.0.state)
                 .map(|f| From::from(ExternalType(f)))
-                .unwrap(),
+                .unwrap_or_default(),
             blocks_total: value.0.blocks_total,
             blocks_recovered: value.0.blocks_recovered,
             blocks_transferred: value.0.blocks_transferred,

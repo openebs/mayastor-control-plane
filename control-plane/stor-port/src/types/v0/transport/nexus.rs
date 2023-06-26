@@ -723,21 +723,33 @@ pub struct GetRebuildRecord {
 }
 
 /// List rebuild history request.
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct ListRebuildRecord {
     /// Maximum number of rebuild records per nexus.
     count: Option<u32>,
+    since_end_time: Option<prost_types::Timestamp>,
 }
 
 impl ListRebuildRecord {
     /// Returns instance of self.
-    pub fn new(count: Option<u32>) -> Self {
-        Self { count }
+    pub fn new(count: Option<u32>, since_end_time: Option<prost_types::Timestamp>) -> Self {
+        Self {
+            count,
+            since_end_time,
+        }
     }
 
-    /// Get count from the request.
+    /// Get the max rebuild record count.
     pub fn count(&self) -> Option<u32> {
         self.count
+    }
+    /// Get the since_end timestamp.
+    pub fn since_time_ref(&self) -> Option<&prost_types::Timestamp> {
+        self.since_end_time.as_ref()
+    }
+    /// Get the since_end timestamp.
+    pub fn since_time(self) -> Option<prost_types::Timestamp> {
+        self.since_end_time
     }
 }
 
@@ -759,6 +771,8 @@ impl GetRebuildRecord {
 pub struct RebuildHistory {
     /// Nexus UUID.
     pub uuid: NexusId,
+    /// Nexus Name.
+    pub name: String,
     /// List of all rebuilds finalised on the nexus.
     pub records: Vec<RebuildRecord>,
 }

@@ -23,6 +23,7 @@ rand = "0.8.5"
 tonic = "0.8.3"
 chrono = { version = "0.4.23", features = ["serde"] }
 tracing = "0.1.37"
+prost-types = "0.11.6"
 
 openapi = { path = "../../openapi", features = [ "actix-server", "tower-client", "tower-trace" ] }
 platform = { path = "../../utils/platform" }

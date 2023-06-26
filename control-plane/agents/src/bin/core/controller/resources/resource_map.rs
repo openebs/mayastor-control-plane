@@ -1,6 +1,6 @@
 use super::{ResourceMutex, ResourceUid};
 use indexmap::{map::Values, IndexMap};
-use std::{fmt::Debug, hash::Hash};
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
 use stor_port::IntoVec;
 
 #[derive(Debug)]
@@ -65,6 +65,27 @@ where
         for value in values.into_vec() {
             self.map.insert(value.uid().clone(), value.into());
         }
+    }
+
+    /// Update the resource map.
+    pub(crate) fn update<U: Fn(&mut ResourceMutex<S>, S)>(
+        &mut self,
+        values: HashMap<I, S>,
+        merge: U,
+    ) {
+        for (key, value) in values {
+            match self.map.get_mut(&key) {
+                Some(existing) => merge(existing, value),
+                None => {
+                    self.map.insert(key, value.into());
+                }
+            }
+        }
+    }
+
+    /// Retain entries as specified by the retain closure.
+    pub(crate) fn retain<F: FnMut(&I, &mut ResourceMutex<S>) -> bool>(&mut self, retain: F) {
+        self.map.retain(retain)
     }
 
     /// Get all the resources as a vector.

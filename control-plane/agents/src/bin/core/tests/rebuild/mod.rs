@@ -17,7 +17,7 @@ use stor_port::types::v0::{
 const REBUILD_WAIT_TIME: u64 = 12;
 const CHILD_WAIT: u64 = 5;
 
-async fn build_cluster(num_ioe: u32, pool_size: u64, _num_pools: u32) -> Cluster {
+async fn build_cluster(num_ioe: u32, pool_size: u64) -> Cluster {
     let reconcile_period = Duration::from_millis(300);
     let child_twait = Duration::from_secs(CHILD_WAIT);
     ClusterBuilder::builder()
@@ -27,6 +27,7 @@ async fn build_cluster(num_ioe: u32, pool_size: u64, _num_pools: u32) -> Cluster
         .with_reconcile_period(reconcile_period, reconcile_period)
         .with_cache_period("250ms")
         .with_tmpfs_pool(pool_size)
+        .with_options(|b| b.with_isolated_io_engine(true))
         .build()
         .await
         .unwrap()
@@ -42,7 +43,7 @@ async fn build_cluster(num_ioe: u32, pool_size: u64, _num_pools: u32) -> Cluster
 // gets and validates rebuild history response from rest api.
 #[tokio::test]
 async fn rebuild_history_for_full_rebuild() {
-    let cluster = build_cluster(4, 52428800, 0).await; // 50MiB pool size
+    let cluster = build_cluster(4, 52428800).await;
 
     let vol_target = cluster.node(0).to_string();
     let api_client = cluster.rest_v00();
@@ -174,7 +175,7 @@ async fn rebuild_history_for_full_rebuild() {
 
 #[tokio::test]
 async fn rebuild_history_for_partial_rebuild() {
-    let cluster = build_cluster(4, 52428800, 0).await; // 50MiB pool size
+    let cluster = build_cluster(4, 52428800).await;
 
     let vol_target = cluster.node(0).to_string();
     let api_client = cluster.rest_v00();
@@ -230,13 +231,13 @@ async fn rebuild_history_for_partial_rebuild() {
     let testrep_node = &testrep.node;
     tracing::info!(
         "Restarting node {testrep_node} having replica {}",
-        testrep.uri.clone()
+        testrep.uri
     );
 
     // Restart the container.
     cluster
         .composer()
-        .restart(&testrep_node.to_string())
+        .restart(testrep_node)
         .await
         .expect("container stop failure");
 
@@ -254,7 +255,7 @@ async fn rebuild_history_for_partial_rebuild() {
     }
 
     // Get the volume again for validations.
-    let vol = volume_api.get_volume(volid.uuid()).await.unwrap();
+    let vol = volume_api.get_volume(&volid).await.unwrap();
     let volume_state = vol.state;
     let nexus = volume_state.target.unwrap();
     // The child must be still in the nexus.
@@ -306,6 +307,32 @@ async fn rebuild_history_for_partial_rebuild() {
         history.records.get(0).unwrap().is_partial,
         "Rebuild type is not Partial rebuild in rest"
     );
+
+    // Restart the container.
+    cluster
+        .composer()
+        .restart(testrep_node)
+        .await
+        .expect("container stop failure");
+
+    wait_pool_online(&cluster, testrep, Duration::from_secs(6))
+        .await
+        .expect("Pool didn't get into online state");
+    wait_nexus_online(&nexus_client, nexus_id.clone())
+        .await
+        .expect("Rebuild didnt finish in 30 secs");
+
+    let history = api_client
+        .volumes_api()
+        .get_rebuild_history(&vol.spec.uuid)
+        .await
+        .expect("could not find rebuild history in rest");
+    assert_eq!(
+        nexus_id.to_string(),
+        history.target_uuid.to_string(),
+        "Can't match nexus id in rebuild history in rest"
+    );
+    assert_eq!(2, history.records.len());
 }
 
 /// Checks if node is online, returns true if yes.
