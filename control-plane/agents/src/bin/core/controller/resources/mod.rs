@@ -49,6 +49,20 @@ pub(crate) type OperationGuardArc<T> = OperationGuard<ResourceMutex<T>, T>;
 pub(crate) struct ResourceMutex<T> {
     inner: Arc<ResourceMutexInner<T>>,
 }
+impl<T: Clone + ResourceUid> ResourceUid for ResourceMutex<T> {
+    type Uid = T::Uid;
+
+    fn uid(&self) -> &Self::Uid {
+        self.immutable_ref().uid()
+    }
+}
+impl<T: Clone + ResourceUid> ResourceUid for Resource<T> {
+    type Uid = T::Uid;
+
+    fn uid(&self) -> &Self::Uid {
+        self.inner.uid()
+    }
+}
 /// Inner Resource which holds the mutex and an immutable value for peeking
 /// into immutable fields such as identification fields.
 #[derive(Debug)]
@@ -87,6 +101,30 @@ impl<T: Clone> ResourceMutex<T> {
     /// Useful over `as_ref` as it returns the `Arc` directly.
     pub(crate) fn immutable_arc(&self) -> Arc<T> {
         self.inner.immutable_peek.clone()
+    }
+}
+
+/// Ref-counted resource.
+#[derive(Debug, Clone)]
+pub(crate) struct Resource<T> {
+    inner: Arc<T>,
+}
+impl<T> Deref for Resource<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+impl<T: Clone> Resource<T> {
+    pub(crate) fn inner(&self) -> &T {
+        self.deref()
+    }
+}
+impl<T: Clone> From<T> for Resource<T> {
+    fn from(resource: T) -> Self {
+        Self {
+            inner: Arc::new(resource),
+        }
     }
 }
 

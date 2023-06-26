@@ -11,12 +11,12 @@ impl ResourceMutex<NexusSpec> {
     }
 }
 
-impl ResourceUid for ResourceMutex<NexusSpec> {
-    type Uid = NexusId;
-    fn uid(&self) -> &Self::Uid {
-        &self.immutable_ref().uuid
-    }
-}
+// impl ResourceUid for ResourceMutex<NexusSpec> {
+//     type Uid = NexusId;
+//     fn uid(&self) -> &Self::Uid {
+//         &self.immutable_ref().uuid
+//     }
+// }
 
 impl ResourceUid for NexusSpec {
     type Uid = NexusId;

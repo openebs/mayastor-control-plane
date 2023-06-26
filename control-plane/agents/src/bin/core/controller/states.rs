@@ -1,4 +1,4 @@
-use crate::controller::resources::{resource_map::ResourceMap, ResourceMutex};
+use crate::controller::resources::{resource_map::ResourceMap, Resource};
 use stor_port::types::v0::{
     store::{
         nexus::NexusState, pool::PoolState, replica::ReplicaState, snapshots::ReplicaSnapshotState,
@@ -92,13 +92,13 @@ impl ResourceStates {
     }
 
     /// Returns an iterator of nexus states.
-    pub(crate) fn nexus_states(&self) -> Values<NexusId, ResourceMutex<NexusState>> {
+    pub(crate) fn nexus_states(&self) -> Values<NexusId, Resource<NexusState>> {
         self.nexuses.values()
     }
 
     /// Returns the nexus state for the nexus with the given ID.
     pub(crate) fn nexus_state(&self, id: &NexusId) -> Option<NexusState> {
-        self.nexuses.get(id).map(|state| state.lock().clone())
+        self.nexuses.get(id).map(|state| state.inner().clone())
     }
 
     /// Update pool states.
@@ -125,14 +125,14 @@ impl ResourceStates {
     }
 
     /// Returns an iterator of pool states.
-    pub(crate) fn pool_states(&self) -> Values<PoolId, ResourceMutex<PoolState>> {
+    pub(crate) fn pool_states(&self) -> Values<PoolId, Resource<PoolState>> {
         self.pools.values()
     }
 
     /// Get a pool with the given ID.
     pub(crate) fn pool_state(&self, id: &PoolId) -> Option<PoolState> {
         let pool_state = self.pools.get(id)?;
-        Some(pool_state.lock().clone())
+        Some(pool_state.inner().clone())
     }
 
     /// Update replica states.
@@ -177,12 +177,12 @@ impl ResourceStates {
     }
 
     /// Returns an iterator of replica states.
-    pub(crate) fn replica_states(&self) -> Values<ReplicaId, ResourceMutex<ReplicaState>> {
+    pub(crate) fn replica_states(&self) -> Values<ReplicaId, Resource<ReplicaState>> {
         self.replicas.values()
     }
 
     /// Get a replica with the given ID.
-    pub(crate) fn replica_state(&self, id: &ReplicaId) -> Option<&ResourceMutex<ReplicaState>> {
+    pub(crate) fn replica_state(&self, id: &ReplicaId) -> Option<&Resource<ReplicaState>> {
         self.replicas.get(id)
     }
 
@@ -190,7 +190,7 @@ impl ResourceStates {
     pub(crate) fn snapshot_state(
         &self,
         id: &SnapshotId,
-    ) -> Option<&ResourceMutex<ReplicaSnapshotState>> {
+    ) -> Option<&Resource<ReplicaSnapshotState>> {
         self.snapshots.get(id)
     }
 
@@ -201,32 +201,35 @@ impl ResourceStates {
             self.rebuild_history
                 .populate(state.history.into_values().collect::<Vec<_>>());
         } else {
+            let max_entries = state.max_entries as usize;
+
             // for now, retain only if the nexus is still alive, in the future we may
             // want to persist even after the nexus is gone so we can keep track of
             // rebuilds per volume.
-            self.rebuild_history
-                .retain(|k, _| state.history.contains_key(k));
-
-            let max_entries = state.max_entries as usize;
             self.rebuild_history.update(state.history, |existing, new| {
-                let mut existing = existing.lock();
-                existing.records.extend(new.records);
-                if existing.records.len() > max_entries {
-                    let records = existing
-                        .records
-                        .drain(..)
+                let len = existing.records.len() + new.records.len();
+                let records = existing.records.iter().cloned().chain(new.records);
+                let records = if len > max_entries {
+                    records
                         .sorted_by(|a, b| b.end_time.cmp(&a.end_time))
                         .take(max_entries)
-                        .collect::<Vec<_>>();
-                    existing.records = records;
+                        .collect::<Vec<_>>()
+                } else {
+                    records.collect::<Vec<_>>()
+                };
+                *existing = RebuildHistory {
+                    uuid: existing.uuid.clone(),
+                    name: existing.name.clone(),
+                    records,
                 }
+                .into();
             });
         }
         self.rebuild_history_since = state.end_time;
     }
 
     /// Get a rebuild history with the given ID.
-    pub(crate) fn rebuild_history(&self, id: &NexusId) -> Option<&ResourceMutex<RebuildHistory>> {
+    pub(crate) fn rebuild_history(&self, id: &NexusId) -> Option<&Resource<RebuildHistory>> {
         self.rebuild_history.get(id)
     }
 
@@ -247,13 +250,13 @@ impl ResourceStates {
 
     /// Takes an iterator of resources resourced by an 'Arc' and 'Mutex' and returns a vector of
     /// unprotected resources.
-    fn cloned_inner_states<I, S>(locked_states: Values<I, ResourceMutex<S>>) -> Vec<S>
+    fn cloned_inner_states<I, S>(locked_states: Values<I, Resource<S>>) -> Vec<S>
     where
         S: Clone,
     {
         locked_states
             .into_iter()
-            .map(|s| s.lock().clone())
+            .map(|s| s.inner().clone())
             .collect()
     }
 }
@@ -362,23 +365,23 @@ async fn rebuild_updates() {
     assert_eq!(states.rebuild_history.len(), 2);
     states.update_rebuild_history(rebuilds);
     let history = states.rebuild_history(&nexus).cloned().unwrap();
-    assert_eq!(history.lock().records.len(), 0);
+    assert_eq!(history.inner().records.len(), 0);
     let history = states.rebuild_history(&nexus2).cloned().unwrap();
-    assert_eq!(history.lock().records.len(), 0);
+    assert_eq!(history.inner().records.len(), 0);
 
     let time = std::time::SystemTime::now();
     let rebuilds = make_rebuilds(true, &nexus, vec![from_time(time)], &nexus2);
     states.update_rebuild_history(rebuilds);
     assert_eq!(states.rebuild_history.len(), 2);
     let history = states.rebuild_history(&nexus).cloned().unwrap();
-    assert_eq!(history.lock().records.len(), 1);
+    assert_eq!(history.inner().records.len(), 1);
 
     let time = std::time::SystemTime::now();
     let rebuilds = make_rebuilds(true, &nexus, vec![from_time(time)], &nexus2);
     states.update_rebuild_history(rebuilds);
     assert_eq!(states.rebuild_history.len(), 2);
     let history = states.rebuild_history(&nexus).cloned().unwrap();
-    assert_eq!(history.lock().records.len(), 2);
+    assert_eq!(history.inner().records.len(), 2);
 
     let time = std::time::SystemTime::now();
     let rebuilds = make_rebuilds(
@@ -390,13 +393,13 @@ async fn rebuild_updates() {
     states.update_rebuild_history(rebuilds);
     assert_eq!(states.rebuild_history.len(), 2);
     let history = states.rebuild_history(&nexus).cloned().unwrap();
-    assert_eq!(history.lock().records.len(), 4);
+    assert_eq!(history.inner().records.len(), 4);
 
     let rebuilds = make_rebuilds(true, &nexus, vec![], &nexus2);
     states.update_rebuild_history(rebuilds);
     assert_eq!(states.rebuild_history.len(), 2);
     let history = states.rebuild_history(&nexus).cloned().unwrap();
-    assert_eq!(history.lock().records.len(), 4);
+    assert_eq!(history.inner().records.len(), 4);
 
     let time = std::time::SystemTime::now();
     let rebuilds = make_rebuilds(
@@ -415,7 +418,7 @@ async fn rebuild_updates() {
     states.update_rebuild_history(rebuilds);
     assert_eq!(states.rebuild_history.len(), 2);
     let history = states.rebuild_history(&nexus).cloned().unwrap();
-    assert_eq!(history.lock().records.len(), 8);
+    assert_eq!(history.inner().records.len(), 8);
 
     std::thread::sleep(std::time::Duration::from_millis(20));
     let time = std::time::SystemTime::now();
@@ -428,8 +431,8 @@ async fn rebuild_updates() {
     states.update_rebuild_history(rebuilds);
     assert_eq!(states.rebuild_history.len(), 2);
     let history = states.rebuild_history(&nexus).cloned().unwrap();
-    assert_eq!(history.lock().records.len(), 8);
-    history.lock().records.iter().for_each(|r| {
+    assert_eq!(history.inner().records.len(), 8);
+    history.inner().records.iter().for_each(|r| {
         assert_eq!(r.end_time, time);
     });
 

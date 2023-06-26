@@ -462,7 +462,7 @@ impl NodeWrapper {
     pub(crate) fn pools(&self) -> Vec<PoolState> {
         self.resources()
             .pool_states()
-            .map(|p| p.lock().pool.clone())
+            .map(|p| p.inner().pool.clone())
             .collect()
     }
     /// Get all pool wrappers.
@@ -475,7 +475,7 @@ impl NodeWrapper {
                 let replicas = resources
                     .replica_states()
                     .filter_map(|replica_state| {
-                        let replica_state = replica_state.lock();
+                        let replica_state = replica_state.inner();
                         if &replica_state.replica.pool_id == pool_state.uid() {
                             Some(replica_state.replica.clone())
                         } else {
@@ -503,7 +503,7 @@ impl NodeWrapper {
                 let replicas = resources
                     .replica_states()
                     .filter_map(|r| {
-                        let replica = r.lock();
+                        let replica = r.inner();
                         if &replica.replica.pool_id == pool_state.uid() {
                             Some(replica.replica.clone())
                         } else {
@@ -520,7 +520,7 @@ impl NodeWrapper {
     pub(crate) fn replicas(&self) -> Vec<Replica> {
         self.resources()
             .replica_states()
-            .map(|r| r.lock().replica.clone())
+            .map(|r| r.inner().replica.clone())
             .collect()
     }
     /// Get all replica states.
@@ -531,7 +531,7 @@ impl NodeWrapper {
     fn nexuses(&self) -> Vec<Nexus> {
         self.resources()
             .nexus_states()
-            .map(|nexus_state| nexus_state.lock().nexus.clone())
+            .map(|nexus_state| nexus_state.inner().nexus.clone())
             .collect()
     }
     /// Get all nexus states.
@@ -551,27 +551,27 @@ impl NodeWrapper {
     pub(crate) fn rebuild_history(&self, nexus_id: &NexusId) -> Option<RebuildHistory> {
         self.resources()
             .rebuild_history(nexus_id)
-            .map(|rs| rs.lock().clone())
+            .map(|rs| rs.inner().clone())
     }
 
     /// Get nexus for the given volume.
     fn volume_nexus(&self, volume_id: &VolumeId) -> Option<Nexus> {
         self.resources()
             .nexus_states()
-            .find(|n| n.lock().nexus.name == volume_id.as_str())
-            .map(|n| n.lock().nexus.clone())
+            .find(|n| n.inner().nexus.name == volume_id.as_str())
+            .map(|n| n.inner().nexus.clone())
     }
     /// Get replica from `replica_id`.
     pub(crate) fn replica(&self, replica_id: &ReplicaId) -> Option<Replica> {
         self.resources()
             .replica_state(replica_id)
-            .map(|r| r.lock().replica.clone())
+            .map(|r| r.inner().replica.clone())
     }
     /// Get snapshot from `snapshot_id`.
     pub(crate) fn snapshot(&self, snapshot_id: &SnapshotId) -> Option<ReplicaSnapshot> {
         self.resources()
             .snapshot_state(snapshot_id)
-            .map(|r| r.lock().snapshot.clone())
+            .map(|r| r.inner().snapshot.clone())
     }
     /// Is the node online.
     pub(crate) fn is_online(&self) -> bool {
@@ -819,12 +819,12 @@ impl NodeWrapper {
                 self.resources()
                     .nexus_states()
                     .take(1)
-                    .fold(0, |acc, n| acc + n.lock().nexus.rebuilds)
+                    .fold(0, |acc, n| acc + n.inner().nexus.rebuilds)
             }
             _ => self
                 .resources()
                 .nexus_states()
-                .fold(0, |acc, n| acc + n.lock().nexus.rebuilds),
+                .fold(0, |acc, n| acc + n.inner().nexus.rebuilds),
         };
         let mut rebuilds = self.num_rebuilds.write();
         *rebuilds = num_rebuilds;
