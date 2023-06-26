@@ -7,7 +7,9 @@ pub(crate) mod v1;
 
 pub(crate) use client::*;
 
-use crate::controller::io_engine::types::{CreateNexusSnapshot, CreateNexusSnapshotResp};
+use crate::controller::io_engine::types::{
+    CreateNexusSnapshot, CreateNexusSnapshotResp, RebuildHistoryResp,
+};
 use agents::errors::SvcError;
 use stor_port::{
     transport_api::v0::BlockDevices,
@@ -22,7 +24,6 @@ use stor_port::{
 };
 
 use async_trait::async_trait;
-use std::collections::HashMap;
 
 #[async_trait]
 #[dyn_clonable::clonable]
@@ -164,7 +165,7 @@ pub(crate) trait NexusChildRebuildApi {
     async fn list_rebuild_record(
         &self,
         request: &ListRebuildRecord,
-    ) -> Result<HashMap<NexusId, RebuildHistory>, SvcError>;
+    ) -> Result<RebuildHistoryResp, SvcError>;
 }
 
 /// The trait for replica snapshot operations like create, remove, list.

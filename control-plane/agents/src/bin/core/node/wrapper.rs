@@ -1,14 +1,14 @@
 use crate::{
     controller::{
         io_engine::{
-            types::{CreateNexusSnapshot, CreateNexusSnapshotResp},
+            types::{CreateNexusSnapshot, CreateNexusSnapshotResp, RebuildHistoryResp},
             GrpcClient, GrpcClientLocked, GrpcContext, NexusApi, NexusChildActionApi,
             NexusChildApi, NexusChildRebuildApi, NexusShareApi, NexusSnapshotApi, PoolApi,
             ReplicaApi, ReplicaSnapshotApi,
         },
         registry::Registry,
         resources::ResourceUid,
-        states::{Either, ResourceStates, ResourceStatesLocked},
+        states::{Either, RebuildHistoryState, ResourceStates, ResourceStatesLocked},
     },
     node::{service::NodeCommsTimeout, watchdog::Watchdog},
     pool::wrapper::PoolWrapper,
@@ -36,7 +36,7 @@ use stor_port::{
 
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use std::{collections::HashMap, future::Future, ops::DerefMut, sync::Arc};
+use std::{future::Future, ops::DerefMut, sync::Arc};
 use tracing::{debug, trace, warn};
 
 type NodeResourceStates = (
@@ -44,7 +44,7 @@ type NodeResourceStates = (
     Vec<PoolState>,
     Vec<Nexus>,
     Vec<ReplicaSnapshot>,
-    HashMap<NexusId, RebuildHistory>,
+    RebuildHistoryState,
 );
 
 /// Default timeout for GET* gRPC requests (ex: GetPools, GetNexuses, etc..)
@@ -58,7 +58,7 @@ enum ResourceType {
         Vec<Replica>,
         Vec<Nexus>,
         Vec<ReplicaSnapshot>,
-        HashMap<NexusId, RebuildHistory>,
+        RebuildHistoryState,
     ),
     Nexuses(Vec<Nexus>),
     Nexus(Either<Nexus, NexusId>),
@@ -273,7 +273,7 @@ impl NodeWrapper {
 
     /// Get the `NodeStateFetcher` to fetch information from the data-plane.
     pub(crate) fn fetcher(&self) -> NodeStateFetcher {
-        NodeStateFetcher::new(self.node_state.clone())
+        NodeStateFetcher::new(self.node_state.clone(), self.rebuild_since_timestamp())
     }
 
     /// Whether the watchdog deadline has expired.
@@ -462,7 +462,7 @@ impl NodeWrapper {
     pub(crate) fn pools(&self) -> Vec<PoolState> {
         self.resources()
             .pool_states()
-            .map(|p| p.lock().pool.clone())
+            .map(|p| p.inner().pool.clone())
             .collect()
     }
     /// Get all pool wrappers.
@@ -475,7 +475,7 @@ impl NodeWrapper {
                 let replicas = resources
                     .replica_states()
                     .filter_map(|replica_state| {
-                        let replica_state = replica_state.lock();
+                        let replica_state = replica_state.inner();
                         if &replica_state.replica.pool_id == pool_state.uid() {
                             Some(replica_state.replica.clone())
                         } else {
@@ -503,7 +503,7 @@ impl NodeWrapper {
                 let replicas = resources
                     .replica_states()
                     .filter_map(|r| {
-                        let replica = r.lock();
+                        let replica = r.inner();
                         if &replica.replica.pool_id == pool_state.uid() {
                             Some(replica.replica.clone())
                         } else {
@@ -520,7 +520,7 @@ impl NodeWrapper {
     pub(crate) fn replicas(&self) -> Vec<Replica> {
         self.resources()
             .replica_states()
-            .map(|r| r.lock().replica.clone())
+            .map(|r| r.inner().replica.clone())
             .collect()
     }
     /// Get all replica states.
@@ -531,7 +531,7 @@ impl NodeWrapper {
     fn nexuses(&self) -> Vec<Nexus> {
         self.resources()
             .nexus_states()
-            .map(|nexus_state| nexus_state.lock().nexus.clone())
+            .map(|nexus_state| nexus_state.inner().nexus.clone())
             .collect()
     }
     /// Get all nexus states.
@@ -551,27 +551,27 @@ impl NodeWrapper {
     pub(crate) fn rebuild_history(&self, nexus_id: &NexusId) -> Option<RebuildHistory> {
         self.resources()
             .rebuild_history(nexus_id)
-            .map(|rs| rs.lock().clone())
+            .map(|rs| rs.inner().clone())
     }
 
     /// Get nexus for the given volume.
     fn volume_nexus(&self, volume_id: &VolumeId) -> Option<Nexus> {
         self.resources()
             .nexus_states()
-            .find(|n| n.lock().nexus.name == volume_id.as_str())
-            .map(|n| n.lock().nexus.clone())
+            .find(|n| n.inner().nexus.name == volume_id.as_str())
+            .map(|n| n.inner().nexus.clone())
     }
     /// Get replica from `replica_id`.
     pub(crate) fn replica(&self, replica_id: &ReplicaId) -> Option<Replica> {
         self.resources()
             .replica_state(replica_id)
-            .map(|r| r.lock().replica.clone())
+            .map(|r| r.inner().replica.clone())
     }
     /// Get snapshot from `snapshot_id`.
     pub(crate) fn snapshot(&self, snapshot_id: &SnapshotId) -> Option<ReplicaSnapshot> {
         self.resources()
             .snapshot_state(snapshot_id)
-            .map(|r| r.lock().snapshot.clone())
+            .map(|r| r.inner().snapshot.clone())
     }
     /// Is the node online.
     pub(crate) fn is_online(&self) -> bool {
@@ -819,12 +819,12 @@ impl NodeWrapper {
                 self.resources()
                     .nexus_states()
                     .take(1)
-                    .fold(0, |acc, n| acc + n.lock().nexus.rebuilds)
+                    .fold(0, |acc, n| acc + n.inner().nexus.rebuilds)
             }
             _ => self
                 .resources()
                 .nexus_states()
-                .fold(0, |acc, n| acc + n.lock().nexus.rebuilds),
+                .fold(0, |acc, n| acc + n.inner().nexus.rebuilds),
         };
         let mut rebuilds = self.num_rebuilds.write();
         *rebuilds = num_rebuilds;
@@ -834,19 +834,28 @@ impl NodeWrapper {
     pub(crate) fn num_rebuilds(&self) -> NumRebuilds {
         *self.num_rebuilds.read()
     }
+
+    fn rebuild_since_timestamp(&self) -> Option<prost_types::Timestamp> {
+        self.resources().rebuild_history_time()
+    }
 }
 
 /// Fetches node state from the dataplane.
 #[derive(Debug, Clone)]
 pub(crate) struct NodeStateFetcher {
-    /// inner Node state
+    /// Inner Node state.
     node_state: NodeState,
+    /// Fetch rebuild history since end_time timestamp.
+    rebuild_since_timestamp: Option<prost_types::Timestamp>,
 }
 
 impl NodeStateFetcher {
     /// Get new `Self` from the `NodeState`.
-    fn new(node_state: NodeState) -> Self {
-        Self { node_state }
+    fn new(node_state: NodeState, rebuild_since_timestamp: Option<prost_types::Timestamp>) -> Self {
+        Self {
+            node_state,
+            rebuild_since_timestamp,
+        }
     }
     fn id(&self) -> &NodeId {
         self.node_state.id()
@@ -875,23 +884,32 @@ impl NodeStateFetcher {
         Ok((replicas, pools, nexuses, snapshots, rebuild_history))
     }
 
-    pub(crate) async fn fetch_rebuild_history(
+    async fn fetch_rebuild_history(
         &self,
         client: &mut GrpcClient,
-    ) -> Result<HashMap<NexusId, RebuildHistory>, SvcError> {
-        let request = ListRebuildRecord::new(Some(MAX_HISTORY_PER_NEXUS));
-        client.list_rebuild_record(&request).await
+    ) -> Result<RebuildHistoryState, SvcError> {
+        let request = ListRebuildRecord::new(
+            Some(MAX_HISTORY_PER_NEXUS),
+            self.rebuild_since_timestamp.clone(),
+        );
+        let history = client.list_rebuild_record(&request).await?;
+        Ok(RebuildHistoryState {
+            max_entries: MAX_HISTORY_PER_NEXUS,
+            start_time: request.since_time(),
+            end_time: history.end_time,
+            history: history.histories,
+        })
     }
 
     /// Fetch all snapshots from this node via gRPC.
-    pub(crate) async fn fetch_snapshots(
+    async fn fetch_snapshots(
         &self,
         client: &mut GrpcClient,
     ) -> Result<Vec<ReplicaSnapshot>, SvcError> {
         client.list_repl_snapshots(&ListReplicaSnapshots::All).await
     }
     /// Fetch all snapshots from this node via gRPC.
-    pub(crate) async fn fetch_snapshot(
+    async fn fetch_snapshot(
         &self,
         client: &mut GrpcClient,
         snapshot: ReplicaSnapshotInfo,
@@ -908,24 +926,15 @@ impl NodeStateFetcher {
         }
     }
     /// Fetch all replicas from this node via gRPC.
-    pub(crate) async fn fetch_replicas(
-        &self,
-        client: &mut GrpcClient,
-    ) -> Result<Vec<Replica>, SvcError> {
+    async fn fetch_replicas(&self, client: &mut GrpcClient) -> Result<Vec<Replica>, SvcError> {
         client.list_replicas(self.id()).await
     }
     /// Fetch all pools from this node via gRPC.
-    pub(crate) async fn fetch_pools(
-        &self,
-        client: &mut GrpcClient,
-    ) -> Result<Vec<PoolState>, SvcError> {
+    async fn fetch_pools(&self, client: &mut GrpcClient) -> Result<Vec<PoolState>, SvcError> {
         client.list_pools(self.id()).await
     }
     /// Fetch all nexuses from the node via gRPC.
-    pub(crate) async fn fetch_nexuses(
-        &self,
-        client: &mut GrpcClient,
-    ) -> Result<Vec<Nexus>, SvcError> {
+    async fn fetch_nexuses(&self, client: &mut GrpcClient) -> Result<Vec<Nexus>, SvcError> {
         client.list_nexuses(self.id()).await
     }
 }
@@ -1445,7 +1454,7 @@ impl NexusChildRebuildApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn list_rebuild_record(
         &self,
         request: &ListRebuildRecord,
-    ) -> Result<HashMap<NexusId, RebuildHistory>, SvcError> {
+    ) -> Result<RebuildHistoryResp, SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
         dataplane.list_rebuild_record(request).await
     }

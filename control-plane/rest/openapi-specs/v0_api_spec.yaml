@@ -1407,7 +1407,7 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
-  '/volumes/{volume_id}/rebuild':
+  '/volumes/{volume_id}/rebuild-history':
     get:
       tags:
         - Volumes

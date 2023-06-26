@@ -1,5 +1,8 @@
-use std::time::SystemTime;
-use stor_port::types::v0::transport;
+use std::{collections::HashMap, time::SystemTime};
+use stor_port::types::v0::{
+    transport,
+    transport::{NexusId, RebuildHistory},
+};
 
 /// Re-export creation types.
 pub(crate) use transport::{CreateNexusSnapReplDescr, CreateNexusSnapshot};
@@ -22,4 +25,10 @@ pub struct CreateNexusSnapshotReplicaStatus {
     pub replica_uuid: transport::ReplicaId,
     /// Result of snapping this replica.
     pub error: Option<nix::errno::Errno>,
+}
+
+/// Rebuild history response.
+pub(crate) struct RebuildHistoryResp {
+    pub(crate) end_time: Option<prost_types::Timestamp>,
+    pub(crate) histories: HashMap<NexusId, RebuildHistory>,
 }

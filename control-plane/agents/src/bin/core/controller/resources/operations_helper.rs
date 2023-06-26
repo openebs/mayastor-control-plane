@@ -1,5 +1,5 @@
 use super::{
-    super::registry::Registry, resource_map::ResourceMap, OperationGuardArc, ResourceMutex,
+    super::registry::Registry, resource_map::ResourceMutexMap, OperationGuardArc, ResourceMutex,
     ResourceUid, UpdateInnerValue,
 };
 use crate::controller::{
@@ -885,14 +885,14 @@ impl Deref for ResourceSpecsLocked {
 /// Resource Specs.
 #[derive(Default, Debug)]
 pub(crate) struct ResourceSpecs {
-    pub(crate) volumes: ResourceMap<VolumeId, VolumeSpec>,
-    pub(crate) nodes: ResourceMap<NodeId, NodeSpec>,
-    pub(crate) nexuses: ResourceMap<NexusId, NexusSpec>,
-    pub(crate) pools: ResourceMap<PoolId, PoolSpec>,
-    pub(crate) replicas: ResourceMap<ReplicaId, ReplicaSpec>,
-    pub(crate) affinity_groups: ResourceMap<String, AffinityGroupSpec>,
+    pub(crate) volumes: ResourceMutexMap<VolumeId, VolumeSpec>,
+    pub(crate) nodes: ResourceMutexMap<NodeId, NodeSpec>,
+    pub(crate) nexuses: ResourceMutexMap<NexusId, NexusSpec>,
+    pub(crate) pools: ResourceMutexMap<PoolId, PoolSpec>,
+    pub(crate) replicas: ResourceMutexMap<ReplicaId, ReplicaSpec>,
+    pub(crate) affinity_groups: ResourceMutexMap<String, AffinityGroupSpec>,
     /// Top-level volume snapshots.
-    pub(crate) volume_snapshots: ResourceMap<SnapshotId, VolumeSnapshot>,
+    pub(crate) volume_snapshots: ResourceMutexMap<SnapshotId, VolumeSnapshot>,
 }
 
 impl ResourceSpecsLocked {
