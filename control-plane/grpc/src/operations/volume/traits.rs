@@ -31,6 +31,7 @@ use stor_port::{
 };
 
 use std::{borrow::Borrow, collections::HashMap, convert::TryFrom};
+use stor_port::types::v0::store::volume::VolumeMetadata;
 
 /// All volume crud operations to be a part of the VolumeOperations trait.
 #[tonic::async_trait]
@@ -126,7 +127,9 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
         let nexus_id = volume_spec.health_info_id().cloned();
         let target = volume_spec.target().cloned();
         let target_config = volume_spec.config().clone().into_opt();
+        let as_thin = volume_spec.snapshot_as_thin();
         let spec_status: common::SpecStatus = volume_spec.status.into();
+
         Self {
             spec: Some(volume::VolumeSpec {
                 uuid: Some(volume_spec.uuid.to_string()),
@@ -148,6 +151,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
                 publish_context: volume_spec
                     .publish_context
                     .map(|map| common::MapWrapper { map }),
+                as_thin,
             }),
         }
     }
@@ -288,7 +292,7 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
                 .publish_context
                 .map(|map_wrapper| map_wrapper.map),
             affinity_group: volume_spec.affinity_group.into_opt(),
-            runtime_info: Default::default(),
+            metadata: VolumeMetadata::new(volume_meta.as_thin),
         };
         Ok(volume_spec)
     }

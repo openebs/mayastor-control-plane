@@ -3122,7 +3122,10 @@ components:
         policy:
           $ref: '#/components/schemas/VolumePolicy'
         thin:
-          description: Thin provisioning flag
+          description: Thin provisioning flag.
+          type: boolean
+        as_thin:
+          description: Volume converted to thin provisioned.
           type: boolean
         affinity_group:
           $ref: '#/components/schemas/AffinityGroup'
