@@ -26,7 +26,11 @@ impl CreateRow for openapi::models::Volume {
             optional_cell(state.target.as_ref().and_then(target_protocol)),
             state.status.clone(),
             ::utils::bytes::into_human(state.size),
-            self.spec.thin,
+            match self.spec.thin {
+                true => "true",
+                false if self.spec.as_thin == Some(true) => "true (snapped)",
+                false => "false",
+            },
             optional_cell(
                 state
                     .usage

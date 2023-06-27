@@ -34,12 +34,16 @@ async fn snapshot() {
                 uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
                 size: 5242880,
                 replicas: 1,
+                thin: false,
                 ..Default::default()
             },
             None,
         )
         .await
         .unwrap();
+
+    assert!(!volume.spec().thin);
+    assert!(!volume.spec().as_thin(), "Volume should not be thin!");
 
     let replica_snapshot = vol_cli
         .create_snapshot(
@@ -50,6 +54,15 @@ async fn snapshot() {
         .unwrap();
 
     tracing::info!("Replica Snapshot: {replica_snapshot:?}");
+
+    let volumes = vol_cli
+        .get(Filter::Volume(volume.uuid().clone()), false, None, None)
+        .await
+        .unwrap();
+    let volume = &volumes.entries[0];
+
+    assert!(!volume.spec().thin);
+    assert!(volume.spec().as_thin(), "Volume should be thin!");
 
     // Get snapshot by source id and snapshot id.
     let snaps = vol_cli
@@ -93,6 +106,15 @@ async fn snapshot() {
         .unwrap();
 
     tracing::info!("Deleted Snapshot: {}", replica_snapshot.spec().snap_id);
+
+    assert!(!volume.spec().thin);
+    assert!(volume.spec().as_thin(), "Volume should still be thin!");
+
+    let volumes = vol_cli
+        .get(Filter::Volume(volume.uuid().clone()), false, None, None)
+        .await
+        .unwrap();
+    let volume = &volumes.entries[0];
 
     // Get snapshot by snapshot id. Shouldn't be found.
     vol_cli
