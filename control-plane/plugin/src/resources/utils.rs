@@ -47,6 +47,18 @@ lazy_static! {
         "CHILD-STATUS-REASON",
         "REBUILD"
     ];
+    pub static ref REBUILD_HISTORY_HEADER: Row = row![
+        "DST",
+        "SRC",
+        "STATE",
+        "BLKS-TOTAL",
+        "BLKS-RECOVERED",
+        "BLKS-TRANSFERRED",
+        "BLKS-SIZE",
+        "IS-PARTIAL",
+        "START-TIME",
+        "END-TIME"
+    ];
     pub static ref BLOCKDEVICE_HEADERS_ALL: Row = row![
         "DEVNAME",
         "DEVTYPE",

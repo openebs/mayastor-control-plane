@@ -2472,7 +2472,7 @@ components:
         - blocksTotal
         - blocksRecovered
         - blocksTransferred
-        - blockRemaining
+        - blocksRemaining
         - blockSize
         - isPartial
         - startTime
