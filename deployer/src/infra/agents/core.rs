@@ -61,6 +61,10 @@ impl ComponentAction for CoreAgent {
             let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
             binary = binary.with_args(vec!["--jaeger", &jaeger_config]);
         }
+        if options.eventing {
+            let nats_server_url = "nats://nats:4222";
+            binary = binary.with_args(vec!["--events-url", nats_server_url]);
+        }
         if let Some(size) = &options.otel_max_batch_size {
             binary = binary.with_env("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", size);
         }

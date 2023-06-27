@@ -99,6 +99,10 @@ pub(crate) struct CliArgs {
 
     #[clap(flatten)]
     thin_args: ThinArgs,
+
+    /// Events message-bus endpoint url.
+    #[clap(long, short)]
+    events_url: Option<url::Url>,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -141,10 +145,11 @@ async fn main() {
     let cli_args = CliArgs::args();
     utils::print_package_info!();
     println!("Using options: {cli_args:?}");
-    utils::tracing_telemetry::init_tracing(
-        "core-agent",
+    utils::tracing_telemetry::init_tracing_with_eventing(
+        "agent-core",
         cli_args.tracing_tags.clone(),
         cli_args.jaeger.clone(),
+        cli_args.events_url.clone(),
     );
     server(cli_args).await;
 }

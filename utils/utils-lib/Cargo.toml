@@ -10,3 +10,6 @@ opentelemetry = { version = "0.18.0", features = ["rt-tokio-current-thread"] }
 opentelemetry-jaeger = { version = "0.17.0", features = ["rt-tokio-current-thread"] }
 version-info = { path = "../dependencies/version-info", default-features = false, features = ["git-version-fallback"] }
 git-version-macro = { path = "../dependencies/rust-git-version/git-version-macro" }
+tracing = "0.1.37"
+url = "2.3.1"
+event-publisher = { path = "../dependencies/event-publisher" }

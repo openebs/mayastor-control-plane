@@ -1,8 +1,10 @@
 /// OpenTelemetry KeyVal for Processor Tags
 pub use opentelemetry::{global, trace, Context, KeyValue};
 
+use event_publisher::event_handler::EventHandle;
 use opentelemetry::sdk::{propagation::TraceContextPropagator, Resource};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
+use tracing::Level;
+use tracing_subscriber::{filter, layer::SubscriberExt, util::SubscriberInitExt, Layer, Registry};
 
 /// Parse KeyValues from structopt's cmdline arguments
 pub fn parse_key_value(source: &str) -> Result<KeyValue, String> {
@@ -56,10 +58,27 @@ pub fn rust_log_add_quiet_defaults(
     .unwrap()
 }
 
+/// Initialise tracing and optionally opentelemetry and eventing.
+/// Tracing will have a stdout subscriber with pretty formatting.
+pub fn init_tracing_with_eventing(
+    service_name: &str,
+    tracing_tags: Vec<KeyValue>,
+    jaeger: Option<String>,
+    events_url: Option<url::Url>,
+) {
+    init_tracing_ext(
+        service_name,
+        tracing_tags,
+        jaeger,
+        FmtLayer::Stdout,
+        events_url,
+    );
+}
+
 /// Initialise tracing and optionally opentelemetry.
 /// Tracing will have a stdout subscriber with pretty formatting.
 pub fn init_tracing(service_name: &str, tracing_tags: Vec<KeyValue>, jaeger: Option<String>) {
-    init_tracing_ext(service_name, tracing_tags, jaeger, FmtLayer::Stdout);
+    init_tracing_ext(service_name, tracing_tags, jaeger, FmtLayer::Stdout, None);
 }
 
 /// Fmt Layer for console output.
@@ -79,6 +98,7 @@ pub fn init_tracing_ext<T: std::net::ToSocketAddrs>(
     mut tracing_tags: Vec<KeyValue>,
     jaeger: Option<T>,
     fmt_layer: FmtLayer,
+    events_url: Option<url::Url>,
 ) {
     let filter = rust_log_add_quiet_defaults(
         tracing_subscriber::EnvFilter::try_from_default_env()
@@ -98,7 +118,21 @@ pub fn init_tracing_ext<T: std::net::ToSocketAddrs>(
         FmtLayer::None => (None, None),
     };
 
-    let subscriber = Registry::default().with(filter).with(stdout).with(stderr);
+    // Get the optional eventing layer.
+    let events_layer = match events_url {
+        Some(url) => {
+            let events_filter =
+                filter::Targets::new().with_target("mbus-events-target", Level::INFO);
+            Some(EventHandle::init(url.to_string(), service_name).with_filter(events_filter))
+        }
+        None => None,
+    };
+
+    let subscriber = Registry::default()
+        .with(filter)
+        .with(stdout)
+        .with(stderr)
+        .with(events_layer);
 
     match jaeger {
         Some(jaeger) => {
