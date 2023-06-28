@@ -2748,6 +2748,13 @@ components:
           type: integer
           format: int64
           minimum: 0
+        allocated_bytes_snapshots:
+          description: Amount of actually allocated disk space for this replica's snapshots in bytes.
+          example: 80241024
+          type: integer
+          format: int64
+          minimum: 0
+          default: 0
         cluster_size:
           description: Cluster size in bytes.
           example: 80241024
@@ -2769,6 +2776,7 @@ components:
       required:
         - capacity_bytes
         - allocated_bytes
+        - allocated_bytes_snapshots
         - cluster_size
         - clusters
         - allocated_clusters
@@ -3551,9 +3559,17 @@ components:
           type: integer
           format: int64
           minimum: 0
+        allocated_snapshots:
+          description: Amount of actually allocated disk space for this replica's snapshots in bytes.
+          example: 80241024
+          type: integer
+          format: int64
+          minimum: 0
+          default: 0
       required:
         - capacity
         - allocated
+        - allocated_snapshots
     CordonDrainState:
       description: The drain state
       type: object
