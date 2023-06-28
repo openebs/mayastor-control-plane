@@ -1,5 +1,9 @@
 use crate::{
-    controller::{reconciler::PollTriggerEvent, registry::Registry, resources::ResourceMutex},
+    controller::{
+        reconciler::PollTriggerEvent,
+        registry::Registry,
+        resources::{ResourceMutex, ResourceUid},
+    },
     node::wrapper::GetterOps,
 };
 use agents::errors::SvcError;
@@ -48,7 +52,7 @@ impl Registry {
     ) -> Result<VolumeState, SvcError> {
         let replica_specs = replicas
             .iter()
-            .filter(|r| r.owners.owned_by(&volume_spec.uuid))
+            .filter(|r| r.owners.owned_by(volume_spec.uid()))
             .collect::<Vec<_>>();
 
         let nexus_spec = self.specs().volume_target_nexus_rsc(volume_spec);
@@ -70,9 +74,10 @@ impl Registry {
         for replica_spec in &replica_specs {
             let replica = self.replica_topology(replica_spec, &nexus).await;
             if let Some(usage) = replica.usage() {
-                total_usage += usage.allocated();
-                if usage.allocated() > largest_allocated {
-                    largest_allocated = usage.allocated();
+                let allocated = usage.allocated() + usage.allocated_snapshots();
+                total_usage += allocated;
+                if allocated > largest_allocated {
+                    largest_allocated = allocated;
                 }
             }
             replica_topology.insert(replica_spec.uuid.clone(), replica);

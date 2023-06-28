@@ -422,7 +422,7 @@ impl TryFrom<volume::ReplicaTopology> for ReplicaTopology {
 
 impl From<volume::ReplicaUsage> for ReplicaUsage {
     fn from(value: volume::ReplicaUsage) -> Self {
-        Self::new(value.capacity, value.allocated)
+        Self::new(value.capacity, value.allocated, value.allocated_snaps)
     }
 }
 impl From<ReplicaTopology> for volume::ReplicaTopology {
@@ -451,6 +451,7 @@ impl From<&ReplicaUsage> for volume::ReplicaUsage {
         Self {
             capacity: value.capacity(),
             allocated: value.allocated(),
+            allocated_snaps: value.allocated_snapshots(),
         }
     }
 }

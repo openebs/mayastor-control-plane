@@ -185,6 +185,8 @@ message ReplicaUsage {
   uint64 capacity = 1;
   // Allocated size in bytes.
   uint64 allocated = 2;
+  // Allocated size in bytes from all its snapshots.
+  uint64 allocated_snaps = 3;
 }
 
 message GetVolumesRequest {
