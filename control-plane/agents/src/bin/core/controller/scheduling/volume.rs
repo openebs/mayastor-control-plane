@@ -163,7 +163,7 @@ impl AddVolumeReplica {
         }
     }
     fn with_default_policy(self) -> Self {
-        match self.data.context.thin {
+        match self.data.context.as_thin() {
             true => self.with_simple_policy(),
             false => self.with_thick_policy(),
         }

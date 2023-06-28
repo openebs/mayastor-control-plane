@@ -12,8 +12,7 @@ rpc_impl_string_uuid!(VolumeId, "UUID of a volume");
 /// Volumes
 ///
 /// Volume information.
-#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Volume {
     /// Desired specification of the volume.
     spec: VolumeSpec,
@@ -55,8 +54,7 @@ impl From<Volume> for models::Volume {
 }
 
 /// Runtime volume state information.
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct VolumeState {
     /// Name of the volume.
     pub uuid: VolumeId,
@@ -74,8 +72,7 @@ pub struct VolumeState {
     pub usage: Option<VolumeUsage>,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct VolumeUsage {
     /// Capacity of the volume in bytes.
     capacity: u64,
@@ -193,10 +190,10 @@ impl From<VolumeStatus> for models::VolumeStatus {
 pub struct LabelledTopology {
     /// Exclusive labels.
     #[serde(default)]
-    pub exclusion: ::std::collections::HashMap<String, String>,
+    pub exclusion: HashMap<String, String>,
     /// Inclusive labels.
     #[serde(default)]
-    pub inclusion: ::std::collections::HashMap<String, String>,
+    pub inclusion: HashMap<String, String>,
 }
 
 impl From<models::LabelledTopology> for LabelledTopology {
@@ -647,20 +644,22 @@ impl DestroyVolume {
 }
 
 /// Replica usage information
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct ReplicaUsage {
     /// Capacity of the replica in bytes.
     capacity: u64,
     /// Allocated space in bytes.
     allocated: u64,
+    /// Allocated space in bytes from all its snapshots.
+    allocated_snaps: u64,
 }
 impl ReplicaUsage {
     /// Return a new `Self` from the given parameters.
-    pub fn new(capacity: u64, allocated: u64) -> Self {
+    pub fn new(capacity: u64, allocated: u64, allocated_snaps: u64) -> Self {
         Self {
             capacity,
             allocated,
+            allocated_snaps,
         }
     }
     /// Get the replica capacity in bytes.
@@ -671,16 +670,23 @@ impl ReplicaUsage {
     pub fn allocated(&self) -> u64 {
         self.allocated
     }
+    /// Get the replica's snapshots allocated bytes.
+    pub fn allocated_snapshots(&self) -> u64 {
+        self.allocated_snaps
+    }
 }
 impl From<ReplicaSpaceUsage> for ReplicaUsage {
     fn from(value: ReplicaSpaceUsage) -> Self {
-        Self::new(value.capacity_bytes, value.allocated_bytes)
+        Self::new(
+            value.capacity_bytes,
+            value.allocated_bytes,
+            value.allocated_bytes_snapshots,
+        )
     }
 }
 
 /// Replica topology information
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct ReplicaTopology {
     /// The id of the io-engine instance.
     node: Option<NodeId>,
@@ -774,7 +780,7 @@ impl From<&ReplicaTopology> for models::ReplicaTopology {
 }
 impl From<&ReplicaUsage> for models::ReplicaUsage {
     fn from(value: &ReplicaUsage) -> Self {
-        Self::new(value.capacity, value.allocated)
+        Self::new(value.capacity, value.allocated, value.allocated_snaps)
     }
 }
 

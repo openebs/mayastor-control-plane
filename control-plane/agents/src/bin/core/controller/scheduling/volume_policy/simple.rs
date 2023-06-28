@@ -128,7 +128,7 @@ impl SimplePolicy {
     /// Minimum free space is the currently allocated usage plus some percentage of volume size
     /// slack.
     fn min_free_space(&self, request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        if !request.thin {
+        if !request.as_thin() {
             return item.pool.free_space() > request.size;
         }
         item.pool.free_space()

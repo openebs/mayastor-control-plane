@@ -66,6 +66,8 @@ message Metadata {
   TargetConfig target_config = 2;
   // Publish Context of the volme.
   optional common.MapWrapper publish_context = 3;
+  // A volume may get temporarily converted into thin-provisioned
+  optional bool as_thin = 4;
 }
 
 // Affinity Group related information.
@@ -183,6 +185,8 @@ message ReplicaUsage {
   uint64 capacity = 1;
   // Allocated size in bytes.
   uint64 allocated = 2;
+  // Allocated size in bytes from all its snapshots.
+  uint64 allocated_snaps = 3;
 }
 
 message GetVolumesRequest {

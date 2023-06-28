@@ -5,7 +5,8 @@ use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
         CreateReplica, CreateReplicaSnapshot, DestroyReplica, DestroyReplicaSnapshot,
-        ListReplicaSnapshots, NodeId, Replica, ReplicaSnapshot, ShareReplica, UnshareReplica,
+        ListReplicaSnapshots, NodeId, Replica, ReplicaId, ReplicaSnapshot, ShareReplica,
+        UnshareReplica,
     },
 };
 
@@ -37,6 +38,14 @@ impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
             .collect();
 
         Ok(replicas)
+    }
+
+    async fn get_replica(&self, _replica_id: &ReplicaId) -> Result<Replica, SvcError> {
+        Err(SvcError::GrpcRequestError {
+            resource: ResourceKind::Replica,
+            request: "get_replica".to_string(),
+            source: tonic::Status::unimplemented(""),
+        })
     }
 }
 

@@ -43,6 +43,7 @@ message ReplicaSpaceUsage {
   uint64 cluster_size = 3; // cluster size in bytes
   uint64 clusters = 4; // total number of clusters
   uint64 allocated_clusters = 5; // number of actually used clusters
+  uint64 allocated_bytes_snapshots = 6; // amount of actually allocated disk space for this replica's snapshots in bytes
 }
 
 // State of the Replica

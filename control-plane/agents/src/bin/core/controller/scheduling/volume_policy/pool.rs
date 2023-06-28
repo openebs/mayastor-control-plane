@@ -19,7 +19,7 @@ impl PoolBaseFilters {
         item: &PoolItem,
         allowed_commit_percent: u64,
     ) -> bool {
-        match request.thin {
+        match request.as_thin() {
             true => {
                 let max_cap_allowed = allowed_commit_percent * item.pool().capacity;
                 (request.size + item.pool().commitment()) * 100 < max_cap_allowed
@@ -29,7 +29,7 @@ impl PoolBaseFilters {
     }
     /// Should only attempt to use pools with sufficient free space.
     pub(crate) fn min_free_space(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        match request.thin {
+        match request.as_thin() {
             true => item.pool.free_space() > Self::free_space_watermark(),
             false => item.pool.free_space() > request.size,
         }
@@ -41,7 +41,7 @@ impl PoolBaseFilters {
         request: &GetSuitablePoolsContext,
         item: &PoolItem,
     ) -> bool {
-        match request.thin && request.config().is_none() {
+        match request.as_thin() && request.config().is_none() {
             true => item.pool.free_space() > Self::free_space_watermark(),
             false => item.pool.free_space() > request.size,
         }
