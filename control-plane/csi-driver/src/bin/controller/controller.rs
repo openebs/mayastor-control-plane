@@ -88,8 +88,12 @@ impl From<ApiClientError> for Status {
             ApiClientError::ResourceNotExists(reason) => Status::not_found(reason),
             ApiClientError::NotImplemented(reason) => Status::unimplemented(reason),
             ApiClientError::RequestTimeout(reason) => Status::deadline_exceeded(reason),
-            ApiClientError::Conflict(reason) => Status::unavailable(reason),
-            ApiClientError::Aborted(reason) => Status::unavailable(reason),
+            ApiClientError::Conflict(reason) => Status::aborted(reason),
+            ApiClientError::Aborted(reason) => Status::aborted(reason),
+            ApiClientError::Unavailable(reason) => Status::unavailable(reason),
+            // TODO: Revisit the error mapping. Currently handled specifically for snapshot create.
+            // ApiClientError::PreconditionFailed(reason) => Status::resource_exhausted(reason),
+            // ApiClientError::ResourceExhausted(reason) => Status::resource_exhausted(reason),
             error => Status::internal(format!("Operation failed: {error:?}")),
         }
     }
@@ -718,7 +722,12 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         let snapshot = IoEngineApiClient::get_client()
             .create_volume_snapshot(&volume_uuid, &snap_uuid)
-            .await?;
+            .await
+            .map_err(|error| match error {
+                ApiClientError::ResourceExhausted(reason) => Status::resource_exhausted(reason),
+                ApiClientError::PreconditionFailed(reason) => Status::resource_exhausted(reason),
+                error => error.into(),
+            })?;
 
         Ok(tonic::Response::new(CreateSnapshotResponse {
             snapshot: Some(snapshot_to_csi(snapshot)),
