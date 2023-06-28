@@ -36,6 +36,10 @@ pub enum ApiClientError {
     MalformedUrl(String),
     /// Invalid argument.
     InvalidArgument(String),
+    /// Unavailable.
+    Unavailable(String),
+    /// Precondition Failed.
+    PreconditionFailed(String),
 }
 
 /// Placeholder for volume topology for volume creation operation.
@@ -72,7 +76,8 @@ impl From<clients::tower::Error<RestJsonError>> for ApiClientError {
                         StatusCode::REQUEST_TIMEOUT => Self::RequestTimeout(detailed),
                         StatusCode::CONFLICT => Self::Conflict(detailed),
                         StatusCode::INSUFFICIENT_STORAGE => Self::ResourceExhausted(detailed),
-                        StatusCode::SERVICE_UNAVAILABLE => Self::Aborted(detailed),
+                        StatusCode::SERVICE_UNAVAILABLE => Self::Unavailable(detailed),
+                        StatusCode::PRECONDITION_FAILED => Self::PreconditionFailed(detailed),
                         status => Self::GenericOperation(status, detailed),
                     }
                 }
