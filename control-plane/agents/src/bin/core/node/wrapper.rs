@@ -776,6 +776,12 @@ impl NodeWrapper {
         let snapshot = fetcher.fetch_snapshot(&mut dataplane, snapshot).await?;
         node.update_snapshot_state(Either::Insert(snapshot.clone()))
             .await;
+        if let Ok(replica) = fetcher
+            .fetch_replica(&mut dataplane, snapshot.replica_uuid())
+            .await
+        {
+            node.update_replica_state(Either::Insert(replica)).await;
+        }
         Ok(snapshot)
     }
 
@@ -924,6 +930,14 @@ impl NodeStateFetcher {
                 id: snapshot.snap_id.to_string(),
             }),
         }
+    }
+    /// Fetch the specified replica from this node via gRPC.
+    async fn fetch_replica(
+        &self,
+        client: &mut GrpcClient,
+        replica_id: &ReplicaId,
+    ) -> Result<Replica, SvcError> {
+        client.get_replica(replica_id).await
     }
     /// Fetch all replicas from this node via gRPC.
     async fn fetch_replicas(&self, client: &mut GrpcClient) -> Result<Vec<Replica>, SvcError> {
@@ -1578,6 +1592,10 @@ impl ReplicaSnapshotApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
         let snapshot = dataplane.create_repl_snapshot(request).await?;
         self.update_snapshot_state(Either::Insert(snapshot.clone()))
             .await;
+        let ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
+        if let Ok(replica) = ctx.get_replica(snapshot.replica_uuid()).await {
+            self.update_replica_state(Either::Insert(replica)).await;
+        }
         Ok(snapshot)
     }
 
