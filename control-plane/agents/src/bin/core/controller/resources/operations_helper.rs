@@ -934,7 +934,7 @@ impl ResourceSpecsLocked {
         for snapshot in self.read().volume_snapshots.values() {
             let volume_id = snapshot.immutable_ref().spec().source_id();
             if let Some(volume) = self.read().volumes.get(volume_id) {
-                volume.lock().runtime_info.insert_snapshot(snapshot.uuid());
+                volume.lock().insert_snapshot(snapshot.uuid());
             }
         }
 

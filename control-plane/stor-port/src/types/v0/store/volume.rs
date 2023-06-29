@@ -172,10 +172,49 @@ pub struct VolumeSpec {
     /// Affinity Group related information.
     #[serde(default)]
     pub affinity_group: Option<AffinityGroup>,
-    /// Runtime volume information, useful to quick checks without having to read out from PSTOR
+    /// Volume metadata information.
+    #[serde(default, skip_serializing_if = "metadata_is_default")]
+    pub metadata: VolumeMetadata,
+}
+
+fn metadata_is_default(meta: &VolumeMetadata) -> bool {
+    meta == &VolumeMetadata::default()
+}
+
+/// Volume meta information.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct VolumeMetadata {
+    /// Persisted metadata information.
+    persisted: VolumePersistedMetadata,
+    /// Runtime information, useful to quick checks without having to read out from PSTOR
     /// or any other control-plane related registry.
     #[serde(skip)]
-    pub runtime_info: VolumeRuntimeMetadata,
+    runtime: VolumeRuntimeMetadata,
+}
+impl VolumeMetadata {
+    /// Create a new `Self` from the given parameters.
+    pub fn new(as_thin: Option<bool>) -> Self {
+        Self {
+            persisted: VolumePersistedMetadata {
+                snapshot_as_thin: as_thin,
+            },
+            runtime: Default::default(),
+        }
+    }
+    /// Insert snapshot in the list.
+    fn insert_snapshot(&mut self, snapshot: SnapshotId) {
+        self.runtime.snapshots.insert(snapshot);
+        // we become thin provisioned!
+        self.persisted.snapshot_as_thin = Some(true);
+    }
+}
+
+/// Volume meta information.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct VolumePersistedMetadata {
+    /// Volume becomes thin if a snapshot has been created for it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    snapshot_as_thin: Option<bool>,
 }
 
 /// Runtime volume information.
@@ -185,10 +224,6 @@ pub struct VolumeRuntimeMetadata {
     snapshots: super::snapshots::volume::VolumeSnapshotList,
 }
 impl VolumeRuntimeMetadata {
-    /// Insert snapshot in the list.
-    pub fn insert_snapshot(&mut self, snapshot: &SnapshotId) {
-        self.snapshots.insert(snapshot.clone());
-    }
     /// Check if there's any snapshot.
     pub fn has_snapshots(&self) -> bool {
         !self.snapshots.is_empty()
@@ -277,10 +312,22 @@ impl AsOperationSequencer for AffinityGroupSpec {
 }
 
 impl VolumeSpec {
+    /// Insert snapshot in the list.
+    pub fn insert_snapshot(&mut self, snapshot: &SnapshotId) {
+        self.metadata.insert_snapshot(snapshot.clone());
+    }
+    /// Check if there's any snapshot.
+    pub fn has_snapshots(&self) -> bool {
+        self.metadata.runtime.has_snapshots()
+    }
     /// Check if the volume behaves as thin provisioned.
     /// This can happen when a volume has snapshots.
     pub fn as_thin(&self) -> bool {
-        self.thin | self.runtime_info.has_snapshots()
+        self.thin || self.metadata.persisted.snapshot_as_thin == Some(true)
+    }
+    /// Check if the volume has had a snapshot ond if so if it behaves as thin provisioned.
+    pub fn snapshot_as_thin(&self) -> Option<bool> {
+        self.metadata.persisted.snapshot_as_thin
     }
     /// Get the currently active target.
     pub fn target(&self) -> Option<&VolumeTarget> {
@@ -402,8 +449,12 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                 VolumeOperation::Unpublish => {
                     self.deactivate_target();
                 }
-                VolumeOperation::CreateSnapshot(snap) => self.runtime_info.snapshots.insert(snap),
-                VolumeOperation::DestroySnapshot(snap) => self.runtime_info.snapshots.remove(&snap),
+                VolumeOperation::CreateSnapshot(snapshot) => {
+                    self.metadata.insert_snapshot(snapshot);
+                }
+                VolumeOperation::DestroySnapshot(snapshot) => {
+                    self.metadata.runtime.snapshots.remove(&snapshot);
+                }
             }
         }
         self.clear_op();
@@ -428,9 +479,18 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
 
     fn log_op(&self, operation: &VolumeOperation) -> (bool, bool) {
         match operation {
-            VolumeOperation::CreateSnapshot(_) | VolumeOperation::DestroySnapshot(_) => {
-                (false, false)
+            VolumeOperation::CreateSnapshot(_) => {
+                // first snapshot created, now we're becoming thin provisioned, we need to store it
+                if !self.thin && !self.has_snapshots() {
+                    (
+                        false,
+                        self.metadata.persisted.snapshot_as_thin != Some(true),
+                    )
+                } else {
+                    (false, false)
+                }
             }
+            VolumeOperation::DestroySnapshot(_) => (false, false),
             VolumeOperation::RemoveUnusedReplica(_) => (false, false),
             _ => (true, true),
         }
@@ -613,7 +673,7 @@ impl From<&CreateVolume> for VolumeSpec {
             target_config: None,
             publish_context: None,
             affinity_group: request.affinity_group.clone(),
-            runtime_info: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -664,6 +724,7 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.topology.into_opt(),
             src.policy,
             src.thin,
+            src.metadata.persisted.snapshot_as_thin,
             src.affinity_group.into_opt(),
         )
     }

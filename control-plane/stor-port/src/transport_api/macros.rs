@@ -23,7 +23,7 @@ macro_rules! impl_message {
 macro_rules! impl_vector_request {
     ($Request:ident, $Inner:ident) => {
         /// Request all the `Inner` elements
-        #[derive(Serialize, Deserialize, Default, Debug, Clone)]
+        #[derive(Default, Debug, Clone)]
         pub struct $Request(pub Vec<$Inner>);
         impl $Request {
             /// returns the first element of the tuple and consumes self
@@ -39,7 +39,7 @@ macro_rules! impl_vector_request {
 macro_rules! impl_vector_request_token {
     ($Request:ident, $Inner:ident) => {
         /// Request all the `Inner` elements
-        #[derive(Serialize, Deserialize, Default, Debug, Clone)]
+        #[derive(Default, Debug, Clone)]
         pub struct $Request {
             /// Vector of entries
             pub entries: Vec<$Inner>,

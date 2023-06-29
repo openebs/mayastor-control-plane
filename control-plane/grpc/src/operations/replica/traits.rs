@@ -80,6 +80,7 @@ impl From<ReplicaSpaceUsage> for replica::ReplicaSpaceUsage {
         Self {
             capacity_bytes: space.capacity_bytes,
             allocated_bytes: space.allocated_bytes,
+            allocated_bytes_snapshots: space.allocated_bytes_snapshots,
             cluster_size: space.cluster_size,
             clusters: space.clusters,
             allocated_clusters: space.allocated_clusters,
@@ -141,6 +142,7 @@ impl From<replica::ReplicaSpaceUsage> for ReplicaSpaceUsage {
         Self {
             capacity_bytes: space.capacity_bytes,
             allocated_bytes: space.allocated_bytes,
+            allocated_bytes_snapshots: space.allocated_bytes_snapshots,
             cluster_size: space.cluster_size,
             clusters: space.clusters,
             allocated_clusters: space.allocated_clusters,

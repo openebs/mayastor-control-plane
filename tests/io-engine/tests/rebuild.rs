@@ -254,7 +254,7 @@ async fn repeated_rebuilds() {
         .with_io_engines(3)
         .with_pool(1, "malloc:///pool?size_mb=100")
         .with_pool(2, "malloc:///pool?size_mb=100")
-        .compose_build(|b| b.with_clean(false).with_logs(false))
+        .build()
         .await
         .unwrap();
 
@@ -363,7 +363,7 @@ async fn repeated_volume_rebuilds() {
         .with_pool(3, "malloc:///pool?size_mb=300")
         .with_cache_period("1s")
         .with_options(|o| o.with_isolated_io_engine(true).with_io_engine_cores(3))
-        .compose_build(|b| b.with_clean(false).with_logs(false))
+        .build()
         .await
         .unwrap();
 
@@ -596,7 +596,7 @@ async fn repeated_volume_double_rebuilds() {
         .with_cache_period("1s")
         .with_reconcile_period(Duration::from_secs(3), Duration::from_secs(3))
         .with_options(|o| o.with_isolated_io_engine(true).with_io_engine_cores(3))
-        .compose_build(|b| b.with_clean(false).with_logs(false))
+        .build()
         .await
         .unwrap();
 
@@ -775,7 +775,7 @@ async fn fault_rebuild_verify() {
         .with_cache_period("100ms")
         .with_reconcile_period(Duration::from_secs(3), Duration::from_secs(3))
         .with_options(|o| o.with_isolated_io_engine(true).with_io_engine_cores(1))
-        .compose_build(|b| b.with_clean(false).with_logs(false))
+        .build()
         .await
         .unwrap();
 
@@ -909,7 +909,7 @@ async fn destroy_rebuilding_nexus() {
         .with_cache_period("100ms")
         .with_reconcile_period(Duration::from_secs(3), Duration::from_secs(3))
         .with_options(|o| o.with_isolated_io_engine(true).with_io_engine_cores(1))
-        .compose_build(|b| b.with_clean(false).with_logs(false))
+        .build()
         .await
         .unwrap();
 
