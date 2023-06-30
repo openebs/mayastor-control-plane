@@ -64,7 +64,7 @@ def cluster_agent_rpc_handle():
 
 @pytest.fixture(scope="module")
 def setup():
-    Deployer.start(1, cluster_agent=True)
+    Deployer.start(0, cluster_agent=True)
     yield
     Deployer.stop()
 

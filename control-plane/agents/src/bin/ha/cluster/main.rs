@@ -40,6 +40,10 @@ struct Cli {
     /// Add process service tags to the traces.
     #[clap(short, long, env = "TRACING_TAGS", value_delimiter=',', value_parser = utils::tracing_telemetry::parse_key_value)]
     tracing_tags: Vec<KeyValue>,
+
+    /// If set, configures the fast requeue period to this duration.
+    #[clap(long)]
+    fast_requeue: Option<humantime::Duration>,
 }
 
 impl Cli {
@@ -69,9 +73,8 @@ fn initialize_tracing(args: &Cli) {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     utils::print_package_info!();
-
     let cli = Cli::args();
-
+    println!("Using options: {cli:?}");
     initialize_tracing(&cli);
 
     // Initialise the core client to be used in rest
@@ -86,7 +89,7 @@ async fn main() -> anyhow::Result<()> {
     let entries = store.fetch_incomplete_requests().await?;
 
     // Node list has ref counted list internally.
-    let mover = volume::VolumeMover::new(store, node_list.clone());
+    let mover = volume::VolumeMover::new(store, cli.fast_requeue, node_list.clone());
     mover.send_switchover_req(entries).await?;
 
     info!("starting cluster-agent server");

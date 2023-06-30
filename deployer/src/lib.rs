@@ -244,6 +244,10 @@ pub struct StartOptions {
     #[clap(long)]
     pub node_conn_timeout: Option<humantime::Duration>,
 
+    /// If set, configures the agent-ha-cluster fast requeue period to this duration.
+    #[clap(long)]
+    cluster_fast_requeue: Option<humantime::Duration>,
+
     /// Don't use minimum timeouts for specific requests.
     #[clap(long)]
     no_min_timeouts: bool,

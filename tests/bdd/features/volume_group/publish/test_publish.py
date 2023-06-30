@@ -14,6 +14,7 @@ from pytest_bdd import (
 import openapi.exceptions
 from common.apiclient import ApiClient
 from common.deployer import Deployer
+from common.operations import Cluster
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.protocol import Protocol
@@ -29,6 +30,16 @@ VOLUME_SIZE = 10485761
 AG_PARAM = {"id": "ag"}
 
 
+@pytest.fixture(autouse=True, scope="module")
+def init():
+    """a deployer cluster."""
+    Deployer.start(
+        io_engines=2,
+    )
+    yield
+    Deployer.stop()
+
+
 @scenario("feature.feature", "affinity group target distribution")
 def test_affinity_group_target_distribution():
     """affinity group target distribution."""
@@ -41,14 +52,11 @@ def test_affinity_group_volume_undergoes_republish():
 
 @pytest.fixture(autouse=True)
 @given("a deployer cluster")
-def a_deployer_cluster():
+def a_deployer_cluster(init):
     """a deployer cluster."""
-    Deployer.start(
-        io_engines=2,
-    )
     pytest.exception = ""
     yield
-    Deployer.stop()
+    Cluster.cleanup()
 
 
 @given("one non affinity group volume with 2 replica published on node B")

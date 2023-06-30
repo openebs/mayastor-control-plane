@@ -14,7 +14,19 @@ SCRIPT_DIR="$(dirname "$0")"
 export ROOT_DIR="$SCRIPT_DIR/../.."
 
 cleanup_handler() {
-  "$ROOT_DIR"/scripts/python/test_residue_cleanup.sh
+  sudo nvme disconnect-all || true
+
+  "$ROOT_DIR"/scripts/python/test_residue_cleanup.sh || true
+  "$ROOT_DIR"/target/debug/deployer stop || true
+
+  for c in $(docker ps -a --filter "label=io.composer.test.name" --format '{{.ID}}') ; do
+    docker kill "$c" || true
+    docker rm -v "$c" || true
+  done
+
+  for n in $(docker network ls --filter "label=io.composer.test.name" --format '{{.ID}}') ; do
+    docker network rm "$n" || ( sudo systemctl restart docker && docker network rm "$n" )
+  done
 }
 
 # FAST mode to avoid rebuilding certain dependencies

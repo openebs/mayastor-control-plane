@@ -134,7 +134,7 @@ fn value_parse_percent(value: &str) -> Result<u64, ParseIntError> {
 async fn main() {
     let cli_args = CliArgs::args();
     utils::print_package_info!();
-    println!("Using options: {:?}", &cli_args);
+    println!("Using options: {cli_args:?}");
     utils::tracing_telemetry::init_tracing(
         "core-agent",
         cli_args.tracing_tags.clone(),
