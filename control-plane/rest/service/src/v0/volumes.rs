@@ -262,6 +262,7 @@ fn rebuild_record_to_rest(value: RebuildRecord) -> models::RebuildRecord {
         value.blocks_total as isize,
         value.blocks_recovered as isize,
         value.blocks_transferred as isize,
+        value.blocks_remaining as isize,
         value.block_size as isize,
         value.is_partial,
         start,

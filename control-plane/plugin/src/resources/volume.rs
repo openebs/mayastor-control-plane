@@ -6,11 +6,12 @@ use crate::{
 use async_trait::async_trait;
 
 use crate::{
-    operations::ReplicaTopology,
+    operations::{RebuildHistory, ReplicaTopology},
     resources::utils::{optional_cell, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
 };
+use openapi::tower::client::Url;
 use prettytable::Row;
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 /// Volumes resource.
 #[derive(clap::Args, Debug)]
@@ -162,6 +163,25 @@ impl ReplicaTopology for Volume {
     }
 }
 
+#[async_trait(?Send)]
+impl RebuildHistory for Volume {
+    type ID = VolumeId;
+    async fn rebuild_history(id: &Self::ID, output: &OutputFormat) {
+        match RestClient::client()
+            .volumes_api()
+            .get_rebuild_history(id)
+            .await
+        {
+            Ok(history) => {
+                utils::print_table(output, history.into_body());
+            }
+            Err(e) => {
+                println!("Failed to get rebuild history for volume {id}. Error {e}")
+            }
+        }
+    }
+}
+
 #[derive(Default, Debug, serde::Serialize, serde::Deserialize)]
 struct VolumeTopologies(Vec<openapi::models::Volume>);
 
@@ -239,4 +259,44 @@ impl CreateRows for HashMap<String, openapi::models::ReplicaTopology> {
             })
             .collect()
     }
+}
+
+impl GetHeaderRow for openapi::models::RebuildHistory {
+    fn get_header_row(&self) -> Row {
+        (*utils::REBUILD_HISTORY_HEADER).clone()
+    }
+}
+
+impl CreateRows for openapi::models::RebuildHistory {
+    fn create_rows(&self) -> Vec<Row> {
+        self.records
+            .iter()
+            .map(|rec| {
+                row![
+                    child_uuid(rec.child_uri.as_str()),
+                    child_uuid(rec.src_uri.as_str()),
+                    rec.rebuild_job_state,
+                    to_human_readable(rec.blocks_total),
+                    to_human_readable(rec.blocks_recovered),
+                    to_human_readable(rec.blocks_transferred),
+                    to_human_readable(rec.block_size),
+                    rec.is_partial,
+                    rec.start_time,
+                    rec.end_time,
+                ]
+            })
+            .collect()
+    }
+}
+
+fn child_uuid(uri: &str) -> String {
+    let Ok(uri) = Url::from_str(uri) else { return "".into();};
+    match uri.query_pairs().find(|(q, _)| q == "uuid") {
+        Some((_, uuid)) => uuid.to_string(),
+        _ => "".into(),
+    }
+}
+
+fn to_human_readable(val: isize) -> String {
+    ::utils::bytes::into_human(val as u64)
 }

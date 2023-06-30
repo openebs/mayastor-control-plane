@@ -32,6 +32,8 @@ pub enum GetResources {
     Volumes,
     /// Get volume with the given ID.
     Volume { id: VolumeId },
+    /// Get Rebuild history for the volume with the given ID.
+    RebuildHistory { id: VolumeId },
     /// Get the replica topology for all volumes.
     VolumeReplicaTopologies,
     /// Get the replica topology for the volume with the given ID.
