@@ -43,8 +43,9 @@ lazy_static! {
         "STATUS",
         "CAPACITY",
         "ALLOCATED",
+        "SNAPSHOTS",
         "CHILD-STATUS",
-        "CHILD-STATUS-REASON",
+        "REASON",
         "REBUILD"
     ];
     pub static ref REBUILD_HISTORY_HEADER: Row = row![

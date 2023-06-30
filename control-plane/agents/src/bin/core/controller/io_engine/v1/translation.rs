@@ -126,10 +126,11 @@ impl IoEngineToAgent for v1::replica::ReplicaSpaceUsage {
         transport::ReplicaSpaceUsage {
             capacity_bytes: self.capacity_bytes,
             allocated_bytes: self.allocated_bytes,
-            allocated_bytes_snapshots: 0,
+            allocated_bytes_snapshots: self.allocated_bytes_snapshots,
             cluster_size: self.cluster_size,
             clusters: self.num_clusters,
             allocated_clusters: self.num_allocated_clusters,
+            allocated_clusters_snapshots: self.num_allocated_clusters_snapshots,
         }
     }
 }
