@@ -66,6 +66,14 @@ pub trait ReplicaTopology {
     async fn topology(id: &Self::ID, output: &utils::OutputFormat);
 }
 
+/// Rebuild trait.
+/// To be implemented by resources which support the 'rebuild-history' operation
+#[async_trait(?Send)]
+pub trait RebuildHistory {
+    type ID;
+    async fn rebuild_history(id: &Self::ID, output: &utils::OutputFormat);
+}
+
 /// GetBlockDevices trait.
 /// To be implemented by resources which support the 'get block-devices' operation
 #[async_trait(?Send)]
