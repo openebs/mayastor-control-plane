@@ -1,4 +1,5 @@
 """Rebuilding a volume feature tests."""
+import os
 
 from pytest_bdd import (
     given,
@@ -15,6 +16,7 @@ from retrying import retry
 from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
+from common.operations import Cluster
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
@@ -33,31 +35,59 @@ NODE_3_NAME = "io-engine-3"
 POOL_1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL_2_UUID = "91a60318-bcfe-4e36-92cb-ddc7abf212ea"
 POOL_3_UUID = "4d471e62-ca17-44d1-a6d3-8820f6156c1a"
-RECONCILE_PERIOD_SECS = 1
 MAX_REBUILDS = 0  # Prevent all rebuilds
+RECONCILE_PERIOD_MSECS = 250
+WAIT_FIXED = RECONCILE_PERIOD_MSECS / 2
+POOL_DISK_COUNT = 3
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
+def tmp_files():
+    files = []
+    for index in range(0, POOL_DISK_COUNT):
+        files.append(f"/tmp/disk_{index}")
+    yield files
+
+
+@pytest.fixture
+def disks(tmp_files):
+    for disk in tmp_files:
+        if os.path.exists(disk):
+            os.remove(disk)
+        with open(disk, "w") as file:
+            file.truncate(100 * 1024 * 1024)
+    # /tmp is mapped into /host/tmp within the io-engine containers
+    yield list(map(lambda file: f"/host{file}", tmp_files))
+    for disk in tmp_files:
+        if os.path.exists(disk):
+            os.remove(disk)
+
+
+@pytest.fixture(scope="module")
 def init():
     Deployer.start(
         io_engines="3",
         wait="10s",
-        reconcile_period=f"{RECONCILE_PERIOD_SECS}s",
-        cache_period="1s",
-        faulted_child_wait_period="1s",
+        reconcile_period=f"{RECONCILE_PERIOD_MSECS}ms",
+        cache_period="200ms",
+        faulted_child_wait_period="200ms",
         max_rebuilds=f"{MAX_REBUILDS}",
     )
-
-    # Only create 2 pools so we can control where the intial replicas are placed.
-    ApiClient.pools_api().put_node_pool(
-        NODE_1_NAME, POOL_1_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
-    )
-    ApiClient.pools_api().put_node_pool(
-        NODE_2_NAME, POOL_2_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
-    )
-
     yield
     Deployer.stop()
+
+
+@pytest.fixture(autouse=True)
+def init_scenarios(init, disks):
+    # Only create 2 pools so we can control where the initial replicas are placed.
+    ApiClient.pools_api().put_node_pool(
+        NODE_1_NAME, POOL_1_UUID, CreatePoolBody([disks[0]])
+    )
+    ApiClient.pools_api().put_node_pool(
+        NODE_2_NAME, POOL_2_UUID, CreatePoolBody([disks[1]])
+    )
+    yield
+    Cluster.cleanup(waitPools=True)
 
 
 @scenario(
@@ -82,7 +112,7 @@ def a_user_defined_maximum_number_of_rebuilds():
 
 
 @given("an existing published volume")
-def an_existing_published_volume():
+def an_existing_published_volume(disks):
     """an existing published volume."""
     request = CreateVolumeBody(
         VolumePolicy(True), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False
@@ -97,7 +127,7 @@ def an_existing_published_volume():
 
     # Now the volume has been created, create the additional pool.
     ApiClient.pools_api().put_node_pool(
-        NODE_3_NAME, POOL_3_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
+        NODE_3_NAME, POOL_3_UUID, CreatePoolBody([disks[2]])
     )
 
 
@@ -108,6 +138,8 @@ def a_replica_is_faulted():
     # Check the replica becomes unhealthy by waiting for the volume to become degraded.
     Docker.stop_container(NODE_2_NAME)
     wait_for_degraded_volume()
+    yield
+    Docker.stop_container(NODE_2_NAME)
 
 
 @then(
@@ -132,18 +164,18 @@ def replacing_the_replica_should_fail_if_doing_so_would_exceed_the_maximum_numbe
     wait_for_replica_removal()
     # Check that a replica doesn't get added to the volume.
     # This should be prevented because it would exceed the number of max rebuilds.
-    for _ in range(10):
+    for _ in range(5):
         check_replica_not_added()
-        time.sleep(RECONCILE_PERIOD_SECS)
+        time.sleep(RECONCILE_PERIOD_MSECS / 1000)
 
 
-@retry(wait_fixed=1000, stop_max_attempt_number=10)
+@retry(wait_fixed=WAIT_FIXED, stop_max_attempt_number=20)
 def wait_for_degraded_volume():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     assert volume.state.status == VolumeStatus("Degraded")
 
 
-@retry(wait_fixed=1000, stop_max_attempt_number=10)
+@retry(wait_fixed=WAIT_FIXED, stop_max_attempt_number=20)
 def wait_for_replica_removal():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     assert len(volume.state.target["children"]) == NUM_VOLUME_REPLICAS - 1

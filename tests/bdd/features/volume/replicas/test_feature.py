@@ -1,4 +1,5 @@
 """Adjusting the volume replicas feature tests."""
+import os
 import time
 
 from pytest_bdd import (
@@ -14,6 +15,7 @@ from retrying import retry
 from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
+from common.operations import Cluster
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
@@ -34,55 +36,67 @@ NUM_VOLUME_REPLICAS = 2
 REPLICA_CONTEXT_KEY = "replica"
 
 
-# Initialisation function to setup system for test cases.
-# The deployer uses the default parameterisation.
-@pytest.fixture()
-def init():
-    Deployer.start(
-        NUM_IO_ENGINES, faulted_child_wait_period="1s", reconcile_period="1s"
-    )
-    init_resources()
-    yield
-    Deployer.stop()
-
-
-# Initialisation function to setup system for test cases.
-# The deployer uses a custom parameterisation.
-@pytest.fixture()
-def init_parameterised_deployer():
-    # Shorten the reconcile periods and cache period to speed up the tests.
+@pytest.fixture(scope="module")
+def background():
     Deployer.start(
         NUM_IO_ENGINES,
-        reconcile_period="1s",
-        cache_period="1s",
-        faulted_child_wait_period="1s",
+        faulted_child_wait_period="100ms",
+        reconcile_period="150ms",
+        cache_period="100ms",
+        io_engine_env="MAYASTOR_HB_INTERVAL_SEC=1",
     )
-    init_resources()
     yield
     Deployer.stop()
+
+
+@pytest.fixture
+def tmp_files():
+    files = []
+    for index in range(0, NUM_IO_ENGINES):
+        files.append(f"/tmp/disk_{index}")
+    yield files
+
+
+@pytest.fixture
+def disks(tmp_files):
+    for disk in tmp_files:
+        if os.path.exists(disk):
+            os.remove(disk)
+        with open(disk, "w") as file:
+            file.truncate(100 * 1024 * 1024)
+    # /tmp is mapped into /host/tmp within the io-engine containers
+    yield list(map(lambda file: f"/host{file}", tmp_files))
+    for disk in tmp_files:
+        if os.path.exists(disk):
+            os.remove(disk)
+
+
+@pytest.fixture
+def init(background, disks):
+    init_resources(disks)
+    yield
+    Cluster.cleanup()
 
 
 # Create pools and a volume for use in the test cases.
-def init_resources():
+def init_resources(disks):
     ApiClient.pools_api().put_node_pool(
-        NODE_1_NAME, POOL_1_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
+        NODE_1_NAME, POOL_1_UUID, CreatePoolBody([disks[0]])
     )
     ApiClient.pools_api().put_node_pool(
-        NODE_2_NAME, POOL_2_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
+        NODE_2_NAME, POOL_2_UUID, CreatePoolBody([disks[1]])
     )
     ApiClient.volumes_api().put_volume(
         VOLUME_UUID,
         CreateVolumeBody(VolumePolicy(True), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False),
     )
     ApiClient.pools_api().put_node_pool(
-        NODE_3_NAME, POOL_3_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
+        NODE_3_NAME, POOL_3_UUID, CreatePoolBody([disks[2]])
     )
     # Publish volume so that there is a nexus to add a replica to.
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=NODE_1_NAME, frontend_node=""
-        ),
+        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=NODE_1_NAME),
     )
     assert hasattr(volume.spec, "target")
     assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
@@ -99,7 +113,7 @@ def replica_ctx():
     "decreasing the replica count when the runtime replica count matches the desired count",
 )
 def test_decreasing_the_replica_count_when_the_runtime_replica_count_matches_the_desired_count(
-    init_parameterised_deployer,
+    init,
 ):
     """removing a replica when the runtime replica count matches the desired count."""
 
@@ -190,6 +204,9 @@ def the_number_of_runtime_replicas_is_1():
     Docker.stop_container(NODE_2_NAME)
     # Wait for the replica to be removed from the volume.
     wait_for_volume_replica_count(1)
+    yield
+    Docker.restart_container(NODE_2_NAME)
+    time.sleep(1)
 
 
 @then("a replica should be removed from the volume")
@@ -224,7 +241,7 @@ def the_volume_spec_should_show_1_replica():
 
 
 # Wait for the number of runtime volume replicas to reach the expected number of replicas.
-@retry(wait_fixed=1000, stop_max_attempt_number=10)
+@retry(wait_fixed=200, stop_max_attempt_number=20)
 def wait_for_volume_replica_count(expected_num_replicas):
     assert num_runtime_volume_replicas() == expected_num_replicas
 

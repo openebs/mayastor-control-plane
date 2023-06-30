@@ -23,6 +23,7 @@ class StartOptions:
     max_rebuilds: str = ""
     ha_node_agent: bool = False
     ha_cluster_agent: bool = False
+    ha_cluster_agent_fast: str = None
     fio_spdk: bool = False
     io_engine_coreisol: bool = False
     io_engine_devices: [str] = ()
@@ -73,6 +74,8 @@ class StartOptions:
             agent_arg += ",HaNode"
         if self.ha_cluster_agent:
             agent_arg += ",HaCluster"
+            if self.ha_cluster_agent_fast is not None:
+                args.append(f"--cluster-fast-requeue={self.ha_cluster_agent_fast}")
         args.append(agent_arg)
 
         return args
@@ -96,6 +99,7 @@ class Deployer(object):
         jaeger=True,
         max_rebuilds="",
         cluster_agent=False,
+        cluster_agent_fast=None,
         node_agent=False,
         fio_spdk=False,
         io_engine_coreisol=False,
@@ -117,6 +121,7 @@ class Deployer(object):
             max_rebuilds=max_rebuilds,
             ha_node_agent=node_agent,
             ha_cluster_agent=cluster_agent,
+            ha_cluster_agent_fast=cluster_agent_fast,
             fio_spdk=fio_spdk,
             io_engine_coreisol=io_engine_coreisol,
             io_engine_devices=io_engine_devices,

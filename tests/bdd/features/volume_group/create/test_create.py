@@ -12,6 +12,7 @@ from pytest_bdd import (
     parsers,
 )
 
+import common.operations
 import openapi.exceptions
 from common.apiclient import ApiClient
 from common.deployer import Deployer
@@ -28,6 +29,16 @@ AG_VOLUME_UUID_2 = "07805245-ec1c-43bd-a950-c42f4c3a9ac7"
 AG_VOLUME_UUID_3 = "6805e636-1986-4ab7-95d0-75597df1532b"
 VOLUME_SIZE = 10485761
 AG_PARAM = {"id": "ag"}
+
+
+@pytest.fixture(autouse=True, scope="module")
+def init():
+    """an io-engine cluster."""
+    Deployer.start(
+        io_engines=3,
+    )
+    yield
+    Deployer.stop()
 
 
 @scenario(
@@ -96,14 +107,11 @@ def create_node_pools_for_given_nine_pools_configuration():
 
 @pytest.fixture(autouse=True)
 @given("an io-engine cluster")
-def setup_io_engine_cluster():
+def setup_io_engine_cluster(init):
     """an io-engine cluster."""
-    Deployer.start(
-        io_engines=3,
-    )
     pytest.exception = ""
     yield
-    Deployer.stop()
+    common.operations.Cluster.cleanup()
 
 
 @when(

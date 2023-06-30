@@ -453,6 +453,7 @@ impl SwitchOverRequest {
 #[derive(Debug, Clone)]
 pub(crate) struct SwitchOverEngine {
     etcd: EtcdStore,
+    fast_requeue: Option<humantime::Duration>,
     nodes: NodeList,
     channel: UnboundedSender<SwitchOverRequest>,
 }
@@ -471,13 +472,18 @@ enum ReQueue {
 
 impl SwitchOverEngine {
     /// Creates a new switchover engine to process Nvme path failures.
-    pub(crate) fn new(etcd: EtcdStore, nodes: NodeList) -> Self {
+    pub(crate) fn new(
+        etcd: EtcdStore,
+        fast_requeue: Option<humantime::Duration>,
+        nodes: NodeList,
+    ) -> Self {
         let (rq_tx, rq_rx) = unbounded_channel();
 
         let sw = SwitchOverEngine {
             channel: rq_tx,
             etcd,
             nodes,
+            fast_requeue,
         };
 
         sw.init_worker(Arc::new(Mutex::new(rq_rx)));
@@ -555,10 +561,14 @@ impl SwitchOverEngine {
     /// Sends Switchover request to the channel after sleeping for sometime (if necessary).
     pub(crate) fn enqueue(&self, req: SwitchOverRequest) {
         let tx_clone = self.channel.clone();
+        let fast_requeue = self.fast_requeue;
         tokio::spawn(async move {
             let errored_request = req.retry_count > 0;
             let retry_delay = if req.retry_count < ReQueue::NumFast as u64 {
-                ReQueue::Fast as u64
+                match fast_requeue {
+                    None => ReQueue::Fast as u64,
+                    Some(duration) => duration.as_secs(),
+                }
             } else {
                 ReQueue::Slow as u64
             };

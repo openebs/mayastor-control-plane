@@ -16,6 +16,10 @@ impl ComponentAction for HaClusterAgent {
         )
         .with_portmap("11500", "11500");
 
+        if let Some(period) = options.cluster_fast_requeue {
+            spec = spec.with_args(vec!["--fast-requeue", period.to_string().as_str()]);
+        }
+
         let etcd = format!("etcd.{}:2379", options.cluster_label.name());
         spec = spec.with_args(vec!["--store", &etcd]);
 
