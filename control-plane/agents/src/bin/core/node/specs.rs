@@ -159,7 +159,7 @@ impl SpecOperationsHelper for NodeSpec {
             NodeOperation::Uncordon(label) => {
                 // Check that the label is present.
                 if !self.has_cordon_label(&label) {
-                    Err(SvcError::CordonLabel {
+                    Err(SvcError::UncordonLabel {
                         node_id: self.id().to_string(),
                         label,
                     })
