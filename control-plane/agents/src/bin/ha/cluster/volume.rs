@@ -19,8 +19,12 @@ pub(crate) struct VolumeMover {
 
 impl VolumeMover {
     /// Create a new `Self`.
-    pub(crate) fn new(etcd: EtcdStore, nodes: NodeList) -> Self {
-        let engine = SwitchOverEngine::new(etcd.clone(), nodes);
+    pub(crate) fn new(
+        etcd: EtcdStore,
+        fast_requeue: Option<humantime::Duration>,
+        nodes: NodeList,
+    ) -> Self {
+        let engine = SwitchOverEngine::new(etcd.clone(), fast_requeue, nodes);
         Self { engine, etcd }
     }
 

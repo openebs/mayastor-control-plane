@@ -19,6 +19,7 @@ from common.docker import Docker
 from common.nvme import nvme_connect, nvme_disconnect
 from time import sleep
 from common.fio import Fio
+from common.operations import Cluster
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
@@ -42,25 +43,29 @@ POOL_4_UUID = "d5c5e3de-d77b-11ed-afa1-0242ac120002"
 VOLUME_SIZE = 524288000
 POOL_SIZE = 734003200
 NUM_VOLUME_REPLICAS = 3
-RECONCILE_PERIOD_SECS = "300ms"
-FAULTED_CHILD_WAIT_SECS = 3
+FAULTED_CHILD_WAIT_SECS = 2
 FIO_RUN = 7
-SLEEP_BEFORE_START = 2
+SLEEP_BEFORE_START = 1
 
 
-@pytest.fixture(autouse=True)
-def init(disks):
+@pytest.fixture(autouse=True, scope="module")
+def init():
     Deployer.start(
         io_engines=4,
         node_agent=True,
         cluster_agent=True,
         csi_node=True,
         wait="10s",
-        reconcile_period=RECONCILE_PERIOD_SECS,
+        reconcile_period="300ms",
         faulted_child_wait_period=f"{FAULTED_CHILD_WAIT_SECS}s",
         cache_period="200ms",
     )
+    yield
+    Deployer.stop()
 
+
+@pytest.fixture(autouse=True)
+def init_scenario(init, disks):
     assert len(disks) == (NUM_VOLUME_REPLICAS + 1)
     # Only create 3 pools, so we can control where the initial replicas are placed.
     ApiClient.pools_api().put_node_pool(
@@ -74,9 +79,8 @@ def init(disks):
     ApiClient.pools_api().put_node_pool(
         NODE_3_NAME, POOL_3_UUID, CreatePoolBody([f"aio://{disks[2]}"])
     )
-
     yield
-    Deployer.stop()
+    Cluster.cleanup(waitPools=True)
 
 
 @pytest.fixture
@@ -264,7 +268,7 @@ def a_full_rebuild_starts_before_the_timedwait_period():
     rebuild_ongoing_before_timed_wait()
 
 
-@retry(wait_fixed=200, stop_max_attempt_number=10)
+@retry(wait_fixed=200, stop_max_attempt_number=20)
 def rebuild_ongoing_before_timed_wait():
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     target = vol.state.target

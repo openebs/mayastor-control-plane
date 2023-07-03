@@ -16,6 +16,7 @@ import requests
 from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
+from common.operations import Cluster
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
@@ -36,17 +37,24 @@ POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 NODE_NAME = "io-engine-1"
 
 
+@pytest.fixture(scope="module")
+def init():
+    Deployer.start(1)
+    yield
+    Deployer.stop()
+
+
 # This fixture will be automatically used by all tests.
 # It starts the deployer which launches all the necessary containers.
 # A pool is created for convenience such that it is available for use by the tests.
 @pytest.fixture(autouse=True)
-def init(disks):
-    Deployer.start(1)
+def init_scenario(init, disks):
     ApiClient.pools_api().put_node_pool(
         NODE_NAME, POOL_UUID, CreatePoolBody([f"{disks[0]}"])
     )
     yield
-    Deployer.stop()
+    Docker.restart_container("core")
+    Cluster.cleanup()
 
 
 @pytest.fixture
@@ -147,6 +155,9 @@ def a_create_operation_takes_longer_than_the_grpc_timeout():
 
     for io_engine in io_engines:
         io_engine.kill()
+    yield
+    for io_engine in io_engines:
+        io_engine.start()
 
 
 @when("the number of suitable pools is less than the number of desired volume replicas")
@@ -181,6 +192,8 @@ def there_are_no_available_io_engine_instances():
     docker_client = docker.from_env()
     container = docker_client.containers.get("io-engine-1")
     container.kill()
+    yield
+    container.start()
 
 
 @then("there should not be any specs relating to the volume")

@@ -15,3 +15,7 @@ class Etcd(object):
         # Getting the entry returns a tuple of the value and metadata.
         # Return the NexusInfo value only.
         return self.client.get(key)[0]
+
+    def del_switchover(self, volume_id):
+        key = "{}/SwitchOver/{}".format(self.__ns_key(), volume_id)
+        self.client.delete(key)
