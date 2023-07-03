@@ -4,9 +4,6 @@
 
 set -euo pipefail
 
-echo "Cleaning leftover nvme devices..."
-sudo nvme disconnect-all
-
 echo "Cleaning all IPTABLE rules added by tests..."
 
 # First backup the iptables rules
