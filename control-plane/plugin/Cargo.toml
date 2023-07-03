@@ -34,6 +34,7 @@ serde = "1.0.152"
 serde_json = "1.0.93"
 serde_yaml = "0.9.17"
 humantime = "2.1.0"
+chrono = "0.4.23"
 
 [dev-dependencies]
 # Test dependencies
