@@ -15,6 +15,7 @@ from pytest_bdd import (
 
 import openapi.exceptions
 from common.deployer import Deployer
+from common.operations import Cluster
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.volume_policy import VolumePolicy
 from common.apiclient import ApiClient
@@ -29,6 +30,16 @@ AG_VOLUME_UUID_2 = "07805245-ec1c-43bd-a950-c42f4c3a9ac7"
 AG_VOLUME_UUID_3 = "6805e636-1986-4ab7-95d0-75597df1532b"
 VOLUME_SIZE = 10485761
 AG_PARAM = {"id": "ag"}
+
+
+@pytest.fixture(autouse=True, scope="module")
+def init():
+    """an io-engine cluster."""
+    Deployer.start(
+        io_engines=3,
+    )
+    yield
+    Deployer.stop()
 
 
 @scenario("feature.feature", "scale up and subsequent creation")
@@ -77,14 +88,11 @@ def volumes_belonging_to_a_affinity_group_with_replicas_each_and_thin(replicas, 
 
 @pytest.fixture(autouse=True)
 @given("an io-engine cluster")
-def an_ioengine_cluster():
+def an_ioengine_cluster(init):
     """an io-engine cluster."""
-    Deployer.start(
-        io_engines=3,
-    )
     pytest.vol_id = ""
     yield
-    Deployer.stop()
+    Cluster.cleanup()
 
 
 @when("a new pool on node B is created")

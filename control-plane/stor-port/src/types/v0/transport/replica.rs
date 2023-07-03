@@ -38,6 +38,8 @@ pub struct ReplicaSpaceUsage {
     pub clusters: u64,
     /// Number of actually used clusters.
     pub allocated_clusters: u64,
+    /// Number of actually used clusters for this replica's snapshots.
+    pub allocated_clusters_snapshots: u64,
 }
 
 /// Replica information.

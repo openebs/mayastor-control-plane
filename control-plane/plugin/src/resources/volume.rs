@@ -235,23 +235,15 @@ impl CreateRows for HashMap<String, openapi::models::ReplicaTopology> {
     fn create_rows(&self) -> Vec<Row> {
         self.iter()
             .map(|(id, topology)| {
+                let usage = topology.usage.as_ref();
                 row![
                     id,
                     optional_cell(topology.node.as_ref()),
                     optional_cell(topology.pool.as_ref()),
                     topology.state,
-                    optional_cell(
-                        topology
-                            .usage
-                            .as_ref()
-                            .map(|u| ::utils::bytes::into_human(u.capacity))
-                    ),
-                    optional_cell(
-                        topology
-                            .usage
-                            .as_ref()
-                            .map(|u| ::utils::bytes::into_human(u.allocated))
-                    ),
+                    optional_cell(usage.map(|u| ::utils::bytes::into_human(u.capacity))),
+                    optional_cell(usage.map(|u| ::utils::bytes::into_human(u.allocated))),
+                    optional_cell(usage.map(|u| ::utils::bytes::into_human(u.allocated_snapshots))),
                     optional_cell(topology.child_status.as_ref().map(|s| s.to_string())),
                     optional_cell(topology.child_status_reason.as_ref().map(|s| s.to_string())),
                     optional_cell(topology.rebuild_progress.map(|p| format!("{p}%"))),

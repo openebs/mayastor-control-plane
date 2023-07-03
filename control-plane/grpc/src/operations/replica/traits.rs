@@ -84,6 +84,7 @@ impl From<ReplicaSpaceUsage> for replica::ReplicaSpaceUsage {
             cluster_size: space.cluster_size,
             clusters: space.clusters,
             allocated_clusters: space.allocated_clusters,
+            allocated_clusters_snapshots: space.allocated_clusters_snapshots,
         }
     }
 }
@@ -146,6 +147,7 @@ impl From<replica::ReplicaSpaceUsage> for ReplicaSpaceUsage {
             cluster_size: space.cluster_size,
             clusters: space.clusters,
             allocated_clusters: space.allocated_clusters,
+            allocated_clusters_snapshots: space.allocated_clusters_snapshots,
         }
     }
 }

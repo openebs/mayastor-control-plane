@@ -2,7 +2,6 @@
 
 import os
 import time
-from urllib.parse import urlparse
 
 from pytest_bdd import (
     given,
@@ -18,13 +17,14 @@ from retrying import retry
 from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
-from common.fio import Fio
+from common.etcd import Etcd
 from common.nvme import (
     nvme_connect,
     nvme_disconnect,
     nvme_list_subsystems,
     nvme_set_reconnect_delay,
 )
+from common.operations import Cluster
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
@@ -42,19 +42,28 @@ DEPLOYER_NETWORK_INTERFACE = "mayabridge0"
 NVME_SVC_PORT = 8420
 RULE_APPEND = "sudo iptables -t filter -A OUTPUT -o {} -d {} -p tcp --dport {} -j DROP -m comment --comment 'added by bdd test'"
 RULE_REMOVE = "sudo iptables -t filter -D OUTPUT -o {} -d {} -p tcp --dport {} -j DROP -m comment --comment 'added by bdd test'"
+ETCD_CLIENT = Etcd()
+
+
+@pytest.fixture(scope="module")
+def init():
+    Deployer.start(
+        2,
+        cache_period="500ms",
+        reconcile_period="600ms",
+        cluster_agent=True,
+        cluster_agent_fast="1s",
+        node_agent=True,
+        csi_node=True,
+        io_engine_coreisol=True,
+        io_engine_env="MAYASTOR_HB_INTERVAL_SEC=0",
+    )
+    yield
+    Deployer.stop()
 
 
 @pytest.fixture(autouse=True)
-def init(disks):
-    Deployer.start(
-        2,
-        cache_period="1s",
-        reconcile_period="1s",
-        cluster_agent=True,
-        node_agent=True,
-        csi_node=True,
-    )
-
+def init_scenario(init, disks):
     for disk_index in range(0, 2):
         node_index = disk_index + 1
         name = f"pool-{node_index}"
@@ -63,7 +72,10 @@ def init(disks):
             node, name, CreatePoolBody([disks[disk_index]])
         )
     yield
-    Deployer.stop()
+    Docker.restart_container("agent-ha-node")
+    ETCD_CLIENT.del_switchover(VOLUME_UUID)
+    Docker.restart_container("agent-ha-cluster")
+    Cluster.cleanup()
 
 
 @scenario("robustness.feature", "reconnecting the new target times out")
@@ -89,6 +101,9 @@ def test_second_failure_during_switchover_with_no_other_nodes():
 @given("a connected nvme initiator")
 def a_connected_nvme_initiator(connect_to_first_path):
     """a connected nvme initiator."""
+    volume = pytest.volume
+    device_uri = volume.state["target"]["deviceUri"]
+    nvme_set_reconnect_delay(device_uri, 2)
 
 
 @given("a deployer cluster")
@@ -135,11 +150,17 @@ def we_cordon_the_nontarget_node():
     """we cordon the non-target node."""
     ApiClient.nodes_api().put_node_cordon(TARGET_NODE_2, "d")
     wait_node_cordon(TARGET_NODE_2)
+    yield
+    try:
+        ApiClient.nodes_api().delete_node_cordon(TARGET_NODE_2, "d")
+    except:
+        pass
 
 
 @when("the ha clustering republishes")
 def the_ha_clustering_republishes():
     """the ha clustering republishes."""
+    time.sleep(1)
 
 
 @when("we restart the volume target node")
@@ -152,6 +173,8 @@ def we_restart_the_volume_target_node():
 def we_stop_the_volume_target_node():
     """we stop the volume target."""
     Docker.stop_container(TARGET_NODE_1)
+    yield
+    Docker.restart_container(TARGET_NODE_1)
 
 
 @when("we uncordon the non-target node")
@@ -234,7 +257,7 @@ def connect_to_first_path():
     nvme_disconnect(device_uri)
 
 
-@retry(wait_fixed=200, stop_max_attempt_number=100)
+@retry(wait_fixed=100, stop_max_attempt_number=200)
 def wait_initiator_reconnect(connect_to_first_path):
     device = connect_to_first_path
     desc = nvme_list_subsystems(device)
@@ -246,7 +269,7 @@ def wait_initiator_reconnect(connect_to_first_path):
     assert subsystem["Paths"][0]["State"] == "live", "I/O path is not healthy"
 
 
-@retry(wait_fixed=200, stop_max_attempt_number=10)
+@retry(wait_fixed=100, stop_max_attempt_number=20)
 def wait_node_cordon(node):
     node = ApiClient.nodes_api().get_node(node)
     assert "cordonedstate" in node.spec.cordondrainstate

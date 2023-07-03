@@ -16,6 +16,7 @@ from pytest_bdd import (
 from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.fio import Fio
+from common.operations import Cluster
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
@@ -36,6 +37,41 @@ IO_ENGINE_GRPC_PORT = 10124
 IO_ENGINE_1_IP = "10.1.0.7"
 RULE_APPEND = "sudo iptables -t filter -A OUTPUT -o {} -d {} -p tcp --dport {} -j DROP -m comment --comment 'added by bdd test'"
 RULE_REMOVE = "sudo iptables -t filter -D OUTPUT -o {} -d {} -p tcp --dport {} -j DROP -m comment --comment 'added by bdd test'"
+
+
+@pytest.fixture
+def tmp_files():
+    files = []
+    for index in range(0, 2):
+        files.append(f"/tmp/disk_{index}")
+    yield files
+
+
+@pytest.fixture
+def disks(tmp_files):
+    for disk in tmp_files:
+        if os.path.exists(disk):
+            os.remove(disk)
+        with open(disk, "w") as file:
+            file.truncate(100 * 1024 * 1024)
+    # /tmp is mapped into /host/tmp within the io-engine containers
+    yield list(map(lambda file: f"/host{file}", tmp_files))
+    for disk in tmp_files:
+        if os.path.exists(disk):
+            os.remove(disk)
+
+
+@pytest.fixture(scope="module")
+def init():
+    Deployer.start(
+        io_engines=3,
+        reconcile_period="300ms",
+        cache_period="200ms",
+        io_engine_coreisol=True,
+        fio_spdk=True,
+    )
+    yield
+    Deployer.stop()
 
 
 @scenario(
@@ -84,24 +120,18 @@ def test_node_offline_should_not_fail_the_switchover():
 
 
 @given("a control plane, two Io-Engine instances, two pools")
-def a_control_plane_two_ioengine_instances_two_pools():
+def a_control_plane_two_ioengine_instances_two_pools(init, disks):
     """a control plane, two Io-Engine instances, two pools."""
-    Deployer.start(
-        io_engines=3,
-        reconcile_period="10s",
-        io_engine_coreisol=True,
-        fio_spdk=True,
-    )
-    ApiClient.pools_api().put_node_pool(
-        NODE_NAME_1, POOL_UUID_1, CreatePoolBody(["malloc:///disk1?size_mb=200"])
-    )
-    ApiClient.pools_api().put_node_pool(
-        NODE_NAME_2, POOL_UUID_2, CreatePoolBody(["malloc:///disk2?size_mb=200"])
-    )
     pytest.reuse_existing = False
+    ApiClient.pools_api().put_node_pool(
+        NODE_NAME_1, POOL_UUID_1, CreatePoolBody([disks[0]])
+    )
+    ApiClient.pools_api().put_node_pool(
+        NODE_NAME_2, POOL_UUID_2, CreatePoolBody([disks[1]])
+    )
     yield
     cleanup_iptable_rules(IO_ENGINE_1_IP)
-    Deployer.stop()
+    Cluster.cleanup()
 
 
 @given("a published volume with two replicas")
