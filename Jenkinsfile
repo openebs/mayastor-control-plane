@@ -114,7 +114,6 @@ pipeline {
         beforeAgent true
         not {
           anyOf {
-            branch 'master'
             branch 'release/*'
             expression { run_linter == false }
           }
@@ -132,11 +131,6 @@ pipeline {
     stage('test') {
       when {
         beforeAgent true
-        not {
-          anyOf {
-            branch 'master'
-          }
-        }
         expression { run_tests == true }
       }
       parallel {
@@ -154,8 +148,7 @@ pipeline {
           }
           post {
             always {
-              // in case of abnormal termination of any nvmf test
-              sh 'sudo nvme disconnect-all'
+              sh 'nix-shell --run "./scripts/rust/deployer-cleanup.sh"'
             }
           }
         }
@@ -174,8 +167,7 @@ pipeline {
           }
           post {
             always {
-              // in case of abnormal termination of any nvmf test
-              sh 'sudo nvme disconnect-all'
+              sh 'nix-shell --run "./scripts/python/test-residue-cleanup.sh"'
             }
           }
         }
@@ -198,7 +190,6 @@ pipeline {
         anyOf {
           expression { build_images == true }
           anyOf {
-            branch 'master'
             branch 'release/*'
             branch 'develop'
           }
