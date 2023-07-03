@@ -52,10 +52,9 @@ lazy_static! {
         "DST",
         "SRC",
         "STATE",
-        "BLKS-TOTAL",
-        "BLKS-RECOVERED",
-        "BLKS-TRANSFERRED",
-        "BLKS-SIZE",
+        "TOTAL",
+        "RECOVERED",
+        "TRANSFERRED",
         "IS-PARTIAL",
         "START-TIME",
         "END-TIME"
