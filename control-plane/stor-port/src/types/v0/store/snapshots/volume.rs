@@ -339,6 +339,10 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
     fn pending_op(&self) -> Option<&VolumeSnapshotOperation> {
         self.metadata.operation.as_ref().map(|o| &o.operation)
     }
+
+    fn allow_op_creating(&mut self, operation: &VolumeSnapshotOperation) -> bool {
+        matches!(operation, VolumeSnapshotOperation::CleanupStaleTransactions)
+    }
 }
 
 /// Key used by the store to uniquely identify a VolumeSnapshot.

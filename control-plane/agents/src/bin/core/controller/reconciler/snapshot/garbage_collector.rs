@@ -59,6 +59,7 @@ impl GarbageCollect for OperationGuardArc<VolumeSnapshot> {
             self.destroy_deleting(context).await,
             creating_orphaned_volume_snapshot_reconciler(self, context).await,
             prune_volume_snapshot_reconciler(self, context).await,
+            delete_no_transaction_volume_snapshot_reconciler(self, context).await,
         ])
     }
 
@@ -90,15 +91,12 @@ async fn deleting_volume_snapshot_reconciler(
         return Ok(PollerState::Idle);
     }
 
-    let Some(snap_rsc) = context.specs().volume_snapshot_rsc(snapshot.uuid()) else {
-        return Ok(PollerState::Idle);
-    };
+    let snap_rsc = snapshot.resource().clone();
 
-    let snap_uuid = snapshot.uuid().clone();
     match snapshot
         .destroy(
             context.registry(),
-            &DestroyVolumeSnapshotRequest::new(snap_rsc, None, snap_uuid),
+            &DestroyVolumeSnapshotRequest::new(snap_rsc, None, snapshot.uuid().clone()),
         )
         .await
     {
@@ -133,15 +131,12 @@ async fn creating_orphaned_volume_snapshot_reconciler(
         return Ok(PollerState::Idle);
     }
 
-    let Some(snap_rsc) = context.specs().volume_snapshot_rsc(snapshot.uuid()) else {
-        return Ok(PollerState::Idle);
-    };
+    let snap_rsc = snapshot.resource().clone();
 
-    let snap_uuid = snapshot.uuid().clone();
     match snapshot
         .destroy(
             context.registry(),
-            &DestroyVolumeSnapshotRequest::new(snap_rsc, None, snap_uuid),
+            &DestroyVolumeSnapshotRequest::new(snap_rsc, None, snapshot.uuid().clone()),
         )
         .await
     {
@@ -178,6 +173,32 @@ async fn prune_volume_snapshot_reconciler(
             Some(utils::SNAPSHOT_TRANSACTION_PRUNE_LIMIT),
         )
         .await;
+
+    Ok(PollerState::Idle)
+}
+
+#[tracing::instrument(skip(snapshot, context), level = "trace", fields(snapshot.id = %snapshot.uuid(), request.reconcile = true))]
+async fn delete_no_transaction_volume_snapshot_reconciler(
+    snapshot: &mut OperationGuardArc<VolumeSnapshot>,
+    context: &PollContext,
+) -> PollResult {
+    // Only proceed if the spec is in creating and has no transactions.
+    if !snapshot.as_ref().status().creating()
+        || !snapshot.as_ref().metadata().transactions().is_empty()
+    {
+        return Ok(PollerState::Idle);
+    }
+
+    let snap_rsc = snapshot.resource().clone();
+
+    // TODO: Call the destroy using the volume guard if present.
+    snapshot
+        .destroy(
+            context.registry(),
+            &DestroyVolumeSnapshotRequest::new(snap_rsc, None, snapshot.uuid().clone()),
+        )
+        .await
+        .ok();
 
     Ok(PollerState::Idle)
 }
