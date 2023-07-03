@@ -719,6 +719,7 @@ pub(crate) trait SpecOperationsHelper:
         let _ = self.busy()?;
 
         match self.status() {
+            SpecStatus::Creating if self.allow_op_creating(&operation) => Ok(()),
             SpecStatus::Creating => Err(SvcError::PendingCreation {
                 id: self.uuid_str(),
                 kind: self.kind(),

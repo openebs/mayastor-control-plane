@@ -198,6 +198,13 @@ impl<T: OperationSequencer + Sized, R> OperationGuard<T, R> {
     }
 }
 
+impl<T: Clone + Debug + AsOperationSequencer, R> OperationGuard<ResourceMutex<T>, R> {
+    /// Get the ResourceMutex for the concerned resource.
+    pub fn resource(&self) -> &ResourceMutex<T> {
+        &self.inner
+    }
+}
+
 /// Tracing simple string messages with resource specific information
 /// eg, volume.uuid for volumes and replica.uuid for replicas
 pub(crate) trait TraceStrLog {

@@ -24,7 +24,8 @@ use stor_port::{
                 replica::{ReplicaSnapshot, ReplicaSnapshotSource, ReplicaSnapshotSpec},
                 volume::{
                     VolumeSnapshot, VolumeSnapshotCompleter, VolumeSnapshotCreateInfo,
-                    VolumeSnapshotCreateResult, VolumeSnapshotOperation, VolumeSnapshotUserSpec,
+                    VolumeSnapshotCreateResult, VolumeSnapshotOperation, VolumeSnapshotSpecStatus,
+                    VolumeSnapshotUserSpec,
                 },
             },
             volume::{VolumeOperation, VolumeSpec, VolumeTarget},
@@ -252,11 +253,16 @@ impl ResourcePruning for OperationGuardArc<VolumeSnapshot> {
         registry: &Registry,
         max_prune_limit: Option<usize>,
     ) -> Result<(), SvcError> {
-        // If the transaction is the only transaction or there are no transactions, then no cleanup
-        // is needed. Also if no nodes are online don't attempt.
-        if self.as_ref().metadata().transactions().len() <= 1
-            || !self.check_nodes_availability(registry).await
-        {
+        // Check if pruning is allowed based on status and transactions count. Also if no nodes are
+        // online don't attempt.
+        let transactions = self.as_ref().metadata().transactions().len();
+        let pruning_allowed = match self.as_ref().status() {
+            VolumeSnapshotSpecStatus::Creating => transactions > 0,
+            VolumeSnapshotSpecStatus::Created(_) => transactions > 1,
+            _ => false,
+        };
+
+        if !pruning_allowed || !self.check_nodes_availability(registry).await {
             return Ok(());
         }
 
