@@ -3,11 +3,13 @@
 SCRIPT_DIR="$(dirname "$0")"
 
 cleanup_handler() {
-  "$SCRIPT_DIR"/rust/deployer-cleanup.sh || true
+  ERROR=$?
+  "$SCRIPT_DIR"/deployer-cleanup.sh || true
+  if [ $ERROR != 0 ]; then exit $ERROR; fi
 }
 
-trap cleanup_handler ERR INT QUIT TERM HUP EXIT
-cleanup_handler
+cleanup_handler >/dev/null
+trap cleanup_handler INT QUIT TERM HUP EXIT
 
 set -euxo pipefail
 # test dependencies
