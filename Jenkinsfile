@@ -144,6 +144,7 @@ pipeline {
               sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
             }
             sh 'printenv'
+            sh 'nix-shell --run "cargo build --bins"'
             sh 'nix-shell --run "./scripts/rust/test.sh"'
           }
           post {
@@ -162,7 +163,8 @@ pipeline {
               sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
             }
             sh 'printenv'
-            sh 'nix-shell --run "cargo test -p deployer-cluster"'
+            sh 'nix-shell --run "cargo build --bins"'
+            sh 'nix-shell --run "deployer start --image-pull-policy always -w 60s && deployer stop"'
             sh 'nix-shell --run "./scripts/python/test.sh"'
           }
           post {
