@@ -14,20 +14,25 @@ SCRIPT_DIR="$(dirname "$0")"
 export ROOT_DIR="$SCRIPT_DIR/../.."
 
 cleanup_handler() {
+  ERROR=$?
   "$SCRIPT_DIR"/test-residue-cleanup.sh || true
   "$SCRIPT_DIR"/../rust/deployer-cleanup.sh || true
+  if [ $ERROR != 0 ]; then exit $ERROR; fi
 }
 
 # FAST mode to avoid rebuilding certain dependencies
-if [ -n "$FAST" ]; then
+FAST=${FAST:-"0"}
+if [ "$FAST" != "0" ]; then
   echo "FAST enabled - will not rebuild the csi&openapi clients nor the deployer. (Make sure they are built already)"
 fi
 
 # shellcheck source=/dev/null
 . "$ROOT_DIR"/tests/bdd/setup.sh
 
-trap cleanup_handler ERR INT QUIT TERM HUP EXIT
-cleanup_handler
+cleanup_handler >/dev/null
+if [ "$CLEAN" != "0" ]; then
+  trap cleanup_handler INT QUIT TERM HUP EXIT
+fi
 
 # Extra arguments will be provided directly to pytest, otherwise the bdd folder will be tested with default arguments
 if [ $# -eq 0 ]; then
