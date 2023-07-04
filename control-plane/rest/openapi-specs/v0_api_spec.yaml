@@ -3553,12 +3553,14 @@ components:
           type: integer
           format: int64
           minimum: 0
+          default: 0
         allocated:
           description: Amount of actually allocated disk space for this replica in bytes.
           example: 80241024
           type: integer
           format: int64
           minimum: 0
+          default: 0
         allocated_snapshots:
           description: Amount of actually allocated disk space for this replica's snapshots in bytes.
           example: 80241024

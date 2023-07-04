@@ -46,7 +46,7 @@ cat <<REPO | tee "$source_file"
   "owner": "${owner}",
   "repo": "${repo}",
   "rev": "$rev",
-  "sha256": "$sha256"
+  "hash": "sha256:$sha256"
 }
 REPO
 echo
