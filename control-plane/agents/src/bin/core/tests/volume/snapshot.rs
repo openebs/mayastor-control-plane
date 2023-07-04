@@ -216,8 +216,8 @@ async fn snapshot_timeout() {
         .with_agents(vec!["core"])
         .with_io_engines(2)
         .with_tmpfs_pool_ix(1, 100 * 1024 * 1024)
-        .with_cache_period("1s")
-        .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
+        .with_cache_period("10s")
+        .with_reconcile_period(Duration::from_secs(10), Duration::from_secs(10))
         .with_req_timeouts(req_timeout, req_timeout)
         .with_grpc_timeouts(grpc_timeout_opts(grpc_timeout))
         .build()
@@ -309,9 +309,12 @@ async fn snapshot_timeout() {
         .await
         .expect_err("timeout");
     tracing::info!("Replica Snapshot Error: {replica_snapshot:?}");
-    tokio::time::sleep(req_timeout).await;
+    tokio::time::sleep(req_timeout - grpc_timeout).await;
 
     cluster.composer().thaw(&cluster.node(0)).await.unwrap();
+    wait_node_online(&grpc.node(), cluster.node(0))
+        .await
+        .unwrap();
 
     let snapshots = vol_cli
         .get_snapshots(Filter::Snapshot(snapshot_id.clone()), false, None, None)
