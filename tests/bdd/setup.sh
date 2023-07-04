@@ -18,7 +18,8 @@ VENV_PTH="$CSI_OUT:$BDD_DIR"
 SETUP_ARGS=(--venv-pth "$VENV_DIR" "$VENV_PTH")
 
 # if FAST is set then we do not regenerate the python csi, the python openapi and the rust component binaries
-if [ -z "$FAST" ]; then
+FAST=${FAST:-"0"}
+if [ "$FAST" != "1" ]; then
   SETUP_ARGS=("${SETUP_ARGS[@]}" --csi "$CSI_PROTO" "$CSI_OUT" --build-bins --build-openapi --ha "$HA_PROTO_PARENT_DIR" "$HA_OUT")
 fi
 
