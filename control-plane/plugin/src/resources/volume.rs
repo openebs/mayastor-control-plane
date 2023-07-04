@@ -9,6 +9,7 @@ use crate::{
     operations::{RebuildHistory, ReplicaTopology},
     resources::utils::{optional_cell, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
 };
+use chrono::prelude::*;
 use openapi::tower::client::Url;
 use prettytable::Row;
 use std::{collections::HashMap, str::FromStr};
@@ -264,17 +265,22 @@ impl CreateRows for openapi::models::RebuildHistory {
         self.records
             .iter()
             .map(|rec| {
+                let start: DateTime<Utc> = DateTime::from_str(rec.start_time.as_str())
+                    .expect("Cant map time to required format");
+                let start_formatted = start.format("%Y-%m-%dT%H:%M:%SZ");
+                let end: DateTime<Utc> = DateTime::from_str(rec.end_time.as_str())
+                    .expect("Cant map time to required format");
+                let end_formatted = end.format("%Y-%m-%dT%H:%M:%SZ");
                 row![
                     child_uuid(rec.child_uri.as_str()),
                     child_uuid(rec.src_uri.as_str()),
                     rec.rebuild_job_state,
-                    to_human_readable(rec.blocks_total),
-                    to_human_readable(rec.blocks_recovered),
-                    to_human_readable(rec.blocks_transferred),
-                    to_human_readable(rec.block_size),
+                    to_human_readable(rec.blocks_total * rec.block_size),
+                    to_human_readable(rec.blocks_recovered * rec.block_size),
+                    to_human_readable(rec.blocks_transferred * rec.block_size),
                     rec.is_partial,
-                    rec.start_time,
-                    rec.end_time,
+                    start_formatted,
+                    end_formatted
                 ]
             })
             .collect()
