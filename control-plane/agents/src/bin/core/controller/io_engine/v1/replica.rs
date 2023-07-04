@@ -8,9 +8,9 @@ use rpc::v1::{
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
-        CreateReplica, CreateReplicaSnapshot, DestroyReplica, DestroyReplicaSnapshot,
-        ListReplicaSnapshots, NodeId, Replica, ReplicaId, ReplicaSnapshot, ShareReplica,
-        UnshareReplica,
+        CreateReplica, CreateReplicaSnapshot, CreateSnapshotClone, DestroyReplica,
+        DestroyReplicaSnapshot, ListReplicaSnapshots, ListSnapshotClones, NodeId, Replica,
+        ReplicaId, ReplicaSnapshot, ShareReplica, UnshareReplica,
     },
 };
 
@@ -183,5 +183,19 @@ impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
 
         let ret = response.into_inner();
         ret.snapshots.iter().map(|s| s.try_to_agent()).collect()
+    }
+
+    async fn create_snapshot_clone(
+        &self,
+        _request: &CreateSnapshotClone,
+    ) -> Result<Replica, SvcError> {
+        todo!()
+    }
+
+    async fn list_snapshot_clones(
+        &self,
+        _request: &ListSnapshotClones,
+    ) -> Result<Vec<Replica>, SvcError> {
+        todo!()
     }
 }

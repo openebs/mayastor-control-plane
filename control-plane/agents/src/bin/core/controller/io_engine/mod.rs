@@ -15,11 +15,12 @@ use stor_port::{
     transport_api::v0::BlockDevices,
     types::v0::transport::{
         AddNexusChild, ApiVersion, CreateNexus, CreatePool, CreateReplica, CreateReplicaSnapshot,
-        DestroyNexus, DestroyPool, DestroyReplica, DestroyReplicaSnapshot, FaultNexusChild,
-        GetBlockDevices, GetRebuildRecord, ImportPool, ListRebuildRecord, ListReplicaSnapshots,
-        Nexus, NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, NodeId,
-        PoolState, RebuildHistory, Register, RemoveNexusChild, Replica, ReplicaId, ReplicaSnapshot,
-        ShareNexus, ShareReplica, ShutdownNexus, UnshareNexus, UnshareReplica,
+        CreateSnapshotClone, DestroyNexus, DestroyPool, DestroyReplica, DestroyReplicaSnapshot,
+        FaultNexusChild, GetBlockDevices, GetRebuildRecord, ImportPool, ListRebuildRecord,
+        ListReplicaSnapshots, ListSnapshotClones, Nexus, NexusChildAction, NexusChildActionContext,
+        NexusChildActionKind, NexusId, NodeId, PoolState, RebuildHistory, Register,
+        RemoveNexusChild, Replica, ReplicaId, ReplicaSnapshot, ShareNexus, ShareReplica,
+        ShutdownNexus, UnshareNexus, UnshareReplica,
     },
 };
 
@@ -189,6 +190,18 @@ pub(crate) trait ReplicaSnapshotApi {
         &self,
         request: &ListReplicaSnapshots,
     ) -> Result<Vec<ReplicaSnapshot>, SvcError>;
+
+    /// Create replica clone from the snapshot.
+    async fn create_snapshot_clone(
+        &self,
+        request: &CreateSnapshotClone,
+    ) -> Result<Replica, SvcError>;
+
+    /// List snapshot clones.
+    async fn list_snapshot_clones(
+        &self,
+        request: &ListSnapshotClones,
+    ) -> Result<Vec<Replica>, SvcError>;
 }
 
 #[async_trait]

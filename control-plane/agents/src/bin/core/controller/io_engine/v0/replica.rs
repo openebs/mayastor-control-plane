@@ -4,9 +4,9 @@ use rpc::io_engine::Null;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
-        CreateReplica, CreateReplicaSnapshot, DestroyReplica, DestroyReplicaSnapshot,
-        ListReplicaSnapshots, NodeId, Replica, ReplicaId, ReplicaSnapshot, ShareReplica,
-        UnshareReplica,
+        CreateReplica, CreateReplicaSnapshot, CreateSnapshotClone, DestroyReplica,
+        DestroyReplicaSnapshot, ListReplicaSnapshots, ListSnapshotClones, NodeId, Replica,
+        ReplicaId, ReplicaSnapshot, ShareReplica, UnshareReplica,
     },
 };
 
@@ -136,6 +136,28 @@ impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
         Err(SvcError::GrpcRequestError {
             resource: ResourceKind::Replica,
             request: "list_snapshots".to_string(),
+            source: tonic::Status::unimplemented(""),
+        })
+    }
+
+    async fn create_snapshot_clone(
+        &self,
+        _request: &CreateSnapshotClone,
+    ) -> Result<Replica, SvcError> {
+        Err(SvcError::GrpcRequestError {
+            resource: ResourceKind::Replica,
+            request: "create_snapshot_clone".to_string(),
+            source: tonic::Status::unimplemented(""),
+        })
+    }
+
+    async fn list_snapshot_clones(
+        &self,
+        _request: &ListSnapshotClones,
+    ) -> Result<Vec<Replica>, SvcError> {
+        Err(SvcError::GrpcRequestError {
+            resource: ResourceKind::Replica,
+            request: "create_snapshot_clone".to_string(),
             source: tonic::Status::unimplemented(""),
         })
     }

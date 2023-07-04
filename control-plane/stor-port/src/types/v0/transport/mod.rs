@@ -89,6 +89,10 @@ pub enum MessageIdVs {
     DestroyReplicaSnapshot,
     /// List Replica Snapshots.
     ListReplicaSnapshots,
+    /// Create a Snapshot Clone.
+    CreateSnapshotClone,
+    /// List all clones from snapshot.
+    ListSnapshotClones,
     /// Volume Service
     ///
     /// Get nexuses with filter.

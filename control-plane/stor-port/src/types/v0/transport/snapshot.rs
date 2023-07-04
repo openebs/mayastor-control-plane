@@ -2,6 +2,7 @@ use super::*;
 use serde::Serialize;
 
 rpc_impl_string_uuid!(SnapshotId, "UUID of a snapshot");
+rpc_impl_string_uuid!(SnapshotCloneId, "UUID of a snapshot clone");
 
 /// The entity if of a snapshot.
 pub type SnapshotEntId = String;
@@ -9,6 +10,8 @@ pub type SnapshotEntId = String;
 pub type SnapshotTxId = String;
 /// The name of a snapshot.
 pub type SnapshotName = String;
+/// The name of a snapshot clone.
+pub type SnapshotCloneName = String;
 
 /// Common set of snapshot parameters used for snapshot creation against `TargetId`.
 #[derive(Debug)]
@@ -118,5 +121,39 @@ pub enum ListReplicaSnapshots {
     /// All snapshots from the given source.
     ReplicaSnapshots(ReplicaId),
     /// The specific snapshot.
+    Snapshot(SnapshotId),
+}
+
+/// The request type to create a snapshot's clone.
+pub type CreateSnapshotClone = SnapshotCloneParameters;
+
+/// Common set of parameters used for snapshot clone creation.
+#[derive(Debug, Clone)]
+pub struct SnapshotCloneParameters {
+    /// Unique identification of the source snapshot.
+    snapshot_uuid: SnapshotId,
+    /// Name of the snapshot clone.
+    name: SnapshotCloneName,
+    /// Unique identification of the snapshot clone.
+    uuid: SnapshotCloneId,
+}
+impl SnapshotCloneParameters {
+    /// Get a reference to the snapshot uuid.
+    pub fn snapshot_uuid(&self) -> &SnapshotId {
+        &self.snapshot_uuid
+    }
+    /// Get a reference to the clone name.
+    pub fn name(&self) -> &SnapshotCloneName {
+        &self.name
+    }
+    /// Get a reference to the clone uuid.
+    pub fn uuid(&self) -> &SnapshotCloneId {
+        &self.uuid
+    }
+}
+
+/// List all clones from the given snapshot.
+#[derive(Debug, Clone)]
+pub enum ListSnapshotClones {
     Snapshot(SnapshotId),
 }

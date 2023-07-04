@@ -23,13 +23,13 @@ use stor_port::{
         store::{nexus::NexusState, replica::ReplicaState},
         transport::{
             AddNexusChild, ApiVersion, Child, CreateNexus, CreatePool, CreateReplica,
-            CreateReplicaSnapshot, DestroyNexus, DestroyPool, DestroyReplica,
+            CreateReplicaSnapshot, CreateSnapshotClone, DestroyNexus, DestroyPool, DestroyReplica,
             DestroyReplicaSnapshot, FaultNexusChild, GetRebuildRecord, ImportPool,
-            ListRebuildRecord, ListReplicaSnapshots, MessageIdVs, Nexus, NexusChildAction,
-            NexusChildActionContext, NexusChildActionKind, NexusId, NodeId, NodeState, NodeStatus,
-            PoolId, PoolState, RebuildHistory, Register, RemoveNexusChild, Replica, ReplicaId,
-            ReplicaName, ReplicaSnapshot, ShareNexus, ShareReplica, ShutdownNexus, SnapshotId,
-            UnshareNexus, UnshareReplica, VolumeId,
+            ListRebuildRecord, ListReplicaSnapshots, ListSnapshotClones, MessageIdVs, Nexus,
+            NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, NodeId,
+            NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register, RemoveNexusChild,
+            Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ShareNexus, ShareReplica,
+            ShutdownNexus, SnapshotId, UnshareNexus, UnshareReplica, VolumeId,
         },
     },
 };
@@ -1616,6 +1616,25 @@ impl ReplicaSnapshotApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
     ) -> Result<Vec<ReplicaSnapshot>, SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
         dataplane.list_repl_snapshots(request).await
+    }
+
+    async fn create_snapshot_clone(
+        &self,
+        request: &CreateSnapshotClone,
+    ) -> Result<Replica, SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        let clone = dataplane.create_snapshot_clone(request).await?;
+        self.update_replica_state(Either::Insert(clone.clone()))
+            .await;
+        Ok(clone)
+    }
+
+    async fn list_snapshot_clones(
+        &self,
+        request: &ListSnapshotClones,
+    ) -> Result<Vec<Replica>, SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        dataplane.list_snapshot_clones(request).await
     }
 }
 
