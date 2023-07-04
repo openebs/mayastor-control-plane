@@ -1,8 +1,10 @@
 from urllib.parse import urlparse, parse_qs, ParseResult
+from retrying import retry
+from common.command import run_cmd_async_at
+
 import subprocess
 import time
 import json
-from common.command import run_cmd_async_at
 
 
 async def nvme_remote_connect(remote, uri):
@@ -16,19 +18,7 @@ async def nvme_remote_connect(remote, uri):
     command = f"sudo nvme connect -t tcp -s {port} -a {host} -n {nqn} {hostnqn}"
 
     await run_cmd_async_at(remote, command)
-    time.sleep(1)
-    command = "sudo nvme list -v -o json"
-
-    discover = await run_cmd_async_at(remote, command)
-    discover = json.loads(discover.stdout)
-
-    dev = list(filter(lambda d: nqn in d.get("SubsystemNQN"), discover.get("Devices")))
-
-    # we should only have one connection
-    assert len(dev) == 1
-    dev_path = dev[0].get("Controllers")[0].get("Namespaces")[0].get("NameSpace")
-
-    return f"/dev/{dev_path}"
+    return wait_nvme_find_device(uri)
 
 
 async def nvme_remote_disconnect(remote, uri):
@@ -71,28 +61,8 @@ def nvme_connect(uri):
     command = f"sudo nvme connect -t tcp -s {port} -a {host} -n {nqn} {hostnqn}"
     print(command)
     subprocess.run(command, check=True, shell=True, capture_output=False)
-    time.sleep(1)
-    command = "sudo nvme list -v -o json"
-    discover = json.loads(
-        subprocess.run(
-            command, shell=True, check=True, text=True, capture_output=True
-        ).stdout
-    )
 
-    dev = list(
-        filter(
-            lambda d: list(
-                filter(lambda dd: nqn in dd.get("SubsystemNQN"), d.get("Subsystems"))
-            ),
-            discover.get("Devices"),
-        )
-    )
-    # we should only have one connection
-    assert len(dev) == 1
-    assert len(dev[0].get("Subsystems")) == 1
-    subsystem = dev[0].get("Subsystems")[0]
-
-    return "/dev/{}".format(subsystem["Namespaces"][0].get("NameSpace"))
+    return wait_nvme_find_device(uri)
 
 
 def nvme_id_ctrl(device):
@@ -238,3 +208,8 @@ def nvme_set_reconnect_delay(uri, delay=10):
 
     command = f"echo {delay} | sudo tee -a /sys/class/nvme/{controller}/reconnect_delay"
     subprocess.run(command, check=True, shell=True, capture_output=True)
+
+
+@retry(wait_fixed=100, stop_max_attempt_number=20)
+def wait_nvme_find_device(uri):
+    return nvme_find_device(uri)
