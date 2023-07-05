@@ -4,6 +4,8 @@ use crate::{
     rest_wrapper::RestClient,
 };
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use std::str::FromStr;
 
 use crate::resources::utils::{CreateRow, GetHeaderRow};
 use prettytable::Row;
@@ -12,14 +14,14 @@ use prettytable::Row;
 #[derive(clap::Args, Debug)]
 pub struct VolumeSnapshots {}
 
-#[derive(Debug, Clone, clap::Args)]
 /// Volume Snapshot args.
+#[derive(Debug, Clone, clap::Args)]
 pub struct VolumeSnapshotArgs {
-    #[clap(long)]
     /// Uuid of the volume (Optional).
-    volume: Option<VolumeId>,
     #[clap(long)]
+    volume: Option<VolumeId>,
     /// Uuid of the snapshot (Optional).
+    #[clap(long)]
     snapshot: Option<SnapshotId>,
 }
 
@@ -38,10 +40,19 @@ impl VolumeSnapshotArgs {
 impl CreateRow for openapi::models::VolumeSnapshot {
     fn row(&self) -> Row {
         let state = &self.state;
+        let timestamp =
+            state
+                .timestamp
+                .as_ref()
+                .map(|timestamp| match DateTime::<Utc>::from_str(timestamp) {
+                    Ok(timestamp) => timestamp.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+                    Err(_) => timestamp.to_string(),
+                });
+
         row![
             state.uuid,
-            optional_cell(state.timestamp.as_ref()),
-            state.size,
+            optional_cell(timestamp),
+            ::utils::bytes::into_human(state.size),
             state.source_volume
         ]
     }
