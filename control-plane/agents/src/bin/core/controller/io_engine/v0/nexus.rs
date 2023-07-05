@@ -10,7 +10,7 @@ use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
         AddNexusChild, Child, CreateNexus, DestroyNexus, FaultNexusChild, Nexus, NexusChildAction,
-        NexusChildActionContext, NexusId, NodeId, RemoveNexusChild, ShareNexus, ShutdownNexus,
+        NexusChildActionContext, NexusId, RemoveNexusChild, ShareNexus, ShutdownNexus,
         UnshareNexus,
     },
 };
@@ -19,7 +19,7 @@ use snafu::ResultExt;
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::NexusListApi for super::RpcClient {
-    async fn list_nexuses(&self, node_id: &NodeId) -> Result<Vec<Nexus>, SvcError> {
+    async fn list_nexuses(&self) -> Result<Vec<Nexus>, SvcError> {
         let rpc_nexuses = self
             .client()
             .list_nexus_v2(Null {})
@@ -32,7 +32,7 @@ impl crate::controller::io_engine::NexusListApi for super::RpcClient {
         let rpc_nexuses = &rpc_nexuses.get_ref().nexus_list;
         let nexuses = rpc_nexuses
             .iter()
-            .filter_map(|n| match rpc_nexus_v2_to_agent(n, node_id) {
+            .filter_map(|n| match rpc_nexus_v2_to_agent(n, self.context.node()) {
                 Ok(n) => Some(n),
                 Err(error) => {
                     tracing::error!(error=%error, "Could not convert rpc nexus");
@@ -44,8 +44,8 @@ impl crate::controller::io_engine::NexusListApi for super::RpcClient {
         Ok(nexuses)
     }
 
-    async fn get_nexus(&self, node_id: &NodeId, nexus_id: &NexusId) -> Result<Nexus, SvcError> {
-        let nexuses = self.list_nexuses(node_id).await?;
+    async fn get_nexus(&self, nexus_id: &NexusId) -> Result<Nexus, SvcError> {
+        let nexuses = self.list_nexuses().await?;
         nexuses
             .into_iter()
             .find(|nexus| &nexus.uuid == nexus_id)
@@ -132,13 +132,13 @@ impl crate::controller::io_engine::NexusShareApi<Nexus, Nexus> for super::RpcCli
         let _ =
             crate::controller::io_engine::NexusShareApi::<String, ()>::share_nexus(self, request)
                 .await?;
-        self.fetch_nexus(&request.node, &request.uuid).await
+        self.fetch_nexus(&request.uuid).await
     }
 
     async fn unshare_nexus(&self, request: &UnshareNexus) -> Result<Nexus, SvcError> {
         crate::controller::io_engine::NexusShareApi::<String, ()>::unshare_nexus(self, request)
             .await?;
-        self.fetch_nexus(&request.node, &request.uuid).await
+        self.fetch_nexus(&request.uuid).await
     }
 }
 
@@ -187,7 +187,7 @@ impl crate::controller::io_engine::NexusChildApi<Nexus, Nexus, ()> for super::Rp
         let child =
             crate::controller::io_engine::NexusChildApi::<Child, (), ()>::add_child(self, request)
                 .await;
-        let nexus = self.fetch_nexus(&request.node, &request.nexus).await?;
+        let nexus = self.fetch_nexus(&request.nexus).await?;
         match child {
             Ok(_) => Ok(nexus),
             Err(_) if nexus.contains_child(&request.uri) => {
@@ -207,7 +207,7 @@ impl crate::controller::io_engine::NexusChildApi<Nexus, Nexus, ()> for super::Rp
             self, request,
         )
         .await;
-        let nexus = self.fetch_nexus(&request.node, &request.nexus).await?;
+        let nexus = self.fetch_nexus(&request.nexus).await?;
         match removed {
             Ok(_) => Ok(nexus),
             Err(_) if !nexus.contains_child(&request.uri) => {
@@ -245,9 +245,9 @@ impl crate::controller::io_engine::NexusChildActionApi<NexusChildActionContext>
 }
 
 impl super::RpcClient {
-    async fn fetch_nexus(&self, node: &NodeId, nexus: &NexusId) -> Result<Nexus, SvcError> {
+    async fn fetch_nexus(&self, nexus: &NexusId) -> Result<Nexus, SvcError> {
         let fetcher = self.fetcher_client().await?;
-        let nexuses = fetcher.list_nexuses(node).await?;
+        let nexuses = fetcher.list_nexuses().await?;
         match nexuses.into_iter().find(|n| &n.uuid == nexus) {
             Some(nexus) => Ok(nexus),
             None => Err(SvcError::NotFound {

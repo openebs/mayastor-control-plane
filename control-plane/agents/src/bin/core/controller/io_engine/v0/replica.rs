@@ -5,8 +5,8 @@ use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
         CreateReplica, CreateReplicaSnapshot, CreateSnapshotClone, DestroyReplica,
-        DestroyReplicaSnapshot, ListReplicaSnapshots, ListSnapshotClones, NodeId, Replica,
-        ReplicaId, ReplicaSnapshot, ShareReplica, UnshareReplica,
+        DestroyReplicaSnapshot, ListReplicaSnapshots, ListSnapshotClones, Replica, ReplicaId,
+        ReplicaSnapshot, ShareReplica, UnshareReplica,
     },
 };
 
@@ -14,7 +14,7 @@ use snafu::ResultExt;
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
-    async fn list_replicas(&self, node_id: &NodeId) -> Result<Vec<Replica>, SvcError> {
+    async fn list_replicas(&self) -> Result<Vec<Replica>, SvcError> {
         let rpc_replicas =
             self.client()
                 .list_replicas_v2(Null {})
@@ -28,7 +28,7 @@ impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
 
         let replicas = rpc_replicas
             .iter()
-            .filter_map(|p| match rpc_replica_to_agent(p, node_id) {
+            .filter_map(|p| match rpc_replica_to_agent(p, self.context.node()) {
                 Ok(r) => Some(r),
                 Err(error) => {
                     tracing::error!(error=%error, "Could not convert rpc replica");

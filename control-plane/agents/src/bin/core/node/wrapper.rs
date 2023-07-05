@@ -273,7 +273,7 @@ impl NodeWrapper {
 
     /// Get the `NodeStateFetcher` to fetch information from the data-plane.
     pub(crate) fn fetcher(&self) -> NodeStateFetcher {
-        NodeStateFetcher::new(self.node_state.clone(), self.rebuild_since_timestamp())
+        NodeStateFetcher::new(self.rebuild_since_timestamp())
     }
 
     /// Whether the watchdog deadline has expired.
@@ -849,22 +849,16 @@ impl NodeWrapper {
 /// Fetches node state from the dataplane.
 #[derive(Debug, Clone)]
 pub(crate) struct NodeStateFetcher {
-    /// Inner Node state.
-    node_state: NodeState,
     /// Fetch rebuild history since end_time timestamp.
     rebuild_since_timestamp: Option<prost_types::Timestamp>,
 }
 
 impl NodeStateFetcher {
     /// Get new `Self` from the `NodeState`.
-    fn new(node_state: NodeState, rebuild_since_timestamp: Option<prost_types::Timestamp>) -> Self {
+    fn new(rebuild_since_timestamp: Option<prost_types::Timestamp>) -> Self {
         Self {
-            node_state,
             rebuild_since_timestamp,
         }
-    }
-    fn id(&self) -> &NodeId {
-        self.node_state.id()
     }
     async fn ignore_unimplemented<T: Default, F: Future<Output = Result<T, SvcError>>>(
         fetch: F,
@@ -941,15 +935,15 @@ impl NodeStateFetcher {
     }
     /// Fetch all replicas from this node via gRPC.
     async fn fetch_replicas(&self, client: &mut GrpcClient) -> Result<Vec<Replica>, SvcError> {
-        client.list_replicas(self.id()).await
+        client.list_replicas().await
     }
     /// Fetch all pools from this node via gRPC.
     async fn fetch_pools(&self, client: &mut GrpcClient) -> Result<Vec<PoolState>, SvcError> {
-        client.list_pools(self.id()).await
+        client.list_pools().await
     }
     /// Fetch all nexuses from the node via gRPC.
     async fn fetch_nexuses(&self, client: &mut GrpcClient) -> Result<Vec<Nexus>, SvcError> {
-        client.list_nexuses(self.id()).await
+        client.list_nexuses().await
     }
 }
 
