@@ -41,6 +41,18 @@ pub struct ReplicaSpaceUsage {
     /// Number of actually used clusters for this replica's snapshots.
     pub allocated_clusters_snapshots: u64,
 }
+impl ReplicaSpaceUsage {
+    /// Get the total allocated bytes, including from snapshots.
+    pub fn total_allocated(&self) -> u64 {
+        self.allocated_bytes + self.allocated_bytes_snapshots
+    }
+    /// Get the distinct allocated bytes from the replica and its snapshots.
+    /// This would signify how much data of the replica range is allocated.
+    /// Not supported at the moment so cap replica+snapshots up to capacity.
+    pub fn allocated_distinct(&self) -> u64 {
+        self.total_allocated().min(self.capacity_bytes)
+    }
+}
 
 /// Replica information.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]

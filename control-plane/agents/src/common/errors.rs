@@ -531,6 +531,7 @@ impl From<SvcError> for ReplyError {
                     NotEnough::OfReplicas { .. } => ResourceKind::Replica,
                     NotEnough::OfNexuses { .. } => ResourceKind::Nexus,
                     NotEnough::OfNodes { .. } => ResourceKind::Node,
+                    NotEnough::PoolFree {} => ResourceKind::Pool,
                 },
                 source: desc.to_string(),
                 extra: error.full_string(),
@@ -919,4 +920,6 @@ pub enum NotEnough {
     OfNexuses { have: u64, need: u64 },
     #[snafu(display("Not enough nodes available, {}/{}", have, need))]
     OfNodes { have: u64, need: u64 },
+    #[snafu(display("Not enough free space in the pool"))]
+    PoolFree {},
 }

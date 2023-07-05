@@ -95,6 +95,8 @@ pub(super) async fn child_enospc_onlineable(
     for r in children.flat_map(|c| c.as_replica()) {
         replicas.push(registry.replica(r.uuid()).await?);
     }
+    // todo: this won't work for volumes with snapshots
+    //  we need to figure out which blocks would require rebuild
     let min_allocated_bytes = replicas
         .into_iter()
         .flat_map(|r| r.space)
