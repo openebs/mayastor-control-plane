@@ -3,14 +3,14 @@ use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::pool::ListPoolOptions;
 use stor_port::{
     transport_api::ResourceKind,
-    types::v0::transport::{CreatePool, DestroyPool, ImportPool, NodeId, PoolState},
+    types::v0::transport::{CreatePool, DestroyPool, ImportPool, PoolState},
 };
 
 use snafu::ResultExt;
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::PoolListApi for super::RpcClient {
-    async fn list_pools(&self, id: &NodeId) -> Result<Vec<PoolState>, SvcError> {
+    async fn list_pools(&self) -> Result<Vec<PoolState>, SvcError> {
         let rpc_pools = self
             .pool()
             .list_pools(ListPoolOptions::default())
@@ -20,7 +20,10 @@ impl crate::controller::io_engine::PoolListApi for super::RpcClient {
                 request: "list_pools",
             })?;
         let rpc_pools = &rpc_pools.get_ref().pools;
-        let pools = rpc_pools.iter().map(|p| rpc_pool_to_agent(p, id)).collect();
+        let pools = rpc_pools
+            .iter()
+            .map(|p| rpc_pool_to_agent(p, self.context.node()))
+            .collect();
         Ok(pools)
     }
 }

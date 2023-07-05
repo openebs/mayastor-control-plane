@@ -29,6 +29,8 @@ message Replica {
   optional google.protobuf.StringValue pool_uuid = 10;
   // space usage information.
   ReplicaSpaceUsage space = 11;
+  // kind of the replica, eg: regular or clone.
+  ReplicaKind kind = 12;
 }
 
 // Multiple replicas
@@ -57,6 +59,16 @@ enum ReplicaStatus {
   Degraded = 2;
   // the replica is unable to be used
   Faulted = 3;
+}
+
+// Kind of the Replica.
+enum ReplicaKind {
+  // A regular data-replica.
+  Regular = 0;
+  // A replica which is another replica's snapshot.
+  Snapshot = 1;
+  // A replica which is a clone of another replica's snapshot.
+  SnapshotClone = 2;
 }
 
 // Create Replica Request

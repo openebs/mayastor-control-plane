@@ -15,11 +15,12 @@ use stor_port::{
     transport_api::v0::BlockDevices,
     types::v0::transport::{
         AddNexusChild, ApiVersion, CreateNexus, CreatePool, CreateReplica, CreateReplicaSnapshot,
-        DestroyNexus, DestroyPool, DestroyReplica, DestroyReplicaSnapshot, FaultNexusChild,
-        GetBlockDevices, GetRebuildRecord, ImportPool, ListRebuildRecord, ListReplicaSnapshots,
-        Nexus, NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, NodeId,
-        PoolState, RebuildHistory, Register, RemoveNexusChild, Replica, ReplicaId, ReplicaSnapshot,
-        ShareNexus, ShareReplica, ShutdownNexus, UnshareNexus, UnshareReplica,
+        CreateSnapshotClone, DestroyNexus, DestroyPool, DestroyReplica, DestroyReplicaSnapshot,
+        FaultNexusChild, GetBlockDevices, GetRebuildRecord, ImportPool, ListRebuildRecord,
+        ListReplicaSnapshots, ListSnapshotClones, Nexus, NexusChildAction, NexusChildActionContext,
+        NexusChildActionKind, NexusId, PoolState, RebuildHistory, Register, RemoveNexusChild,
+        Replica, ReplicaId, ReplicaSnapshot, ShareNexus, ShareReplica, ShutdownNexus, UnshareNexus,
+        UnshareReplica,
     },
 };
 
@@ -51,7 +52,7 @@ pub(crate) trait NodeApi:
 #[async_trait]
 pub(crate) trait PoolListApi {
     /// List pools based on api version in context.
-    async fn list_pools(&self, node_id: &NodeId) -> Result<Vec<PoolState>, SvcError>;
+    async fn list_pools(&self) -> Result<Vec<PoolState>, SvcError>;
 }
 
 #[async_trait]
@@ -67,7 +68,7 @@ pub(crate) trait PoolApi {
 #[async_trait]
 pub(crate) trait ReplicaListApi {
     /// List all replicas from the node.
-    async fn list_replicas(&self, node_id: &NodeId) -> Result<Vec<Replica>, SvcError>;
+    async fn list_replicas(&self) -> Result<Vec<Replica>, SvcError>;
 
     /// Get the specified replica from the node.
     async fn get_replica(&self, replica_id: &ReplicaId) -> Result<Replica, SvcError>;
@@ -89,9 +90,9 @@ pub(crate) trait ReplicaApi {
 #[async_trait]
 pub(crate) trait NexusListApi {
     /// List all nexuses from the node.
-    async fn list_nexuses(&self, node_id: &NodeId) -> Result<Vec<Nexus>, SvcError>;
+    async fn list_nexuses(&self) -> Result<Vec<Nexus>, SvcError>;
     /// Get the specified nexus from the node.
-    async fn get_nexus(&self, node_id: &NodeId, nexus_id: &NexusId) -> Result<Nexus, SvcError>;
+    async fn get_nexus(&self, nexus_id: &NexusId) -> Result<Nexus, SvcError>;
 }
 
 #[async_trait]
@@ -189,6 +190,18 @@ pub(crate) trait ReplicaSnapshotApi {
         &self,
         request: &ListReplicaSnapshots,
     ) -> Result<Vec<ReplicaSnapshot>, SvcError>;
+
+    /// Create replica clone from the snapshot.
+    async fn create_snapshot_clone(
+        &self,
+        request: &CreateSnapshotClone,
+    ) -> Result<Replica, SvcError>;
+
+    /// List snapshot clones.
+    async fn list_snapshot_clones(
+        &self,
+        request: &ListSnapshotClones,
+    ) -> Result<Vec<Replica>, SvcError>;
 }
 
 #[async_trait]

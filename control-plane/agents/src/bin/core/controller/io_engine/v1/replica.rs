@@ -8,9 +8,9 @@ use rpc::v1::{
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
-        CreateReplica, CreateReplicaSnapshot, DestroyReplica, DestroyReplicaSnapshot,
-        ListReplicaSnapshots, NodeId, Replica, ReplicaId, ReplicaSnapshot, ShareReplica,
-        UnshareReplica,
+        CreateReplica, CreateReplicaSnapshot, CreateSnapshotClone, DestroyReplica,
+        DestroyReplicaSnapshot, ListReplicaSnapshots, ListSnapshotClones, Replica, ReplicaId,
+        ReplicaSnapshot, ShareReplica, UnshareReplica,
     },
 };
 
@@ -18,7 +18,7 @@ use snafu::ResultExt;
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
-    async fn list_replicas(&self, id: &NodeId) -> Result<Vec<Replica>, SvcError> {
+    async fn list_replicas(&self) -> Result<Vec<Replica>, SvcError> {
         let rpc_replicas = self
             .replica()
             .list_replicas(ListReplicaOptions::default())
@@ -32,7 +32,7 @@ impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
 
         let replicas = rpc_replicas
             .iter()
-            .filter_map(|p| match rpc_replica_to_agent(p, id) {
+            .filter_map(|p| match rpc_replica_to_agent(p, self.context.node()) {
                 Ok(r) => Some(r),
                 Err(error) => {
                     tracing::error!(error=%error, "Could not convert rpc replica");
@@ -183,5 +183,47 @@ impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
 
         let ret = response.into_inner();
         ret.snapshots.iter().map(|s| s.try_to_agent()).collect()
+    }
+
+    async fn create_snapshot_clone(
+        &self,
+        request: &CreateSnapshotClone,
+    ) -> Result<Replica, SvcError> {
+        let response = self
+            .snapshot()
+            .create_snapshot_clone(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Replica,
+                request: "create_snapshot_clone",
+            })?;
+        rpc_replica_to_agent(response.get_ref(), self.context.node())
+    }
+
+    async fn list_snapshot_clones(
+        &self,
+        request: &ListSnapshotClones,
+    ) -> Result<Vec<Replica>, SvcError> {
+        let response = self
+            .snapshot()
+            .list_snapshot_clone(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Replica,
+                request: "list_snapshot_clones",
+            })?;
+        let rpc_replicas = &response.get_ref().replicas;
+
+        let replicas = rpc_replicas
+            .iter()
+            .filter_map(|p| match rpc_replica_to_agent(p, self.context.node()) {
+                Ok(r) => Some(r),
+                Err(error) => {
+                    tracing::error!(error=%error, "Could not convert rpc replica");
+                    None
+                }
+            })
+            .collect();
+        Ok(replicas)
     }
 }

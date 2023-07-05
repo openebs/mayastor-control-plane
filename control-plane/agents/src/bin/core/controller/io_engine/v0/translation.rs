@@ -10,7 +10,7 @@ use stor_port::{
         transport::{
             self, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
             NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState, Protocol, Replica,
-            ReplicaId, ReplicaName, ReplicaStatus,
+            ReplicaId, ReplicaKind, ReplicaName, ReplicaStatus,
         },
     },
 };
@@ -125,6 +125,7 @@ impl TryIoEngineToAgent for v0::ReplicaV2 {
                         .unwrap_or(transport::HostNqn::Invalid { nqn: n.to_string() })
                 })
                 .collect(),
+            kind: ReplicaKind::Regular,
         })
     }
 }

@@ -114,7 +114,8 @@ async fn pool() {
             share: Protocol::None,
             uri,
             status: ReplicaStatus::Online,
-            allowed_hosts: vec![]
+            allowed_hosts: vec![],
+            kind: Default::default(),
         }
     );
 

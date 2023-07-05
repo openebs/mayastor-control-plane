@@ -22,7 +22,7 @@ use std::collections::HashMap;
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::NexusListApi for super::RpcClient {
-    async fn list_nexuses(&self, node_id: &NodeId) -> Result<Vec<Nexus>, SvcError> {
+    async fn list_nexuses(&self) -> Result<Vec<Nexus>, SvcError> {
         let rpc_nexuses = self
             .nexus()
             .list_nexus(ListNexusOptions {
@@ -39,7 +39,7 @@ impl crate::controller::io_engine::NexusListApi for super::RpcClient {
 
         let nexuses = rpc_nexuses
             .iter()
-            .filter_map(|n| match rpc_nexus_to_agent(n, node_id) {
+            .filter_map(|n| match rpc_nexus_to_agent(n, self.context.node()) {
                 Ok(n) => Some(n),
                 Err(error) => {
                     tracing::error!(error=%error, "Could not convert rpc nexus");
@@ -51,7 +51,7 @@ impl crate::controller::io_engine::NexusListApi for super::RpcClient {
         Ok(nexuses)
     }
 
-    async fn get_nexus(&self, node_id: &NodeId, nexus_id: &NexusId) -> Result<Nexus, SvcError> {
+    async fn get_nexus(&self, nexus_id: &NexusId) -> Result<Nexus, SvcError> {
         let response = self
             .nexus()
             .list_nexus(ListNexusOptions {
@@ -66,7 +66,7 @@ impl crate::controller::io_engine::NexusListApi for super::RpcClient {
 
         let response = response.into_inner().nexus_list;
         match response.first() {
-            Some(nexus) => match rpc_nexus_to_agent(nexus, node_id) {
+            Some(nexus) => match rpc_nexus_to_agent(nexus, self.context.node()) {
                 Ok(nexus) => Ok(nexus),
                 Err(error) => {
                     tracing::error!(error=%error, "Could not convert rpc nexus");
@@ -248,7 +248,7 @@ impl crate::controller::io_engine::NexusChildApi<Nexus, Nexus, ()> for super::Rp
                 ),
             }),
             Err(error) => {
-                let nexus = self.fetch_nexus(&request.node, &request.nexus).await?;
+                let nexus = self.fetch_nexus(&request.nexus).await?;
                 if !nexus.contains_child(&request.uri) {
                     tracing::warn!(
                         child.uri=%request.uri,
@@ -314,9 +314,9 @@ impl super::RpcClient {
             }),
         }
     }
-    async fn fetch_nexus(&self, node_id: &NodeId, nexus_id: &NexusId) -> Result<Nexus, SvcError> {
+    async fn fetch_nexus(&self, nexus_id: &NexusId) -> Result<Nexus, SvcError> {
         let fetcher = self.fetcher_client().await?;
-        fetcher.get_nexus(node_id, nexus_id).await
+        fetcher.get_nexus(nexus_id).await
     }
 }
 

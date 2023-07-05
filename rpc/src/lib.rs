@@ -476,7 +476,8 @@ pub mod v1 {
     pub mod snapshot {
         pub use super::pb::{
             destroy_snapshot_request, snapshot_rpc_client, CreateReplicaSnapshotRequest,
-            CreateReplicaSnapshotResponse, DestroySnapshotRequest, ListSnapshotsRequest,
+            CreateReplicaSnapshotResponse, CreateSnapshotCloneRequest, DestroySnapshotRequest,
+            ListSnapshotCloneRequest, ListSnapshotCloneResponse, ListSnapshotsRequest,
             ListSnapshotsResponse, Nexus, NexusCreateSnapshotReplicaDescriptor,
             NexusCreateSnapshotReplicaStatus, NexusCreateSnapshotRequest,
             NexusCreateSnapshotResponse, SnapshotInfo,
