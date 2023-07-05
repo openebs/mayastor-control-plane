@@ -37,7 +37,6 @@ pub trait DeleteVolumeSnapshotInfo: Send + Sync + std::fmt::Debug {
 
 /// A volume snapshot.
 #[derive(Debug)]
-#[allow(unused)]
 pub struct VolumeSnapshot {
     spec: VolumeSnapshotSpec,
     meta: VolumeSnapshotMeta,
@@ -64,6 +63,15 @@ impl VolumeSnapshot {
     /// Get the volume snapshot state.
     pub fn state(&self) -> &VolumeSnapshotState {
         &self.state
+    }
+}
+
+impl From<&VolumeSnapshot> for DeleteVolumeSnapshot {
+    fn from(snapshot: &VolumeSnapshot) -> Self {
+        Self::new(
+            &Some(snapshot.spec().source_id.clone()),
+            snapshot.spec().snap_id.clone(),
+        )
     }
 }
 

@@ -4,9 +4,9 @@ use crate::controller::{
         operations_helper::{GuardedOperationsHelper, SpecOperationsHelper},
         OperationGuardArc, ResourceUid, TraceStrLog,
     },
-    scheduling::{nexus::GetPersistedNexusChildren, resources::ChildItem},
+    scheduling::{resources::ChildItem, volume::SnapshotVolumeReplica, ResourceFilter},
 };
-use agents::errors::SvcError;
+use agents::errors::{NotEnough, SvcError};
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
@@ -96,19 +96,33 @@ pub(crate) async fn snapshoteable_replica(
     volume: &VolumeSpec,
     registry: &Registry,
 ) -> Result<ChildItem, SvcError> {
-    let children = super::scheduling::snapshoteable_replica(
-        &GetPersistedNexusChildren::new_snapshot(volume),
-        registry,
-    )
-    .await?;
+    if volume.num_replicas != 1 {
+        return Err(SvcError::NReplSnapshotNotAllowed {});
+    }
+
+    let children = super::scheduling::snapshoteable_replica(volume, registry).await?;
 
     volume.trace(&format!("Snapshoteable replicas for volume: {children:?}"));
 
-    match children.candidates().as_slice() {
-        [item] => Ok(item.clone()),
+    let item = match children.candidates().as_slice() {
+        [item] => Ok(item),
         [] => Err(SvcError::NoHealthyReplicas {
             id: volume.uuid_str(),
         }),
         _ => Err(SvcError::NReplSnapshotNotAllowed {}),
+    }?;
+
+    let pools = SnapshotVolumeReplica::builder_with_defaults(registry, volume, item)
+        .await
+        .collect();
+
+    match pools
+        .iter()
+        .any(|pool_item| pool_item.pool.id == item.pool().id)
+    {
+        true => Ok(item.clone()),
+        false => Err(SvcError::NotEnoughResources {
+            source: NotEnough::PoolFree {},
+        }),
     }
 }

@@ -3,7 +3,7 @@ use crate::{
         registry::Registry,
         scheduling::{
             resources::PoolItem,
-            volume::{AddVolumeReplica, GetSuitablePoolsContext},
+            volume::{AddVolumeReplica, GetSuitablePoolsContext, SnapshotVolumeReplica},
             volume_policy::{affinity_group, pool::PoolBaseFilters, DefaultBasePolicy},
             ResourceFilter, ResourcePolicy, SortBuilder, SortCriteria,
         },
@@ -42,6 +42,16 @@ impl ResourcePolicy<AddVolumeReplica> for SimplePolicy {
             .filter_param(&self, SimplePolicy::pool_overcommit)
             // sort pools in order of total weight of certain field values.
             .sort_ctx(SimplePolicy::sort_by_weights)
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl ResourcePolicy<SnapshotVolumeReplica> for SimplePolicy {
+    fn apply(self, to: SnapshotVolumeReplica) -> SnapshotVolumeReplica {
+        DefaultBasePolicy::filter_snapshot(to)
+            .filter(PoolBaseFilters::min_free_space)
+            .filter_param(&self, SimplePolicy::min_free_space)
+            .filter_param(&self, SimplePolicy::pool_overcommit)
     }
 }
 
@@ -130,6 +140,11 @@ impl SimplePolicy {
     fn min_free_space(&self, request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         if !request.as_thin() {
             return item.pool.free_space() > request.size;
+        }
+        if request.snap_repl() {
+            return item.pool.free_space() > {
+                (self.cli_args.snapshot_commitment * request.size) / 100
+            };
         }
         item.pool.free_space()
             > match request.allocated_bytes() {

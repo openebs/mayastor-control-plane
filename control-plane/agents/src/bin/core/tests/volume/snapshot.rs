@@ -2,16 +2,17 @@ use crate::volume::helpers::wait_node_online;
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{
     pool::traits::PoolOperations,
+    replica::traits::ReplicaOperations,
     volume::traits::{CreateVolumeSnapshot, DeleteVolumeSnapshot, VolumeOperations},
 };
+use std::time::Duration;
 use stor_port::{
     transport_api::{ReplyErrorKind, TimeoutOptions},
     types::v0::transport::{
-        CreateVolume, DestroyPool, DestroyVolume, Filter, PublishVolume, SnapshotId,
+        CreateReplica, CreateVolume, DestroyPool, DestroyReplica, DestroyVolume, Filter,
+        PublishVolume, ReplicaId, SnapshotId, Volume,
     },
 };
-
-use std::time::Duration;
 
 #[tokio::test]
 async fn snapshot() {
@@ -32,7 +33,7 @@ async fn snapshot() {
         .create(
             &CreateVolume {
                 uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
-                size: 5242880,
+                size: 60 * 1024 * 1024,
                 replicas: 1,
                 thin: false,
                 ..Default::default()
@@ -95,13 +96,7 @@ async fn snapshot() {
     assert!(!snaps.entries().is_empty());
 
     vol_cli
-        .delete_snapshot(
-            &DeleteVolumeSnapshot::new(
-                &Some(replica_snapshot.spec().source_id.clone()),
-                replica_snapshot.spec().snap_id.clone(),
-            ),
-            None,
-        )
+        .delete_snapshot(&DeleteVolumeSnapshot::from(&replica_snapshot), None)
         .await
         .unwrap();
 
@@ -147,8 +142,100 @@ async fn snapshot() {
         .unwrap();
 
     tracing::info!("Nexus Snapshot: {nexus_snapshot:?}");
+    vol_cli
+        .delete_snapshot(&DeleteVolumeSnapshot::from(&nexus_snapshot), None)
+        .await
+        .unwrap();
 
     pool_destroy_validation(&cluster).await;
+    thin_provisioning(&cluster, volume).await;
+}
+
+async fn thin_provisioning(cluster: &Cluster, volume: Volume) {
+    let vol_cli = cluster.grpc_client().volume();
+    let pool_cli = cluster.grpc_client().pool();
+
+    let pools = pool_cli
+        .get(Filter::Pool(cluster.pool(0, 0)), None)
+        .await
+        .unwrap();
+    let pool = pools.0.get(0).unwrap();
+    let pool_state = pool.state().unwrap();
+    let watermark = 16 * 1024 * 1024;
+    let free_space = pool_state.capacity - pool_state.used - watermark;
+
+    // Take up the entire pool free space
+    let repl_cli = cluster.grpc_client().replica();
+    let mut req = CreateReplica {
+        node: cluster.node(0),
+        uuid: ReplicaId::new(),
+        pool_id: cluster.pool(0, 0),
+        size: free_space,
+        thin: false,
+        ..Default::default()
+    };
+    let replica = repl_cli.create(&req, None).await.unwrap();
+
+    // Try to take a snapshot now, should fail!
+    let error = vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume.uuid(), SnapshotId::new()),
+            None,
+        )
+        .await
+        .expect_err("No free space");
+    assert_eq!(error.kind, ReplyErrorKind::ResourceExhausted);
+
+    repl_cli
+        .destroy(&DestroyReplica::from(replica), None)
+        .await
+        .unwrap();
+
+    req.size = free_space / 2;
+    let replica = repl_cli.create(&req, None).await.unwrap();
+
+    let snapshot = vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume.uuid(), SnapshotId::new()),
+            None,
+        )
+        .await
+        .unwrap();
+
+    repl_cli
+        .destroy(&DestroyReplica::from(replica), None)
+        .await
+        .unwrap();
+    vol_cli
+        .delete_snapshot(&DeleteVolumeSnapshot::from(&snapshot), None)
+        .await
+        .unwrap();
+
+    // create 2 replicas of pool cap, exceeding pool commitment of 2.5x
+    req.thin = true;
+    req.size = pool_state.capacity - watermark;
+    let _replica = repl_cli.create(&req, None).await.unwrap();
+
+    // 2x the pool capacity is ok
+    let _snapshot = vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume.uuid(), SnapshotId::new()),
+            None,
+        )
+        .await
+        .unwrap();
+
+    req.uuid = ReplicaId::new();
+    let _replica = repl_cli.create(&req, None).await.unwrap();
+
+    let error = vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume.uuid(), SnapshotId::new()),
+            None,
+        )
+        .await
+        .expect_err("Pool over-committed");
+    assert_eq!(error.kind, ReplyErrorKind::ResourceExhausted);
 }
 
 async fn pool_destroy_validation(cluster: &Cluster) {
@@ -189,13 +276,7 @@ async fn pool_destroy_validation(cluster: &Cluster) {
     assert_eq!(del_error.kind, ReplyErrorKind::InUse);
 
     vol_cli
-        .delete_snapshot(
-            &DeleteVolumeSnapshot::new(
-                &Some(replica_snapshot.spec().source_id.clone()),
-                replica_snapshot.spec().snap_id.clone(),
-            ),
-            None,
-        )
+        .delete_snapshot(&DeleteVolumeSnapshot::from(&replica_snapshot), None)
         .await
         .unwrap();
 }
@@ -216,8 +297,8 @@ async fn snapshot_timeout() {
         .with_agents(vec!["core"])
         .with_io_engines(2)
         .with_tmpfs_pool_ix(1, 100 * 1024 * 1024)
-        .with_cache_period("1s")
-        .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
+        .with_cache_period("10s")
+        .with_reconcile_period(Duration::from_secs(10), Duration::from_secs(10))
         .with_req_timeouts(req_timeout, req_timeout)
         .with_grpc_timeouts(grpc_timeout_opts(grpc_timeout))
         .build()
@@ -309,9 +390,12 @@ async fn snapshot_timeout() {
         .await
         .expect_err("timeout");
     tracing::info!("Replica Snapshot Error: {replica_snapshot:?}");
-    tokio::time::sleep(req_timeout).await;
+    tokio::time::sleep(req_timeout - grpc_timeout).await;
 
     cluster.composer().thaw(&cluster.node(0)).await.unwrap();
+    wait_node_online(&grpc.node(), cluster.node(0))
+        .await
+        .unwrap();
 
     let snapshots = vol_cli
         .get_snapshots(Filter::Snapshot(snapshot_id.clone()), false, None, None)
