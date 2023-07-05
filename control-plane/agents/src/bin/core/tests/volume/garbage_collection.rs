@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::RECONCILE_TIMEOUT_SECS;
-use deployer_cluster::{Cluster, ClusterBuilder};
+use deployer_cluster::{Cluster, ClusterBuilder, TmpDiskFile};
 use grpc::operations::{
     nexus::traits::NexusOperations, node::traits::NodeOperations, volume::traits::VolumeOperations,
 };
@@ -29,6 +29,7 @@ async fn garbage_collection() {
         .with_tmpfs_pool(POOL_SIZE_BYTES)
         .with_cache_period("1s")
         .with_reconcile_period(reconcile_period, reconcile_period)
+        .with_options(|o| o.with_isolated_io_engine(true))
         .build()
         .await
         .unwrap();
@@ -41,6 +42,8 @@ async fn garbage_collection() {
     unused_reconcile(&cluster).await;
     deleting_volume_reconcile(&cluster).await;
     offline_replicas_reconcile(&cluster, reconcile_period).await;
+    cluster.cleanup().await;
+    volume_nexus_reconcile(&cluster).await;
 }
 
 async fn deleting_volume_reconcile(cluster: &Cluster) {
@@ -511,16 +514,27 @@ async fn wait_till_volume_status(cluster: &Cluster, volume: &Uuid, status: model
 }
 
 const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
-#[tokio::test]
-async fn volume_nexus_reconcile() {
-    let cluster = ClusterBuilder::builder()
-        .with_rest(true)
-        .with_agents(vec!["core"])
-        .with_io_engines(2)
-        .with_tmpfs_pool(POOL_SIZE_BYTES)
-        .with_cache_period("1s")
-        .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
-        .build()
+async fn volume_nexus_reconcile(cluster: &Cluster) {
+    let api_client = cluster.rest_v00();
+    let pools_api = api_client.pools_api();
+
+    let disk1 = TmpDiskFile::new(&Uuid::new_v4().to_string(), POOL_SIZE_BYTES);
+    pools_api
+        .put_node_pool(
+            "io-engine-1",
+            "io-engine-1-pool-0",
+            models::CreatePoolBody::new(vec![disk1.uri()]),
+        )
+        .await
+        .unwrap();
+
+    let disk2 = TmpDiskFile::new(&Uuid::new_v4().to_string(), POOL_SIZE_BYTES);
+    pools_api
+        .put_node_pool(
+            "io-engine-2",
+            "io-engine-2-pool-1",
+            models::CreatePoolBody::new(vec![disk2.uri()]),
+        )
         .await
         .unwrap();
 
@@ -528,5 +542,5 @@ async fn volume_nexus_reconcile() {
     let nodes = node_client.get(Filter::None, false, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
 
-    missing_nexus_reconcile(&cluster).await;
+    missing_nexus_reconcile(cluster).await;
 }

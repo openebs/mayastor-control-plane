@@ -1,12 +1,11 @@
 #![cfg(test)]
 use crate::volume::helpers::wait_node_online;
-use deployer_cluster::{Cluster, ClusterBuilder};
+use deployer_cluster::{Cluster, ClusterBuilder, TmpDiskFile};
 use grpc::operations::{
     nexus::traits::NexusOperations, pool::traits::PoolOperations,
     registry::traits::RegistryOperations, replica::traits::ReplicaOperations,
     volume::traits::VolumeOperations,
 };
-use std::{collections::HashMap, time::Duration};
 use stor_port::{
     transport_api::{ReplyErrorKind, ResourceKind},
     types::v0::{
@@ -18,7 +17,48 @@ use stor_port::{
         },
     },
 };
+
+use std::{collections::HashMap, time::Duration};
 use tokio::time::sleep;
+use uuid::Uuid;
+
+const VOLUME_UUID: &str = "1e3cf927-80c2-47a8-adf0-95c486bdd7b7";
+const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
+
+#[tokio::test]
+async fn switchover_set_1() {
+    let reconcile_period = Duration::from_millis(200);
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_io_engines(3)
+        .with_cache_period("100ms")
+        .with_reconcile_period(reconcile_period, reconcile_period)
+        .build()
+        .await
+        .unwrap();
+
+    old_nexus_delete_after_vol_destroy(&cluster).await;
+    cluster.cleanup().await;
+    node_exhaustion(&cluster).await;
+}
+
+#[tokio::test]
+async fn switchover_set_2() {
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_io_engines(2)
+        .with_cache_period("1s")
+        .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
+        .build()
+        .await
+        .unwrap();
+
+    lazy_delete_shutdown_targets(&cluster).await;
+    cluster.cleanup().await;
+    volume_republish_nexus_recreation(&cluster).await;
+}
 
 // This test: Creates a three io engine cluster
 // Creates volume with 2 replicas and publishes it to create nexus
@@ -26,23 +66,43 @@ use tokio::time::sleep;
 // Stops node housing a previous nexus
 // Destroys volume
 // Starts node which was stopped and expects old nexus cleanup.
-#[tokio::test]
-async fn old_nexus_delete_after_vol_destroy() {
-    let reconcile_period = Duration::from_millis(200);
-    let cluster = ClusterBuilder::builder()
-        .with_rest(true)
-        .with_agents(vec!["core"])
-        .with_io_engines(3)
-        .with_tmpfs_pool(POOL_SIZE_BYTES)
-        .with_cache_period("100ms")
-        .with_reconcile_period(reconcile_period, reconcile_period)
-        .build()
+async fn old_nexus_delete_after_vol_destroy(cluster: &Cluster) {
+    let rest_client = cluster.rest_v00();
+    let pools_api = rest_client.pools_api();
+
+    let disk1 = TmpDiskFile::new(&Uuid::new_v4().to_string(), POOL_SIZE_BYTES);
+    pools_api
+        .put_node_pool(
+            "io-engine-1",
+            "io-engine-1-pool-0",
+            models::CreatePoolBody::new(vec![disk1.uri()]),
+        )
+        .await
+        .unwrap();
+
+    let disk2 = TmpDiskFile::new(&Uuid::new_v4().to_string(), POOL_SIZE_BYTES);
+    pools_api
+        .put_node_pool(
+            "io-engine-2",
+            "io-engine-2-pool-1",
+            models::CreatePoolBody::new(vec![disk2.uri()]),
+        )
+        .await
+        .unwrap();
+
+    let disk2 = TmpDiskFile::new(&Uuid::new_v4().to_string(), POOL_SIZE_BYTES);
+    pools_api
+        .put_node_pool(
+            "io-engine-3",
+            "io-engine-3-pool-2",
+            models::CreatePoolBody::new(vec![disk2.uri()]),
+        )
         .await
         .unwrap();
 
     let vol_client = cluster.grpc_client().volume();
     let nexus_client = cluster.grpc_client().nexus();
-    let rest_client = cluster.rest_v00();
+
     let spec_client = rest_client.specs_api();
     let node_client = cluster.grpc_client().node();
 
@@ -199,17 +259,29 @@ async fn wait_nexus_spec_empty(spec_client: &dyn Specs) -> Result<(), ()> {
     Err(())
 }
 
-#[tokio::test]
-async fn lazy_delete_shutdown_targets() {
+async fn lazy_delete_shutdown_targets(cluster: &Cluster) {
     const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
-    let cluster = ClusterBuilder::builder()
-        .with_rest(true)
-        .with_agents(vec!["core"])
-        .with_io_engines(2)
-        .with_tmpfs_pool(POOL_SIZE_BYTES)
-        .with_cache_period("1s")
-        .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
-        .build()
+
+    let api_client = cluster.rest_v00();
+    let pools_api = api_client.pools_api();
+
+    let disk1 = TmpDiskFile::new(&Uuid::new_v4().to_string(), POOL_SIZE_BYTES);
+    pools_api
+        .put_node_pool(
+            "io-engine-1",
+            "io-engine-1-pool-0",
+            models::CreatePoolBody::new(vec![disk1.uri()]),
+        )
+        .await
+        .unwrap();
+
+    let disk2 = TmpDiskFile::new(&Uuid::new_v4().to_string(), POOL_SIZE_BYTES);
+    pools_api
+        .put_node_pool(
+            "io-engine-2",
+            "io-engine-2-pool-1",
+            models::CreatePoolBody::new(vec![disk2.uri()]),
+        )
         .await
         .unwrap();
 
@@ -326,17 +398,27 @@ pub(crate) async fn wait_till_target_deleted(client: &impl RegistryOperations, t
     }
 }
 
-const VOLUME_UUID: &str = "1e3cf927-80c2-47a8-adf0-95c486bdd7b7";
-const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
+async fn volume_republish_nexus_recreation(cluster: &Cluster) {
+    let api_client = cluster.rest_v00();
+    let pools_api = api_client.pools_api();
 
-#[tokio::test]
-async fn volume_republish_nexus_recreation() {
-    let cluster = ClusterBuilder::builder()
-        .with_rest(false)
-        .with_agents(vec!["core"])
-        .with_io_engines(2)
-        .with_tmpfs_pool(POOL_SIZE_BYTES)
-        .build()
+    let disk1 = TmpDiskFile::new(&Uuid::new_v4().to_string(), POOL_SIZE_BYTES);
+    pools_api
+        .put_node_pool(
+            "io-engine-1",
+            "io-engine-1-pool-0",
+            models::CreatePoolBody::new(vec![disk1.uri()]),
+        )
+        .await
+        .unwrap();
+
+    let disk2 = TmpDiskFile::new(&Uuid::new_v4().to_string(), POOL_SIZE_BYTES);
+    pools_api
+        .put_node_pool(
+            "io-engine-2",
+            "io-engine-2-pool-1",
+            models::CreatePoolBody::new(vec![disk2.uri()]),
+        )
         .await
         .unwrap();
 
@@ -408,7 +490,7 @@ async fn volume_republish_nexus_recreation() {
         .await
         .expect("Service should have been live by now");
 
-    assert!(pool_recreated(&cluster, 10).await);
+    assert!(pool_recreated(cluster, 10).await);
 
     // Republishing volume after node restart.
     let volume = client
@@ -452,13 +534,37 @@ async fn pool_recreated(cluster: &Cluster, max_tries: i32) -> bool {
     false
 }
 
-#[tokio::test]
-async fn node_exhaustion() {
-    let cluster = ClusterBuilder::builder()
-        .with_agents(vec!["core"])
-        .with_io_engines(3)
-        .with_tmpfs_pool(POOL_SIZE_BYTES)
-        .build()
+async fn node_exhaustion(cluster: &Cluster) {
+    let rest_client = cluster.rest_v00();
+    let pools_api = rest_client.pools_api();
+
+    let disk1 = TmpDiskFile::new(&Uuid::new_v4().to_string(), POOL_SIZE_BYTES);
+    pools_api
+        .put_node_pool(
+            "io-engine-1",
+            "io-engine-1-pool-0",
+            models::CreatePoolBody::new(vec![disk1.uri()]),
+        )
+        .await
+        .unwrap();
+
+    let disk2 = TmpDiskFile::new(&Uuid::new_v4().to_string(), POOL_SIZE_BYTES);
+    pools_api
+        .put_node_pool(
+            "io-engine-2",
+            "io-engine-2-pool-1",
+            models::CreatePoolBody::new(vec![disk2.uri()]),
+        )
+        .await
+        .unwrap();
+
+    let disk2 = TmpDiskFile::new(&Uuid::new_v4().to_string(), POOL_SIZE_BYTES);
+    pools_api
+        .put_node_pool(
+            "io-engine-3",
+            "io-engine-3-pool-2",
+            models::CreatePoolBody::new(vec![disk2.uri()]),
+        )
         .await
         .unwrap();
 

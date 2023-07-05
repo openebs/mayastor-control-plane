@@ -10,14 +10,12 @@ use stor_port::types::v0::{
 };
 
 #[tokio::test]
-async fn online_enospc_child() {
+async fn capacity_test() {
     let cache_period = Duration::from_millis(250);
     let reconcile_period = Duration::from_millis(3000);
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_io_engines(2)
-        .with_pool(0, "malloc:///p1?size_mb=300")
-        .with_pool(1, "malloc:///p1?size_mb=100")
         .with_csi(false, true)
         .with_options(|o| o.with_isolated_io_engine(true))
         .with_cache_period(&humantime::Duration::from(cache_period).to_string())
@@ -26,11 +24,40 @@ async fn online_enospc_child() {
         .await
         .unwrap();
 
-    let (volume_1, volume_2) =
-        common_enospc_builder(&cluster, cache_period, reconcile_period, 2).await;
+    online_enospc_child(&cluster, &cache_period, &reconcile_period).await;
+    cluster.cleanup().await;
+    faulted_nexus_enospc_child(&cluster, &cache_period, &reconcile_period).await;
+}
 
+async fn online_enospc_child(
+    cluster: &Cluster,
+    cache_period: &Duration,
+    reconcile_period: &Duration,
+) {
     let api_client = cluster.rest_v00();
     let pools_api = api_client.pools_api();
+
+    pools_api
+        .put_node_pool(
+            "io-engine-1",
+            "io-engine-1-pool-0",
+            models::CreatePoolBody::new(vec!["malloc:///p1?size_mb=300"]),
+        )
+        .await
+        .unwrap();
+
+    pools_api
+        .put_node_pool(
+            "io-engine-2",
+            "io-engine-2-pool-1",
+            models::CreatePoolBody::new(vec!["malloc:///p1?size_mb=100"]),
+        )
+        .await
+        .unwrap();
+
+    let (volume_1, volume_2) =
+        common_enospc_builder(cluster, cache_period, reconcile_period, 2).await;
+
     let volumes_api = api_client.volumes_api();
 
     let volume_1 = volumes_api.get_volume(&volume_1.spec.uuid).await.unwrap();
@@ -41,8 +68,8 @@ async fn online_enospc_child() {
     // Now we add a pool which allows us to move the largest replica
     pools_api
         .put_node_pool(
-            cluster.node(1).as_str(),
-            cluster.pool(1, 1).as_str(),
+            "io-engine-2",
+            "large-pool-on-io-engine-2",
             models::CreatePoolBody::new(vec!["malloc:///disk?size_mb=200"]),
         )
         .await
@@ -124,26 +151,26 @@ async fn wait_till_1_volume_healthy(volume_client: &dyn VolumeOperations) {
     }
 }
 
-#[tokio::test]
-async fn faulted_nexus_enospc_child() {
-    let cache_period = Duration::from_millis(250);
-    let reconcile_period = Duration::from_millis(3000);
-    let cluster = ClusterBuilder::builder()
-        .with_rest(true)
-        .with_io_engines(2)
-        .with_pool(1, "malloc:///p1?size_mb=100")
-        .with_csi(false, true)
-        .with_options(|o| o.with_isolated_io_engine(true))
-        .with_cache_period(&humantime::Duration::from(cache_period).to_string())
-        .with_reconcile_period(reconcile_period, reconcile_period)
-        .build()
+async fn faulted_nexus_enospc_child(
+    cluster: &Cluster,
+    cache_period: &Duration,
+    reconcile_period: &Duration,
+) {
+    let api_client = cluster.rest_v00();
+    let pools_api = api_client.pools_api();
+
+    pools_api
+        .put_node_pool(
+            "io-engine-2",
+            "io-engine-2-pool-1",
+            models::CreatePoolBody::new(vec!["malloc:///p1?size_mb=100"]),
+        )
         .await
         .unwrap();
 
     let (volume_1, volume_2) =
-        common_enospc_builder(&cluster, cache_period, reconcile_period, 1).await;
+        common_enospc_builder(cluster, cache_period, reconcile_period, 1).await;
 
-    let api_client = cluster.rest_v00();
     let volumes_api = api_client.volumes_api();
 
     let volume_1 = volumes_api.get_volume(&volume_1.spec.uuid).await.unwrap();
@@ -164,8 +191,8 @@ async fn faulted_nexus_enospc_child() {
 
 async fn common_enospc_builder(
     cluster: &Cluster,
-    cache_period: Duration,
-    reconcile_period: Duration,
+    cache_period: &Duration,
+    reconcile_period: &Duration,
     replicas: u8,
 ) -> (models::Volume, models::Volume) {
     let api_client = cluster.rest_v00();
@@ -291,7 +318,7 @@ async fn common_enospc_builder(
 
     // 1. really need a way to by pass the cache!
     // for now simply wait for the cache period!
-    tokio::time::sleep(cache_period * 2).await;
+    tokio::time::sleep(*cache_period * 2).await;
     log_thin(cluster).await;
 
     let dd_1 = cluster.composer().exec(
@@ -315,7 +342,7 @@ async fn common_enospc_builder(
 
     tracing::info!("\n{:?}", output);
 
-    tokio::time::sleep(reconcile_period * 2).await;
+    tokio::time::sleep(*reconcile_period * 2).await;
     log_thin(cluster).await;
 
     // no children should be removed as there's no space for the larger replica
