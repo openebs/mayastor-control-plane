@@ -14,7 +14,7 @@ use stor_port::{
         transport::{
             self, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
             NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState, PoolUuid, Protocol,
-            Replica, ReplicaId, ReplicaName, ReplicaStatus, SnapshotId,
+            Replica, ReplicaId, ReplicaKind, ReplicaName, ReplicaStatus, SnapshotId,
         },
     },
 };
@@ -117,6 +117,13 @@ impl TryIoEngineToAgent for v1::replica::Replica {
                         .unwrap_or(transport::HostNqn::Invalid { nqn })
                 })
                 .collect(),
+            kind: if self.is_snapshot {
+                ReplicaKind::Snapshot
+            } else if self.is_clone {
+                ReplicaKind::SnapshotClone
+            } else {
+                ReplicaKind::Regular
+            },
         })
     }
 }
@@ -752,6 +759,26 @@ impl From<ExternalType<NexusNvmePreemption>> for v1::nexus::NexusNvmePreemption 
         match value.0 {
             NexusNvmePreemption::ArgKey(_) => Self::ArgKey,
             NexusNvmePreemption::Holder => Self::Holder,
+        }
+    }
+}
+
+impl AgentToIoEngine for transport::CreateSnapshotClone {
+    type IoEngineMessage = v1::snapshot::CreateSnapshotCloneRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        v1::snapshot::CreateSnapshotCloneRequest {
+            snapshot_uuid: self.snapshot_uuid().to_string(),
+            clone_name: self.name().to_string(),
+            clone_uuid: self.uuid().to_string(),
+        }
+    }
+}
+
+impl AgentToIoEngine for transport::ListSnapshotClones {
+    type IoEngineMessage = v1::snapshot::ListSnapshotCloneRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        v1::snapshot::ListSnapshotCloneRequest {
+            snapshot_uuid: self.uuid().map(ToString::to_string),
         }
     }
 }

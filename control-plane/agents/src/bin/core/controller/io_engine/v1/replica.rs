@@ -187,15 +187,43 @@ impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
 
     async fn create_snapshot_clone(
         &self,
-        _request: &CreateSnapshotClone,
+        request: &CreateSnapshotClone,
     ) -> Result<Replica, SvcError> {
-        todo!()
+        let response = self
+            .snapshot()
+            .create_snapshot_clone(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Replica,
+                request: "create_snapshot_clone",
+            })?;
+        rpc_replica_to_agent(response.get_ref(), self.context.node())
     }
 
     async fn list_snapshot_clones(
         &self,
-        _request: &ListSnapshotClones,
+        request: &ListSnapshotClones,
     ) -> Result<Vec<Replica>, SvcError> {
-        todo!()
+        let response = self
+            .snapshot()
+            .list_snapshot_clone(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Replica,
+                request: "list_snapshot_clones",
+            })?;
+        let rpc_replicas = &response.get_ref().replicas;
+
+        let replicas = rpc_replicas
+            .iter()
+            .filter_map(|p| match rpc_replica_to_agent(p, self.context.node()) {
+                Ok(r) => Some(r),
+                Err(error) => {
+                    tracing::error!(error=%error, "Could not convert rpc replica");
+                    None
+                }
+            })
+            .collect();
+        Ok(replicas)
     }
 }

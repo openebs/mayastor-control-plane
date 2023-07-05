@@ -18,8 +18,8 @@ use stor_port::{
         transport,
         transport::{
             CreateReplica, DestroyReplica, Filter, HostNqn, NexusId, NodeId, PoolId, PoolUuid,
-            Replica, ReplicaId, ReplicaName, ReplicaOwners, ReplicaSpaceUsage, ShareReplica,
-            UnshareReplica, VolumeId,
+            Replica, ReplicaId, ReplicaKind, ReplicaName, ReplicaOwners, ReplicaSpaceUsage,
+            ShareReplica, UnshareReplica, VolumeId,
         },
     },
     IntoOption, IntoVec,
@@ -72,6 +72,25 @@ impl From<Replica> for replica::Replica {
             uri: replica.uri,
             status: status as i32,
             space: replica.space.into_opt(),
+            kind: replica::ReplicaKind::from(replica.kind).into(),
+        }
+    }
+}
+impl From<ReplicaKind> for replica::ReplicaKind {
+    fn from(value: ReplicaKind) -> Self {
+        match value {
+            ReplicaKind::Regular => Self::Regular,
+            ReplicaKind::Snapshot => Self::Snapshot,
+            ReplicaKind::SnapshotClone => Self::SnapshotClone,
+        }
+    }
+}
+impl From<replica::ReplicaKind> for ReplicaKind {
+    fn from(value: replica::ReplicaKind) -> Self {
+        match value {
+            replica::ReplicaKind::Regular => Self::Regular,
+            replica::ReplicaKind::Snapshot => Self::Snapshot,
+            replica::ReplicaKind::SnapshotClone => Self::SnapshotClone,
         }
     }
 }
@@ -135,6 +154,9 @@ impl TryFrom<replica::Replica> for Replica {
                 }
             },
             allowed_hosts: vec![],
+            kind: replica::ReplicaKind::from_i32(replica.kind)
+                .unwrap_or_default()
+                .into(),
         })
     }
 }

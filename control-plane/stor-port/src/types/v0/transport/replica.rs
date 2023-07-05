@@ -82,12 +82,27 @@ pub struct Replica {
     pub status: ReplicaStatus,
     /// Host nqn's allowed to connect to the target.
     pub allowed_hosts: Vec<HostNqn>,
+    /// Type of replica, example regular or snapshot.
+    pub kind: ReplicaKind,
 }
 impl Replica {
     /// Check if the replica is online.
     pub fn online(&self) -> bool {
         self.status.online()
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, EnumString, Display, Default, Eq, PartialEq)]
+#[strum(serialize_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
+pub enum ReplicaKind {
+    /// A regular data-replica.
+    #[default]
+    Regular,
+    /// A replica which is another replica's snapshot.
+    Snapshot,
+    /// A replica which is a clone of another replica's snapshot.
+    SnapshotClone,
 }
 
 /// The request type to create a replica's snapshot.

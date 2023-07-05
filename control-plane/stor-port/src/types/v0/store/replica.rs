@@ -9,7 +9,7 @@ use crate::{
         },
         transport::{
             self, CreateReplica, HostNqn, NodeId, PoolId, PoolUuid, Protocol, ReplicaId,
-            ReplicaName, ReplicaOwners, ReplicaShareProtocol, VolumeId,
+            ReplicaKind, ReplicaName, ReplicaOwners, ReplicaShareProtocol, VolumeId,
         },
     },
     IntoOption, IntoVec,
@@ -365,6 +365,7 @@ impl From<&ReplicaSpec> for transport::Replica {
             uri: "".to_string(),
             status: transport::ReplicaStatus::Unknown,
             allowed_hosts: replica.allowed_hosts.clone().into_vec(),
+            kind: ReplicaKind::Regular,
         }
     }
 }

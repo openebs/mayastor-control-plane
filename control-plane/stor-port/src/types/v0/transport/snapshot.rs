@@ -155,5 +155,15 @@ impl SnapshotCloneParameters {
 /// List all clones from the given snapshot.
 #[derive(Debug, Clone)]
 pub enum ListSnapshotClones {
+    All,
     Snapshot(SnapshotId),
+}
+impl ListSnapshotClones {
+    /// Get a reference to the snapshot uuid.
+    pub fn uuid(&self) -> Option<&SnapshotId> {
+        match self {
+            ListSnapshotClones::All => None,
+            ListSnapshotClones::Snapshot(uuid) => Some(uuid),
+        }
+    }
 }
