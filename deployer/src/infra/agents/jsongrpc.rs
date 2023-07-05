@@ -35,6 +35,10 @@ impl ComponentAction for JsonGrpcAgent {
         cfg.start("jsongrpc").await?;
         Ok(())
     }
+    async fn restart(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+        cfg.restart("jsongrpc").await?;
+        Ok(())
+    }
     async fn wait_on(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         let ip = cfg.container_ip("jsongrpc");
         let uri = tonic::transport::Uri::from_str(&format!("https://{ip}:50052")).unwrap();

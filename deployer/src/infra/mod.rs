@@ -18,7 +18,7 @@ use clap::Parser;
 use composer::{Builder, BuilderConfigure, ComposeTest};
 use futures::future::{join_all, try_join_all};
 use paste::paste;
-use std::{cmp::Ordering, convert::TryFrom, str::FromStr};
+use std::{cmp::Ordering, convert::TryFrom, future::Future, str::FromStr};
 use strum_macros::{Display, EnumVariantNames};
 
 /// Error type used by the deployer.
@@ -191,9 +191,68 @@ impl Components {
         }
         Ok(())
     }
+    /// Restart all components and wait up to the provided timeout.
+    pub async fn restart_wait(
+        &self,
+        cfg: &ComposeTest,
+        timeout: std::time::Duration,
+    ) -> Result<(), Error> {
+        match tokio::time::timeout(timeout, self.restart_wait_inner(cfg)).await {
+            Ok(result) => result,
+            Err(_) => {
+                let error = format!("Time out of {timeout:?} expired");
+                Err(std::io::Error::new(std::io::ErrorKind::TimedOut, error).into())
+            }
+        }
+    }
+    /// Start all components, in order, but don't wait for them.
+    pub async fn restart(&self, cfg: &ComposeTest) -> Result<(), Error> {
+        let mut last_done = None;
+        for component in &self.0 {
+            if let Some(last_done) = last_done {
+                if component.boot_order() == last_done {
+                    continue;
+                }
+            }
+            let components = self
+                .0
+                .iter()
+                .filter(|c| c.boot_order() == component.boot_order());
+
+            let start_components = components.map(|component| async move {
+                tracing::trace!(component=%component.to_string(), "Restarting");
+                component.restart(&self.1, cfg).await
+            });
+            try_join_all(start_components).await?;
+            last_done = Some(component.boot_order());
+        }
+        Ok(())
+    }
     /// Start all components, in order. Then wait for all components with a wait between each
     /// component to make sure they start orderly.
     async fn start_wait_inner(&self, cfg: &ComposeTest) -> Result<(), Error> {
+        self.wait_inner(
+            |c, start_opts, cfg| async move { c.start(start_opts, cfg).await },
+            cfg,
+        )
+        .await
+    }
+    async fn restart_wait_inner(&self, cfg: &ComposeTest) -> Result<(), Error> {
+        self.wait_inner(
+            |c, start_opts, cfg| async move { c.restart(start_opts, cfg).await },
+            cfg,
+        )
+        .await
+    }
+    async fn wait_inner<
+        'a,
+        F: Fn(&'a Component, &'a StartOptions, &'a ComposeTest) -> Fut,
+        Fut: 'a + Future<Output = Result<(), Error>>,
+    >(
+        &'a self,
+        method: F,
+        cfg: &'a ComposeTest,
+    ) -> Result<(), Error> {
         let mut last_done = None;
 
         for component in &self.0 {
@@ -208,9 +267,7 @@ impl Components {
                 .filter(|c| c.boot_order() == component.boot_order())
                 .collect::<Vec<&Component>>();
 
-            let wait_components = components
-                .iter()
-                .map(|c| async move { c.start(&self.1, cfg).await });
+            let wait_components = components.iter().map(|c| method(c, &self.1, cfg));
             try_join_all(wait_components).await?;
             self.wait_on_components(&components, cfg).await?;
             last_done = Some(component.boot_order());
@@ -275,6 +332,12 @@ macro_rules! impl_component {
                     $(Self::$name(obj) => obj.start(options, cfg).await,)+
                 }
             }
+            async fn restart(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+                let _trace = TraceFn::new(self, "restart");
+                match self {
+                    $(Self::$name(obj) => obj.restart(options, cfg).await,)+
+                }
+            }
             async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
                 let _trace = TraceFn::new(self, "wait_on");
                 match self {
@@ -311,6 +374,7 @@ macro_rules! impl_component {
 pub trait ComponentAction {
     fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error>;
     async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error>;
+    async fn restart(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error>;
     async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error>;
 }
 /// List of Control Plane Components to deploy.

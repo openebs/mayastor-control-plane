@@ -33,6 +33,12 @@ impl ComponentAction for Etcd {
         }
         Ok(())
     }
+    async fn restart(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+        if !options.no_etcd {
+            cfg.restart("etcd").await?;
+        }
+        Ok(())
+    }
     async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
         if !options.no_etcd {
             let _store = EtcdStore::new("0.0.0.0:2379")

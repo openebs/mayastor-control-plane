@@ -88,6 +88,14 @@ impl ComponentAction for Jaeger {
         }
         Ok(())
     }
+
+    async fn restart(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+        if options.jaeger {
+            cfg.restart("jaeger").await?;
+        }
+        Ok(())
+    }
+
     async fn wait_on(&self, _options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
         Ok(())
     }

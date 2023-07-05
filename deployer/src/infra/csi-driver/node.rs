@@ -63,6 +63,26 @@ impl ComponentAction for CsiNode {
         Ok(())
     }
 
+    async fn restart(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+        if options.csi_node {
+            let local_nodes = if options.local_nodes {
+                options.io_engines
+            } else {
+                0
+            };
+
+            for i in 0 .. local_nodes {
+                let container_name = Self::local_container_name(&IoEngine::name(i, options));
+                cfg.restart(&container_name).await?;
+            }
+
+            for i in 0 .. options.app_nodes() {
+                cfg.restart(&Self::container_name(i)).await?;
+            }
+        }
+        Ok(())
+    }
+
     async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
         if !options.csi_node {
             return Ok(());

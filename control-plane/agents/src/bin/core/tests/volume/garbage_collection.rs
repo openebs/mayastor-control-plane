@@ -42,7 +42,7 @@ async fn garbage_collection() {
     unused_reconcile(&cluster).await;
     deleting_volume_reconcile(&cluster).await;
     offline_replicas_reconcile(&cluster, reconcile_period).await;
-    cluster.cleanup().await;
+    cluster.restart().await;
     volume_nexus_reconcile(&cluster).await;
 }
 

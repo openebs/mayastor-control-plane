@@ -69,6 +69,12 @@ impl ComponentAction for Rest {
         }
         Ok(())
     }
+    async fn restart(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+        if !options.no_rest {
+            cfg.restart("rest").await?;
+        }
+        Ok(())
+    }
     async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
         if options.no_rest {
             return Ok(());

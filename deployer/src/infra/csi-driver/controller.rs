@@ -55,6 +55,13 @@ impl ComponentAction for CsiController {
         Ok(())
     }
 
+    async fn restart(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+        if options.csi_controller {
+            cfg.restart("csi-controller").await?;
+        }
+        Ok(())
+    }
+
     async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
         if !options.csi_controller {
             return Ok(());

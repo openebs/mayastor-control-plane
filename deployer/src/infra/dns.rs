@@ -20,6 +20,14 @@ impl ComponentAction for Dns {
         }
         Ok(())
     }
+
+    async fn restart(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+        if options.dns {
+            cfg.restart("dns").await?;
+        }
+        Ok(())
+    }
+
     async fn wait_on(&self, _options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
         Ok(())
     }

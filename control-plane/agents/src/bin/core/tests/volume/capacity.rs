@@ -25,7 +25,7 @@ async fn capacity_test() {
         .unwrap();
 
     online_enospc_child(&cluster, &cache_period, &reconcile_period).await;
-    cluster.cleanup().await;
+    cluster.restart().await;
     faulted_nexus_enospc_child(&cluster, &cache_period, &reconcile_period).await;
 }
 

@@ -25,6 +25,14 @@ impl ComponentAction for FioSpdk {
         }
         Ok(())
     }
+
+    async fn restart(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+        if options.fio_spdk {
+            cfg.restart("fio-spdk").await?;
+        }
+        Ok(())
+    }
+
     async fn wait_on(&self, _options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
         // this is fine 🔥
         Ok(())

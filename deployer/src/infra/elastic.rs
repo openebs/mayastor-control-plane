@@ -30,6 +30,14 @@ impl ComponentAction for Elastic {
         }
         Ok(())
     }
+
+    async fn restart(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+        if options.elastic {
+            cfg.restart("elastic").await?;
+        }
+        Ok(())
+    }
+
     async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
         if options.elastic {
             Components::wait_url("http://localhost:9200").await?;

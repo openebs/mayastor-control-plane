@@ -21,10 +21,8 @@ use grpc::{
     client::CoreClient,
     context::Context,
     operations::{
-        node::traits::NodeOperations,
-        pool::traits::PoolOperations,
-        replica::traits::ReplicaOperations,
-        volume::traits::{DeleteVolumeSnapshot, VolumeOperations},
+        node::traits::NodeOperations, pool::traits::PoolOperations,
+        replica::traits::ReplicaOperations, volume::traits::VolumeOperations,
     },
 };
 use openapi::models::Volume;
@@ -47,10 +45,10 @@ use stor_port::{
             definitions::ObjectKey,
             registry::{ControlPlaneService, StoreLeaseLockKey},
         },
-        transport::{CreatePool, DestroyPool, DestroyVolume, Filter, NodeId, NodeStatus},
+        transport::{CreatePool, Filter, NodeId, NodeStatus},
     },
 };
-use tokio::{net::UnixStream, time::sleep};
+use tokio::net::UnixStream;
 use tonic::transport::Uri;
 use tracing::dispatcher::DefaultGuard;
 use tracing_subscriber::{filter::Directive, layer::SubscriberExt, EnvFilter, Registry};
@@ -90,6 +88,7 @@ pub struct Cluster {
     grpc_client: Option<CoreClient>,
     trace_guard: Arc<tracing::subscriber::DefaultGuard>,
     builder: ClusterBuilder,
+    components: Components,
 }
 
 impl Cluster {
@@ -396,75 +395,18 @@ impl Cluster {
             grpc_client,
             trace_guard,
             builder: ClusterBuilder::builder(),
+            components,
         };
 
         Ok(cluster)
     }
 
-    /// Cleanup the cluster, by restarting the io-engines and cleaning resources.
-    pub async fn cleanup(&self) {
-        // Ensure that core agent is up.
-        self.node_service_liveness(None).await.unwrap();
-
-        let nodes = self
-            .grpc_client()
-            .node()
-            .get(Filter::None, true, None)
+    // Restart the components.
+    pub async fn restart(&self) {
+        self.components
+            .restart_wait(&self.composer, std::time::Duration::from_secs(30))
             .await
             .unwrap();
-
-        // Restart all the nodes and wait for them to be back.
-        for node in nodes.into_inner() {
-            if node.state().is_none() || node.state().unwrap().status != NodeStatus::Online {
-                self.composer.restart(node.id().as_str()).await.unwrap();
-                self.wait_node_online(node.id(), None).await.unwrap();
-            }
-        }
-
-        let vol_client = self.grpc_client().volume();
-        let pool_client = self.grpc_client().pool();
-
-        // Cleanup all snapshots.
-        let snapshots = vol_client
-            .get_snapshots(Filter::None, true, None, None)
-            .await
-            .unwrap();
-        for snap in snapshots.entries() {
-            vol_client
-                .delete_snapshot(
-                    &DeleteVolumeSnapshot::new(
-                        &Some(snap.spec().source_id.clone()),
-                        snap.spec().snap_id.clone(),
-                    ),
-                    None,
-                )
-                .await
-                .unwrap();
-        }
-
-        // Cleanup all volumes.
-        let volumes = vol_client
-            .get(Filter::None, true, None, None)
-            .await
-            .unwrap();
-        for vol in volumes.entries {
-            vol_client
-                .destroy(&DestroyVolume::new(vol.uuid()), None)
-                .await
-                .unwrap();
-        }
-
-        // Add slack so that volumes can be cleaned.
-        sleep(Duration::from_secs(3)).await;
-
-        // Cleanup all pools.
-        let pools = pool_client.get(Filter::None, None).await.unwrap();
-        for pool in pools.into_inner() {
-            pool_client
-                .destroy(&DestroyPool::new(pool.node(), pool.id().clone()), None)
-                .await
-                .unwrap();
-        }
     }
 }
 

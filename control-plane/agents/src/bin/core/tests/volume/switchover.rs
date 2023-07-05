@@ -39,7 +39,7 @@ async fn switchover_set_1() {
         .unwrap();
 
     old_nexus_delete_after_vol_destroy(&cluster).await;
-    cluster.cleanup().await;
+    cluster.restart().await;
     node_exhaustion(&cluster).await;
 }
 
@@ -56,7 +56,7 @@ async fn switchover_set_2() {
         .unwrap();
 
     lazy_delete_shutdown_targets(&cluster).await;
-    cluster.cleanup().await;
+    cluster.restart().await;
     volume_republish_nexus_recreation(&cluster).await;
 }
 

@@ -10,6 +10,11 @@ impl ComponentAction for Empty {
     async fn start(&self, _options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
         Ok(())
     }
+
+    async fn restart(&self, _options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
+        Ok(())
+    }
+
     async fn wait_on(&self, _options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
         Ok(())
     }

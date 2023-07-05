@@ -75,6 +75,13 @@ impl ComponentAction for CoreAgent {
         cfg.start("core").await?;
         Ok(())
     }
+
+    async fn restart(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+        cfg.restart("core").await?;
+        tracing::trace!("CORE RESTARTED");
+        Ok(())
+    }
+
     async fn wait_on(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         let ip = cfg.container_ip("core");
         let uri = tonic::transport::Uri::from_str(&format!("https://{ip}:50051")).unwrap();

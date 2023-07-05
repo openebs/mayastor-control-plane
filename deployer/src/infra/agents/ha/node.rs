@@ -40,6 +40,11 @@ impl ComponentAction for HaNodeAgent {
         Ok(())
     }
 
+    async fn restart(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+        cfg.restart("agent-ha-node").await?;
+        Ok(())
+    }
+
     async fn wait_on(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         // Wait till node-agent's gRPC server is ready to server the request
         loop {

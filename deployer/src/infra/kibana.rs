@@ -26,6 +26,14 @@ impl ComponentAction for Kibana {
         }
         Ok(())
     }
+
+    async fn restart(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+        if options.kibana {
+            cfg.restart("kibana").await?;
+        }
+        Ok(())
+    }
+
     async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         if options.kibana && (options.jaeger || cfg.container_exists("jaeger").await) {
             loop {

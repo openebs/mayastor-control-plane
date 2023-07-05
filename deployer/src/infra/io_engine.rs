@@ -90,6 +90,12 @@ impl ComponentAction for IoEngine {
         futures::future::try_join_all(io_engines).await?;
         Ok(())
     }
+    async fn restart(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+        let io_engines = (0 .. options.io_engines)
+            .map(|i| async move { cfg.restart(&Self::name(i, options)).await });
+        futures::future::try_join_all(io_engines).await?;
+        Ok(())
+    }
     async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         for i in 0 .. options.io_engines {
             let name = Self::name(i, options);
