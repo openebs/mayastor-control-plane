@@ -28,8 +28,8 @@ impl ResourceCordon for OperationGuardArc<NodeSpec> {
             .start_update(registry, &cloned_node_spec, NodeOperation::Cordon(label))
             .await?;
 
-        self.complete_update(registry, Ok(self.as_ref().clone()), spec_clone)
-            .await
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
     }
 
     /// Uncordon a node via operation guard functions.
@@ -43,8 +43,8 @@ impl ResourceCordon for OperationGuardArc<NodeSpec> {
             .start_update(registry, &cloned_node_spec, NodeOperation::Uncordon(label))
             .await?;
 
-        self.complete_update(registry, Ok(self.as_ref().clone()), spec_clone)
-            .await
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
     }
 }
 
