@@ -938,7 +938,9 @@ impl SpecOperationsHelper for VolumeSpec {
             }
 
             VolumeOperation::SetReplica(replica_count) => {
-                if *replica_count == self.num_replicas {
+                if self.has_snapshots() {
+                    Err(SvcError::NReplSnapshotNotAllowed {})
+                } else if *replica_count == self.num_replicas {
                     Err(SvcError::ReplicaCountAchieved {
                         id: self.uuid_str(),
                         count: self.num_replicas,
@@ -1021,6 +1023,10 @@ impl SpecOperationsHelper for VolumeSpec {
             }
             VolumeOperation::Create => unreachable!(),
             VolumeOperation::Destroy => unreachable!(),
+
+            VolumeOperation::CreateSnapshot(_) if self.num_replicas != 1 => {
+                Err(SvcError::NReplSnapshotNotAllowed {})
+            }
             VolumeOperation::CreateSnapshot(_) => Ok(()),
             VolumeOperation::DestroySnapshot(_) => Ok(()),
         }?;

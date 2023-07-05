@@ -72,13 +72,15 @@ pub(crate) async fn healthy_volume_replicas(
 }
 
 /// Return healthy replicas for volume snapshotting.
+/// todo: need to refactor to filter with dedicated scheduler.
 pub(crate) async fn snapshoteable_replica(
-    request: &GetPersistedNexusChildren,
+    volume: &VolumeSpec,
     registry: &Registry,
 ) -> Result<HealthyChildItems, SvcError> {
-    let published = request.snapshot_target_published();
+    let published = volume.target().is_some();
 
-    let builder = nexus::CreateVolumeNexus::builder_with_defaults(request, registry).await?;
+    let request = GetPersistedNexusChildren::new_snapshot(volume);
+    let builder = nexus::CreateVolumeNexus::builder_with_defaults(&request, registry).await?;
     let info = builder.context().nexus_info().clone();
 
     if let Some(info_inner) = &builder.context().nexus_info() {

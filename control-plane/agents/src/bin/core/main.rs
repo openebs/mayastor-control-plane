@@ -120,6 +120,12 @@ pub(crate) struct ThinArgs {
     /// to be created on the pool is 100GiB.
     #[clap(long, env = "VOLUME_COMMITMENT_%", value_parser = value_parse_percent, default_value = "40%")]
     volume_commitment: u64,
+    /// When creating snapshots for an existing volume, each replica pool must have at least
+    /// this much free space percentage of the volume size.
+    /// Example: if this value is 40, the pool has 40GiB free, then the max volume size allowed
+    /// to be snapped on the pool is 100GiB.
+    #[clap(long, env = "SNAPSHOT_COMMITMENT_%", value_parser = value_parse_percent, default_value = "40%")]
+    snapshot_commitment: u64,
     /// Same as the `volume_commitment` argument, but applicable only when creating replicas for
     /// a new volume.
     #[clap(long, env = "VOLUME_COMMITMENT_%_INITIAL", value_parser = value_parse_percent, default_value = "40%")]

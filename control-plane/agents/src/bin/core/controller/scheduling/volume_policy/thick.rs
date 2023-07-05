@@ -1,6 +1,6 @@
 use crate::controller::scheduling::{
     resources::PoolItem,
-    volume::{AddVolumeReplica, GetSuitablePoolsContext},
+    volume::{AddVolumeReplica, GetSuitablePoolsContext, SnapshotVolumeReplica},
     volume_policy::{affinity_group, pool::PoolBaseFilters, DefaultBasePolicy},
     ResourceFilter, ResourcePolicy, SortBuilder, SortCriteria,
 };
@@ -24,6 +24,13 @@ impl ResourcePolicy<AddVolumeReplica> for ThickPolicy {
             .filter(affinity_group::SingleReplicaPolicy::replica_anti_affinity)
             // sort pools in order of preference (from least to most number of replicas)
             .sort_ctx(ThickPolicy::sort_by_weights)
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl ResourcePolicy<SnapshotVolumeReplica> for ThickPolicy {
+    fn apply(self, to: SnapshotVolumeReplica) -> SnapshotVolumeReplica {
+        DefaultBasePolicy::filter_snapshot(to)
     }
 }
 
