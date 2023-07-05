@@ -1,5 +1,8 @@
 use super::ResourceFilter;
-use crate::controller::scheduling::{volume::AddVolumeReplica, NodeFilters};
+use crate::controller::scheduling::{
+    volume::{AddVolumeReplica, SnapshotVolumeReplica},
+    NodeFilters,
+};
 
 mod affinity_group;
 pub(crate) mod pool;
@@ -27,5 +30,19 @@ impl DefaultBasePolicy {
             .filter(pool::PoolBaseFilters::capacity)
             .filter(pool::PoolBaseFilters::min_free_space)
             .filter(pool::PoolBaseFilters::topology)
+    }
+    fn filter_snapshot(request: SnapshotVolumeReplica) -> SnapshotVolumeReplica {
+        Self::filter_snapshot_pools(Self::filter_snapshot_nodes(request))
+    }
+    fn filter_snapshot_nodes(request: SnapshotVolumeReplica) -> SnapshotVolumeReplica {
+        request
+            .filter(NodeFilters::cordoned_for_pool)
+            .filter(NodeFilters::online_for_pool)
+    }
+    fn filter_snapshot_pools(request: SnapshotVolumeReplica) -> SnapshotVolumeReplica {
+        request
+            .filter(pool::PoolBaseFilters::usable)
+            .filter(pool::PoolBaseFilters::capacity)
+            .filter(pool::PoolBaseFilters::min_free_space)
     }
 }

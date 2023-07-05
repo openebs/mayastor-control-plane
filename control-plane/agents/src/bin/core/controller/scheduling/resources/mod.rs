@@ -9,7 +9,7 @@ use stor_port::types::v0::{
         nexus_persistence::{ChildInfo, NexusInfo},
         replica::ReplicaSpec,
     },
-    transport::{Child, ChildUri, PoolId, Replica},
+    transport::{Child, ChildUri, NodeId, PoolId, Replica},
 };
 
 /// Item for pool scheduling logic.
@@ -87,6 +87,15 @@ impl PoolItemLister {
             })
             .collect();
         pools
+    }
+    /// Get a list of pool items.
+    pub(crate) async fn list_for_snaps(registry: &Registry, item: &ChildItem) -> Vec<PoolItem> {
+        let nodes = Self::nodes(registry).await;
+
+        match nodes.iter().find(|n| n.id() == item.node()) {
+            Some(node) => vec![PoolItem::new(node.clone(), item.pool().clone(), None)],
+            None => vec![],
+        }
     }
 }
 
@@ -245,6 +254,10 @@ impl ChildItem {
     /// Get the pool wrapper.
     pub(crate) fn pool(&self) -> &PoolWrapper {
         &self.pool_state
+    }
+    /// Get a reference to the node id.
+    pub(crate) fn node(&self) -> &NodeId {
+        &self.pool_state.node
     }
     /// Check if we can rebuild this child.
     pub(crate) fn rebuildable(&self) -> &Option<bool> {

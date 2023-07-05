@@ -42,14 +42,6 @@ impl GetPersistedNexusChildren {
     pub(crate) fn new_snapshot(spec: &VolumeSpec) -> Self {
         Self::Snapshot(spec.clone())
     }
-    /// Check if the snapshotting volume is published.
-    pub(crate) fn snapshot_target_published(&self) -> bool {
-        match self {
-            Self::Create(_) => false,
-            Self::ReCreate(_) => false,
-            Self::Snapshot(vol) => vol.target().is_some(),
-        }
-    }
     /// Get the optional volume spec (used for nexus creation).
     pub(crate) fn vol_spec(&self) -> Option<&VolumeSpec> {
         match self {

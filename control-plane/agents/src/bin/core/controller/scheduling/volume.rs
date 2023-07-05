@@ -17,7 +17,7 @@ use stor_port::types::v0::{
 };
 
 /// Move replica to another pool.
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub(crate) struct MoveReplica {
     /// Current replica node.
     node: NodeId,
@@ -66,6 +66,7 @@ pub(crate) struct GetSuitablePoolsContext {
     spec: VolumeSpec,
     allocated_bytes: Option<u64>,
     move_repl: Option<MoveReplica>,
+    snap_repl: bool,
     ag_restricted_nodes: Option<Vec<NodeId>>,
 }
 impl GetSuitablePoolsContext {
@@ -81,8 +82,15 @@ impl GetSuitablePoolsContext {
     pub(crate) fn move_repl(&self) -> Option<&MoveReplica> {
         self.move_repl.as_ref()
     }
+    /// Check if this is a replica snapshot request.
+    pub(crate) fn snap_repl(&self) -> bool {
+        self.snap_repl
+    }
     pub(crate) fn ag_restricted_nodes(&self) -> &Option<Vec<NodeId>> {
         &self.ag_restricted_nodes
+    }
+    pub fn as_thin(&self) -> bool {
+        self.spec.as_thin() || self.snap_repl()
     }
 }
 
@@ -121,7 +129,7 @@ impl AddVolumeReplica {
         for spec in replicas {
             if let Ok(state) = registry.replica(spec.uuid()).await {
                 if let Some(space) = state.space {
-                    used_bytes.push(space.allocated_bytes);
+                    used_bytes.push(space.allocated_distinct());
                 }
             }
         }
@@ -156,6 +164,7 @@ impl AddVolumeReplica {
                     spec: volume_spec,
                     allocated_bytes,
                     move_repl: request.move_repl,
+                    snap_repl: false,
                     ag_restricted_nodes,
                 },
                 PoolItemLister::list(registry, &pool_ag_replica_count_map).await,
@@ -601,6 +610,70 @@ impl AddVolumeNexusReplicas {
 impl ResourceFilter for AddVolumeNexusReplicas {
     type Request = VolumeReplicasForNexusCtx;
     type Item = ChildItem;
+
+    fn data(&mut self) -> &mut ResourceData<Self::Request, Self::Item> {
+        &mut self.data
+    }
+
+    fn collect(self) -> Vec<Self::Item> {
+        self.data.list
+    }
+}
+
+/// Snapshot a volume replica.
+#[derive(Clone)]
+pub(crate) struct SnapshotVolumeReplica {
+    data: ResourceData<GetSuitablePoolsContext, PoolItem>,
+}
+
+impl SnapshotVolumeReplica {
+    async fn builder(registry: &Registry, volume: &VolumeSpec, item: &ChildItem) -> Self {
+        let allocated_bytes = AddVolumeReplica::allocated_bytes(registry, volume).await;
+
+        Self {
+            data: ResourceData::new(
+                GetSuitablePoolsContext {
+                    registry: registry.clone(),
+                    spec: volume.clone(),
+                    allocated_bytes,
+                    move_repl: None,
+                    snap_repl: true,
+                    ag_restricted_nodes: None,
+                },
+                PoolItemLister::list_for_snaps(registry, item).await,
+            ),
+        }
+    }
+    fn with_default_policy(self) -> Self {
+        match self.data.context.as_thin() {
+            true => self.with_simple_policy(),
+            false => self.with_thick_policy(),
+        }
+    }
+    fn with_thick_policy(self) -> Self {
+        self.policy(ThickPolicy::new())
+    }
+    fn with_simple_policy(self) -> Self {
+        let simple = SimplePolicy::new(&self.data.context().registry);
+        self.policy(simple)
+    }
+    /// Default rules for replica snapshot selection when snapshot replicas for a volume.
+    pub(crate) async fn builder_with_defaults(
+        registry: &Registry,
+        volume: &VolumeSpec,
+        // todo: only 1 replica snapshot supported atm
+        items: &ChildItem,
+    ) -> Self {
+        Self::builder(registry, volume, items)
+            .await
+            .with_default_policy()
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl ResourceFilter for SnapshotVolumeReplica {
+    type Request = GetSuitablePoolsContext;
+    type Item = PoolItem;
 
     fn data(&mut self) -> &mut ResourceData<Self::Request, Self::Item> {
         &mut self.data

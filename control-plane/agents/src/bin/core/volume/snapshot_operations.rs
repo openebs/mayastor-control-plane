@@ -155,10 +155,6 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
         let volume = &request.volume;
         let request = &request.request;
 
-        if volume.as_ref().num_replicas != 1 {
-            return Err(SvcError::NReplSnapshotNotAllowed {});
-        }
-
         let replica = snapshoteable_replica(volume.as_ref(), registry).await?;
         let target_node = if let Some(target) = volume.as_ref().target() {
             registry.node_wrapper(target.node()).await
