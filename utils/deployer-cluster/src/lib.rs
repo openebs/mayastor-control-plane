@@ -45,7 +45,7 @@ use stor_port::{
             definitions::ObjectKey,
             registry::{ControlPlaneService, StoreLeaseLockKey},
         },
-        transport::{CreatePool, Filter, NodeId, NodeStatus},
+        transport::CreatePool,
     },
 };
 use tokio::net::UnixStream;
@@ -160,43 +160,6 @@ impl Cluster {
                 Ok(resp) => return Ok(resp),
                 Err(_) => {
                     tracing::debug!("Node Service not available, Retrying ....{}", x);
-                    tokio::time::sleep(timeout_opts.base_timeout()).await;
-                }
-            }
-        }
-        Err(ReplyError::invalid_reply_error(
-            "Max tries exceeded, node service not up".to_string(),
-        ))
-    }
-
-    /// Wait for the node to be online.
-    pub async fn wait_node_online(
-        &self,
-        node: &NodeId,
-        timeout_opts: Option<TimeoutOptions>,
-    ) -> Result<bool, ReplyError> {
-        let client = self.grpc_client().node();
-        let timeout_opts = match timeout_opts {
-            Some(opts) => opts,
-            None => TimeoutOptions::new()
-                .with_req_timeout(Duration::from_millis(500))
-                .with_max_retries(10),
-        };
-        for x in 1 .. timeout_opts.max_retries().unwrap_or_default() {
-            match client.get(Filter::Node(node.clone()), true, None).await {
-                Ok(nodes) => {
-                    if let Some(node) = nodes.into_inner().get(0) {
-                        if let Some(state) = node.state() {
-                            if state.status == NodeStatus::Online {
-                                return Ok(true);
-                            }
-                        }
-                    }
-                    tracing::debug!("Node {} not online, Retrying ....{}", node, x);
-                    tokio::time::sleep(timeout_opts.base_timeout()).await;
-                }
-                Err(_) => {
-                    tracing::debug!("Node {} not available, Retrying ....{}", node, x);
                     tokio::time::sleep(timeout_opts.base_timeout()).await;
                 }
             }
