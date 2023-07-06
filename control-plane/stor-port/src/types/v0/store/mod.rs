@@ -247,3 +247,15 @@ impl OperationSequence {
         }
     }
 }
+
+/// Check if the given value is in its default form.
+pub(crate) fn is_default<T: Default + PartialEq>(value: &T) -> bool {
+    value == &T::default()
+}
+/// Check if the given value is in its default form.
+pub(crate) fn is_opt_default<T: Default + PartialEq>(value: &Option<T>) -> bool {
+    match value {
+        Some(value) => value == &T::default(),
+        None => true,
+    }
+}

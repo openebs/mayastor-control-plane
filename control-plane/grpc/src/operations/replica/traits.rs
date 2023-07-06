@@ -1079,6 +1079,10 @@ impl TryFrom<replica::ReplicaSpec> for ReplicaSpec {
                 result: op.result,
             }),
             allowed_hosts: vec![],
+            kind: value
+                .kind
+                .map(replica::ReplicaKind::from_i32)
+                .map(|k| k.unwrap_or_default().into()),
         })
     }
 }
@@ -1107,6 +1111,7 @@ impl From<ReplicaSpec> for replica::ReplicaSpec {
             operation: value.operation.map(|operation| common::SpecOperation {
                 result: operation.result,
             }),
+            kind: value.kind.map(replica::ReplicaKind::from).map(|k| k as i32),
         }
     }
 }

@@ -144,6 +144,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
                 last_nexus_id: nexus_id.map(|id| id.to_string()),
                 thin: volume_spec.thin,
                 affinity_group: volume_spec.affinity_group.into_opt(),
+                is_clone: volume_spec.is_clone,
             }),
             metadata: Some(volume::Metadata {
                 spec_status: spec_status as i32,
@@ -293,6 +294,7 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
                 .map(|map_wrapper| map_wrapper.map),
             affinity_group: volume_spec.affinity_group.into_opt(),
             metadata: VolumeMetadata::new(volume_meta.as_thin),
+            is_clone: volume_spec.is_clone,
         };
         Ok(volume_spec)
     }

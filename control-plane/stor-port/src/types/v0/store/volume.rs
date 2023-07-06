@@ -163,6 +163,8 @@ pub struct VolumeSpec {
     /// Flag indicating whether the volume should be thin provisioned.
     #[serde(default)]
     pub thin: bool,
+    #[serde(default, skip_serializing_if = "super::is_default")]
+    pub is_clone: bool,
     /// Last used Target or current Configuration.
     #[serde(default, rename = "target")]
     pub target_config: Option<TargetConfig>,
@@ -173,12 +175,8 @@ pub struct VolumeSpec {
     #[serde(default)]
     pub affinity_group: Option<AffinityGroup>,
     /// Volume metadata information.
-    #[serde(default, skip_serializing_if = "metadata_is_default")]
+    #[serde(default, skip_serializing_if = "super::is_default")]
     pub metadata: VolumeMetadata,
-}
-
-fn metadata_is_default(meta: &VolumeMetadata) -> bool {
-    meta == &VolumeMetadata::default()
 }
 
 /// Volume meta information.

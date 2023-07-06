@@ -6,13 +6,14 @@ use crate::{
         publish_volume_reply, republish_volume_reply, set_volume_replica_reply, share_volume_reply,
         unpublish_volume_reply,
         volume_grpc_server::{VolumeGrpc, VolumeGrpcServer},
-        CreateSnapshotReply, CreateSnapshotRequest, CreateVolumeReply, CreateVolumeRequest,
-        DeleteSnapshotReply, DeleteSnapshotRequest, DestroyShutdownTargetReply,
-        DestroyShutdownTargetRequest, DestroyVolumeReply, DestroyVolumeRequest, GetSnapshotsReply,
-        GetSnapshotsRequest, GetVolumesReply, GetVolumesRequest, ProbeRequest, ProbeResponse,
-        PublishVolumeReply, PublishVolumeRequest, RepublishVolumeReply, RepublishVolumeRequest,
-        SetVolumeReplicaReply, SetVolumeReplicaRequest, ShareVolumeReply, ShareVolumeRequest,
-        UnpublishVolumeReply, UnpublishVolumeRequest, UnshareVolumeReply, UnshareVolumeRequest,
+        CreateSnapshotCloneReply, CreateSnapshotCloneRequest, CreateSnapshotReply,
+        CreateSnapshotRequest, CreateVolumeReply, CreateVolumeRequest, DeleteSnapshotReply,
+        DeleteSnapshotRequest, DestroyShutdownTargetReply, DestroyShutdownTargetRequest,
+        DestroyVolumeReply, DestroyVolumeRequest, GetSnapshotsReply, GetSnapshotsRequest,
+        GetVolumesReply, GetVolumesRequest, ProbeRequest, ProbeResponse, PublishVolumeReply,
+        PublishVolumeRequest, RepublishVolumeReply, RepublishVolumeRequest, SetVolumeReplicaReply,
+        SetVolumeReplicaRequest, ShareVolumeReply, ShareVolumeRequest, UnpublishVolumeReply,
+        UnpublishVolumeRequest, UnshareVolumeReply, UnshareVolumeRequest,
     },
 };
 use std::{convert::TryFrom, sync::Arc};
@@ -261,5 +262,12 @@ impl VolumeGrpc for VolumeServer {
                 reply: Some(get_snapshots_reply::Reply::Error(error.into())),
             })),
         }
+    }
+
+    async fn create_snapshot_clone(
+        &self,
+        _request: Request<CreateSnapshotCloneRequest>,
+    ) -> Result<Response<CreateSnapshotCloneReply>, Status> {
+        todo!()
     }
 }

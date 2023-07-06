@@ -96,6 +96,8 @@ pub struct ReplicaSpec {
     /// List of host nqn's allowed to connect to the shared replica target.
     #[serde(default)]
     pub allowed_hosts: Vec<HostNqn>,
+    #[serde(default, skip_serializing_if = "super::is_opt_default")]
+    pub kind: Option<ReplicaKind>,
 }
 
 impl ReplicaSpec {
@@ -173,6 +175,7 @@ mod tests_deserializer {
                     sequencer: Default::default(),
                     operation: None,
                     allowed_hosts: vec![],
+                    kind: None,
                 },
             },
             Test {
@@ -196,6 +199,7 @@ mod tests_deserializer {
                     sequencer: Default::default(),
                     operation: None,
                     allowed_hosts: vec![],
+                    kind: None,
                 },
             },
         ];
@@ -391,6 +395,7 @@ impl From<&CreateReplica> for ReplicaSpec {
             sequencer: OperationSequence::new(),
             operation: None,
             allowed_hosts: request.allowed_hosts.clone(),
+            kind: None,
         }
     }
 }
