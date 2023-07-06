@@ -236,13 +236,13 @@ impl Registry {
     /// Get the snapshot state for the specified volume.
     pub(crate) async fn snapshot_state(&self, snapshot: &VolumeSnapshot) -> VolumeSnapshotState {
         let mut replica_snaps = vec![];
-        let mut size = None;
+        let mut allocated_size = None;
         if let Some(meta_snapshots) = snapshot.metadata().replica_snapshots() {
             replica_snaps = Vec::with_capacity(meta_snapshots.len());
             for replica_snap in meta_snapshots {
                 replica_snaps.push(
                     if let Ok(state) = self.snapshot_replica(replica_snap.spec()).await {
-                        size = Some(state.snap_size());
+                        allocated_size = Some(state.allocated_size());
                         VolumeReplicaSnapshotState::new_online(replica_snap.spec(), state)
                     } else {
                         VolumeReplicaSnapshotState::new_offline(replica_snap.spec())
@@ -251,7 +251,7 @@ impl Registry {
             }
         }
 
-        VolumeSnapshotState::new(snapshot, size, replica_snaps)
+        VolumeSnapshotState::new(snapshot, allocated_size, replica_snaps)
     }
 
     /// Return a single snapshot object corresponding, either matching (vol_id + snap_id)

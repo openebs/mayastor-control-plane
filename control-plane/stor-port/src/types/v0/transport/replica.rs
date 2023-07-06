@@ -136,8 +136,8 @@ pub struct ReplicaSnapshotDescr {
     snap_uuid: SnapshotId,
     /// Name of the snapshot.
     snap_name: String,
-    /// Amount of bytes referenced by snapshot.
-    snap_size: u64,
+    /// Amount of bytes allocated to snapshot.
+    allocated_size: u64,
     /// Number of clones created from this snapshot.
     num_clones: u64,
     /// Snapshot timestamp.
@@ -148,7 +148,7 @@ pub struct ReplicaSnapshotDescr {
     pool_uuid: PoolUuid,
     /// Name of the pool where the snapshot resides.
     pool_id: PoolId,
-    /// Amount of bytes referenced by replica.
+    /// Amount of bytes allocated to replica.
     replica_size: u64,
     /// Identity of the entity under which snapshot is taken.
     entity_id: String,
@@ -158,6 +158,8 @@ pub struct ReplicaSnapshotDescr {
     valid: bool,
     /// Snapshot is ready as source.
     ready_as_source: bool,
+    /// The amount of bytes allocated to all predecessor snapshots.
+    predecessor_alloc_size: u64,
 }
 impl ReplicaSnapshotDescr {
     #[allow(clippy::too_many_arguments)]
@@ -165,7 +167,7 @@ impl ReplicaSnapshotDescr {
     pub fn new(
         snap_uuid: SnapshotId,
         snap_name: String,
-        snap_size: u64,
+        allocated_size: u64,
         num_clones: u64,
         snap_time: SystemTime,
         replica_uuid: ReplicaId,
@@ -176,11 +178,12 @@ impl ReplicaSnapshotDescr {
         txn_id: String,
         valid: bool,
         ready_as_source: bool,
+        predecessor_alloc_size: u64,
     ) -> Self {
         Self {
             snap_uuid,
             snap_name,
-            snap_size,
+            allocated_size,
             num_clones,
             snap_time,
             replica_uuid,
@@ -191,6 +194,7 @@ impl ReplicaSnapshotDescr {
             txn_id,
             valid,
             ready_as_source,
+            predecessor_alloc_size,
         }
     }
 
@@ -228,13 +232,13 @@ impl ReplicaSnapshotDescr {
     }
 
     /// Get the size of snapshot source.
-    pub fn source_size(&self) -> u64 {
+    pub fn replica_size(&self) -> u64 {
         self.replica_size
     }
 
-    /// Get the size of snapshot referenced data.
-    pub fn snap_size(&self) -> u64 {
-        self.snap_size
+    /// Get the size of snapshot allocated data.
+    pub fn allocated_size(&self) -> u64 {
+        self.allocated_size
     }
 
     /// Get the snapshot name.
@@ -265,6 +269,11 @@ impl ReplicaSnapshotDescr {
     /// Get the replica snapshot's replica uuid.
     pub fn replica_uuid(&self) -> &ReplicaId {
         &self.replica_uuid
+    }
+
+    /// The amount of bytes allocated to all predecessor snapshots.
+    pub fn predecessor_alloc_size(&self) -> u64 {
+        self.predecessor_alloc_size
     }
 }
 

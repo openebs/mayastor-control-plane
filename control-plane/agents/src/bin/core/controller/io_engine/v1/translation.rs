@@ -241,6 +241,7 @@ impl TryIoEngineToAgent for v1::snapshot::SnapshotInfo {
             self.txn_id.clone(),
             self.valid_snapshot,
             self.ready_as_source,
+            self.referenced_bytes,
         ))
     }
 }

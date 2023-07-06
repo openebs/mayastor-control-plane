@@ -350,13 +350,13 @@ def the_snapshot_should_not_be_listed():
 @then("the snapshot size should be equal to the volume size")
 def the_snapshot_size_should_be_equal_to_the_volume_size(volume, snapshot):
     """the snapshot size should be equal to the volume size."""
-    assert snapshot.state.size == volume.spec.size
+    assert snapshot.state.allocated_size == volume.spec.size
 
 
 @then("the snapshot source size should be equal to the volume size")
 def the_snapshot_source_size_should_be_equal_to_the_volume_size(volume, snapshot):
     """the snapshot source size should be equal to the volume size."""
-    assert snapshot.state.size == volume.spec.size
+    assert snapshot.state.allocated_size == volume.spec.size
 
 
 @then("the snapshot status ready as source should be false")
