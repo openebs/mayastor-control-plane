@@ -234,6 +234,7 @@ impl From<ReplicaSpec> for models::ReplicaSpec {
             src.status,
             src.thin,
             openapi::apis::Uuid::try_from(src.uuid).unwrap(),
+            src.kind.into_opt(),
         )
     }
 }

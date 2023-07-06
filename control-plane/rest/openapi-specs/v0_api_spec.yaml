@@ -1807,6 +1807,41 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
+  '/snapshots/{snapshot_id}/volumes/{volume_id}':
+    put:
+      tags:
+        - Volumes
+      operationId: put_snapshot_volume
+      parameters:
+        - in: path
+          name: snapshot_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/SnapshotId'
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVolumeBody'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Volume'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/watches/volumes/{volume_id}':
     get:
       tags:
@@ -2682,6 +2717,15 @@ components:
         - Online
         - Degraded
         - Faulted
+    ReplicaKind:
+      description: Type of replica, example regular or snapshot.
+      type: string
+      enum:
+        - Regular
+        - Snapshot
+        - SnapshotClone
+      default:
+        Regular
     Replica:
       description: Replica information
       type: object
@@ -2721,6 +2765,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/HostNqn'
+        kind:
+          $ref: '#/components/schemas/ReplicaKind'
       required:
         - node
         - pool
@@ -2730,6 +2776,7 @@ components:
         - thin
         - uri
         - uuid
+        - kind
     ReplicaSpaceUsage:
       description: |
         Replica space usage information.
@@ -3054,6 +3101,8 @@ components:
           description: uuid of the replica
           type: string
           format: uuid
+        kind:
+          $ref: '#/components/schemas/ReplicaKind'
       required:
         - managed
         - owners
