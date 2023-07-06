@@ -58,10 +58,18 @@ impl ReplicaSnapshot {
         spec: ReplicaSnapshotSpec,
         vol_params: SnapshotParameters<VolumeId>,
         size: u64,
+        allocated_size: u64,
+        source_spec_size: u64,
     ) -> Self {
         Self {
             status: ReplicaSnapshotSpecStatus::Creating,
-            metadata: ReplicaSnapshotMeta::new(vol_params.uuid(), vol_params.txn_id(), size),
+            metadata: ReplicaSnapshotMeta::new(
+                vol_params.uuid(),
+                vol_params.txn_id(),
+                size,
+                source_spec_size,
+                allocated_size,
+            ),
             spec,
         }
     }
@@ -78,9 +86,11 @@ impl ReplicaSnapshot {
         &self.metadata
     }
     /// Complete the volume operation on the replica.
-    pub fn complete_vol(&mut self, timestamp: DateTime<Utc>) {
+    pub fn complete_vol(&mut self, timestamp: DateTime<Utc>, size: u64, total_allocated_size: u64) {
         self.commit_op();
         self.metadata.timestamp = Some(timestamp);
+        self.metadata.size = size;
+        self.metadata.allocated_size = total_allocated_size;
     }
     /// Mark the status as deleting.
     pub fn set_status_deleting(&mut self) {
@@ -100,15 +110,25 @@ pub struct ReplicaSnapshotMeta {
 
     /// Creation timestamp of the snapshot (set after creation time).
     timestamp: Option<DateTime<Utc>>,
-    /// Size of the snapshot (typically follows source size).
+    /// User specified size of the source of snapshot.
+    source_spec_size: u64,
+    /// Actual size of the source of snapshot.
     size: u64,
+    /// The amount of bytes allocated to the snapshot.
+    allocated_size: u64,
     /// Information about the snapshot which is specific to how the snapshot was created,
     /// either as stand-alone snapshot or part of a volume snapshot transaction.
     meta: SnapshotMeta,
 }
 impl ReplicaSnapshotMeta {
     /// Return a new `Self` from the given parameters.
-    pub fn new(parent: &SnapshotId, txn_id: &SnapshotTxId, size: u64) -> Self {
+    pub fn new(
+        parent: &SnapshotId,
+        txn_id: &SnapshotTxId,
+        size: u64,
+        source_spec_size: u64,
+        allocated_size: u64,
+    ) -> Self {
         Self {
             sequencer: OperationSequence::new(),
             operation: Some(ReplicaSnapshotOperationState {
@@ -116,7 +136,9 @@ impl ReplicaSnapshotMeta {
                 result: None,
             }),
             timestamp: None,
+            source_spec_size,
             size,
+            allocated_size,
             meta: SnapshotMeta::Volume {
                 parent: parent.clone(),
                 txn_id: txn_id.to_string(),
@@ -126,6 +148,14 @@ impl ReplicaSnapshotMeta {
     /// Get the snapshot size.
     pub fn size(&self) -> u64 {
         self.size
+    }
+    /// Get the snapshot allocated size.
+    pub fn allocated_size(&self) -> u64 {
+        self.allocated_size
+    }
+    /// Get the snapshot source spec size.
+    pub fn source_spec_size(&self) -> u64 {
+        self.source_spec_size
     }
     /// Get the snapshot timestamp reference.
     pub fn timestamp(&self) -> Option<&DateTime<Utc>> {

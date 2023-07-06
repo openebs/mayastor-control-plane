@@ -480,6 +480,13 @@ message VolumeSnapshotMeta {
   // Failed transactions are any other key.
   map<string, ReplicaSnapshots>   transactions = 4;
 
+  // Size of the snapshot in bytes.
+  uint64                                  size = 5;
+  // Spec size of the snapshot in bytes.
+  uint64                             spec_size = 6;
+  // Size taken by the snapshot and its predecessors.
+  uint64                  total_allocated_size = 7;
+
   message ReplicaSnapshots {
     repeated ReplicaSnapshot         snapshots = 1;
   }

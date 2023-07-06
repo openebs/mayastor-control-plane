@@ -302,6 +302,8 @@ impl OperationGuardArc<VolumeSnapshot> {
         let replica_snapshot = ReplicaSnapshot::new_vol(
             ReplicaSnapshotSpec::new(&snapshot_source, SnapshotId::new()),
             SnapshotParameters::new(volume, generic_params),
+            replica.state().size,
+            0,
             replica.spec().size,
         );
         let replica = replica.state().clone();
@@ -371,24 +373,24 @@ impl OperationGuardArc<VolumeSnapshot> {
         }
 
         let timestamp = DateTime::<Utc>::from(response.snap_time);
-        let mut replica_timestamp = timestamp;
         // What if snapshot succeeds but we can't fetch the replica snapshot, should we carry
         // on as following, or should we bail out?
-        if let Ok(node) = registry.node_wrapper(&replica.node).await {
-            if let Ok(snapshot) = NodeWrapper::fetch_update_snapshot_state(
-                &node,
-                ReplicaSnapshotInfo::new(
-                    replica_snap.spec().source_id().replica_id(),
-                    replica_snap.spec().uuid().clone(),
-                ),
-            )
-            .await
-            {
-                replica_timestamp = snapshot.timestamp().into();
-            }
-        }
+        let node = registry.node_wrapper(&replica.node).await?;
 
-        replica_snap.complete_vol(replica_timestamp);
+        let snapshot = NodeWrapper::fetch_update_snapshot_state(
+            &node,
+            ReplicaSnapshotInfo::new(
+                replica_snap.spec().source_id().replica_id(),
+                replica_snap.spec().uuid().clone(),
+            ),
+        )
+        .await?;
+
+        replica_snap.complete_vol(
+            snapshot.timestamp().into(),
+            snapshot.replica_size(),
+            snapshot.allocated_size() + snapshot.predecessor_alloc_size(),
+        );
         Ok(VolumeSnapshotCreateResult::new_ok(replica_snap, timestamp))
     }
     async fn snapshot_replica<N: ReplicaSnapshotApi>(
@@ -407,7 +409,11 @@ impl OperationGuardArc<VolumeSnapshot> {
             )))
             .await?;
         let timestamp = response.timestamp();
-        replica_snap.1.complete_vol(timestamp.into());
+        replica_snap.1.complete_vol(
+            timestamp.into(),
+            response.replica_size(),
+            response.allocated_size() + response.predecessor_alloc_size(),
+        );
 
         Ok(VolumeSnapshotCreateResult::new_ok(
             replica_snap.1,

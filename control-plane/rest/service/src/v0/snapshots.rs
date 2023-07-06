@@ -170,6 +170,9 @@ fn to_models_volume_snapshot(snap: &VolumeSnapshot) -> models::VolumeSnapshot {
             models::VolumeSnapshotMetadata::new_all(
                 snap.meta().status().clone(),
                 snap.meta().timestamp().map(|t| t.to_string()),
+                snap.meta().size(),
+                snap.meta().spec_size(),
+                snap.meta().total_allocated_size(),
                 snap.meta().txn_id(),
                 snap.meta()
                     .transactions()
@@ -186,7 +189,7 @@ fn to_models_volume_snapshot(snap: &VolumeSnapshot) -> models::VolumeSnapshot {
         ),
         state: models::VolumeSnapshotState::new_all(
             snap.state().uuid(),
-            snap.state().size().unwrap_or_default(),
+            snap.state().allocated_size().unwrap_or_default(),
             snap.state().source_id(),
             snap.state().timestamp().map(|t| t.to_string()),
             snap.state().ready_as_source(),
@@ -218,8 +221,9 @@ fn to_models_replica_snapshot_state(
                 pool_id: pool_id.to_string(),
                 pool_uuid: state.pool_uuid().uuid().to_owned(),
                 timestamp: Timestamp::from(state.timestamp()).to_string(),
-                size: state.source_size() as i64,
-                referenced_size: state.snap_size() as i64,
+                size: state.replica_size(),
+                allocated_size: state.allocated_size(),
+                predecessor_alloc_size: state.predecessor_alloc_size(),
             })
         }
         VolumeReplicaSnapshotState::Offline {
