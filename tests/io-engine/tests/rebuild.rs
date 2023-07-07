@@ -532,7 +532,7 @@ async fn run_fio_vol_verify(
                 ]
             }
             None => {
-                vec!["--readwrite=randrw", "--verify_async=2"]
+                vec!["--readwrite=randwrite", "--verify_async=2"]
             }
         })
         .map(ToString::to_string)
@@ -985,4 +985,129 @@ async fn destroy_rebuilding_nexus() {
     }
 
     volumes_api.del_volume(&volume_1.state.uuid).await.unwrap();
+}
+
+/// This test will create a volume with two replicas at the beginning
+/// and start fio to the volume. Once the fio is running in background,
+/// the replica count will be scaled up and down repeatedly.
+/// NOTE: This test is long running and hence default marked as 'ignore'.
+/// Not meant to be run as part of CI.
+#[tokio::test]
+#[ignore]
+async fn replica_scaling_rebuild() {
+    let volume_1_size = 512 * 1024 * 1024u64;
+    let pool_size = volume_1_size + 100 * 1024 * 1024u64;
+    let mut n_iteration = 0u64;
+
+    let cluster = ClusterBuilder::builder()
+        .with_io_engines(4)
+        .with_csi(false, true)
+        .with_tmpfs_pool(pool_size)
+        .with_cache_period("100ms")
+        .with_reconcile_period(Duration::from_secs(3), Duration::from_secs(3))
+        .with_options(|o| o.with_isolated_io_engine(true).with_io_engine_cores(2))
+        .build()
+        .await
+        .unwrap();
+
+    let cli = cluster.rest_v00();
+    let volumes_api = cli.volumes_api();
+
+    cluster
+        .composer()
+        .exec(
+            cluster.csi_container(0).as_str(),
+            vec!["nvme", "disconnect-all"],
+        )
+        .await
+        .unwrap();
+
+    let mut volume_1 = volumes_api
+        .put_volume(
+            &Uuid::new_v4(),
+            models::CreateVolumeBody::new(
+                models::VolumePolicy::new(false),
+                2, // Two replica volume.
+                volume_1_size,
+                false,
+            ),
+        )
+        .await
+        .unwrap();
+
+    volume_1 = volumes_api
+        .put_volume_target(
+            &volume_1.spec.uuid,
+            PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                cluster.node(0).to_string(),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+                cluster.csi_node(0),
+            ),
+        )
+        .await
+        .unwrap();
+    tracing::info!(
+        "Volume replicas: {:?}",
+        volume_1.state.target.as_ref().unwrap().children
+    );
+
+    // Start fio on the volume.
+    let (s, r) = tokio::sync::oneshot::channel::<()>();
+    let task = run_fio_vol(&cluster, volume_1.clone(), r).await;
+
+    for i in 0 .. 500 {
+        // Scale up replica count to 3.
+        volume_1 = volumes_api
+            .put_volume_replica_count(&volume_1.spec.uuid, 3)
+            .await
+            .unwrap();
+
+        let volume = wait_till_volume_online_tmo(volume_1, volumes_api, Duration::from_secs(50))
+            .await
+            .unwrap();
+        assert_eq!(volume.spec.num_replicas, 3);
+        assert!(volume.state.status == models::VolumeStatus::Online);
+
+        // Scale down replica count to 2.
+        volume_1 = volumes_api
+            .put_volume_replica_count(&volume.spec.uuid, 2)
+            .await
+            .unwrap();
+        let volume = wait_till_volume_online_tmo(volume_1, volumes_api, Duration::from_secs(50))
+            .await
+            .unwrap();
+        assert_eq!(volume.spec.num_replicas, 2);
+        assert!(volume.state.status == models::VolumeStatus::Online);
+        volume_1 = volume;
+
+        n_iteration = i + 1;
+        if task.is_finished() {
+            // no point waiting...
+            tracing::info!("Iteration {} -  fio task finished", n_iteration);
+            break;
+        }
+
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+
+    tracing::info!("{} Iterations done", n_iteration);
+    s.send(()).ok();
+
+    let code = task.await.unwrap();
+    if code != Some(0) {
+        cluster
+            .composer()
+            .exec(
+                cluster.csi_container(0).as_str(),
+                vec!["nvme", "disconnect-all"],
+            )
+            .await
+            .unwrap();
+    }
+
+    assert_eq!(code, Some(0), "Fio Failure");
+    volumes_api.del_volume(&volume_1.state.uuid).await.ok();
 }
