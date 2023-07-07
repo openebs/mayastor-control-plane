@@ -2,9 +2,9 @@ use crate::{
     misc::traits::ValidateRequestTypes,
     operations::{volume::traits::VolumeOperations, Pagination},
     volume::{
-        create_snapshot_reply, create_volume_reply, get_snapshots_reply, get_volumes_reply,
-        publish_volume_reply, republish_volume_reply, set_volume_replica_reply, share_volume_reply,
-        unpublish_volume_reply,
+        create_snapshot_clone_reply, create_snapshot_reply, create_volume_reply,
+        get_snapshots_reply, get_volumes_reply, publish_volume_reply, republish_volume_reply,
+        set_volume_replica_reply, share_volume_reply, unpublish_volume_reply,
         volume_grpc_server::{VolumeGrpc, VolumeGrpcServer},
         CreateSnapshotCloneReply, CreateSnapshotCloneRequest, CreateSnapshotReply,
         CreateSnapshotRequest, CreateVolumeReply, CreateVolumeRequest, DeleteSnapshotReply,
@@ -266,8 +266,16 @@ impl VolumeGrpc for VolumeServer {
 
     async fn create_snapshot_clone(
         &self,
-        _request: Request<CreateSnapshotCloneRequest>,
+        request: Request<CreateSnapshotCloneRequest>,
     ) -> Result<Response<CreateSnapshotCloneReply>, Status> {
-        todo!()
+        let req = request.into_inner().validated()?;
+        match self.service.create_snapshot_clone(&req, None).await {
+            Ok(volume) => Ok(Response::new(CreateSnapshotCloneReply {
+                reply: Some(create_snapshot_clone_reply::Reply::Volume(volume.into())),
+            })),
+            Err(err) => Ok(Response::new(CreateSnapshotCloneReply {
+                reply: Some(create_snapshot_clone_reply::Reply::Error(err.into())),
+            })),
+        }
     }
 }

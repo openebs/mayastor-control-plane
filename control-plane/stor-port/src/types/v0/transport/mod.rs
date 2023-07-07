@@ -90,7 +90,7 @@ pub enum MessageIdVs {
     /// List Replica Snapshots.
     ListReplicaSnapshots,
     /// Create a Snapshot Clone.
-    CreateSnapshotClone,
+    IoEngCreateSnapshotClone,
     /// List all clones from snapshot.
     ListSnapshotClones,
     /// Volume Service
@@ -143,6 +143,8 @@ pub enum MessageIdVs {
     DeleteVolumeSnapshot,
     /// Get volume snapshots.
     GetVolumeSnapshots,
+    /// Create volume as snapshot clone.
+    CreateVSnapshotClone,
     /// Generic JSON gRPC message.
     JsonGrpc,
     /// Get block devices.

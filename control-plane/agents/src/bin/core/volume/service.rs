@@ -18,11 +18,11 @@ use grpc::{
     context::Context,
     operations::{
         volume::traits::{
-            CreateVolumeInfo, CreateVolumeSnapshot, CreateVolumeSnapshotInfo, DeleteVolumeSnapshot,
-            DeleteVolumeSnapshotInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo,
-            PublishVolumeInfo, RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo,
-            UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations, VolumeSnapshot,
-            VolumeSnapshots,
+            CreateSnapshotCloneInfo, CreateVolumeInfo, CreateVolumeSnapshot,
+            CreateVolumeSnapshotInfo, DeleteVolumeSnapshot, DeleteVolumeSnapshotInfo,
+            DestroyShutdownTargetsInfo, DestroyVolumeInfo, PublishVolumeInfo, RepublishVolumeInfo,
+            SetVolumeReplicaInfo, ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo,
+            VolumeOperations, VolumeSnapshot, VolumeSnapshots,
         },
         Pagination,
     },
@@ -32,8 +32,9 @@ use stor_port::{
     types::v0::{
         store::{snapshots::volume::VolumeSnapshotUserSpec, volume::VolumeSpec},
         transport::{
-            CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter, PublishVolume,
-            RepublishVolume, SetVolumeReplica, ShareVolume, UnpublishVolume, UnshareVolume, Volume,
+            CreateVSnapshotClone, CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter,
+            PublishVolume, RepublishVolume, SetVolumeReplica, ShareVolume, UnpublishVolume,
+            UnshareVolume, Volume,
         },
     },
 };
@@ -206,6 +207,18 @@ impl VolumeOperations for Service {
             .get_snapshots(filter, ignore_notfound, pagination)
             .await?;
         Ok(snapshots)
+    }
+
+    async fn create_snapshot_clone(
+        &self,
+        req: &dyn CreateSnapshotCloneInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let request = req.into();
+        let service = self.clone();
+        let volume =
+            Context::spawn(async move { service.create_snap_clone(&request).await }).await??;
+        Ok(volume)
     }
 }
 
@@ -500,6 +513,20 @@ impl Service {
                 true => None,
                 false => pagination.map(|p| p.starting_token() + p.max_entries()),
             },
+        })
+    }
+
+    /// Create a volume clone from a snapshot using the given parameters.
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.params().uuid))]
+    pub(super) async fn create_snap_clone(
+        &self,
+        request: &CreateVSnapshotClone,
+    ) -> Result<Volume, SvcError> {
+        Err(SvcError::Unimplemented {
+            resource: ResourceKind::VolumeSnapshotClone,
+            request: "create_snap_clone".to_string(),
+            // todo: remove this source from here...
+            source: tonic::Status::unimplemented(""),
         })
     }
 }

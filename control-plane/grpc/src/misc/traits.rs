@@ -31,6 +31,8 @@ impl From<ResourceKind> for common::ResourceKind {
             ResourceKind::AffinityGroup => Self::AffinityGroup,
             ResourceKind::VolumeSnapshot => Self::VolumeSnapshot,
             ResourceKind::ReplicaSnapshot => Self::ReplicaSnapshot,
+            ResourceKind::VolumeSnapshotClone => Self::VolumeSnapshotClone,
+            ResourceKind::ReplicaSnapshotClone => Self::ReplicaSnapshotClone,
         }
     }
 }
@@ -57,6 +59,8 @@ impl From<common::ResourceKind> for ResourceKind {
             common::ResourceKind::AffinityGroup => Self::AffinityGroup,
             common::ResourceKind::VolumeSnapshot => Self::VolumeSnapshot,
             common::ResourceKind::ReplicaSnapshot => Self::ReplicaSnapshot,
+            common::ResourceKind::VolumeSnapshotClone => Self::VolumeSnapshotClone,
+            common::ResourceKind::ReplicaSnapshotClone => Self::ReplicaSnapshotClone,
         }
     }
 }

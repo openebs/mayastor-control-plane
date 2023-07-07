@@ -42,7 +42,8 @@ impl_message!(UnshareReplica);
 impl_message!(CreateReplicaSnapshot);
 impl_message!(DestroyReplicaSnapshot);
 impl_message!(ListReplicaSnapshots);
-impl_message!(CreateSnapshotClone);
+impl_message!(IoEngCreateSnapshotClone);
+impl_message!(CreateVSnapshotClone);
 impl_message!(ListSnapshotClones);
 
 impl_vector_request!(Nexuses, Nexus);

@@ -125,7 +125,7 @@ pub enum ListReplicaSnapshots {
 }
 
 /// The request type to create a snapshot's clone.
-pub type CreateSnapshotClone = SnapshotCloneParameters;
+pub type IoEngCreateSnapshotClone = SnapshotCloneParameters;
 
 /// Common set of parameters used for snapshot clone creation.
 #[derive(Debug, Clone)]

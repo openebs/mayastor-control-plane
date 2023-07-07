@@ -23,13 +23,13 @@ use stor_port::{
         store::{nexus::NexusState, replica::ReplicaState},
         transport::{
             AddNexusChild, ApiVersion, Child, CreateNexus, CreatePool, CreateReplica,
-            CreateReplicaSnapshot, CreateSnapshotClone, DestroyNexus, DestroyPool, DestroyReplica,
+            CreateReplicaSnapshot, DestroyNexus, DestroyPool, DestroyReplica,
             DestroyReplicaSnapshot, FaultNexusChild, GetRebuildRecord, ImportPool,
-            ListRebuildRecord, ListReplicaSnapshots, ListSnapshotClones, MessageIdVs, Nexus,
-            NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, NodeId,
-            NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register, RemoveNexusChild,
-            Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ShareNexus, ShareReplica,
-            ShutdownNexus, SnapshotId, UnshareNexus, UnshareReplica, VolumeId,
+            IoEngCreateSnapshotClone, ListRebuildRecord, ListReplicaSnapshots, ListSnapshotClones,
+            MessageIdVs, Nexus, NexusChildAction, NexusChildActionContext, NexusChildActionKind,
+            NexusId, NodeId, NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register,
+            RemoveNexusChild, Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ShareNexus,
+            ShareReplica, ShutdownNexus, SnapshotId, UnshareNexus, UnshareReplica, VolumeId,
         },
     },
 };
@@ -1614,7 +1614,7 @@ impl ReplicaSnapshotApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
 
     async fn create_snapshot_clone(
         &self,
-        request: &CreateSnapshotClone,
+        request: &IoEngCreateSnapshotClone,
     ) -> Result<Replica, SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
         let clone = dataplane.create_snapshot_clone(request).await?;

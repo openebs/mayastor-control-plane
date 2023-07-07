@@ -124,6 +124,8 @@ pub enum ResourceKind {
     ReplicaSpec,
     /// Replica snapshot.
     ReplicaSnapshot,
+    /// Replica snapshot clone.
+    ReplicaSnapshotClone,
     /// Nexus resource.
     Nexus,
     /// Child resource.
@@ -132,6 +134,8 @@ pub enum ResourceKind {
     Volume,
     /// Volume snapshot.
     VolumeSnapshot,
+    /// Volume snapshot clone.
+    VolumeSnapshotClone,
     /// Json Grpc methods.
     JsonGrpc,
     /// Block devices.

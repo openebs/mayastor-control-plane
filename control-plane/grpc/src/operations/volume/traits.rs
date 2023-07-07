@@ -30,8 +30,12 @@ use stor_port::{
     IntoOption,
 };
 
+use crate::volume::CreateSnapshotCloneRequest;
 use std::{borrow::Borrow, collections::HashMap, convert::TryFrom};
-use stor_port::types::v0::store::volume::VolumeMetadata;
+use stor_port::types::v0::{
+    store::volume::VolumeMetadata,
+    transport::{CreateVSnapshotClone, SnapshotId},
+};
 
 /// All volume crud operations to be a part of the VolumeOperations trait.
 #[tonic::async_trait]
@@ -120,6 +124,12 @@ pub trait VolumeOperations: Send + Sync {
         pagination: Option<Pagination>,
         ctx: Option<Context>,
     ) -> Result<VolumeSnapshots, ReplyError>;
+    /// Create a volume clone from a volume snapshot.
+    async fn create_snapshot_clone(
+        &self,
+        req: &dyn CreateSnapshotCloneInfo,
+        ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError>;
 }
 
 impl From<VolumeSpec> for volume::VolumeDefinition {
@@ -746,6 +756,64 @@ impl TryFrom<get_volumes_request::Filter> for Filter {
 }
 
 /// Trait to be implemented for CreateVolume operation.
+pub trait CreateSnapshotCloneInfo: Send + Sync + std::fmt::Debug {
+    /// Get the clone source snapshot uuid.
+    fn source_snapshot(&self) -> &SnapshotId;
+    /// Get the generic volume create parameters.
+    fn volume(&self) -> &dyn CreateVolumeInfo;
+}
+
+impl CreateSnapshotCloneInfo for CreateVSnapshotClone {
+    fn source_snapshot(&self) -> &SnapshotId {
+        self.snapshot_uuid()
+    }
+
+    fn volume(&self) -> &dyn CreateVolumeInfo {
+        self.params()
+    }
+}
+
+impl CreateSnapshotCloneInfo for ValidatedCreateSnapshotCloneRequest {
+    fn source_snapshot(&self) -> &SnapshotId {
+        &self.snapshot_id
+    }
+    fn volume(&self) -> &dyn CreateVolumeInfo {
+        &self.inner
+    }
+}
+impl ValidateRequestTypes for CreateSnapshotCloneRequest {
+    type Validated = ValidatedCreateSnapshotCloneRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        let Some(volume) = self.volume else {
+            return Err(ReplyError::missing_argument(
+                ResourceKind::Volume,
+                "volume",
+            ))
+        };
+
+        Ok(ValidatedCreateSnapshotCloneRequest {
+            snapshot_id: match &self.source_snapshot {
+                Some(id) => SnapshotId::try_from(id.as_str()).map_err(|e| {
+                    ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "source_snapshot", e)
+                }),
+                None => Err(ReplyError::missing_argument(
+                    ResourceKind::Volume,
+                    "source_snapshot",
+                )),
+            }?,
+            inner: volume.validated()?,
+        })
+    }
+}
+
+/// Intermediate structure that validates the conversion to CreateVolumeRequest type.
+#[derive(Debug)]
+pub struct ValidatedCreateSnapshotCloneRequest {
+    snapshot_id: SnapshotId,
+    inner: ValidatedCreateVolumeRequest,
+}
+
+/// Trait to be implemented for CreateVolume operation.
 pub trait CreateVolumeInfo: Send + Sync + std::fmt::Debug {
     /// Uuid of the volume
     fn uuid(&self) -> VolumeId;
@@ -898,6 +966,21 @@ impl From<&dyn CreateVolumeInfo> for CreateVolumeRequest {
                 .map(|labels| crate::common::StringMapValue { value: labels }),
             thin: data.thin(),
             affinity_group: data.affinity_group().map(|ag| ag.into()),
+        }
+    }
+}
+
+impl From<&dyn CreateSnapshotCloneInfo> for CreateVSnapshotClone {
+    fn from(data: &dyn CreateSnapshotCloneInfo) -> Self {
+        Self::new(data.source_snapshot().clone(), data.volume().into())
+    }
+}
+
+impl From<&dyn CreateSnapshotCloneInfo> for CreateSnapshotCloneRequest {
+    fn from(data: &dyn CreateSnapshotCloneInfo) -> Self {
+        Self {
+            source_snapshot: Some(data.source_snapshot().to_string()),
+            volume: Some(data.volume().into()),
         }
     }
 }
