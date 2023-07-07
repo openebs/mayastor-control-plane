@@ -101,6 +101,9 @@ impl From<&stor_port::types::v0::store::snapshots::volume::VolumeSnapshot> for V
                     .metadata()
                     .timestamp()
                     .map(|t| std::time::SystemTime::from(t).into()),
+                size: value.metadata().size(),
+                spec_size: value.metadata().spec_size(),
+                total_allocated_size: value.metadata().total_allocated_size(),
                 txn_id: value.metadata().txn_id().clone(),
                 transactions,
             },
@@ -120,7 +123,12 @@ pub struct VolumeSnapshotMeta {
 
     /// Creation timestamp of the snapshot (set after creation time).
     timestamp: Option<prost_types::Timestamp>,
-
+    /// Size of the snapshot (typically follows source size).
+    size: u64,
+    /// Spec size of the snapshot (typically follows source spec size).
+    spec_size: u64,
+    /// Total allocated size of the snapshot and its predecessors.
+    total_allocated_size: u64,
     /// Transaction Id that defines this snapshot when it is created.
     txn_id: SnapshotTxId,
     /// Replicas which "reference" to this snapshot as its parent, indexed by the transaction
@@ -145,6 +153,18 @@ impl VolumeSnapshotMeta {
     /// Get a reference to the transactions hashmap.
     pub fn transactions(&self) -> &HashMap<String, Vec<ReplicaSnapshot>> {
         &self.transactions
+    }
+    /// Get the snapshot size in bytes.
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+    /// Get the snapshot spec size in bytes.
+    pub fn spec_size(&self) -> u64 {
+        self.spec_size
+    }
+    /// Get the snapshot total allocated size in bytes.
+    pub fn total_allocated_size(&self) -> u64 {
+        self.total_allocated_size
     }
 }
 
@@ -241,7 +261,7 @@ impl VolumeReplicaSnapshotState {
 #[derive(Debug)]
 pub struct VolumeSnapshotState {
     info: SnapshotInfo<VolumeId>,
-    size: Option<u64>,
+    allocated_size: Option<u64>,
     timestamp: Option<prost_types::Timestamp>,
     repl_snapshots: Vec<VolumeReplicaSnapshotState>,
 }
@@ -249,7 +269,7 @@ impl VolumeSnapshotState {
     /// Create a new `Self` with the given parameters.
     pub fn new(
         volume_snapshot: &v0::store::snapshots::volume::VolumeSnapshot,
-        size: Option<u64>,
+        allocated_size: Option<u64>,
         repl_snapshots: Vec<VolumeReplicaSnapshotState>,
     ) -> Self {
         let spec = volume_snapshot.spec();
@@ -263,24 +283,24 @@ impl VolumeSnapshotState {
             });
         Self {
             info,
-            size,
+            allocated_size,
             timestamp,
             repl_snapshots,
         }
     }
-    /// Get the volume snapshot state.
+    /// Get the volume snapshot uuid.
     pub fn uuid(&self) -> &SnapshotId {
         self.info.snap_id()
     }
-    /// Get the volume snapshot state.
+    /// Get the volume snapshot source id.
     pub fn source_id(&self) -> &VolumeId {
         self.info.source_id()
     }
-    /// Get the volume snapshot state.
-    pub fn size(&self) -> Option<u64> {
-        self.size
+    /// Get the volume snapshot allocated size.
+    pub fn allocated_size(&self) -> Option<u64> {
+        self.allocated_size
     }
-    /// Get the volume snapshot state.
+    /// Get the volume snapshot creation timestamp.
     pub fn timestamp(&self) -> Option<&prost_types::Timestamp> {
         self.timestamp.as_ref()
     }
@@ -425,6 +445,9 @@ impl TryFrom<volume::VolumeSnapshot> for VolumeSnapshot {
                     .unwrap_or_default()
                     .into(),
                 timestamp: meta.timestamp,
+                size: meta.size,
+                spec_size: meta.spec_size,
+                total_allocated_size: meta.total_allocated_size,
                 txn_id: meta.txn_id,
                 transactions: meta
                     .transactions
@@ -441,7 +464,7 @@ impl TryFrom<volume::VolumeSnapshot> for VolumeSnapshot {
             },
             state: VolumeSnapshotState {
                 info,
-                size: state.state.as_ref().map(|s| s.size),
+                allocated_size: state.state.as_ref().map(|s| s.allocated_size),
                 timestamp: state.state.as_ref().and_then(|s| s.timestamp.clone()),
                 repl_snapshots: state
                     .replicas
@@ -515,7 +538,7 @@ impl TryFrom<&snapshot::ReplicaSnapshotState> for ReplicaSnapshotState {
                     .clone()
                     .try_into_id(ResourceKind::ReplicaSnapshot, "snapshot_id")?,
                 val.name.clone(),
-                val.size_referenced,
+                val.allocated_size,
                 val.num_clones,
                 val.timestamp
                     .clone()
@@ -528,11 +551,12 @@ impl TryFrom<&snapshot::ReplicaSnapshotState> for ReplicaSnapshotState {
                     .clone()
                     .try_into_id(ResourceKind::ReplicaSnapshot, "pool_uuid")?,
                 PoolId::from(&val.pool_id),
-                val.size,
+                val.replica_size,
                 val.entity_id.clone(),
                 val.txn_id.clone(),
                 val.valid,
                 val.ready_as_source,
+                val.predecessor_alloc_size,
             ),
         })
     }
@@ -590,13 +614,16 @@ impl TryFrom<VolumeSnapshot> for volume::VolumeSnapshot {
                         )
                     })
                     .collect::<HashMap<_, _>>(),
+                size: value.meta.size,
+                spec_size: value.meta.spec_size,
+                total_allocated_size: value.meta.total_allocated_size,
             }),
             state: Some(volume::VolumeSnapshotState {
                 state: Some(snapshot::SnapshotState {
                     uuid: value.state().uuid().to_string(),
                     status: 0,
                     timestamp: value.state().timestamp().cloned(),
-                    size: value.state().size().unwrap_or_default(),
+                    allocated_size: value.state().allocated_size().unwrap_or_default(),
                     source_id: value.state().source_id().to_string(),
                 }),
                 replicas: value
@@ -616,12 +643,13 @@ impl TryFrom<VolumeSnapshot> for volume::VolumeSnapshot {
                                         entity_id: state.entity_id().to_string(),
                                         status: crate::snapshot::SnapshotStatus::Online as i32,
                                         timestamp: state.timestamp().try_into().ok(),
-                                        size: state.source_size(),
-                                        size_referenced: state.snap_size(),
+                                        replica_size: state.replica_size(),
+                                        allocated_size: state.allocated_size(),
                                         num_clones: state.num_clones(),
                                         txn_id: state.txn_id().to_string(),
                                         valid: state.valid(),
                                         ready_as_source: state.ready_as_source(),
+                                        predecessor_alloc_size: state.predecessor_alloc_size(),
                                     },
                                 )
                             }
@@ -706,7 +734,7 @@ impl TryFrom<snapshot::ReplicaSnapshotState> for transport::ReplicaSnapshot {
                 .uuid
                 .try_into_id(ResourceKind::VolumeSnapshot, "snap_uuid")?,
             value.name,
-            value.size_referenced,
+            value.allocated_size,
             value.num_clones,
             value
                 .timestamp
@@ -719,11 +747,12 @@ impl TryFrom<snapshot::ReplicaSnapshotState> for transport::ReplicaSnapshot {
                 .pool_uuid
                 .try_into_id(ResourceKind::VolumeSnapshot, "pool_uuid")?,
             value.pool_id.into(),
-            value.size,
+            value.replica_size,
             value.entity_id,
             value.txn_id,
             value.valid,
             value.ready_as_source,
+            value.predecessor_alloc_size,
         ))
     }
 }

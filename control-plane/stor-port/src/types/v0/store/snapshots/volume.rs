@@ -102,8 +102,12 @@ pub struct VolumeSnapshotMeta {
 
     /// Creation timestamp of the snapshot (set after creation time).
     timestamp: Option<DateTime<Utc>>,
-    /// Size of the snapshot (typically follows source size).
+    /// User specified size of the source of snapshot.
+    spec_size: u64,
+    /// Actual size of the source of snapshot.
     size: u64,
+    /// The amount of bytes allocated by the snapshot and its successors.
+    total_allocated_size: u64,
     /// Transaction Id that defines this snapshot when it is created.
     txn_id: SnapshotTxId,
     /// Replicas which "reference" to this snapshot as its parent, indexed by the transaction
@@ -125,7 +129,18 @@ impl VolumeSnapshotMeta {
     pub fn txn_id(&self) -> &SnapshotTxId {
         &self.txn_id
     }
-
+    /// Get the snapshot size.
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+    /// Get the snapshot spec size.
+    pub fn spec_size(&self) -> u64 {
+        self.spec_size
+    }
+    /// The amount of bytes allocated to the snapshot and its successors.
+    pub fn total_allocated_size(&self) -> u64 {
+        self.total_allocated_size
+    }
     pub fn prepare(&self) -> SnapshotTxId {
         // If this is a create retry, then we must allocate a new transaction id, and prepare
         // replicas
@@ -248,6 +263,19 @@ impl VolumeSnapshotCreateResult {
         let first = self.replicas.first();
         first.map(|r| r.meta().size()).unwrap_or_default()
     }
+
+    /// The amount of bytes allocated to the snapshot.
+    pub fn allocated_size(&self) -> u64 {
+        let first = self.replicas.first();
+        first.map(|r| r.meta().allocated_size()).unwrap_or_default()
+    }
+    /// The snapshot source spec size.
+    pub fn source_spec_size(&self) -> u64 {
+        let first = self.replicas.first();
+        first
+            .map(|r| r.meta().source_spec_size())
+            .unwrap_or_default()
+    }
 }
 
 impl AsOperationSequencer for VolumeSnapshot {
@@ -275,6 +303,8 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
             VolumeSnapshotOperation::Create(info) => {
                 if let Some(result) = info.complete.lock().unwrap().as_ref() {
                     self.metadata.size = result.size();
+                    self.metadata.total_allocated_size = result.allocated_size();
+                    self.metadata.spec_size = result.source_spec_size();
                     self.metadata.timestamp = Some(result.timestamp);
                     // replace-in-place the logged replica specs.
                     self.metadata
