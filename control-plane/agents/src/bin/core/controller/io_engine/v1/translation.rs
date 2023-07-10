@@ -763,7 +763,7 @@ impl From<ExternalType<NexusNvmePreemption>> for v1::nexus::NexusNvmePreemption 
     }
 }
 
-impl AgentToIoEngine for transport::CreateSnapshotClone {
+impl AgentToIoEngine for transport::IoEngCreateSnapshotClone {
     type IoEngineMessage = v1::snapshot::CreateSnapshotCloneRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         v1::snapshot::CreateSnapshotCloneRequest {

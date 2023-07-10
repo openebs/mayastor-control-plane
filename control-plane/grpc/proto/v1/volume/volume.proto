@@ -57,6 +57,8 @@ message VolumeSpec {
   bool thin = 9;
   // Affinity Group related information.
   optional AffinityGroup affinity_group = 10;
+  // Indicates if this volume was created as a clone.
+  bool is_clone = 12;
 }
 
 message Metadata {
@@ -493,6 +495,18 @@ message ReplicaSnapshot {
   string                             source_id = 5;
 }
 
+message CreateSnapshotCloneRequest {
+  // The snapshot to clone.
+  optional string       source_snapshot = 1;
+  // The generic create volume parameters.
+  CreateVolumeRequest            volume = 2;
+}
+message CreateSnapshotCloneReply {
+  oneof reply {
+    Volume volume = 1;
+    common.ReplyError error = 2;
+  }
+}
 
 service VolumeGrpc {
   rpc CreateVolume (CreateVolumeRequest) returns (CreateVolumeReply) {}
@@ -511,4 +525,7 @@ service VolumeGrpc {
   rpc CreateSnapshot (CreateSnapshotRequest) returns (CreateSnapshotReply) {}
   rpc DeleteSnapshot (DeleteSnapshotRequest) returns (DeleteSnapshotReply) {}
   rpc GetSnapshots (GetSnapshotsRequest) returns (GetSnapshotsReply) {}
+
+  // Clones
+  rpc CreateSnapshotClone (CreateSnapshotCloneRequest) returns (CreateSnapshotCloneReply) {}
 }

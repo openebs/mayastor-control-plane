@@ -2,17 +2,18 @@ use crate::{
     misc::traits::ValidateRequestTypes,
     operations::{volume::traits::VolumeOperations, Pagination},
     volume::{
-        create_snapshot_reply, create_volume_reply, get_snapshots_reply, get_volumes_reply,
-        publish_volume_reply, republish_volume_reply, set_volume_replica_reply, share_volume_reply,
-        unpublish_volume_reply,
+        create_snapshot_clone_reply, create_snapshot_reply, create_volume_reply,
+        get_snapshots_reply, get_volumes_reply, publish_volume_reply, republish_volume_reply,
+        set_volume_replica_reply, share_volume_reply, unpublish_volume_reply,
         volume_grpc_server::{VolumeGrpc, VolumeGrpcServer},
-        CreateSnapshotReply, CreateSnapshotRequest, CreateVolumeReply, CreateVolumeRequest,
-        DeleteSnapshotReply, DeleteSnapshotRequest, DestroyShutdownTargetReply,
-        DestroyShutdownTargetRequest, DestroyVolumeReply, DestroyVolumeRequest, GetSnapshotsReply,
-        GetSnapshotsRequest, GetVolumesReply, GetVolumesRequest, ProbeRequest, ProbeResponse,
-        PublishVolumeReply, PublishVolumeRequest, RepublishVolumeReply, RepublishVolumeRequest,
-        SetVolumeReplicaReply, SetVolumeReplicaRequest, ShareVolumeReply, ShareVolumeRequest,
-        UnpublishVolumeReply, UnpublishVolumeRequest, UnshareVolumeReply, UnshareVolumeRequest,
+        CreateSnapshotCloneReply, CreateSnapshotCloneRequest, CreateSnapshotReply,
+        CreateSnapshotRequest, CreateVolumeReply, CreateVolumeRequest, DeleteSnapshotReply,
+        DeleteSnapshotRequest, DestroyShutdownTargetReply, DestroyShutdownTargetRequest,
+        DestroyVolumeReply, DestroyVolumeRequest, GetSnapshotsReply, GetSnapshotsRequest,
+        GetVolumesReply, GetVolumesRequest, ProbeRequest, ProbeResponse, PublishVolumeReply,
+        PublishVolumeRequest, RepublishVolumeReply, RepublishVolumeRequest, SetVolumeReplicaReply,
+        SetVolumeReplicaRequest, ShareVolumeReply, ShareVolumeRequest, UnpublishVolumeReply,
+        UnpublishVolumeRequest, UnshareVolumeReply, UnshareVolumeRequest,
     },
 };
 use std::{convert::TryFrom, sync::Arc};
@@ -259,6 +260,21 @@ impl VolumeGrpc for VolumeServer {
             })),
             Err(error) => Ok(Response::new(GetSnapshotsReply {
                 reply: Some(get_snapshots_reply::Reply::Error(error.into())),
+            })),
+        }
+    }
+
+    async fn create_snapshot_clone(
+        &self,
+        request: Request<CreateSnapshotCloneRequest>,
+    ) -> Result<Response<CreateSnapshotCloneReply>, Status> {
+        let req = request.into_inner().validated()?;
+        match self.service.create_snapshot_clone(&req, None).await {
+            Ok(volume) => Ok(Response::new(CreateSnapshotCloneReply {
+                reply: Some(create_snapshot_clone_reply::Reply::Volume(volume.into())),
+            })),
+            Err(err) => Ok(Response::new(CreateSnapshotCloneReply {
+                reply: Some(create_snapshot_clone_reply::Reply::Error(err.into())),
             })),
         }
     }

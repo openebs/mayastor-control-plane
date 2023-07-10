@@ -6,6 +6,7 @@ mod garbage_collection;
 mod helpers;
 mod hotspare;
 mod snapshot;
+mod snapshot_clone;
 mod switchover;
 
 use deployer_cluster::{Cluster, ClusterBuilder};

@@ -29,7 +29,7 @@ message Replica {
   optional google.protobuf.StringValue pool_uuid = 10;
   // space usage information.
   ReplicaSpaceUsage space = 11;
-  // kind of the replica, eg: regular or clone.
+  // Kind of the replica, eg: regular or clone.
   ReplicaKind kind = 12;
 }
 
@@ -228,6 +228,8 @@ message ReplicaSpec {
   optional common.SpecOperation operation = 10;
   // uuid of the pool
   optional google.protobuf.StringValue pool_uuid = 11;
+  // Kind of the replica, eg: regular or clone.
+  optional ReplicaKind kind = 12;
 }
 
 // Service for managing replicas

@@ -811,3 +811,29 @@ impl DestroyShutdownTargets {
         &self.registered_targets
     }
 }
+
+/// Create volume snapshot clone request.
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct CreateVSnapshotClone {
+    /// Unique identification of the source snapshot.
+    snapshot_uuid: SnapshotId,
+    /// Generic volume creation parameters.
+    volume_params: CreateVolume,
+}
+impl CreateVSnapshotClone {
+    /// Create a new `Self` from the given parameters.
+    pub fn new(snapshot_uuid: SnapshotId, volume_params: CreateVolume) -> Self {
+        Self {
+            snapshot_uuid,
+            volume_params,
+        }
+    }
+    /// Get a reference to the source snapshot uuid.
+    pub fn snapshot_uuid(&self) -> &SnapshotId {
+        &self.snapshot_uuid
+    }
+    /// Get a reference to the generic volume parameters.
+    pub fn params(&self) -> &CreateVolume {
+        &self.volume_params
+    }
+}

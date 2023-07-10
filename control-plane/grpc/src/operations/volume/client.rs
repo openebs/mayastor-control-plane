@@ -14,10 +14,11 @@ use crate::{
         Pagination,
     },
     volume::{
-        create_snapshot_reply, create_volume_reply, get_snapshots_reply, get_snapshots_request,
-        get_volumes_reply, get_volumes_request, publish_volume_reply, republish_volume_reply,
-        set_volume_replica_reply, share_volume_reply, unpublish_volume_reply,
-        volume_grpc_client::VolumeGrpcClient, GetSnapshotsRequest, GetVolumesRequest, ProbeRequest,
+        create_snapshot_clone_reply, create_snapshot_reply, create_volume_reply,
+        get_snapshots_reply, get_snapshots_request, get_volumes_reply, get_volumes_request,
+        publish_volume_reply, republish_volume_reply, set_volume_replica_reply, share_volume_reply,
+        unpublish_volume_reply, volume_grpc_client::VolumeGrpcClient, GetSnapshotsRequest,
+        GetVolumesRequest, ProbeRequest,
     },
 };
 
@@ -26,6 +27,7 @@ use stor_port::{
     types::v0::transport::{Filter, MessageIdVs, Volume},
 };
 
+use crate::operations::volume::traits::CreateSnapshotCloneInfo;
 use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;
 
@@ -322,6 +324,28 @@ impl VolumeOperations for VolumeClient {
                 get_snapshots_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::VolumeSnapshot)),
+        }
+    }
+
+    #[tracing::instrument(
+        name = "VolumeClient::create_snapshot_clone",
+        level = "debug",
+        skip(self),
+        err
+    )]
+    async fn create_snapshot_clone(
+        &self,
+        request: &dyn CreateSnapshotCloneInfo,
+        ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let req = self.request(request, ctx, MessageIdVs::CreateVSnapshotClone);
+        let response = self.client().create_snapshot_clone(req).await?.into_inner();
+        match response.reply {
+            Some(reply) => match reply {
+                create_snapshot_clone_reply::Reply::Volume(volume) => Ok(Volume::try_from(volume)?),
+                create_snapshot_clone_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Volume)),
         }
     }
 }

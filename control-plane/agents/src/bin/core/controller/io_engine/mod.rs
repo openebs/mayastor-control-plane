@@ -15,8 +15,8 @@ use stor_port::{
     transport_api::v0::BlockDevices,
     types::v0::transport::{
         AddNexusChild, ApiVersion, CreateNexus, CreatePool, CreateReplica, CreateReplicaSnapshot,
-        CreateSnapshotClone, DestroyNexus, DestroyPool, DestroyReplica, DestroyReplicaSnapshot,
-        FaultNexusChild, GetBlockDevices, GetRebuildRecord, ImportPool, ListRebuildRecord,
+        DestroyNexus, DestroyPool, DestroyReplica, DestroyReplicaSnapshot, FaultNexusChild,
+        GetBlockDevices, GetRebuildRecord, ImportPool, IoEngCreateSnapshotClone, ListRebuildRecord,
         ListReplicaSnapshots, ListSnapshotClones, Nexus, NexusChildAction, NexusChildActionContext,
         NexusChildActionKind, NexusId, PoolState, RebuildHistory, Register, RemoveNexusChild,
         Replica, ReplicaId, ReplicaSnapshot, ShareNexus, ShareReplica, ShutdownNexus, UnshareNexus,
@@ -194,7 +194,7 @@ pub(crate) trait ReplicaSnapshotApi {
     /// Create replica clone from the snapshot.
     async fn create_snapshot_clone(
         &self,
-        request: &CreateSnapshotClone,
+        request: &IoEngCreateSnapshotClone,
     ) -> Result<Replica, SvcError>;
 
     /// List snapshot clones.
