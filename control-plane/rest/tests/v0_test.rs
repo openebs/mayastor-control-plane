@@ -7,6 +7,7 @@ use rest_client::RestClient;
 
 use crate::models::PublishVolumeBody;
 use deployer_cluster::{Cluster, ClusterBuilder};
+use rest_client::versions::v0::models::ReplicaKind;
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
@@ -188,6 +189,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             state: models::ReplicaState::Online,
             pool_uuid: replica.pool_uuid,
             allowed_hosts: None,
+            kind: ReplicaKind::Regular,
         }
     );
     assert_eq!(

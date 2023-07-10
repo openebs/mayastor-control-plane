@@ -351,6 +351,7 @@ impl From<Replica> for models::Replica {
             src.uri,
             *src.uuid.uuid(),
             None::<Vec<String>>,
+            src.kind,
         )
     }
 }
@@ -743,6 +744,15 @@ impl From<ReplicaStatus> for models::ReplicaState {
             ReplicaStatus::Online => Self::Online,
             ReplicaStatus::Degraded => Self::Degraded,
             ReplicaStatus::Faulted => Self::Faulted,
+        }
+    }
+}
+impl From<ReplicaKind> for models::ReplicaKind {
+    fn from(src: ReplicaKind) -> Self {
+        match src {
+            ReplicaKind::Regular => Self::Regular,
+            ReplicaKind::Snapshot => Self::Snapshot,
+            ReplicaKind::SnapshotClone => Self::SnapshotClone,
         }
     }
 }
