@@ -1,7 +1,7 @@
 use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, IoEngineApiClient};
 
 use csi_driver::context::{CreateParams, PublishParams};
-use rpc::csi::{Topology as CsiTopology, *};
+use rpc::csi::{volume_content_source::Type, Topology as CsiTopology, *};
 use stor_port::types::v0::openapi::{
     models,
     models::{
@@ -178,11 +178,32 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         tracing::trace!(request = ?args);
         let _permit = self.create_volume_permit().await?;
 
-        if args.volume_content_source.is_some() {
-            return Err(Status::invalid_argument(
-                "Source for create volume is not supported",
-            ));
-        }
+        let volume_content_source = if let Some(source) = args.volume_content_source {
+            match source.r#type {
+                Some(Type::Snapshot(snapshot_source)) => {
+                    let snapshot_uuid =
+                        Uuid::parse_str(&snapshot_source.snapshot_id).map_err(|_e| {
+                            Status::invalid_argument(format!(
+                                "Malformed snapshot UUID: {}",
+                                snapshot_source.snapshot_id
+                            ))
+                        })?;
+                    Some(snapshot_uuid)
+                }
+                Some(Type::Volume(_)) => {
+                    return Err(Status::invalid_argument(
+                        "Volume creation from volume source is not supported",
+                    ));
+                }
+                _ => {
+                    return Err(Status::invalid_argument(
+                        "Invalid source type for create volume",
+                    ));
+                }
+            }
+        } else {
+            None
+        };
 
         // k8s uses names pvc-{uuid} and we use uuid further as ID in SPDK so we
         // must require it.
@@ -224,10 +245,10 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         inclusive_label_topology.insert(String::from(CREATED_BY_KEY), String::from(DSP_OPERATOR));
 
-        let u = Uuid::parse_str(&volume_uuid).map_err(|_e| {
+        let parsed_vol_uuid = Uuid::parse_str(&volume_uuid).map_err(|_e| {
             Status::invalid_argument(format!("Malformed volume UUID: {volume_uuid}"))
         })?;
-        let _guard = csi_driver::limiter::VolumeOpGuard::new(u)?;
+        let _guard = csi_driver::limiter::VolumeOpGuard::new(parsed_vol_uuid)?;
 
         let vt_mapper = VolumeTopologyMapper::init().await?;
 
@@ -238,7 +259,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         // First check if the volume already exists.
         match IoEngineApiClient::get_client()
-            .get_volume_for_create(&u)
+            .get_volume_for_create(&parsed_vol_uuid)
             .await
         {
             Ok(volume) => {
@@ -260,16 +281,33 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
                 let sts_affinity_group_name = context.sts_affinity_group();
 
-                IoEngineApiClient::get_client()
-                    .create_volume(
-                        &u,
-                        replica_count,
-                        size,
-                        volume_topology,
-                        thin,
-                        sts_affinity_group_name.clone().map(AffinityGroup::new),
-                    )
-                    .await?;
+                match volume_content_source {
+                    Some(snapshot_uuid) => {
+                        IoEngineApiClient::get_client()
+                            .create_snapshot_volume(
+                                &parsed_vol_uuid,
+                                &snapshot_uuid,
+                                replica_count,
+                                size,
+                                volume_topology,
+                                thin,
+                                sts_affinity_group_name.clone().map(AffinityGroup::new),
+                            )
+                            .await?;
+                    }
+                    None => {
+                        IoEngineApiClient::get_client()
+                            .create_volume(
+                                &parsed_vol_uuid,
+                                replica_count,
+                                size,
+                                volume_topology,
+                                thin,
+                                sts_affinity_group_name.clone().map(AffinityGroup::new),
+                            )
+                            .await?;
+                    }
+                }
 
                 if let Some(ag_name) = sts_affinity_group_name {
                     debug!(
