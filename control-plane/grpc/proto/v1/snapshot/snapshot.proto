@@ -14,8 +14,8 @@ message SnapshotState {
   SnapshotStatus               status = 2;
   // Creation timestamp of the snapshot.
   google.protobuf.Timestamp timestamp = 3;
-  // Size of the snapshot (typically follows source size).
-  uint64                         size = 4;
+  // Size allocated to the snapshot.
+  uint64               allocated_size = 4;
   string                    source_id = 5;
 }
 
@@ -34,27 +34,29 @@ message ReplicaSnapshotSourceState {
 }
 
 message ReplicaSnapshotState {
-  string                         uuid = 1;
-  string                   replica_id = 2;
-  string                    pool_uuid = 3;
-  string                      pool_id = 4;
-  SnapshotStatus               status = 5;
+  string                          uuid = 1;
+  string                    replica_id = 2;
+  string                     pool_uuid = 3;
+  string                       pool_id = 4;
+  SnapshotStatus                status = 5;
   // Creation timestamp of the snapshot.
-  google.protobuf.Timestamp timestamp = 6;
+  google.protobuf.Timestamp  timestamp = 6;
   // Size of the snapshot (typically follows source size).
-  uint64                         size = 7;
-  // Runtime size taken by the snapshot.
-  uint64              size_referenced = 8;
+  uint64                  replica_size = 7;
+  // Size allocated to the snapshot.
+  uint64                allocated_size = 8;
+  // Predecessor allocated size of the snapshot.
+  uint64        predecessor_alloc_size = 9;
   /// Number of clones created from this snapshot.
-  uint64                   num_clones = 9;
+  uint64                   num_clones = 10;
   // Transaction Id that defines this snapshot when it is created.
-  string                       txn_id = 10;
+  string                       txn_id = 11;
   // Whether this replica snapshot is valid w.r.t all attributes.
-  bool                          valid = 11;
+  bool                          valid = 12;
   // Name of the snapshot.
-  string                         name = 12;
+  string                         name = 13;
   // id of the entity for which snapshot is taken.
-  string                    entity_id = 13;
+  string                    entity_id = 14;
   // ready for usage, i,e source for another volume.
-  bool                ready_as_source = 14;
+  bool                ready_as_source = 15;
 }

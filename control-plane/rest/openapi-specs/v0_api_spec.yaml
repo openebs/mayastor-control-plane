@@ -3428,6 +3428,24 @@ components:
           description: Timestamp when snapshot is taken on the storage system.
           type: string
           format: date-time
+        size:
+          description: |-
+            Size in bytes of the snapshot (which is equivalent to its source size).
+          type: integer
+          format: int64
+          minimum: 0
+        spec_size:
+          description: |-
+            Spec size in bytes of the snapshot (which is equivalent to its source spec size).
+          type: integer
+          format: int64
+          minimum: 0
+        total_allocated_size:
+          description: |-
+            Size in bytes taken by the snapshot and its predecessors.
+          type: integer
+          format: int64
+          minimum: 0
         txn_id:
           type: string
         transactions:
@@ -3438,6 +3456,9 @@ components:
               $ref: '#/components/schemas/ReplicaSnapshot'
       required:
         - status
+        - size
+        - spec_size
+        - total_allocated_size
         - txn_id
         - transactions
     VolumeSnapshotSpec:
@@ -3459,9 +3480,10 @@ components:
       properties:
         uuid:
           $ref: '#/components/schemas/SnapshotId'
-        size:
+        allocated_size:
           description: |-
-            Size in bytes of the snapshot (which is equivalent to its source size).
+            Runtime size in bytes of the snapshot. Equal to the volume allocation at the time of the snapshot creation.
+            It may grow larger if any of its predecessors are deleted.
           type: integer
           format: int64
           minimum: 0
@@ -3482,7 +3504,7 @@ components:
             $ref: '#/components/schemas/ReplicaSnapshotState'
       required:
         - uuid
-        - size
+        - allocated_size
         - source_volume
         - ready_as_source
         - replica_snapshots
@@ -3537,10 +3559,19 @@ components:
           description: Replica snapshot size.
           type: integer
           format: int64
-        referenced_size:
-          description: Replica snapshot referenced size.
+          minimum: 0
+        allocated_size:
+          description: |-
+            Runtime size in bytes of the snapshot. Equal to the volume allocation at the time of the snapshot creation.
+            It may grow larger if any of its predecessors are deleted.
           type: integer
           format: int64
+          minimum: 0
+        predecessor_alloc_size:
+          description: Total allocated size of all the snapshot predecessors.
+          type: integer
+          format: int64
+          minimum: 0
       required:
         - uuid
         - source_id
@@ -3548,7 +3579,8 @@ components:
         - pool_id
         - timestamp
         - size
-        - referenced_size
+        - allocated_size
+        - predecessor_alloc_size
     OfflineReplicaSnapshotState:
       description: |-
         Offline ReplicaSnapshotState representation.
