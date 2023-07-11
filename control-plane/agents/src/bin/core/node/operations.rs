@@ -64,8 +64,8 @@ impl ResourceDrain for OperationGuardArc<NodeSpec> {
             .start_update(registry, &cloned_node_spec, NodeOperation::Drain(label))
             .await?;
 
-        self.complete_update(registry, Ok(self.as_ref().clone()), spec_clone)
-            .await
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
     }
 
     /// Mark a node as drained via operation guard functions.
@@ -75,8 +75,8 @@ impl ResourceDrain for OperationGuardArc<NodeSpec> {
             .start_update(registry, &cloned_node_spec, NodeOperation::SetDrained())
             .await?;
 
-        self.complete_update(registry, Ok(self.as_ref().clone()), spec_clone)
-            .await
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
     }
 }
 
@@ -97,8 +97,8 @@ impl OperationGuardArc<NodeSpec> {
             )
             .await?;
 
-        self.complete_update(registry, Ok(self.as_ref().clone()), spec_clone)
-            .await
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
     }
 
     /// Remove the set of draining volumes from the stored set.
@@ -116,8 +116,8 @@ impl OperationGuardArc<NodeSpec> {
             )
             .await?;
 
-        self.complete_update(registry, Ok(self.as_ref().clone()), spec_clone)
-            .await
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
     }
 
     /// Remove all draining volumes from the stored set.
@@ -134,7 +134,7 @@ impl OperationGuardArc<NodeSpec> {
             )
             .await?;
 
-        self.complete_update(registry, Ok(self.as_ref().clone()), spec_clone)
-            .await
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
     }
 }
