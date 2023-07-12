@@ -18,7 +18,7 @@ use stor_port::{
             SpecStatus, SpecTransaction,
         },
         transport::{
-            CreatePool, CreateReplica, PoolId, PoolState, PoolStatus, Replica, ReplicaId,
+            CreatePool, CreateReplica, NodeId, PoolId, PoolState, PoolStatus, Replica, ReplicaId,
             ReplicaOwners, ReplicaStatus,
         },
     },
@@ -303,6 +303,11 @@ impl ResourceSpecsLocked {
             .ok_or(PoolNotFound {
                 pool_id: id.to_owned(),
             })
+    }
+    /// Get a pools's node from its spec for the given pool `id`, if it exists.
+    pub(crate) fn spec_pool_node(&self, id: &PoolId) -> Option<NodeId> {
+        let specs = self.read();
+        specs.pools.get(id).map(|p| p.immutable_arc().node.clone())
     }
     /// Get a vector of resourced PoolSpec's.
     pub(crate) fn pools_rsc(&self) -> Vec<ResourceMutex<PoolSpec>> {

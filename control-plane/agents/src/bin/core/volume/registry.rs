@@ -157,7 +157,7 @@ impl Registry {
                         .and_then(|repl| state.child(repl.uri().as_str()))
                     {
                         return ReplicaTopology::new(
-                            None,
+                            self.specs().spec_pool_node(spec.pool.pool_name()),
                             Some(spec.pool_name().clone()),
                             ReplicaStatus::Unknown,
                             None,
@@ -167,7 +167,15 @@ impl Registry {
                         );
                     }
                 }
-                ReplicaTopology::default()
+                ReplicaTopology::new(
+                    self.specs().spec_pool_node(spec.pool.pool_name()),
+                    Some(spec.pool_name().clone()),
+                    ReplicaStatus::Unknown,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
             }
         }
     }
