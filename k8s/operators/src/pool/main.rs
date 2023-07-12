@@ -258,7 +258,8 @@ impl ResourceContext {
                 if response.status() == clients::tower::StatusCode::UNPROCESSABLE_ENTITY =>
             {
                 // UNPROCESSABLE_ENTITY indicates that the pool spec already exists in the
-                // control plane. Keeping it idempotent.
+                // control plane. Marking cr_state as Created and control plane state as Unknown.
+                return self.mark_unknown().await;
             }
             Err(error) => {
                 return match self
