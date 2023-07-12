@@ -8,9 +8,12 @@ use crate::controller::{
     },
 };
 use agents::errors::{SvcError, SvcError::CordonedNode};
-use stor_port::types::v0::{
-    store::pool::PoolSpec,
-    transport::{CreatePool, CtrlPoolState, DestroyPool, Pool},
+use stor_port::{
+    transport_api::ResourceKind,
+    types::v0::{
+        store::pool::PoolSpec,
+        transport::{CreatePool, CtrlPoolState, DestroyPool, Pool},
+    },
 };
 
 #[async_trait::async_trait]
@@ -34,6 +37,15 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
             return Err(SvcError::InvalidPoolDeviceNum {
                 disks: request.disks.clone(),
             });
+        }
+
+        if let Ok(pool) = registry.specs().pool(&request.id) {
+            if pool.status.created() {
+                return Err(SvcError::AlreadyExists {
+                    kind: ResourceKind::Pool,
+                    id: request.id.to_string(),
+                });
+            }
         }
 
         let node = registry.node_wrapper(&request.node).await?;
