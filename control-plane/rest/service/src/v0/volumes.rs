@@ -144,12 +144,12 @@ impl apis::actix_server::Volumes for RestApi {
 
     async fn put_snapshot_volume(
         Path((snapshot_id, volume_id)): Path<(Uuid, Uuid)>,
-        Body(_create_volume_body): Body<models::CreateVolumeBody>,
+        Body(create_volume_body): Body<models::CreateVolumeBody>,
     ) -> Result<models::Volume, RestError<RestJsonError>> {
-        Err(ReplyError::unimplemented(format!(
-            "Volume creation for: {volume_id} from snapshot: {snapshot_id} is not implemented"
-        ))
-        .into())
+        let create = CreateVolumeBody::from(create_volume_body)
+            .to_create_snapshot_volume(snapshot_id.into(), volume_id.into());
+        let volume = client().create_snapshot_clone(&create, None).await?;
+        Ok(volume.into())
     }
 
     async fn put_volume(

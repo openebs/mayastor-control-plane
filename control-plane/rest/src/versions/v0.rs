@@ -29,7 +29,7 @@ use stor_port::{
     transport_api::ReplyError,
     types::v0::{
         openapi::models::RestJsonError,
-        transport::{AffinityGroup, HostNqn, HostNqnParseError},
+        transport::{AffinityGroup, CreateVSnapshotClone, HostNqn, HostNqnParseError, SnapshotId},
     },
 };
 
@@ -231,6 +231,14 @@ impl CreateVolumeBody {
             thin: self.thin,
             affinity_group: self.affinity_group.clone(),
         }
+    }
+    /// Convert into rpc request type.
+    pub fn to_create_snapshot_volume(
+        &self,
+        snapshot_id: SnapshotId,
+        volume_id: VolumeId,
+    ) -> CreateVSnapshotClone {
+        CreateVSnapshotClone::new(snapshot_id, self.to_create_volume(volume_id))
     }
 }
 
