@@ -217,7 +217,6 @@ impl From<&v0::store::snapshots::replica::ReplicaSnapshot> for ReplicaSnapshot {
 
 /// Volume replica snapshot state information.
 #[derive(Debug)]
-#[allow(unused)]
 pub enum VolumeReplicaSnapshotState {
     /// When the replica snapshot is available.
     Online {
@@ -253,6 +252,13 @@ impl VolumeReplicaSnapshotState {
             pool_id: spec.source_id().pool_id().clone(),
             replica_id: spec.source_id().replica_id().clone(),
             snapshot_id: spec.uuid().clone(),
+        }
+    }
+    /// Get the snapshot state, if the snapshot is online.
+    pub fn state(&self) -> Option<&transport::ReplicaSnapshot> {
+        match self {
+            Self::Online { state, .. } => Some(state),
+            _ => None,
         }
     }
 }

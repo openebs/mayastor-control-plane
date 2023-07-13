@@ -316,6 +316,14 @@ pub enum SvcError {
         snap_id
     ))]
     SnapshotMaxTransactions { snap_id: String },
+    #[snafu(display("Cloned snapshot volumes must be thin provisioned"))]
+    ClonedSnapshotVolumeThin {},
+    #[snafu(display("Cloned snapshot volume must match the snapshot size"))]
+    ClonedSnapshotVolumeSize {},
+    #[snafu(display("Cloned snapshot volume only supported for 1 replica"))]
+    ClonedSnapshotVolumeRepl {},
+    #[snafu(display("The source snapshot is not created"))]
+    SnapshotNotCreated {},
 }
 
 impl SvcError {
@@ -864,6 +872,30 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::SnapshotMaxTransactions { .. } => ReplyError {
                 kind: ReplyErrorKind::DeadlineExceeded,
+                resource: ResourceKind::VolumeSnapshot,
+                source,
+                extra,
+            },
+            SvcError::ClonedSnapshotVolumeRepl {} => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::VolumeSnapshotClone,
+                source,
+                extra,
+            },
+            SvcError::ClonedSnapshotVolumeSize {} => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::VolumeSnapshotClone,
+                source,
+                extra,
+            },
+            SvcError::ClonedSnapshotVolumeThin {} => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::VolumeSnapshotClone,
+                source,
+                extra,
+            },
+            SvcError::SnapshotNotCreated {} => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::VolumeSnapshot,
                 source,
                 extra,

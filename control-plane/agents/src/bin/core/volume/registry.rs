@@ -225,7 +225,6 @@ impl Registry {
     }
 
     /// Get the replica snapshot state for the specified volume.
-    /// TODO: retrieve snapshot from node's resource state map.
     pub(crate) async fn snapshot_replica(
         &self,
         snapshot: &ReplicaSnapshotSpec,
@@ -282,7 +281,7 @@ impl Registry {
         if let Some(vol_id) = vol_id {
             let snap_source_id = snapshot.spec().source_id();
 
-            // Verify that the fetched snashot spec has the same volume id as input.
+            // Verify that the fetched snapshot spec has the same volume id as input.
             if vol_id != snap_source_id {
                 return Err(SvcError::InvalidSnapshotSource {
                     snap_id: snap_id.to_string(),

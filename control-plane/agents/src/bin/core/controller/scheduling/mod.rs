@@ -23,11 +23,11 @@ pub(crate) trait ResourcePolicy<Request: ResourceFilter>: Sized {
 
 /// Default container of context and a list of items which must be filtered down and sorted.
 #[derive(Clone)]
-pub(crate) struct ResourceData<C, I> {
+pub(crate) struct ResourceData<C, I: std::fmt::Debug> {
     context: C,
     list: Vec<I>,
 }
-impl<C, I> ResourceData<C, I> {
+impl<C, I: std::fmt::Debug> ResourceData<C, I> {
     /// Create a new `Self`.
     pub(crate) fn new(request: C, list: Vec<I>) -> Self {
         Self {
@@ -43,7 +43,7 @@ impl<C, I> ResourceData<C, I> {
 #[async_trait::async_trait(?Send)]
 pub(crate) trait ResourceFilter: Sized {
     type Request;
-    type Item;
+    type Item: std::fmt::Debug;
 
     fn data(&mut self) -> &mut ResourceData<Self::Request, Self::Item>;
 

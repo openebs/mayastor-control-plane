@@ -128,6 +128,7 @@ impl CreateReplicaBody {
             managed: false,
             owners: Default::default(),
             allowed_hosts: self.allowed_hosts,
+            kind: None,
         }
     }
 }

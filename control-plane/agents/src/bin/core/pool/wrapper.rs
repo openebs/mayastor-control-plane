@@ -1,5 +1,6 @@
-use stor_port::types::v0::transport::{
-    CtrlPoolState, PoolState, PoolStatus, Protocol, Replica, ReplicaId,
+use stor_port::types::v0::{
+    store::replica::PoolRef,
+    transport::{CtrlPoolState, PoolState, PoolStatus, Protocol, Replica, ReplicaId},
 };
 
 use std::{cmp::Ordering, ops::Deref};
@@ -69,6 +70,12 @@ impl PoolWrapper {
     pub(crate) fn state(&self) -> &PoolState {
         &self.state
     }
+    /// Get the pool reference as name.
+    /// todo: add uuid to pool state.
+    pub(crate) fn pool_ref(&self) -> PoolRef {
+        PoolRef::Named(self.id.clone())
+    }
+
     /// Get the controller pool state (state + metadata).
     pub(crate) fn ctrl_state(&self) -> CtrlPoolState {
         CtrlPoolState::new(self.state.clone())

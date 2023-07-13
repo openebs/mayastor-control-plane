@@ -9,7 +9,8 @@ use crate::{
         },
         transport::{
             self, CreateReplica, HostNqn, NodeId, PoolId, PoolUuid, Protocol, ReplicaId,
-            ReplicaKind, ReplicaName, ReplicaOwners, ReplicaShareProtocol, VolumeId,
+            ReplicaKind, ReplicaName, ReplicaOwners, ReplicaShareProtocol, SnapshotCloneSpecParams,
+            VolumeId,
         },
     },
     IntoOption, IntoVec,
@@ -396,7 +397,7 @@ impl From<&CreateReplica> for ReplicaSpec {
             sequencer: OperationSequence::new(),
             operation: None,
             allowed_hosts: request.allowed_hosts.clone(),
-            kind: None,
+            kind: request.kind.clone(),
         }
     }
 }
@@ -415,5 +416,45 @@ impl PartialEq<transport::Replica> for ReplicaSpec {
             None => PoolRef::Named(other.pool_id.clone()),
         };
         self.share == other.share && self.pool == pool
+    }
+}
+
+impl From<&SnapshotCloneSpecParams> for CreateReplica {
+    fn from(value: &SnapshotCloneSpecParams) -> Self {
+        let request = value.params();
+        Self {
+            node: value.node().clone(),
+            name: Some(ReplicaName::from_string(request.name().to_string())),
+            uuid: request.uuid().clone(),
+            pool_id: value.pool().pool_name().clone(),
+            pool_uuid: value.pool().pool_uuid(),
+            size: value.size(),
+            thin: true,
+            share: Default::default(),
+            managed: true,
+            owners: ReplicaOwners::from_volume(value.uuid()),
+            allowed_hosts: vec![],
+            kind: Some(ReplicaKind::SnapshotClone),
+        }
+    }
+}
+impl From<&SnapshotCloneSpecParams> for ReplicaSpec {
+    fn from(value: &SnapshotCloneSpecParams) -> Self {
+        let request = value.params();
+        Self {
+            name: ReplicaName::from_string(request.name().to_string()),
+            uuid: request.uuid().into(),
+            size: value.size(),
+            pool: value.pool().clone(),
+            share: Protocol::None,
+            thin: true,
+            status: ReplicaSpecStatus::Creating,
+            managed: true,
+            owners: ReplicaOwners::from_volume(value.uuid()),
+            sequencer: OperationSequence::new(),
+            operation: None,
+            allowed_hosts: vec![],
+            kind: Some(ReplicaKind::SnapshotClone),
+        }
     }
 }

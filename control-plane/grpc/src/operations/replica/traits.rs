@@ -813,6 +813,7 @@ impl From<&dyn CreateReplicaInfo> for CreateReplica {
             managed: data.managed(),
             owners: data.owners(),
             allowed_hosts: data.allowed_hosts(),
+            kind: None,
         }
     }
 }

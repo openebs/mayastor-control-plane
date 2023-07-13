@@ -12,7 +12,10 @@ use crate::controller::{
 use agents::errors::SvcError;
 use std::{collections::HashMap, ops::Deref};
 use stor_port::types::v0::{
-    store::{nexus::NexusSpec, nexus_persistence::NexusInfo, volume::VolumeSpec},
+    store::{
+        nexus::NexusSpec, nexus_persistence::NexusInfo, snapshots::replica::ReplicaSnapshot,
+        volume::VolumeSpec,
+    },
     transport::{NodeId, PoolId, VolumeState},
 };
 
@@ -672,6 +675,58 @@ impl SnapshotVolumeReplica {
 
 #[async_trait::async_trait(?Send)]
 impl ResourceFilter for SnapshotVolumeReplica {
+    type Request = GetSuitablePoolsContext;
+    type Item = PoolItem;
+
+    fn data(&mut self) -> &mut ResourceData<Self::Request, Self::Item> {
+        &mut self.data
+    }
+
+    fn collect(self) -> Vec<Self::Item> {
+        self.data.list
+    }
+}
+
+/// Clone volume snapshot replicas.
+#[derive(Clone)]
+pub(crate) struct CloneVolumeSnapshot {
+    data: ResourceData<GetSuitablePoolsContext, PoolItem>,
+}
+
+impl CloneVolumeSnapshot {
+    async fn builder(registry: &Registry, spec: &VolumeSpec, snapshot: &ReplicaSnapshot) -> Self {
+        Self {
+            data: ResourceData::new(
+                GetSuitablePoolsContext {
+                    registry: registry.clone(),
+                    spec: spec.clone(),
+                    allocated_bytes: None,
+                    move_repl: None,
+                    snap_repl: false,
+                    ag_restricted_nodes: None,
+                },
+                PoolItemLister::list_for_clones(registry, snapshot).await,
+            ),
+        }
+    }
+    fn with_simple_policy(self) -> Self {
+        let simple = SimplePolicy::new(&self.data.context().registry);
+        self.policy(simple)
+    }
+    /// Default rules for replica snapshot selection when snapshot replicas for a volume.
+    pub(crate) async fn builder_with_defaults(
+        registry: &Registry,
+        spec: &VolumeSpec,
+        snapshot: &ReplicaSnapshot,
+    ) -> Self {
+        Self::builder(registry, spec, snapshot)
+            .await
+            .with_simple_policy()
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl ResourceFilter for CloneVolumeSnapshot {
     type Request = GetSuitablePoolsContext;
     type Item = PoolItem;
 

@@ -10,6 +10,8 @@ from pytest_bdd import (
 import pytest
 import csi_pb2 as pb
 import grpc
+
+import openapi.exceptions
 from common.apiclient import ApiClient
 from openapi.model.create_pool_body import CreatePoolBody
 
@@ -186,6 +188,7 @@ def a_CreateVolumeRequest_request_with_snapshot_as_source_is_sent_to_the_CSI_con
         "protocol": "nvmf",
         "ioTimeout": "30",
         "repl": "1",
+        "thin": "true",
     }
 
     req = pb.CreateVolumeRequest(
@@ -201,9 +204,13 @@ def a_CreateVolumeRequest_request_with_snapshot_as_source_is_sent_to_the_CSI_con
         csi_rpc_handle().controller.CreateVolume(req)
     except grpc.RpcError as grpc_error:
         return grpc_error
+    yield
+    try:
+        ApiClient.volumes_api().del_volume(VOLUME2_UUID)
+    except openapi.exceptions.NotFoundException:
+        pass
 
 
-@then("the volume creation should fail with unimplemented")
+@then("the volume creation should succeed")
 def the_volume_creation_should_fail(grpc_error):
-    assert grpc_error is not None
-    assert grpc_error.code() == grpc.StatusCode.UNIMPLEMENTED
+    assert grpc_error is None

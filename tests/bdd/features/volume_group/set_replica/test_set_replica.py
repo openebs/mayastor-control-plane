@@ -224,7 +224,7 @@ def the_creation_should_not_fail():
 @then("the scale down operation should fail")
 def the_scale_down_operation_should_fail():
     """the scale down operation should fail."""
-    assert "SvcError :: RestrictedReplicaCount" == pytest.error_body["message"]
+    assert pytest.error_body["message"].startswith("SvcError :: RestrictedReplicaCount")
     assert pytest.error_body["kind"] == "FailedPrecondition"
 
 

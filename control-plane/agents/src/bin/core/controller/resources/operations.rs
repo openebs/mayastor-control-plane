@@ -54,6 +54,20 @@ pub(crate) trait ResourceLifecycle {
     ) -> Result<(), SvcError>;
 }
 
+/// Resource Lifecycle Operations.
+/// Allows for implementations of the trait for the same type multiple times, as in, with different
+/// Create request parameters.
+#[async_trait::async_trait]
+pub(crate) trait ResourceLifecycleExt<Create: Sync + Send> {
+    type CreateOutput: Sync + Send + Sized;
+
+    /// Create the `Self` Resource itself.
+    async fn create_ext(
+        registry: &Registry,
+        request: &Create,
+    ) -> Result<Self::CreateOutput, SvcError>;
+}
+
 /// Resource Lifecycle Operations for types with lifetimes.
 #[async_trait::async_trait]
 pub(crate) trait ResourceLifecycleWithLifetime {
@@ -244,4 +258,18 @@ pub(crate) trait ResourcePruning {
         registry: &Registry,
         max_prune_limit: Option<usize>,
     ) -> Result<(), SvcError>;
+}
+
+/// Resource Cloning Operations.
+#[async_trait::async_trait]
+pub(crate) trait ResourceCloning {
+    type Create: Sync + Send;
+    type CreateOutput: Sync + Send + Sized;
+
+    /// Create a clone for the `Self` resource.
+    async fn create_clone(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Create,
+    ) -> Result<Self::CreateOutput, SvcError>;
 }

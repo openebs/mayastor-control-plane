@@ -1,16 +1,19 @@
 use crate::controller::{
     registry::Registry,
-    wrapper::{NodeWrapper, PoolWrapper},
+    wrapper::{GetterOps, NodeWrapper, PoolWrapper},
 };
-use std::collections::HashMap;
+
 use stor_port::types::v0::{
     store::{
         nexus_child::NexusChild,
         nexus_persistence::{ChildInfo, NexusInfo},
         replica::ReplicaSpec,
+        snapshots::replica::ReplicaSnapshot,
     },
     transport::{Child, ChildUri, NodeId, PoolId, Replica},
 };
+
+use std::{collections::HashMap, ops::Deref};
 
 /// Item for pool scheduling logic.
 #[derive(Debug, Clone)]
@@ -88,7 +91,8 @@ impl PoolItemLister {
             .collect();
         pools
     }
-    /// Get a list of pool items.
+    /// Get a list of pool items to create a snapshot on.
+    /// todo: support multi-replica snapshot.
     pub(crate) async fn list_for_snaps(registry: &Registry, item: &ChildItem) -> Vec<PoolItem> {
         let nodes = Self::nodes(registry).await;
 
@@ -96,6 +100,25 @@ impl PoolItemLister {
             Some(node) => vec![PoolItem::new(node.clone(), item.pool().clone(), None)],
             None => vec![],
         }
+    }
+    /// Get a list of pool items to create a snapshot clone on.
+    /// todo: support multi-replica snapshot and clone.
+    pub(crate) async fn list_for_clones(
+        registry: &Registry,
+        snapshot: &ReplicaSnapshot,
+    ) -> Vec<PoolItem> {
+        let pool_id = snapshot.spec().source_id().pool_id();
+        let Ok(pool_spec) = registry.specs().pool(pool_id) else {
+            return vec![];
+        };
+        let Ok(node) = registry.node_wrapper(&pool_spec.node).await else {
+            return vec![];
+        };
+        let Some(pool) = node.pool_wrapper(pool_id).await else {
+            return vec![];
+        };
+        let node = node.read().await.deref().clone();
+        vec![PoolItem::new(node, pool, None)]
     }
 }
 
@@ -266,7 +289,7 @@ impl ChildItem {
 }
 
 /// Individual Node candidate which is a wrapper over nodewrapper used for filtering.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct NodeItem {
     node_wrapper: NodeWrapper,
     ag_nexus_count: Option<u64>,

@@ -3,7 +3,10 @@ use crate::{
         registry::Registry,
         scheduling::{
             resources::PoolItem,
-            volume::{AddVolumeReplica, GetSuitablePoolsContext, SnapshotVolumeReplica},
+            volume::{
+                AddVolumeReplica, CloneVolumeSnapshot, GetSuitablePoolsContext,
+                SnapshotVolumeReplica,
+            },
             volume_policy::{affinity_group, pool::PoolBaseFilters, DefaultBasePolicy},
             ResourceFilter, ResourcePolicy, SortBuilder, SortCriteria,
         },
@@ -50,6 +53,17 @@ impl ResourcePolicy<SnapshotVolumeReplica> for SimplePolicy {
     fn apply(self, to: SnapshotVolumeReplica) -> SnapshotVolumeReplica {
         DefaultBasePolicy::filter_snapshot(to)
             .filter(PoolBaseFilters::min_free_space)
+            .filter_param(&self, SimplePolicy::min_free_space)
+            .filter_param(&self, SimplePolicy::pool_overcommit)
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl ResourcePolicy<CloneVolumeSnapshot> for SimplePolicy {
+    fn apply(self, to: CloneVolumeSnapshot) -> CloneVolumeSnapshot {
+        DefaultBasePolicy::filter_clone(to)
+            .filter(PoolBaseFilters::min_free_space)
+            .filter(affinity_group::SingleReplicaPolicy::replica_anti_affinity)
             .filter_param(&self, SimplePolicy::min_free_space)
             .filter_param(&self, SimplePolicy::pool_overcommit)
     }

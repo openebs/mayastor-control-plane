@@ -1,10 +1,10 @@
 use crate::controller::{
-    io_engine::ReplicaApi,
+    io_engine::{ReplicaApi, ReplicaSnapshotApi},
     registry::Registry,
     resources::{
         operations::{
-            ResourceLifecycle, ResourceOffspring, ResourceOwnerUpdate, ResourceSharing,
-            ResourceSnapshotting,
+            ResourceLifecycle, ResourceLifecycleExt, ResourceOffspring, ResourceOwnerUpdate,
+            ResourceSharing,
         },
         operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
         OperationGuardArc, UpdateInnerValue,
@@ -18,7 +18,7 @@ use stor_port::types::v0::{
     },
     transport::{
         CreateReplica, DestroyReplica, NodeId, RemoveNexusChild, Replica, ReplicaOwners,
-        ShareReplica, UnshareReplica,
+        ShareReplica, SnapshotCloneSpecParams, UnshareReplica,
     },
 };
 
@@ -268,34 +268,33 @@ fn destroy_replica_request(
 }
 
 #[async_trait::async_trait]
-impl ResourceSnapshotting for OperationGuardArc<ReplicaSpec> {
-    type Create = ();
-    type CreateOutput = ();
-    type Destroy = ();
-    type List = ();
-    type ListOutput = ();
+impl ResourceLifecycleExt<SnapshotCloneSpecParams> for OperationGuardArc<ReplicaSpec> {
+    type CreateOutput = Replica;
 
-    async fn create_snap(
-        &mut self,
-        _registry: &Registry,
-        _request: &Self::Create,
+    async fn create_ext(
+        registry: &Registry,
+        request: &SnapshotCloneSpecParams,
     ) -> Result<Self::CreateOutput, SvcError> {
-        todo!()
-    }
+        let specs = registry.specs();
 
-    async fn list_snaps(
-        &self,
-        _registry: &Registry,
-        _request: &Self::List,
-    ) -> Result<Self::ListOutput, SvcError> {
-        todo!()
-    }
+        if registry.node_cordoned(request.node())? {
+            return Err(CordonedNode {
+                node_id: request.node().to_string(),
+            });
+        }
 
-    async fn destroy_snap(
-        &mut self,
-        _registry: &Registry,
-        _request: &Self::Destroy,
-    ) -> Result<(), SvcError> {
-        todo!()
+        let node = registry.node_wrapper(request.node()).await?;
+
+        let create_replica = CreateReplica::from(request);
+        let mut replica = specs
+            .get_or_create_replica(&create_replica)
+            .operation_guard_wait()
+            .await?;
+        let _ = replica.start_create(registry, &create_replica).await?;
+
+        let result = node.create_snapshot_clone(request.params()).await;
+        let on_fail = OnCreateFail::eeinval_delete(&result);
+
+        replica.complete_create(result, registry, on_fail).await
     }
 }
