@@ -25,6 +25,8 @@ use tonic::Code;
 pub trait ErrorChain {
     /// Full error chain as a string separated by ':'.
     fn full_string(&self) -> String;
+    /// Get the full error chain starting from the parent.
+    fn parent_full_string(&self) -> String;
 }
 
 impl<T> ErrorChain for T
@@ -41,6 +43,13 @@ where
             opt_source = source.source();
         }
         msg
+    }
+
+    fn parent_full_string(&self) -> String {
+        match self.source() {
+            Some(parent) => parent.full_string(),
+            None => String::new(),
+        }
     }
 }
 
