@@ -115,7 +115,6 @@ variable "kubeconfig_output" {
 variable "kubernetes_runtime" {
   type        = string
   description = "Container runtime (crio or containerd)"
-  # crio is not currently fully working, we are able to create a cluster but our pods can't seem to reach service ips...
   default     = "containerd"
 }
 
