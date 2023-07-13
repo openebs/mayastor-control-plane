@@ -203,7 +203,7 @@ def a_CreateVolumeRequest_request_with_snapshot_as_source_is_sent_to_the_CSI_con
         return grpc_error
 
 
-@then("the volume creation should fail with invalid argument")
+@then("the volume creation should fail with unimplemented")
 def the_volume_creation_should_fail(grpc_error):
     assert grpc_error is not None
-    assert grpc_error.code() == grpc.StatusCode.INVALID_ARGUMENT
+    assert grpc_error.code() == grpc.StatusCode.UNIMPLEMENTED

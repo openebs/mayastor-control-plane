@@ -238,6 +238,42 @@ impl IoEngineApiClient {
         Ok(result.into_body())
     }
 
+    /// Create a volume from a snapshot source of target size and provision storage resources for
+    /// it. This operation is not idempotent, so the caller is responsible for taking
+    /// all actions with regards to idempotency.
+    #[allow(clippy::too_many_arguments)]
+    #[instrument(fields(volume.uuid = %volume_id, snapshot.uuid = %snapshot_id), skip(self, volume_id, snapshot_id))]
+    pub(crate) async fn create_snapshot_volume(
+        &self,
+        volume_id: &uuid::Uuid,
+        snapshot_id: &uuid::Uuid,
+        replicas: u8,
+        size: u64,
+        volume_topology: CreateVolumeTopology,
+        thin: bool,
+        affinity_group: Option<AffinityGroup>,
+    ) -> Result<Volume, ApiClientError> {
+        let topology =
+            Topology::new_all(volume_topology.node_topology, volume_topology.pool_topology);
+
+        let req = CreateVolumeBody {
+            replicas,
+            size,
+            thin,
+            topology: Some(topology),
+            policy: VolumePolicy::new_all(true),
+            labels: None,
+            affinity_group,
+        };
+
+        let result = self
+            .rest_client
+            .volumes_api()
+            .put_snapshot_volume(snapshot_id, volume_id, req)
+            .await?;
+        Ok(result.into_body())
+    }
+
     /// Delete volume and reclaim all storage resources associated with it.
     /// This operation is idempotent, so the caller does not see errors indicating
     /// absence of the resource.
