@@ -17,6 +17,11 @@ if [ "$RUNTIME" = "crio" ]; then
   # Add Cri-o repo
   OS="xUbuntu_$(lsb_release -rs)"
   VERSION=1.26
+
+  if [ "$OS" == "xUbuntu_20.04" ]; then
+    sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4D64390375060AA4
+  fi
+
   sudo add-apt-repository --yes "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/ /"
   sudo add-apt-repository --yes "deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/$VERSION/$OS/ /"
   curl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:$VERSION/$OS/Release.key | sudo apt-key add -
@@ -63,6 +68,8 @@ sudo sysctl --system
 # Install CRI-O
 if [ "$RUNTIME" = "crio" ]; then
   sudo apt install -y cri-o cri-o-runc
+  sudo rm /etc/cni/net.d/100-crio-bridge.conflist
+  sudo rm /etc/cni/net.d/200-loopback.conflist
 elif [ "$RUNTIME" = "containerd" ]; then
   sudo apt install -y containerd.io
 
