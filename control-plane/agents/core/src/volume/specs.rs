@@ -655,6 +655,8 @@ impl ResourceSpecsLocked {
                 {
                     Ok(_) => Ok(()),
                     Err(error) if !request.force() => Err(error),
+                    Err(error @ SvcError::Conflict {}) => Err(error),
+                    Err(error @ SvcError::StoreSave { .. }) => Err(error),
                     Err(error) => {
                         let node_online = match registry.get_node_wrapper(&nexus_clone.node).await {
                             Ok(node) => {
@@ -1053,6 +1055,17 @@ impl ResourceSpecsLocked {
             .await
         {
             Ok(_) => Ok(()),
+            Err(SvcError::GrpcRequestError {
+                source,
+                request,
+                resource,
+            }) if source.code() == tonic::Code::DeadlineExceeded => {
+                Err(SvcError::GrpcRequestError {
+                    source,
+                    request,
+                    resource,
+                })
+            }
             Err(error) => {
                 if let Some(replica) = self.get_replica(&replica.uuid) {
                     let mut replica = replica.lock();
@@ -1331,26 +1344,6 @@ impl ResourceSpecsLocked {
             OperationMode::ReconcileStep,
         )
         .await
-    }
-
-    /// Disown and destroy the replica from its volume
-    pub(crate) async fn disown_and_destroy_replica(
-        &self,
-        registry: &Registry,
-        node: &NodeId,
-        replica_uuid: &ReplicaId,
-    ) -> Result<(), SvcError> {
-        if let Some(replica) = self.get_replica(replica_uuid) {
-            // disown it from the volume first, so at the very least it can be garbage collected
-            // at a later point if the node is not accessible
-            self.disown_volume_replica(registry, &replica).await?;
-            self.destroy_volume_replica(registry, Some(node), &replica)
-                .await
-        } else {
-            Err(SvcError::ReplicaNotFound {
-                replica_id: replica_uuid.to_owned(),
-            })
-        }
     }
 
     /// Remove volume by its `id`

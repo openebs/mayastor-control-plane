@@ -5,7 +5,7 @@ use crate::core::{
 };
 use common::errors::{NexusNotFound, SvcError};
 use common_lib::{
-    mbus_api::{ErrorChain, ResourceKind},
+    mbus_api::ResourceKind,
     types::v0::{
         message_bus::{
             AddNexusChild, AddNexusReplica, Child, ChildUri, CreateNexus, DestroyNexus, Nexus,
@@ -16,7 +16,7 @@ use common_lib::{
             nexus::{NexusOperation, NexusSpec},
             nexus_child::NexusChild,
             replica::ReplicaSpec,
-            OperationMode, SpecStatus, SpecTransaction, TraceSpan,
+            OperationMode, SpecStatus, SpecTransaction,
         },
     },
 };
@@ -433,37 +433,23 @@ impl ResourceSpecsLocked {
                                 .ok_or(SvcError::ReplicaNotFound {
                                     replica_id: replica.uuid().clone(),
                                 })?;
-                        let pool_id = replica_spec.lock().pool.clone();
-                        match Self::get_pool_node(registry, pool_id).await {
-                            Some(node) => {
-                                if let Err(error) = self
-                                    .disown_and_destroy_replica(registry, &node, replica.uuid())
-                                    .await
-                                {
-                                    nexus_spec.lock().clone().error_span(|| {
-                                        tracing::error!(
-                                            replica.uuid = %replica.uuid(),
-                                            error = %error.full_string(),
-                                            "Failed to disown and destroy the replica"
-                                        )
-                                    });
+                        if !replica_spec.lock().owners.owned_by_a_nexus() {
+                            let owner_volume = {
+                                let replica_spec = replica_spec.lock();
+                                replica_spec.owners.volume().cloned()
+                            };
+                            if let Some(owner) = owner_volume {
+                                if let Some(volume) = self.get_locked_volume(&owner) {
+                                    self.remove_unused_volume_replica(
+                                        registry,
+                                        &volume,
+                                        replica.uuid(),
+                                        mode,
+                                    )
+                                    .await?;
                                 }
                             }
-                            None => {
-                                // The replica node was not found (perhaps because it is offline).
-                                // The replica can't be destroyed because the node isn't there.
-                                // Instead, disown the replica from the volume and let the garbage
-                                // collector destroy it later.
-                                nexus_spec.lock().clone().warn_span(|| {
-                                    tracing::warn!(
-                                        replica.uuid = %replica.uuid(),
-                                        "Failed to find the node where the replica is hosted"
-                                    )
-                                });
-                                let _ = self.disown_volume_replica(registry, &replica_spec).await;
-                            }
                         }
-
                         Ok(())
                     }
                     result => result,

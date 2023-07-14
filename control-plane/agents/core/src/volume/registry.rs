@@ -22,6 +22,17 @@ impl Registry {
             .await
     }
 
+    /// Get the volume state for the specified volume spec.
+    pub(crate) async fn get_volume_spec_state(
+        &self,
+        volume_spec: VolumeSpec,
+    ) -> Result<VolumeState, SvcError> {
+        let replica_specs = self.specs().get_cloned_volume_replicas(&volume_spec.uuid);
+
+        self.get_volume_state_with_replicas(&volume_spec, &replica_specs)
+            .await
+    }
+
     /// Get the volume state for the specified volume
     #[tracing::instrument(level = "info", skip(self, volume_spec, replicas))]
     pub(crate) async fn get_volume_state_with_replicas(
