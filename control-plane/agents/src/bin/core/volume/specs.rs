@@ -210,6 +210,7 @@ pub(crate) async fn volume_replica_candidates(
                 managed: true,
                 owners: ReplicaOwners::from_volume(&request.uuid),
                 allowed_hosts: vec![],
+                kind: None,
             }
         })
         .collect::<Vec<_>>())
@@ -256,6 +257,7 @@ pub(crate) async fn volume_move_replica_candidates(
                 managed: true,
                 owners: ReplicaOwners::from_volume(&request.uuid),
                 allowed_hosts: vec![],
+                kind: None,
             }
         })
         .collect::<Vec<_>>())
@@ -695,6 +697,19 @@ impl ResourceSpecsLocked {
     ) -> Option<ResourceMutex<AffinityGroupSpec>> {
         let specs = self.read();
         specs.affinity_groups.get(vol_grp_id).cloned()
+    }
+
+    /// Get a guarded VolumeSnapshot for the snapshot with the given ID.
+    pub(crate) async fn volume_snapshot(
+        &self,
+        id: &SnapshotId,
+    ) -> Result<OperationGuardArc<VolumeSnapshot>, SvcError> {
+        match self.volume_snapshot_rsc(id) {
+            Some(spec) => spec.operation_guard_wait().await,
+            None => Err(VolumeNotFound {
+                vol_id: id.to_string(),
+            }),
+        }
     }
 
     /// Get or Create the resourced VolumeSnapshot for the given request.

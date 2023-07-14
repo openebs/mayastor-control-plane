@@ -1,8 +1,12 @@
 use super::*;
+use crate::types::v0::store::replica::PoolRef;
 use serde::Serialize;
 
 rpc_impl_string_uuid!(SnapshotId, "UUID of a snapshot");
-rpc_impl_string_uuid!(SnapshotCloneId, "UUID of a snapshot clone");
+/// UUID of a snapshot clone.
+pub type VolSnapshotCloneId = VolumeId;
+/// UUID of a replica clone.
+pub type SnapshotCloneId = ReplicaId;
 
 /// The entity if of a snapshot.
 pub type SnapshotEntId = String;
@@ -138,6 +142,13 @@ pub struct SnapshotCloneParameters {
     uuid: SnapshotCloneId,
 }
 impl SnapshotCloneParameters {
+    pub fn new(snapshot_uuid: SnapshotId, name: SnapshotCloneName, uuid: SnapshotCloneId) -> Self {
+        Self {
+            snapshot_uuid,
+            name,
+            uuid,
+        }
+    }
     /// Get a reference to the snapshot uuid.
     pub fn snapshot_uuid(&self) -> &SnapshotId {
         &self.snapshot_uuid
@@ -165,5 +176,57 @@ impl ListSnapshotClones {
             ListSnapshotClones::All => None,
             ListSnapshotClones::Snapshot(uuid) => Some(uuid),
         }
+    }
+}
+
+/// Common set of parameters used for snapshot clone creation.
+#[derive(Debug, Clone)]
+pub struct SnapshotCloneSpecParams {
+    /// Parameters for creation of the snapshot clone from.
+    repl_params: SnapshotCloneParameters,
+    /// Size of the volume clone.
+    size: u64,
+    /// Reference of a pool that the clone should live on.
+    pool: PoolRef,
+    /// Node where the snapshot pool lives on.
+    node: NodeId,
+    /// Uuid of the volume clone.
+    uuid: VolSnapshotCloneId,
+}
+impl SnapshotCloneSpecParams {
+    pub fn new(
+        repl_params: SnapshotCloneParameters,
+        size: u64,
+        pool: PoolRef,
+        node: NodeId,
+        uuid: VolSnapshotCloneId,
+    ) -> Self {
+        Self {
+            repl_params,
+            size,
+            pool,
+            node,
+            uuid,
+        }
+    }
+    /// Get a reference to the snapshot uuid.
+    pub fn params(&self) -> &SnapshotCloneParameters {
+        &self.repl_params
+    }
+    /// Get a reference to the clone name.
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+    /// Get a reference to the clone name.
+    pub fn pool(&self) -> &PoolRef {
+        &self.pool
+    }
+    /// Get a reference to the node id.
+    pub fn node(&self) -> &NodeId {
+        &self.node
+    }
+    /// Get a reference to the clone name.
+    pub fn uuid(&self) -> &VolSnapshotCloneId {
+        &self.uuid
     }
 }

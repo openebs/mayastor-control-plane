@@ -277,7 +277,7 @@ impl AgentToIoEngine for transport::ShareReplica {
     type IoEngineMessage = v1::replica::ShareReplicaRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
-            uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
+            uuid: self.uuid.to_string(),
             share: self.protocol as i32,
             allowed_hosts: self.allowed_hosts.clone().into_vec(),
         }
@@ -288,7 +288,7 @@ impl AgentToIoEngine for transport::UnshareReplica {
     type IoEngineMessage = v1::replica::UnshareReplicaRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
         Self::IoEngineMessage {
-            uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
+            uuid: self.uuid.to_string(),
         }
     }
 }
@@ -301,7 +301,7 @@ impl AgentToIoEngine for transport::DestroyReplica {
             None => v1::replica::destroy_replica_request::Pool::PoolName(self.pool_id.to_string()),
         };
         v1::replica::DestroyReplicaRequest {
-            uuid: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
+            uuid: self.uuid.to_string(),
             pool: Some(pool_ref),
         }
     }

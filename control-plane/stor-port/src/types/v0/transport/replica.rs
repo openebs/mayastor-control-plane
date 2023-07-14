@@ -418,6 +418,8 @@ pub struct CreateReplica {
     pub owners: ReplicaOwners,
     /// Host nqn's allowed to connect to the target.
     pub allowed_hosts: Vec<HostNqn>,
+    /// The replica kind, eg: regular or clone.
+    pub kind: Option<ReplicaKind>,
 }
 
 /// Replica owners which is a volume or none and a list of nexuses.

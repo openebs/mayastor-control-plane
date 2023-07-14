@@ -1,6 +1,6 @@
 use super::ResourceFilter;
 use crate::controller::scheduling::{
-    volume::{AddVolumeReplica, SnapshotVolumeReplica},
+    volume::{AddVolumeReplica, CloneVolumeSnapshot, SnapshotVolumeReplica},
     NodeFilters,
 };
 
@@ -40,6 +40,20 @@ impl DefaultBasePolicy {
             .filter(NodeFilters::online_for_pool)
     }
     fn filter_snapshot_pools(request: SnapshotVolumeReplica) -> SnapshotVolumeReplica {
+        request
+            .filter(pool::PoolBaseFilters::usable)
+            .filter(pool::PoolBaseFilters::capacity)
+            .filter(pool::PoolBaseFilters::min_free_space)
+    }
+    fn filter_clone(request: CloneVolumeSnapshot) -> CloneVolumeSnapshot {
+        Self::filter_clone_pools(Self::filter_clone_nodes(request))
+    }
+    fn filter_clone_nodes(request: CloneVolumeSnapshot) -> CloneVolumeSnapshot {
+        request
+            .filter(NodeFilters::cordoned_for_pool)
+            .filter(NodeFilters::online_for_pool)
+    }
+    fn filter_clone_pools(request: CloneVolumeSnapshot) -> CloneVolumeSnapshot {
         request
             .filter(pool::PoolBaseFilters::usable)
             .filter(pool::PoolBaseFilters::capacity)

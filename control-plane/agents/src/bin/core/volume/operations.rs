@@ -4,23 +4,27 @@ use crate::{
         registry::Registry,
         resources::{
             operations::{
-                ResourceLifecycle, ResourceLifecycleWithLifetime, ResourceOwnerUpdate,
-                ResourcePublishing, ResourceReplicas, ResourceSharing, ResourceShutdownOperations,
+                ResourceLifecycle, ResourceLifecycleExt, ResourceLifecycleWithLifetime,
+                ResourceOwnerUpdate, ResourcePublishing, ResourceReplicas, ResourceSharing,
+                ResourceShutdownOperations,
             },
             operations_helper::{
                 GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, ResourceSpecsLocked,
                 SpecOperationsHelper,
             },
-            OperationGuardArc, TraceSpan, TraceStrLog,
+            OperationGuardArc, ResourceUid, TraceSpan, TraceStrLog,
         },
         scheduling::pool::ENoSpcReplica,
     },
     volume::{
+        clone_operations::SnapshotCloneOp,
         snapshot_operations::DestroyVolumeSnapshotRequest,
-        specs::{create_volume_replicas, healthy_volume_replicas, volume_move_replica_candidates},
+        specs::{
+            create_volume_replicas, healthy_volume_replicas, volume_move_replica_candidates,
+            CreateReplicaCandidate,
+        },
     },
 };
-
 use agents::errors::SvcError;
 use stor_port::{
     transport_api::ErrorChain,
@@ -39,7 +43,7 @@ use stor_port::{
     },
 };
 
-use std::ops::Deref;
+use std::{fmt::Debug, ops::Deref};
 
 #[async_trait::async_trait]
 impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
@@ -51,86 +55,8 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
         registry: &Registry,
         request: &Self::Create,
     ) -> Result<Self::CreateOutput, SvcError> {
-        let specs = registry.specs();
-        let mut volume = specs
-            .get_or_create_volume(request)
-            .operation_guard_wait()
-            .await?;
-        let volume_clone = volume.start_create(registry, request).await?;
-
-        // If the volume is a part of the ag, create or update accordingly.
-        registry.specs().get_or_create_affinity_group(&volume_clone);
-
-        // todo: pick nodes and pools using the Node&Pool Topology
-        // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
-        let result = create_volume_replicas(registry, request, &volume_clone).await;
-        let create_replica_candidate = volume
-            .validate_create_step_ext(registry, result, OnCreateFail::Delete)
-            .await?;
-
-        let mut replicas = Vec::<Replica>::new();
-        for replica in create_replica_candidate.candidates() {
-            if replicas.len() >= request.replicas as usize {
-                break;
-            } else if replicas.iter().any(|r| r.node == replica.node) {
-                // don't reuse the same node
-                continue;
-            }
-            let replica = if replicas.is_empty() {
-                let mut replica = replica.clone();
-                // the local replica needs to be connected via "bdev:///"
-                replica.share = Protocol::None;
-                replica
-            } else {
-                replica.clone()
-            };
-            match OperationGuardArc::<ReplicaSpec>::create(registry, &replica).await {
-                Ok(replica) => {
-                    replicas.push(replica);
-                }
-                Err(error) => {
-                    volume_clone.error(&format!(
-                        "Failed to create replica {:?} for volume, error: {}",
-                        replica,
-                        error.full_string()
-                    ));
-                    // continue trying...
-                }
-            };
-        }
-
-        // we can't fulfil the required replication factor, so let the caller
-        // decide what to do next
-        let result = if replicas.len() < request.replicas as usize {
-            for replica_state in replicas {
-                let result = match specs.replica(&replica_state.uuid).await {
-                    Ok(mut replica) => {
-                        let request = DestroyReplica::from(replica_state.clone());
-                        replica.destroy(registry, &request.with_disown_all()).await
-                    }
-                    Err(error) => Err(error),
-                };
-                if let Err(error) = result {
-                    volume_clone.error(&format!(
-                        "Failed to delete replica {:?} from volume, error: {}",
-                        replica_state,
-                        error.full_string()
-                    ));
-                }
-            }
-            Err(SvcError::ReplicaCreateNumber {
-                id: request.uuid.to_string(),
-            })
-        } else {
-            Ok(())
-        };
-
-        // we can destroy volume on error because there's no volume resource created on the nodes,
-        // only sub-resources (such as nexuses/replicas which will be garbage-collected later).
-        volume
-            .complete_create(result, registry, OnCreateFail::Delete)
-            .await?;
-        Ok(volume)
+        let request = CreateVolumeSource::None(request);
+        OperationGuardArc::<VolumeSpec>::create_ext(registry, &request).await
     }
 
     /// Destroy a volume based on the given `DestroyVolume` request.
@@ -736,5 +662,284 @@ impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
             }
         }
         result
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceLifecycleExt<CreateVolume> for OperationGuardArc<VolumeSpec> {
+    type CreateOutput = Self;
+
+    async fn create_ext(
+        registry: &Registry,
+        request: &CreateVolume,
+    ) -> Result<Self::CreateOutput, SvcError> {
+        let specs = registry.specs();
+        let mut volume = specs
+            .get_or_create_volume(request)
+            .operation_guard_wait()
+            .await?;
+        let volume_clone = volume.start_create(registry, request).await?;
+
+        // If the volume is a part of the ag, create or update accordingly.
+        registry.specs().get_or_create_affinity_group(&volume_clone);
+
+        // todo: pick nodes and pools using the Node&Pool Topology
+        // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
+        let result = create_volume_replicas(registry, request, &volume_clone).await;
+        let create_replica_candidate = volume
+            .validate_create_step_ext(registry, result, OnCreateFail::Delete)
+            .await?;
+
+        let mut replicas = Vec::<Replica>::new();
+        for replica in create_replica_candidate.candidates() {
+            if replicas.len() >= request.replicas as usize {
+                break;
+            } else if replicas.iter().any(|r| r.node == replica.node) {
+                // don't reuse the same node
+                continue;
+            }
+            let replica = if replicas.is_empty() {
+                let mut replica = replica.clone();
+                // the local replica needs to be connected via "bdev:///"
+                replica.share = Protocol::None;
+                replica
+            } else {
+                replica.clone()
+            };
+            match OperationGuardArc::<ReplicaSpec>::create(registry, &replica).await {
+                Ok(replica) => {
+                    replicas.push(replica);
+                }
+                Err(error) => {
+                    volume_clone.error(&format!(
+                        "Failed to create replica {:?} for volume, error: {}",
+                        replica,
+                        error.full_string()
+                    ));
+                    // continue trying...
+                }
+            };
+        }
+
+        // we can't fulfil the required replication factor, so let the caller
+        // decide what to do next
+        let result = if replicas.len() < request.replicas as usize {
+            for replica_state in replicas {
+                let result = match specs.replica(&replica_state.uuid).await {
+                    Ok(mut replica) => {
+                        let request = DestroyReplica::from(replica_state.clone());
+                        replica.destroy(registry, &request.with_disown_all()).await
+                    }
+                    Err(error) => Err(error),
+                };
+                if let Err(error) = result {
+                    volume_clone.error(&format!(
+                        "Failed to delete replica {:?} from volume, error: {}",
+                        replica_state,
+                        error.full_string()
+                    ));
+                }
+            }
+            Err(SvcError::ReplicaCreateNumber {
+                id: request.uuid.to_string(),
+            })
+        } else {
+            Ok(())
+        };
+
+        // we can destroy volume on error because there's no volume resource created on the nodes,
+        // only sub-resources (such as nexuses/replicas which will be garbage-collected later).
+        volume
+            .complete_create(result, registry, OnCreateFail::Delete)
+            .await?;
+        Ok(volume)
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceLifecycleExt<CreateVolumeSource<'_>> for OperationGuardArc<VolumeSpec> {
+    type CreateOutput = Self;
+
+    async fn create_ext(
+        registry: &Registry,
+        request_src: &CreateVolumeSource,
+    ) -> Result<Self::CreateOutput, SvcError> {
+        let request = request_src.source();
+        match request_src {
+            CreateVolumeSource::None(params) => params.pre_flight_check()?,
+            CreateVolumeSource::Snapshot(params) => params.pre_flight_check()?,
+        }
+
+        let specs = registry.specs();
+        let mut volume = specs
+            .get_or_create_volume(request)
+            .operation_guard_wait()
+            .await?;
+        let volume_clone = volume.start_create_update(registry, request).await?;
+
+        // If the volume is a part of the ag, create or update accordingly.
+        registry.specs().get_or_create_affinity_group(&volume_clone);
+
+        let context = Context {
+            registry,
+            volume: &mut volume,
+        };
+        let result = match request_src {
+            CreateVolumeSource::None(params) => params.run(context).await,
+            CreateVolumeSource::Snapshot(params) => params.run(context).await,
+        };
+
+        // we can destroy volume on error because there's no volume resource created on the nodes,
+        // only sub-resources (such as nexuses/replicas which will be garbage-collected later).
+        volume
+            .complete_create(result, registry, OnCreateFail::Delete)
+            .await?;
+        Ok(volume)
+    }
+}
+
+/// A volume can be created with different sources for its replicas.
+pub(super) enum CreateVolumeSource<'a> {
+    /// Carve out new replicas from a pool matching the requested topology.
+    None(&'a CreateVolume),
+    /// Clone replica from an existing volume snapshot.
+    Snapshot(SnapshotCloneOp<'a>),
+}
+
+impl CreateVolumeSource<'_> {
+    fn source(&self) -> &CreateVolume {
+        match self {
+            Self::None(param) => param,
+            Self::Snapshot(param) => param.0.params(),
+        }
+    }
+}
+
+/// Context for SetupVolumeReplicas trait.
+pub(super) struct Context<'a> {
+    pub(super) registry: &'a Registry,
+    pub(super) volume: &'a mut OperationGuardArc<VolumeSpec>,
+}
+
+/// Trait that abstracts away the pre-flight validation checks when creating a volume.
+#[async_trait::async_trait]
+pub(super) trait CreateVolumeExeVal: Sync + Send {
+    fn pre_flight_check(&self) -> Result<(), SvcError>;
+}
+
+/// Trait that abstracts away the process of creating volume replicas.
+#[async_trait::async_trait]
+pub(super) trait CreateVolumeExe: CreateVolumeExeVal {
+    type Candidates: Send + Sync;
+
+    async fn run<'a>(&'a self, mut context: Context<'a>) -> Result<Vec<Replica>, SvcError> {
+        let result = self.setup(&mut context).await;
+        let candidates = context
+            .volume
+            .validate_create_step_ext(context.registry, result, OnCreateFail::Delete)
+            .await?;
+        let replicas = self.create(&mut context, candidates).await;
+
+        // we can't fulfil the required replication factor, so let the caller
+        // decide what to do next
+        if replicas.len() < context.volume.as_ref().num_replicas as usize {
+            self.undo(&mut context, replicas).await;
+            Err(SvcError::ReplicaCreateNumber {
+                id: context.volume.uid_str(),
+            })
+        } else {
+            Ok(replicas)
+        }
+    }
+    async fn setup<'a>(&'a self, context: &mut Context<'a>) -> Result<Self::Candidates, SvcError>;
+    async fn create<'a>(
+        &'a self,
+        context: &mut Context<'a>,
+        candidates: Self::Candidates,
+    ) -> Vec<Replica>;
+    async fn undo<'a>(&'a self, context: &mut Context<'a>, replicas: Vec<Replica>);
+}
+
+#[async_trait::async_trait]
+impl CreateVolumeExeVal for CreateVolume {
+    fn pre_flight_check(&self) -> Result<(), SvcError> {
+        snafu::ensure!(
+            self.allowed_nodes().is_empty() || self.allowed_nodes().len() >= self.replicas as usize,
+            agents::errors::InvalidArguments {}
+        );
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl CreateVolumeExe for CreateVolume {
+    type Candidates = CreateReplicaCandidate;
+
+    async fn setup<'a>(
+        &'a self,
+        context: &mut Context<'a>,
+    ) -> Result<CreateReplicaCandidate, SvcError> {
+        // todo: pick nodes and pools using the Node&Pool Topology
+        // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
+        create_volume_replicas(context.registry, self, context.volume.as_ref()).await
+    }
+
+    async fn create<'a>(
+        &'a self,
+        context: &mut Context<'a>,
+        candidates: CreateReplicaCandidate,
+    ) -> Vec<Replica> {
+        let mut replicas = Vec::<Replica>::with_capacity(candidates.candidates().len());
+        for replica in candidates.candidates() {
+            if replicas.len() >= self.replicas as usize {
+                break;
+            } else if replicas.iter().any(|r| r.node == replica.node) {
+                // don't reuse the same node
+                continue;
+            }
+            let replica = if replicas.is_empty() {
+                let mut replica = replica.clone();
+                // the local replica needs to be connected via "bdev:///"
+                replica.share = Protocol::None;
+                replica
+            } else {
+                replica.clone()
+            };
+            match OperationGuardArc::<ReplicaSpec>::create(context.registry, &replica).await {
+                Ok(replica) => {
+                    replicas.push(replica);
+                }
+                Err(error) => {
+                    context.volume.error(&format!(
+                        "Failed to create replica {:?} for volume, error: {}",
+                        replica,
+                        error.full_string()
+                    ));
+                    // continue trying...
+                }
+            };
+        }
+        replicas
+    }
+
+    async fn undo<'a>(&'a self, context: &mut Context<'a>, replicas: Vec<Replica>) {
+        for replica_state in replicas {
+            let result = match context.registry.specs().replica(&replica_state.uuid).await {
+                Ok(mut replica) => {
+                    let request = DestroyReplica::from(replica_state.clone());
+                    replica
+                        .destroy(context.registry, &request.with_disown_all())
+                        .await
+                }
+                Err(error) => Err(error),
+            };
+            if let Err(error) = result {
+                context.volume.error(&format!(
+                    "Failed to delete replica {:?} from volume, error: {}",
+                    replica_state,
+                    error.full_string()
+                ));
+            }
+        }
     }
 }

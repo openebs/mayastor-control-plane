@@ -996,6 +996,11 @@ impl DestroyVolumeInfo for DestroyVolume {
         self.uuid.clone()
     }
 }
+impl DestroyVolumeInfo for Volume {
+    fn uuid(&self) -> VolumeId {
+        self.spec().uuid
+    }
+}
 
 /// Intermediate structure that validates the conversion to DestroyVolumeRequest type.
 #[derive(Debug)]

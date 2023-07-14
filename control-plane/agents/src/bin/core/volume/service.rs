@@ -3,8 +3,8 @@ use crate::{
         registry::Registry,
         resources::{
             operations::{
-                ResourceLifecycle, ResourceLifecycleWithLifetime, ResourcePublishing,
-                ResourceReplicas, ResourceSharing, ResourceShutdownOperations,
+                ResourceCloning, ResourceLifecycle, ResourceLifecycleWithLifetime,
+                ResourcePublishing, ResourceReplicas, ResourceSharing, ResourceShutdownOperations,
                 ResourceSnapshotting,
             },
             operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
@@ -522,11 +522,10 @@ impl Service {
         &self,
         request: &CreateVSnapshotClone,
     ) -> Result<Volume, SvcError> {
-        Err(SvcError::Unimplemented {
-            resource: ResourceKind::VolumeSnapshotClone,
-            request: "create_snap_clone".to_string(),
-            // todo: remove this source from here...
-            source: tonic::Status::unimplemented(""),
-        })
+        let _permit = self.create_volume_permit().await?;
+        let snap_uuid = request.snapshot_uuid();
+        let mut snapshot = self.specs().volume_snapshot(snap_uuid).await?;
+        snapshot.create_clone(&self.registry, request).await?;
+        self.registry.volume(&request.params().uuid).await
     }
 }
