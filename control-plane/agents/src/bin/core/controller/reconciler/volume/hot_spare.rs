@@ -44,12 +44,11 @@ async fn hot_spare_reconcile(
     volume_spec: &mut ResourceMutex<VolumeSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let uuid = volume_spec.uuid();
-    let volume_state = context.registry().volume_state(uuid).await?;
     let mut volume = match volume_spec.operation_guard() {
         Ok(guard) => guard,
         Err(_) => return PollResult::Ok(PollerState::Busy),
     };
+    let volume_state = context.registry().volume_state(volume.uuid()).await?;
 
     if !volume.as_ref().policy.self_heal {
         return PollResult::Ok(PollerState::Idle);

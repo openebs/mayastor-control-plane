@@ -17,7 +17,7 @@ use stor_port::types::v0::{
     store::{
         nexus::NexusSpec, nexus_persistence::NexusInfo, replica::ReplicaSpec, volume::VolumeSpec,
     },
-    transport::{DestroyVolume, ReplicaOwners, VolumeStatus},
+    transport::{DestroyVolume, NexusOwners, ReplicaOwners, VolumeStatus},
 };
 use tracing::Instrument;
 
@@ -160,7 +160,8 @@ async fn disown_unused_nexuses(
 
             nexus.warn_span(|| tracing::warn!("Attempting to disown unused nexus"));
             // the nexus garbage collector will destroy the disowned nexuses
-            match nexus.disown(context.registry()).await {
+            let owner = NexusOwners::Volume(volume.uuid().clone());
+            match nexus.remove_owners(context.registry(), &owner, false).await {
                 Ok(_) => {
                     nexus.info_span(|| tracing::info!("Successfully disowned unused nexus"));
                 }

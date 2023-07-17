@@ -434,7 +434,7 @@ impl OperationGuardArc<VolumeSpec> {
                 Some(child) => child.uri.clone(),
             };
             match nexus
-                .remove_child_by_uri(registry, nexus_state, &child_uri, true)
+                .remove_child_by_uri(registry, nexus_state, &child_uri)
                 .await
             {
                 Ok(_) => {

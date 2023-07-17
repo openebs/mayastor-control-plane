@@ -216,7 +216,7 @@ async fn faulted_children_remover(
         tracing::warn!(%child.uri, %child.state, %child.state_reason, ?faulted_at, "Attempting to remove faulted child")
     });
     nexus
-        .remove_child_by_uri(context.registry(), &nexus_state, &child.uri, true)
+        .remove_child_by_uri(context.registry(), &nexus_state, &child.uri)
         .await?;
 
     nexus.warn_span(|| {
@@ -301,7 +301,7 @@ pub(super) async fn unknown_children_remover(
                     tracing::warn!("Attempting to remove unknown child '{}'", child.uri)
                 });
                 if let Err(error) = nexus
-                    .remove_child_by_uri(context.registry(), &nexus_state, &child.uri, false)
+                    .remove_child_by_uri(context.registry(), &nexus_state, &child.uri)
                     .await
                 {
                     nexus.error(&format!(
@@ -346,7 +346,7 @@ pub(super) async fn missing_children_remover(
         ));
 
         if let Err(error) = nexus
-            .remove_child_by_uri(context.registry(), &nexus_state, &child.uri(), true)
+            .remove_child_by_uri(context.registry(), &nexus_state, &child.uri())
             .await
         {
             nexus.error_span(|| {
