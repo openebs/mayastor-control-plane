@@ -48,20 +48,23 @@ async fn hot_spare_reconcile(
     volume_spec: &Arc<Mutex<VolumeSpec>>,
     context: &PollContext,
 ) -> PollResult {
-    let uuid = volume_spec.lock().uuid.clone();
-    let volume_state = context.registry().get_volume_state(&uuid).await?;
     let _guard = match volume_spec.operation_guard(OperationMode::ReconcileStart) {
         Ok(guard) => guard,
         Err(_) => return PollResult::Ok(PollerState::Busy),
     };
-    let mode = OperationMode::ReconcileStep;
+    let volume_spec_cln = volume_spec.lock().clone();
+    if !volume_spec_cln.policy.self_heal {
+        return PollResult::Ok(PollerState::Idle);
+    }
+    if !volume_spec_cln.status.created() {
+        return PollResult::Ok(PollerState::Idle);
+    }
 
-    if !volume_spec.lock().policy.self_heal {
-        return PollResult::Ok(PollerState::Idle);
-    }
-    if !volume_spec.lock().status.created() {
-        return PollResult::Ok(PollerState::Idle);
-    }
+    let volume_state = context
+        .registry()
+        .get_volume_spec_state(volume_spec_cln)
+        .await?;
+    let mode = OperationMode::ReconcileStep;
 
     match volume_state.status {
         VolumeStatus::Online => volume_replica_count_reconciler(volume_spec, context, mode).await,

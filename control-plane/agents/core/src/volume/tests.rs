@@ -30,7 +30,10 @@ use common_lib::{
             ReplicaId, ReplicaOwners, VolumeId,
         },
         openapi::{models, models::NodeStatus, tower::client::Error},
-        store::{definitions::StorableObject, volume::VolumeSpec},
+        store::{
+            definitions::StorableObject, nexus::ReplicaUri, nexus_child::NexusChild,
+            volume::VolumeSpec,
+        },
     },
 };
 use std::{
@@ -903,24 +906,36 @@ async fn wait_till_volume(volume: &VolumeId, replicas: usize) {
     }
 }
 
-/// Wait for a volume to reach the provided status
-async fn wait_till_volume_status(cluster: &Cluster, volume: &Uuid, status: models::VolumeStatus) {
-    let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
+/// Wait for a volume to reach the provided status with timeout.
+async fn wait_till_volume_status_timeout(
+    cluster: &Cluster,
+    volume: &Uuid,
+    status: models::VolumeStatus,
+    timeout: Duration,
+) -> Result<(), String> {
     let start = std::time::Instant::now();
     loop {
         let volume = cluster.rest_v00().volumes_api().get_volume(volume).await;
         if volume.as_ref().unwrap().state.status == status {
-            return;
+            return Ok(());
         }
 
         if std::time::Instant::now() > (start + timeout) {
-            panic!(
-                "Timeout waiting for the volume to reach the specified status ('{:?}'), current: '{:?}'",
-                status, volume
+            return Err(
+                format!("Timeout waiting for the volume to reach the specified status ('{:?}'), current: '{:?}'",
+                status, volume)
             );
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
+}
+
+/// Wait for a volume to reach the provided status.
+async fn wait_till_volume_status(cluster: &Cluster, volume: &Uuid, status: models::VolumeStatus) {
+    let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
+    wait_till_volume_status_timeout(cluster, volume, status, timeout)
+        .await
+        .unwrap();
 }
 
 /// Either fault the local replica, the remote, or set the nexus as having an unclean shutdown
@@ -1498,4 +1513,116 @@ async fn smoke_test() {
     assert!(GetVolumes::default().request().await.unwrap().0.is_empty());
     assert!(GetNexuses::default().request().await.unwrap().0.is_empty());
     assert!(GetReplicas::default().request().await.unwrap().0.is_empty());
+}
+
+/// When a second nexus with the same child is created for some reason, ensure that removing
+/// a replica doesn't cause the replica to be disowned from the volume and destroyed.
+/// This is something that shouldn't happen to begin with but this adds a safety net just in case.
+#[tokio::test]
+async fn duplicate_nexus_missing_children() {
+    let reconcile_period = Duration::from_millis(100);
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_mayastors(2)
+        .with_pool(1, "malloc:///d?size_mb=100")
+        .with_cache_period("100ms")
+        .with_reconcile_period(reconcile_period, reconcile_period)
+        .build()
+        .await
+        .unwrap();
+    let nodes = GetNodes::default().request().await.unwrap();
+    tracing::info!("Nodes: {:?}", nodes);
+
+    let volume = CreateVolume {
+        uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
+        size: 5242880,
+        replicas: 1,
+        ..Default::default()
+    }
+    .request()
+    .await
+    .unwrap();
+
+    let fake_volume = CreateVolume {
+        uuid: "2e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
+        size: 5242880,
+        replicas: 1,
+        ..Default::default()
+    }
+    .request()
+    .await
+    .unwrap();
+
+    let volume = PublishVolume::new(volume.spec().uuid.clone(), Some(cluster.node(0)), None)
+        .request()
+        .await
+        .unwrap();
+
+    tracing::info!("Volume: {:?}", volume);
+    let volume_state = volume.state();
+    let nexus = volume_state.target.unwrap().clone();
+
+    let child = nexus.children.first().cloned().unwrap();
+    let replica_uri = ReplicaUri::new(
+        &ReplicaId::try_from(child.uri.uuid_str().unwrap()).unwrap(),
+        &child.uri,
+    );
+
+    let local = "malloc:///local?size_mb=12&uuid=4a7b0566-8ec6-49e0-a8b2-1d9a292cf59b".into();
+
+    let bad_nexus = CreateNexus {
+        node: cluster.node(1),
+        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
+        size: 5242880,
+        children: vec![NexusChild::Replica(replica_uri), local],
+        managed: true,
+        // pretend this nexus is from another volume so it won't be deleted..
+        owner: Some(fake_volume.uuid().clone()),
+        ..Default::default()
+    }
+    .request()
+    .await
+    .unwrap();
+
+    let nexuses = GetNexuses::default().request().await.unwrap().0;
+    tracing::info!("Nexuses: {:?}", nexuses);
+
+    let mut rpc_handle = cluster
+        .composer()
+        .grpc_handle(cluster.node(1).as_str())
+        .await
+        .unwrap();
+
+    let children_before_fault = volume_children(volume.uuid()).await;
+    tracing::info!("volume children: {:?}", children_before_fault);
+
+    let missing_child = child.uri.to_string();
+    rpc_handle
+        .mayastor
+        .remove_child_nexus(rpc::mayastor::RemoveChildNexusRequest {
+            uuid: bad_nexus.uuid.to_string(),
+            uri: missing_child.clone(),
+        })
+        .await
+        .unwrap();
+
+    tracing::debug!(
+        "Nexus: {:?}",
+        rpc_handle
+            .mayastor
+            .list_nexus(rpc::mayastor::Null {})
+            .await
+            .unwrap()
+    );
+
+    // There no easy way to check for a negative here, just wait for 2 garbage reconcilers.
+    wait_till_volume_status_timeout(
+        &cluster,
+        volume.uuid(),
+        models::VolumeStatus::Faulted,
+        reconcile_period * 10,
+    )
+    .await
+    .expect_err("Should not get faulted!");
 }
