@@ -83,7 +83,7 @@ async fn hot_spare_nexus_reconcile(
         }
 
         // generic nexus reconciliation (does not matter that it belongs to a volume)
-        results.push(generic_nexus_reconciler(&mut nexus, context).await);
+        results.push(generic_nexus_reconciler(volume, &mut nexus, context).await);
 
         // fixup the volume replica count: creates new replicas when we're behind
         // removes extra replicas but only if they're UNUSED (by a nexus)
@@ -99,6 +99,7 @@ async fn hot_spare_nexus_reconcile(
 
 #[tracing::instrument(skip(context, nexus), fields(nexus.uuid = %nexus.uuid(), nexus.node = %nexus.as_ref().node, volume.uuid = tracing::field::Empty, request.reconcile = true))]
 async fn generic_nexus_reconciler(
+    volume: &mut OperationGuardArc<VolumeSpec>,
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
 ) -> PollResult {
@@ -106,9 +107,9 @@ async fn generic_nexus_reconciler(
         tracing::Span::current().record("volume.uuid", volume_uuid.as_str());
     }
     let mut results = vec![];
-    results.push(handle_faulted_children(nexus, context).await);
+    results.push(handle_faulted_children(nexus, &mut Some(volume), context).await);
     results.push(unknown_children_remover(nexus, context).await);
-    results.push(missing_children_remover(nexus, context).await);
+    results.push(missing_children_remover(nexus, &mut Some(volume), context).await);
     squash_results(results)
 }
 
@@ -116,9 +117,10 @@ async fn generic_nexus_reconciler(
 /// child it performs rebuild operation. We exclude NoSpace Degrade.
 async fn handle_faulted_children(
     nexus: &mut OperationGuardArc<NexusSpec>,
+    volume: &mut Option<&mut OperationGuardArc<VolumeSpec>>,
     context: &PollContext,
 ) -> PollResult {
-    nexus::handle_faulted_children(nexus, context).await
+    nexus::handle_faulted_children(nexus, volume, context).await
 }
 
 /// Given a degraded volume
@@ -138,9 +140,10 @@ async fn unknown_children_remover(
 /// And the replicas should eventually be destroyed
 async fn missing_children_remover(
     nexus: &mut OperationGuardArc<NexusSpec>,
+    volume: &mut Option<&mut OperationGuardArc<VolumeSpec>>,
     context: &PollContext,
 ) -> PollResult {
-    nexus::missing_children_remover(nexus, context).await
+    nexus::missing_children_remover(nexus, volume, context).await
 }
 
 /// Given a degraded volume

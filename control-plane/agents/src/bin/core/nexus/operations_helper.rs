@@ -14,6 +14,7 @@ use stor_port::types::v0::{
     store::{
         nexus::{NexusOperation, NexusSpec, ReplicaUri},
         nexus_child::NexusChild,
+        volume::VolumeSpec,
     },
     transport::{
         AddNexusReplica, Child, ChildUri, Nexus, NodeId, RemoveNexusChild, RemoveNexusReplica,
@@ -69,18 +70,28 @@ impl OperationGuardArc<NexusSpec> {
         self.complete_update(registry, result, spec_clone).await
     }
 
-    /// Remove a nexus child uri.
-    /// If it's a replica it also disowns the replica from the volume and attempts to destroy it,
-    /// if requested.
-    pub(crate) async fn remove_child_by_uri(
+    /// Remove a nexus child uri and disown it from the nexus.
+    /// If the volume is present, also attempts to remove the replica from the volume, if no
+    /// longer required.
+    pub(crate) async fn remove_vol_child_by_uri(
         &mut self,
+        volume: &mut Option<&mut OperationGuardArc<VolumeSpec>>,
         registry: &Registry,
         nexus: &Nexus,
         uri: &ChildUri,
     ) -> Result<(), SvcError> {
         let nexus_children = &self.as_ref().children;
         match nexus_children.iter().find(|c| &c.uri() == uri).cloned() {
-            Some(NexusChild::Replica(replica)) => self.remove_replica(registry, &replica).await,
+            Some(NexusChild::Replica(replica)) => {
+                self.remove_replica(registry, &replica).await?;
+                if let Some(volume) = volume {
+                    volume
+                        .remove_unused_volume_replica(registry, replica.uuid())
+                        .await
+                        .ok();
+                }
+                Ok(())
+            }
             Some(NexusChild::Uri(uri)) => {
                 let request = RemoveNexusChild::new(&nexus.node, &nexus.uuid, &uri);
                 self.remove_child(registry, &request).await
@@ -90,6 +101,17 @@ impl OperationGuardArc<NexusSpec> {
                 self.remove_child(registry, &request).await
             }
         }
+    }
+
+    /// Remove a nexus child uri and disown it from the nexus.
+    pub(crate) async fn remove_child_by_uri(
+        &mut self,
+        registry: &Registry,
+        nexus: &Nexus,
+        uri: &ChildUri,
+    ) -> Result<(), SvcError> {
+        self.remove_vol_child_by_uri(&mut None, registry, nexus, uri)
+            .await
     }
 
     /// Make the replica accessible on the specified `NodeId`.
