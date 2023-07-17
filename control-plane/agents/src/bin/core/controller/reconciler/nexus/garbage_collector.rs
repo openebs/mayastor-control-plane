@@ -1,13 +1,16 @@
 use crate::controller::{
     reconciler::{poller::ReconcilerWorker, GarbageCollect, PollContext, TaskPoller},
     resources::{
-        operations::ResourceLifecycle,
+        operations::{ResourceLifecycle, ResourceOwnerUpdate},
         operations_helper::{OperationSequenceGuard, SpecOperationsHelper},
         OperationGuardArc, TraceSpan,
     },
     task_poller::{PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState},
 };
-use stor_port::types::v0::{store::nexus::NexusSpec, transport::DestroyNexus};
+use stor_port::types::v0::{
+    store::nexus::NexusSpec,
+    transport::{DestroyNexus, NexusOwners},
+};
 use tracing::Instrument;
 
 /// Nexus Garbage Collector reconciler
@@ -98,8 +101,11 @@ async fn destroy_orphaned_nexus(
 
     if let Some(owner) = &nexus.as_ref().owner {
         if context.specs().volume_rsc(owner).is_none() {
+            let owner = NexusOwners::All;
             nexus.warn_span(|| tracing::warn!("Attempting to disown orphaned nexus"));
-            nexus.disown(context.registry()).await?;
+            nexus
+                .remove_owners(context.registry(), &owner, true)
+                .await?;
             nexus.info_span(|| tracing::info!("Successfully disowned orphaned nexus"));
         }
     }

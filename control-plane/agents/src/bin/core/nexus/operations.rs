@@ -4,13 +4,13 @@ use crate::{
         registry::Registry,
         resources::{
             operations::{
-                ResourceLifecycle, ResourceOffspring, ResourceSharing, ResourceShutdownOperations,
-                ResourceSnapshotting,
+                ResourceLifecycle, ResourceOffspring, ResourceOwnerUpdate, ResourceSharing,
+                ResourceShutdownOperations,
             },
             operations_helper::{
                 GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, SpecOperationsHelper,
             },
-            OperationGuardArc, TraceSpan,
+            OperationGuardArc, TraceSpan, UpdateInnerValue,
         },
         scheduling::resources::HealthyChildItems,
         wrapper::{GetterOps, NodeWrapper},
@@ -26,7 +26,7 @@ use stor_port::types::v0::{
     transport::{
         child::Child,
         nexus::{CreateNexus, DestroyNexus, Nexus, ShareNexus, UnshareNexus},
-        AddNexusChild, FaultNexusChild, NodeStatus, RemoveNexusChild, ShutdownNexus,
+        AddNexusChild, FaultNexusChild, NexusOwners, NodeStatus, RemoveNexusChild, ShutdownNexus,
     },
 };
 
@@ -350,6 +350,39 @@ impl ResourceShutdownOperations for OperationGuardArc<NexusSpec> {
     }
 }
 
+#[async_trait::async_trait]
+impl ResourceOwnerUpdate for OperationGuardArc<NexusSpec> {
+    type Update = NexusOwners;
+
+    async fn remove_owners(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Update,
+        update_on_commit: bool,
+    ) -> Result<(), SvcError> {
+        // we don't really need the state, this is a configuration-only change.
+        let state = Default::default();
+
+        let spec_clone = self
+            .start_update(
+                registry,
+                &state,
+                NexusOperation::OwnerUpdate(request.clone()),
+            )
+            .await?;
+
+        match self.complete_update(registry, Ok(()), spec_clone).await {
+            Ok(_) => Ok(()),
+            Err(SvcError::Store { .. }) if update_on_commit => {
+                self.lock().disowned_by_owners(request);
+                self.update();
+                Ok(())
+            }
+            Err(error) => Err(error),
+        }
+    }
+}
+
 impl OperationGuardArc<NexusSpec> {
     async fn create_nexus(
         &self,
@@ -489,38 +522,5 @@ impl OperationGuardArc<NexusSpec> {
                 Err(error)
             }
         }
-    }
-}
-
-#[async_trait::async_trait]
-impl ResourceSnapshotting for OperationGuardArc<NexusSpec> {
-    type Create = ();
-    type CreateOutput = ();
-    type Destroy = ();
-    type List = ();
-    type ListOutput = ();
-
-    async fn create_snap(
-        &mut self,
-        _registry: &Registry,
-        _request: &Self::Create,
-    ) -> Result<Self::CreateOutput, SvcError> {
-        todo!()
-    }
-
-    async fn list_snaps(
-        &self,
-        _registry: &Registry,
-        _request: &Self::List,
-    ) -> Result<Self::ListOutput, SvcError> {
-        todo!()
-    }
-
-    async fn destroy_snap(
-        &mut self,
-        _registry: &Registry,
-        _request: &Self::Destroy,
-    ) -> Result<(), SvcError> {
-        todo!()
     }
 }

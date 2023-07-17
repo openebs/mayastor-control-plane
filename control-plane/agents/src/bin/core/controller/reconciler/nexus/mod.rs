@@ -31,6 +31,7 @@ use stor_port::{
         store::{
             nexus::{NexusSpec, ReplicaUri},
             nexus_child::NexusChild,
+            volume::VolumeSpec,
         },
         transport::{
             Child, ChildUri, CreateNexus, Nexus, NexusChildActionContext, NexusShareProtocol,
@@ -44,7 +45,6 @@ use std::{
     sync::Arc,
     time::{Duration, SystemTime},
 };
-
 use tokio::sync::RwLock;
 use tracing::Instrument;
 
@@ -125,9 +125,9 @@ async fn nexus_reconciler(
 
     if reconcile {
         match squash_results(vec![
-            handle_faulted_children(nexus, context).await,
+            handle_faulted_children(nexus, &mut None, context).await,
             unknown_children_remover(nexus, context).await,
-            missing_children_remover(nexus, context).await,
+            missing_children_remover(nexus, &mut None, context).await,
             fixup_nexus_protocol(nexus, context).await,
             enospc_children_onliner(nexus, context).await,
         ]) {
@@ -144,6 +144,7 @@ async fn nexus_reconciler(
 #[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), nexus.node = %nexus.as_ref().node, request.reconcile = true))]
 pub(super) async fn handle_faulted_children(
     nexus: &mut OperationGuardArc<NexusSpec>,
+    volume: &mut Option<&mut OperationGuardArc<VolumeSpec>>,
     context: &PollContext,
 ) -> PollResult {
     let nexus_uuid = nexus.uuid();
@@ -151,7 +152,7 @@ pub(super) async fn handle_faulted_children(
     let child_count = nexus_state.children.len();
     if nexus_state.status == NexusStatus::Degraded && child_count > 1 {
         for child in nexus_state.children.iter().filter(|c| c.state.faulted()) {
-            let _ = handle_faulted_child(nexus, child, &nexus_state, context).await;
+            let _ = handle_faulted_child(nexus, volume, child, &nexus_state, context).await;
         }
     }
     Ok(PollerState::Idle)
@@ -162,6 +163,7 @@ pub(super) async fn handle_faulted_children(
 /// or it opts for a full rebuilding by faulting the child instead.
 async fn handle_faulted_child(
     nexus_spec: &mut OperationGuardArc<NexusSpec>,
+    volume: &mut Option<&mut OperationGuardArc<VolumeSpec>>,
     child: &Child,
     nexus: &Nexus,
     context: &PollContext,
@@ -171,16 +173,16 @@ async fn handle_faulted_child(
 
     let Some(child_uuid) = nexus_spec.as_ref().replica_uri(&child.uri).map(|r| r.uuid()) else {
         tracing::warn!(%child.uri, "Unknown Child found, a full rebuild is required");
-        return faulted_children_remover(nexus_spec, child, context).await;
+        return faulted_children_remover(nexus_spec, volume, child, context).await;
     };
     let Some(faulted_at) = child.faulted_at else {
         tracing::warn!(%child.uri, child.uuid=%child_uuid, "Child faulted without a timestamp set, a full rebuild required");
-        return faulted_children_remover(nexus_spec, child, context).await;
+        return faulted_children_remover(nexus_spec, volume, child, context).await;
     };
 
     if !can_partial_rebuild {
         tracing::warn!(%child.uri, child.uuid=%child_uuid, ?child.state_reason, "No IO log available, this child cannot be partially rebuilt");
-        faulted_children_remover(nexus_spec, child, context).await?;
+        faulted_children_remover(nexus_spec, volume, child, context).await?;
     } else if child_replica_is_online(child_uuid, context).await {
         let child_uuid = child_uuid.clone();
         tracing::info!(%child.uri, child.uuid=%child_uuid, ?child.state_reason, "Child's replica is back online within the partial rebuild window");
@@ -192,13 +194,13 @@ async fn handle_faulted_child(
                 %error,
                 "Failed to online child, a full rebuild is required"
             );
-            faulted_children_remover(nexus_spec, child, context).await?;
+            faulted_children_remover(nexus_spec, volume, child, context).await?;
         }
     } else if let Some(elapsed) =
         wait_duration_elapsed(&child.uri, child_uuid, faulted_at, wait_duration)
     {
         tracing::warn!(%child.uri, child.uuid=%child_uuid, ?child.state_reason, ?elapsed, "Partial rebuild window elapsed, a full rebuild is required");
-        faulted_children_remover(nexus_spec, child, context).await?;
+        faulted_children_remover(nexus_spec, volume, child, context).await?;
     }
     Ok(())
 }
@@ -206,6 +208,7 @@ async fn handle_faulted_child(
 /// Removes child from nexus children list to initiate Full rebuild of child.
 async fn faulted_children_remover(
     nexus: &mut OperationGuardArc<NexusSpec>,
+    volume: &mut Option<&mut OperationGuardArc<VolumeSpec>>,
     child: &Child,
     context: &PollContext,
 ) -> Result<(), SvcError> {
@@ -216,9 +219,8 @@ async fn faulted_children_remover(
         tracing::warn!(%child.uri, %child.state, %child.state_reason, ?faulted_at, "Attempting to remove faulted child")
     });
     nexus
-        .remove_child_by_uri(context.registry(), &nexus_state, &child.uri, true)
+        .remove_vol_child_by_uri(volume, context.registry(), &nexus_state, &child.uri)
         .await?;
-
     nexus.warn_span(|| {
         tracing::warn!(%child.uri, %child.state, %child.state_reason, ?faulted_at, "Successfully removed faulted child")
     });
@@ -301,7 +303,7 @@ pub(super) async fn unknown_children_remover(
                     tracing::warn!("Attempting to remove unknown child '{}'", child.uri)
                 });
                 if let Err(error) = nexus
-                    .remove_child_by_uri(context.registry(), &nexus_state, &child.uri, false)
+                    .remove_child_by_uri(context.registry(), &nexus_state, &child.uri)
                     .await
                 {
                     nexus.error(&format!(
@@ -330,6 +332,7 @@ pub(super) async fn unknown_children_remover(
 #[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
 pub(super) async fn missing_children_remover(
     nexus: &mut OperationGuardArc<NexusSpec>,
+    volume: &mut Option<&mut OperationGuardArc<VolumeSpec>>,
     context: &PollContext,
 ) -> PollResult {
     let nexus_uuid = nexus.uuid();
@@ -346,7 +349,7 @@ pub(super) async fn missing_children_remover(
         ));
 
         if let Err(error) = nexus
-            .remove_child_by_uri(context.registry(), &nexus_state, &child.uri(), true)
+            .remove_vol_child_by_uri(volume, context.registry(), &nexus_state, &child.uri())
             .await
         {
             nexus.error_span(|| {

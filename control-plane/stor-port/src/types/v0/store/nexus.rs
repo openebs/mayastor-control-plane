@@ -9,7 +9,8 @@ use crate::types::v0::{
     },
     transport::{
         self, ChildState, ChildStateReason, ChildUri, CreateNexus, DestroyNexus, HostNqn, NexusId,
-        NexusNvmfConfig, NexusShareProtocol, NexusStatus, NodeId, Protocol, ReplicaId, VolumeId,
+        NexusNvmfConfig, NexusOwners, NexusShareProtocol, NexusStatus, NodeId, Protocol, ReplicaId,
+        VolumeId,
     },
 };
 use pstor::ApiVersion;
@@ -118,9 +119,28 @@ impl NexusSpec {
             NexusChild::Uri(_) => false,
         })
     }
-    /// Disown nexus by its volume owner
-    pub fn disowned_by_volume(&mut self) {
-        let _ = self.owner.take();
+    fn disowned_by_all(&mut self) {
+        self.owner.take();
+    }
+    /// Check if the owners request would disown the current owners.
+    pub fn would_disown(&self, owners: &NexusOwners) -> bool {
+        owners.volume() == self.owner.as_ref() || owners.disown_all()
+    }
+    /// Disown nexus from the given volume owner.
+    pub fn disowned_by_volume(&mut self, volume_id: &VolumeId) {
+        if Some(volume_id) == self.owner.as_ref() {
+            self.owner.take();
+        }
+    }
+    /// Disown nexus from the given owners.
+    pub fn disowned_by_owners(&mut self, owners: &NexusOwners) {
+        match owners {
+            NexusOwners::None => {}
+            NexusOwners::Volume(volume_id) => {
+                self.disowned_by_volume(volume_id);
+            }
+            NexusOwners::All => self.disowned_by_all(),
+        }
     }
     /// Check if the nexus spec has a shutdown status.
     pub fn is_shutdown(&self) -> bool {
@@ -250,6 +270,7 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
                 NexusOperation::RemoveChild(uri) => {
                     self.children.retain(|c| c.uri() != uri.uri());
                 }
+                NexusOperation::OwnerUpdate(owners) => self.disowned_by_owners(&owners),
             }
         }
         self.clear_op();
@@ -272,6 +293,13 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
         }
     }
 
+    fn log_op(&self, operation: &NexusOperation) -> (bool, bool) {
+        match operation {
+            NexusOperation::OwnerUpdate(_) => (false, true),
+            _ => (true, true),
+        }
+    }
+
     fn pending_op(&self) -> Option<&NexusOperation> {
         self.operation.as_ref().map(|o| &o.operation)
     }
@@ -287,6 +315,7 @@ pub enum NexusOperation {
     Unshare,
     AddChild(NexusChild),
     RemoveChild(NexusChild),
+    OwnerUpdate(NexusOwners),
 }
 
 /// Key used by the store to uniquely identify a NexusSpec structure.

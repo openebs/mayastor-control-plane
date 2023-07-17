@@ -283,7 +283,7 @@ impl OperationGuardArc<VolumeSpec> {
     /// (that is, replicas which are not used by a nexus).
     /// It must not be the last replica of the volume
     /// (an error will be returned in such case).
-    pub(super) async fn remove_unused_volume_replica(
+    pub(crate) async fn remove_unused_volume_replica(
         &mut self,
         registry: &Registry,
         replica_id: &ReplicaId,
@@ -434,7 +434,7 @@ impl OperationGuardArc<VolumeSpec> {
                 Some(child) => child.uri.clone(),
             };
             match nexus
-                .remove_child_by_uri(registry, nexus_state, &child_uri, true)
+                .remove_child_by_uri(registry, nexus_state, &child_uri)
                 .await
             {
                 Ok(_) => {
