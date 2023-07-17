@@ -79,7 +79,15 @@ impl SpecOperationsHelper for NexusSpec {
             }
             NexusOperation::RemoveChild(_) => Ok(()),
             NexusOperation::Shutdown => Ok(()),
-            _ => unreachable!(),
+            NexusOperation::OwnerUpdate(owners) => {
+                if !self.would_disown(owners) {
+                    return Err(SvcError::Internal {
+                        details: format!("Nexus {} not owned by {owners:?}", self.uuid),
+                    });
+                }
+                Ok(())
+            }
+            NexusOperation::Create | NexusOperation::Destroy => unreachable!(),
         }?;
         self.start_op(op);
         Ok(())

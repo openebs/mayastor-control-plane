@@ -1,12 +1,17 @@
 use super::RECONCILE_TIMEOUT_SECS;
+use deployer_cluster::Cluster;
 use grpc::operations::{
     node::traits::NodeOperations, registry::traits::RegistryOperations,
     volume::traits::VolumeOperations,
 };
 use std::time::Duration;
-use stor_port::types::v0::transport::{
-    Child, ChildUri, Filter, GetSpecs, GetVolumes, NodeId, NodeStatus, Volume, VolumeId,
+use stor_port::types::v0::{
+    openapi::models,
+    transport::{
+        Child, ChildUri, Filter, GetSpecs, GetVolumes, NodeId, NodeStatus, Volume, VolumeId,
+    },
 };
+use uuid::Uuid;
 
 /// Wait for the published volume to have the specified replicas and to not having the specified
 /// child. Wait up to the specified timeout.
@@ -169,4 +174,26 @@ pub(crate) async fn wait_node_online(
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
     Err(())
+}
+
+/// Wait for a volume to reach the provided status with timeout.
+pub(crate) async fn wait_till_volume_status(
+    cluster: &Cluster,
+    volume: &Uuid,
+    status: models::VolumeStatus,
+    timeout: Duration,
+) -> Result<(), String> {
+    let start = std::time::Instant::now();
+    loop {
+        let volume = cluster.rest_v00().volumes_api().get_volume(volume).await;
+        if volume.as_ref().unwrap().state.status == status {
+            return Ok(());
+        }
+
+        if std::time::Instant::now() > (start + timeout) {
+            let error = format!("Timeout waiting for the volume to reach the specified status ('{status:?}'), current: '{volume:?}'");
+            return Err(error);
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 }
