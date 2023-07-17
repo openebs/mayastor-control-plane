@@ -1,9 +1,6 @@
 use crate::controller::{
     registry::Registry,
-    resources::{
-        operations::{ResourceLifecycle, ResourceOwnerUpdate},
-        OperationGuardArc,
-    },
+    resources::{operations::ResourceLifecycle, OperationGuardArc},
 };
 use agents::{errors, errors::SvcError};
 use snafu::OptionExt;
@@ -47,19 +44,6 @@ impl OperationGuardArc<ReplicaSpec> {
             &self.destroy_request(ReplicaOwners::new_disown_all(), &node_id),
         )
         .await
-    }
-
-    /// Disown and destroy the replica from its volume
-    pub(crate) async fn disown_and_destroy_replica(
-        &mut self,
-        registry: &Registry,
-        node: &NodeId,
-    ) -> Result<(), SvcError> {
-        // disown it from the volume first, so at the very least it can be garbage collected
-        // at a later point if the node is not accessible
-        let disowner = ReplicaOwners::new_disown_all();
-        self.remove_owners(registry, &disowner, true).await?;
-        self.destroy_volume_replica(registry, Some(node)).await
     }
 
     /// Return a `DestroyReplica` request based on the provided arguments

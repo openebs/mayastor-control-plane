@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use super::RECONCILE_TIMEOUT_SECS;
+use crate::volume::helpers::volume_children;
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{
     nexus::traits::NexusOperations, node::traits::NodeOperations, volume::traits::VolumeOperations,
@@ -13,9 +14,10 @@ use stor_port::types::v0::{
         models::PublishVolumeBody,
         tower::client::Error,
     },
+    store::{nexus::ReplicaUri, nexus_child::NexusChild},
     transport::{
         strip_queries, CreateNexus, CreateVolume, DestroyVolume, Filter, NexusId, PublishVolume,
-        VolumeId,
+        ReplicaId, VolumeId, VolumeShareProtocol,
     },
 };
 
@@ -494,20 +496,9 @@ async fn wait_till_nexus_state(
 /// Wait for a volume to reach the provided status
 async fn wait_till_volume_status(cluster: &Cluster, volume: &Uuid, status: models::VolumeStatus) {
     let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
-    let start = std::time::Instant::now();
-    loop {
-        let volume = cluster.rest_v00().volumes_api().get_volume(volume).await;
-        if volume.as_ref().unwrap().state.status == status {
-            return;
-        }
-
-        if std::time::Instant::now() > (start + timeout) {
-            panic!(
-                "Timeout waiting for the volume to reach the specified status ('{status:?}'), current: '{volume:?}'"
-            );
-        }
-        tokio::time::sleep(Duration::from_millis(500)).await;
-    }
+    super::helpers::wait_till_volume_status(cluster, volume, status, timeout)
+        .await
+        .unwrap();
 }
 
 const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
@@ -529,4 +520,102 @@ async fn volume_nexus_reconcile() {
     tracing::info!("Nodes: {:?}", nodes);
 
     missing_nexus_reconcile(&cluster).await;
+}
+
+/// When a second nexus with the same child is created for some reason, ensure that removing
+/// a replica doesn't cause the replica to be disowned from the volume and destroyed.
+/// This is something that shouldn't happen to begin with but this adds a safety net just in case.
+#[tokio::test]
+async fn duplicate_nexus_missing_children() {
+    let reconcile_period = Duration::from_millis(100);
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_io_engines(2)
+        .with_pool(1, "malloc:///d?size_mb=100")
+        .with_cache_period("100ms")
+        .with_reconcile_period(reconcile_period, reconcile_period)
+        .build()
+        .await
+        .unwrap();
+
+    let volume_client = cluster.grpc_client().volume();
+    let nexus_client = cluster.grpc_client().nexus();
+
+    let volume = volume_client
+        .create(
+            &CreateVolume {
+                uuid: VolumeId::try_from("1e3cf927-80c2-47a8-adf0-95c486bdd7b7").unwrap(),
+                size: 5242880,
+                replicas: 1,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let pub_volume = PublishVolume {
+        uuid: volume.spec().uuid,
+        target_node: Some(cluster.node(0)),
+        share: Some(VolumeShareProtocol::Nvmf),
+        ..Default::default()
+    };
+    let volume = volume_client.publish(&pub_volume, None).await.unwrap();
+
+    let fake_volume = CreateVolume {
+        uuid: "2e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
+        size: 5242880,
+        replicas: 1,
+        ..Default::default()
+    };
+    let fake_volume = volume_client.create(&fake_volume, None).await.unwrap();
+
+    tracing::info!("Volume: {:?}", volume);
+    let volume_state = volume.state();
+    let nexus = volume_state.target.unwrap().clone();
+
+    let child = nexus.children.first().cloned().unwrap();
+    let child_uuid = ReplicaId::try_from(child.uri.uuid_str().unwrap()).unwrap();
+    let child_uri = format!("bdev:///{child_uuid}?uuid={child_uuid}");
+    let replica_uri = ReplicaUri::new(&child_uuid, &(child_uri.into()));
+
+    let local = "malloc:///local?size_mb=12&uuid=4a7b0566-8ec6-49e0-a8b2-1d9a292cf59b".into();
+
+    let bad_nexus_req = CreateNexus {
+        node: cluster.node(1),
+        uuid: NexusId::try_from("f086f12c-1728-449e-be32-9415051090d6").unwrap(),
+        size: 5242880,
+        children: vec![NexusChild::Replica(replica_uri.clone()), local],
+        managed: true,
+        // pretend this nexus is from another volume so it won't be deleted..
+        owner: Some(fake_volume.uuid().clone()),
+        ..Default::default()
+    };
+    let bad_nexus = nexus_client.create(&bad_nexus_req, None).await.unwrap();
+
+    let nexuses = nexus_client.get(Filter::None, None).await.unwrap();
+    tracing::info!("Nexuses: {:?}", nexuses);
+
+    let mut rpc_handle = cluster.grpc_handle(cluster.node(1).as_str()).await.unwrap();
+
+    let children_before_fault = volume_children(volume.uuid(), &volume_client).await;
+    tracing::info!("volume children: {:?}", children_before_fault);
+
+    rpc_handle
+        .remove_child(bad_nexus.uuid.as_str(), replica_uri.uri().as_str())
+        .await
+        .unwrap();
+
+    tracing::debug!("Nexus: {:?}", rpc_handle.list_nexuses().await.unwrap());
+
+    // There no easy way to check for a negative here, just wait for 2 garbage reconcilers.
+    super::helpers::wait_till_volume_status(
+        &cluster,
+        volume.uuid(),
+        models::VolumeStatus::Faulted,
+        reconcile_period * 10,
+    )
+    .await
+    .expect_err("Should not get faulted!");
 }
