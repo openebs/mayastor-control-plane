@@ -5,6 +5,8 @@ use crate::{
     dev::{Detach, Device, DeviceError},
     findmnt, mount,
 };
+use csi_driver::context::FileSystem;
+
 use snafu::{OptionExt, ResultExt, Snafu};
 use tokio::process::Command;
 use tracing::debug;
@@ -165,8 +167,8 @@ pub(crate) async fn find_mount(
                 });
             }
         }
-        debug!(volume.uuid = volume_id, fstype, "Found fstype for volume");
-        if fstype == "devtmpfs" {
+        debug!(volume.uuid = volume_id, ?fstype, "Found fstype for volume");
+        if fstype == FileSystem::DevTmpFs {
             Ok(Some(TypeOfMount::RawBlock))
         } else {
             Ok(Some(TypeOfMount::FileSystem))

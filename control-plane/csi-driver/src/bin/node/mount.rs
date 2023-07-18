@@ -1,4 +1,5 @@
 //! Utility functions for mounting and unmounting filesystems.
+use csi_driver::context::FileSystem;
 
 use devinfo::mountinfo::{MountInfo, MountIter};
 use std::{collections::HashSet, io::Error};
@@ -86,8 +87,8 @@ pub(super) fn subset(first: &[String], second: &[String]) -> bool {
 }
 
 /// Return supported filesystems.
-pub(crate) fn probe_filesystems() -> Vec<String> {
-    vec![String::from("xfs"), String::from("ext4")]
+pub(crate) fn probe_filesystems() -> Vec<FileSystem> {
+    vec![FileSystem::Xfs, FileSystem::Ext4]
 }
 
 // Utility function to transform a vector of options
@@ -141,7 +142,7 @@ fn show(options: &[String]) -> String {
 pub(crate) fn filesystem_mount(
     device: &str,
     target: &str,
-    fstype: &str,
+    fstype: &FileSystem,
     options: &[String],
 ) -> Result<Mount, Error> {
     let mut flags = MountFlags::empty();
@@ -155,7 +156,7 @@ pub(crate) fn filesystem_mount(
     let mount = Mount::new(
         device,
         target,
-        FilesystemType::Manual(fstype),
+        FilesystemType::Manual(fstype.as_ref()),
         flags,
         option(&value),
     )?;

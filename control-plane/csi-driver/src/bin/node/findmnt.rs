@@ -1,6 +1,8 @@
 use crate::error::DeviceError;
+use csi_driver::context::FileSystem;
+
 use serde_json::Value;
-use std::{collections::HashMap, process::Command, string::String, vec::Vec};
+use std::{collections::HashMap, process::Command, str::FromStr, string::String, vec::Vec};
 use tracing::{error, warn};
 
 // Keys of interest we expect to find in the JSON output generated
@@ -13,16 +15,16 @@ const FSTYPE_KEY: &str = "fstype";
 pub(crate) struct DeviceMount {
     #[allow(dead_code)]
     mount_path: String,
-    fstype: String,
+    fstype: FileSystem,
 }
 
 impl DeviceMount {
     /// create new DeviceMount
-    pub(crate) fn new(mount_path: String, fstype: String) -> DeviceMount {
+    pub(crate) fn new(mount_path: String, fstype: FileSystem) -> DeviceMount {
         Self { mount_path, fstype }
     }
     /// File system type
-    pub(crate) fn fstype(&self) -> String {
+    pub(crate) fn fstype(&self) -> FileSystem {
         self.fstype.clone()
     }
 }
@@ -189,12 +191,16 @@ pub(crate) fn get_mountpaths(device_path: &str) -> Result<Vec<DeviceMount>, Devi
             for entry in results {
                 if let Some(mountpath) = entry.get(TARGET_KEY) {
                     if let Some(fstype) = entry.get(FSTYPE_KEY) {
-                        mountpaths.push(DeviceMount::new(mountpath.to_string(), fstype.to_string()))
+                        mountpaths.push(DeviceMount::new(
+                            mountpath.to_string(),
+                            FileSystem::from_str(fstype)
+                                .unwrap_or(FileSystem::Unsupported(fstype.to_string())),
+                        ))
                     } else {
                         error!("Missing fstype for {}", mountpath);
                         mountpaths.push(DeviceMount::new(
                             mountpath.to_string(),
-                            "unspecified".to_string(),
+                            FileSystem::Unsupported("".to_string()),
                         ))
                     }
                 } else {
