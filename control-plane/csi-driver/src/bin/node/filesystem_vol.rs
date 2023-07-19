@@ -1,7 +1,17 @@
 //! Functions for CSI stage, unstage, publish and unpublish filesystem volumes.
+use crate::{
+    format::prepare_device,
+    mount::{self, subset, ReadOnly},
+};
+use csi_driver::{
+    context::FileSystem,
+    csi::{
+        volume_capability::MountVolume, NodePublishVolumeRequest, NodeStageVolumeRequest,
+        NodeUnpublishVolumeRequest, NodeUnstageVolumeRequest,
+    },
+};
 
 use std::{fs, io::ErrorKind, path::PathBuf};
-
 use tonic::{Code, Status};
 use tracing::{debug, error, info};
 
@@ -10,20 +20,11 @@ macro_rules! failure {
     (Code::$code:ident, $fmt:literal $(,$args:expr)+) => {{ let message = format!($fmt $(,$args)+); error!("{}", message); Status::new(Code::$code, message) }};
 }
 
-use crate::{
-    format::prepare_device,
-    mount::{self, subset, ReadOnly},
-};
-use csi_driver::csi::{
-    volume_capability::MountVolume, NodePublishVolumeRequest, NodeStageVolumeRequest,
-    NodeUnpublishVolumeRequest, NodeUnstageVolumeRequest,
-};
-
 pub(crate) async fn stage_fs_volume(
     msg: &NodeStageVolumeRequest,
     device_path: &str,
     mnt: &MountVolume,
-    filesystems: &[String],
+    filesystems: &[FileSystem],
 ) -> Result<(), Status> {
     let volume_id = &msg.volume_id;
     let fs_staging_path = &msg.staging_target_path;
@@ -44,10 +45,13 @@ pub(crate) async fn stage_fs_volume(
     debug!("Staging volume {} to {}", volume_id, fs_staging_path);
 
     let fstype = if mnt.fs_type.is_empty() {
-        String::from(&filesystems[0])
+        &filesystems[0]
     } else {
-        match filesystems.iter().find(|&entry| entry == &mnt.fs_type) {
-            Some(fstype) => String::from(fstype),
+        match filesystems
+            .iter()
+            .find(|entry| entry.to_string() == mnt.fs_type)
+        {
+            Some(fstype) => fstype,
             None => {
                 return Err(failure!(
                     Code::InvalidArgument,
@@ -97,7 +101,7 @@ pub(crate) async fn stage_fs_volume(
         ));
     }
 
-    if let Err(error) = prepare_device(device_path, &fstype).await {
+    if let Err(error) = prepare_device(device_path, fstype).await {
         return Err(failure!(
             Code::Internal,
             "Failed to stage volume {}: error preparing device {}: {}",
@@ -110,7 +114,7 @@ pub(crate) async fn stage_fs_volume(
     debug!("Mounting device {} onto {}", device_path, fs_staging_path);
 
     if let Err(error) =
-        mount::filesystem_mount(device_path, fs_staging_path, &fstype, &mnt.mount_flags)
+        mount::filesystem_mount(device_path, fs_staging_path, fstype, &mnt.mount_flags)
     {
         return Err(failure!(
             Code::Internal,
@@ -179,7 +183,7 @@ pub(crate) async fn unstage_fs_volume(msg: &NodeUnstageVolumeRequest) -> Result<
 pub(crate) fn publish_fs_volume(
     msg: &NodePublishVolumeRequest,
     mnt: &MountVolume,
-    filesystems: &[String],
+    filesystems: &[FileSystem],
 ) -> Result<(), Status> {
     let target_path = &msg.target_path;
     let volume_id = &msg.volume_id;
@@ -212,7 +216,10 @@ pub(crate) fn publish_fs_volume(
         ));
     }
 
-    if !filesystems.iter().any(|entry| entry == &staged.fstype) {
+    if !filesystems
+        .iter()
+        .any(|entry| entry.as_ref() == staged.fstype)
+    {
         return Err(failure!(
             Code::InvalidArgument,
             "Failed to publish volume {}: unsupported filesystem type: {}",

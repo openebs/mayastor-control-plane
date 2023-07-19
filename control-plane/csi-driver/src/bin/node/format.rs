@@ -1,10 +1,11 @@
 //! Utility function for formatting a device with filesystem
+use csi_driver::context::FileSystem;
 
 use devinfo::blkid::probe::Probe;
 use std::process::Command;
 use tracing::{debug, trace};
 
-pub(crate) async fn prepare_device(device: &str, fstype: &str) -> Result<(), String> {
+pub(crate) async fn prepare_device(device: &str, fstype: &FileSystem) -> Result<(), String> {
     debug!("Probing device {}", device);
 
     let probe =

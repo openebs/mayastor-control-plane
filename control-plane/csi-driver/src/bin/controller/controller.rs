@@ -178,8 +178,8 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         tracing::trace!(request = ?args);
         let _permit = self.create_volume_permit().await?;
 
-        let volume_content_source = if let Some(source) = args.volume_content_source {
-            match source.r#type {
+        let volume_content_source = if let Some(source) = &args.volume_content_source {
+            match &source.r#type {
                 Some(Type::Snapshot(snapshot_source)) => {
                     let snapshot_uuid =
                         Uuid::parse_str(&snapshot_source.snapshot_id).map_err(|_e| {
@@ -326,7 +326,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             capacity_bytes: size as i64,
             volume_id: volume_uuid,
             volume_context: args.parameters.clone(),
-            content_source: None,
+            content_source: args.volume_content_source,
             accessible_topology: vt_mapper.volume_accessible_topology(),
         };
 

@@ -1,38 +1,42 @@
+use crate::{
+    block_vol::{publish_block_volume, unpublish_block_volume},
+    dev::Device,
+    filesystem_vol::{publish_fs_volume, stage_fs_volume, unpublish_fs_volume, unstage_fs_volume},
+};
+use csi_driver::{
+    context::FileSystem,
+    csi::volume_capability::{access_mode::Mode, AccessType},
+};
+use rpc::{
+    csi,
+    csi::{
+        node_server, node_service_capability, NodeExpandVolumeRequest, NodeExpandVolumeResponse,
+        NodeGetCapabilitiesRequest, NodeGetCapabilitiesResponse, NodeGetInfoRequest,
+        NodeGetInfoResponse, NodeGetVolumeStatsRequest, NodeGetVolumeStatsResponse,
+        NodePublishVolumeRequest, NodePublishVolumeResponse, NodeServiceCapability,
+        NodeStageVolumeRequest, NodeStageVolumeResponse, NodeUnpublishVolumeRequest,
+        NodeUnpublishVolumeResponse, NodeUnstageVolumeRequest, NodeUnstageVolumeResponse, Topology,
+        VolumeCapability,
+    },
+};
+
 use nix::{errno::Errno, sys};
-use rpc::csi;
 use std::{boxed::Box, collections::HashMap, path::Path, time::Duration, vec::Vec};
 use tonic::{Code, Request, Response, Status};
 use tracing::{debug, error, info, trace};
+use uuid::Uuid;
 
 macro_rules! failure {
     (Code::$code:ident, $msg:literal) => {{ error!($msg); Status::new(Code::$code, $msg) }};
     (Code::$code:ident, $fmt:literal $(,$args:expr)+) => {{ let message = format!($fmt $(,$args)+); error!("{}", message); Status::new(Code::$code, message) }};
 }
 
-use uuid::Uuid;
-
-use crate::{
-    block_vol::{publish_block_volume, unpublish_block_volume},
-    dev::Device,
-    filesystem_vol::{publish_fs_volume, stage_fs_volume, unpublish_fs_volume, unstage_fs_volume},
-};
-use csi_driver::csi::volume_capability::{access_mode::Mode, AccessType};
-use rpc::csi::{
-    node_server, node_service_capability, NodeExpandVolumeRequest, NodeExpandVolumeResponse,
-    NodeGetCapabilitiesRequest, NodeGetCapabilitiesResponse, NodeGetInfoRequest,
-    NodeGetInfoResponse, NodeGetVolumeStatsRequest, NodeGetVolumeStatsResponse,
-    NodePublishVolumeRequest, NodePublishVolumeResponse, NodeServiceCapability,
-    NodeStageVolumeRequest, NodeStageVolumeResponse, NodeUnpublishVolumeRequest,
-    NodeUnpublishVolumeResponse, NodeUnstageVolumeRequest, NodeUnstageVolumeResponse, Topology,
-    VolumeCapability,
-};
-
 /// The Csi Node implementation.
 #[derive(Clone, Debug)]
 pub(crate) struct Node {
     node_name: String,
     node_selector: HashMap<String, String>,
-    filesystems: Vec<String>,
+    filesystems: Vec<FileSystem>,
 }
 
 impl Node {
@@ -40,7 +44,7 @@ impl Node {
     pub(crate) fn new(
         node_name: String,
         node_selector: HashMap<String, String>,
-        filesystems: Vec<String>,
+        filesystems: Vec<FileSystem>,
     ) -> Node {
         let self_ = Self {
             node_name,
