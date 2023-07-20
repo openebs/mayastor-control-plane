@@ -53,6 +53,8 @@ pub fn timeout_grpc(op_id: MessageId, timeout_opts: TimeoutOptions) -> Duration 
                 MessageIdVs::PublishVolume => min_timeouts.nexus(),
                 MessageIdVs::UnpublishVolume => min_timeouts.nexus(),
                 MessageIdVs::RepublishVolume => min_timeouts.nexus() * 2,
+                MessageIdVs::CreateVolumeSnapshot => min_timeouts.volume_snapshot(),
+                MessageIdVs::DestroyVolumeSnapshot => min_timeouts.volume_snapshot(),
 
                 MessageIdVs::CreateNexus => min_timeouts.nexus(),
                 MessageIdVs::CreateNexusSnapshot => min_timeouts.nexus_snapshot(),

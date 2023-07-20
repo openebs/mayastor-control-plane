@@ -30,7 +30,7 @@ pub trait CreateVolumeSnapshotInfo: Send + Sync + std::fmt::Debug {
 }
 
 /// Volume snapshot deletion information.
-pub trait DeleteVolumeSnapshotInfo: Send + Sync + std::fmt::Debug {
+pub trait DestroyVolumeSnapshotInfo: Send + Sync + std::fmt::Debug {
     /// Snapshot creation information.
     fn info(&self) -> SnapshotInfo<Option<VolumeId>>;
 }
@@ -66,7 +66,7 @@ impl VolumeSnapshot {
     }
 }
 
-impl From<&VolumeSnapshot> for DeleteVolumeSnapshot {
+impl From<&VolumeSnapshot> for DestroyVolumeSnapshot {
     fn from(snapshot: &VolumeSnapshot) -> Self {
         Self::new(
             &Some(snapshot.spec().source_id.clone()),
@@ -349,7 +349,7 @@ impl VolumeSnapshots {
 pub type CreateVolumeSnapshot = SnapshotInfo<VolumeId>;
 
 /// Validated delete volume snapshot parameters.
-pub type DeleteVolumeSnapshot = SnapshotInfo<Option<VolumeId>>;
+pub type DestroyVolumeSnapshot = SnapshotInfo<Option<VolumeId>>;
 
 impl ValidateRequestTypes for volume::CreateSnapshotRequest {
     type Validated = CreateVolumeSnapshot;
@@ -364,10 +364,10 @@ impl ValidateRequestTypes for volume::CreateSnapshotRequest {
         })
     }
 }
-impl ValidateRequestTypes for volume::DeleteSnapshotRequest {
-    type Validated = DeleteVolumeSnapshot;
+impl ValidateRequestTypes for volume::DestroySnapshotRequest {
+    type Validated = DestroyVolumeSnapshot;
     fn validated(self) -> Result<Self::Validated, ReplyError> {
-        Ok(DeleteVolumeSnapshot {
+        Ok(DestroyVolumeSnapshot {
             source_id: match self.volume_id {
                 None => None,
                 Some(id) => Some(id.try_into_id(ResourceKind::VolumeSnapshot, "volume_id")?),
@@ -384,8 +384,8 @@ impl CreateVolumeSnapshotInfo for CreateVolumeSnapshot {
         self.clone()
     }
 }
-impl DeleteVolumeSnapshotInfo for DeleteVolumeSnapshot {
-    fn info(&self) -> DeleteVolumeSnapshot {
+impl DestroyVolumeSnapshotInfo for DestroyVolumeSnapshot {
+    fn info(&self) -> DestroyVolumeSnapshot {
         self.clone()
     }
 }
@@ -399,8 +399,8 @@ impl From<&dyn CreateVolumeSnapshotInfo> for volume::CreateSnapshotRequest {
         }
     }
 }
-impl From<&dyn DeleteVolumeSnapshotInfo> for volume::DeleteSnapshotRequest {
-    fn from(value: &dyn DeleteVolumeSnapshotInfo) -> Self {
+impl From<&dyn DestroyVolumeSnapshotInfo> for volume::DestroySnapshotRequest {
+    fn from(value: &dyn DestroyVolumeSnapshotInfo) -> Self {
         let info = value.info();
         Self {
             volume_id: info.source_id.map(|id| id.to_string()),
