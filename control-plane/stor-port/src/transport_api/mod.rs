@@ -503,19 +503,23 @@ pub struct TimeoutOptions {
 #[derive(Debug, Clone)]
 pub struct RequestMinTimeout {
     replica: Duration,
+    replica_snapshot: Duration,
     nexus: Duration,
     pool: Duration,
     nexus_shutdown: Duration,
+    nexus_snapshot: Duration,
     nvme_reconnect: Duration,
 }
 
 impl Default for RequestMinTimeout {
     fn default() -> Self {
         Self {
-            replica: Duration::from_secs(10),
+            replica: Duration::from_secs(15),
+            replica_snapshot: Duration::from_secs(10),
             nexus: Duration::from_secs(30),
             pool: Duration::from_secs(20),
             nexus_shutdown: Duration::from_secs(15),
+            nexus_snapshot: Duration::from_secs(30),
             nvme_reconnect: Duration::from_secs(12),
         }
     }
@@ -525,9 +529,17 @@ impl RequestMinTimeout {
     pub fn replica(&self) -> Duration {
         self.replica
     }
+    /// Minimum timeout for a replica snapshot operation.
+    pub fn replica_snapshot(&self) -> Duration {
+        self.replica_snapshot
+    }
     /// Minimum timeout for a nexus operation.
     pub fn nexus(&self) -> Duration {
         self.nexus
+    }
+    /// Minimum timeout for a nexus snapshot operation.
+    pub fn nexus_snapshot(&self) -> Duration {
+        self.nexus_snapshot
     }
     /// Minimum timeout for a pool operation.
     pub fn pool(&self) -> Duration {
