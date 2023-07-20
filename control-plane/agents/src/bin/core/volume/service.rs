@@ -19,10 +19,10 @@ use grpc::{
     operations::{
         volume::traits::{
             CreateSnapshotCloneInfo, CreateVolumeInfo, CreateVolumeSnapshot,
-            CreateVolumeSnapshotInfo, DeleteVolumeSnapshot, DeleteVolumeSnapshotInfo,
-            DestroyShutdownTargetsInfo, DestroyVolumeInfo, PublishVolumeInfo, RepublishVolumeInfo,
-            SetVolumeReplicaInfo, ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo,
-            VolumeOperations, VolumeSnapshot, VolumeSnapshots,
+            CreateVolumeSnapshotInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo,
+            DestroyVolumeSnapshot, DestroyVolumeSnapshotInfo, PublishVolumeInfo,
+            RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo, UnpublishVolumeInfo,
+            UnshareVolumeInfo, VolumeOperations, VolumeSnapshot, VolumeSnapshots,
         },
         Pagination,
     },
@@ -185,14 +185,14 @@ impl VolumeOperations for Service {
         Ok(snapshot)
     }
 
-    async fn delete_snapshot(
+    async fn destroy_snapshot(
         &self,
-        request: &dyn DeleteVolumeSnapshotInfo,
+        request: &dyn DestroyVolumeSnapshotInfo,
         _ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
         let service = self.clone();
         let request = request.info();
-        Context::spawn(async move { service.delete_snapshot(request).await }).await??;
+        Context::spawn(async move { service.destroy_snapshot(request).await }).await??;
         Ok(())
     }
 
@@ -401,7 +401,7 @@ impl Service {
 
     /// Delete a volume snapshot.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = ?request.source_id, snapshot.source_uuid = ?request.source_id, snapshot.uuid = %request.snap_id))]
-    async fn delete_snapshot(&self, request: DeleteVolumeSnapshot) -> Result<(), SvcError> {
+    async fn destroy_snapshot(&self, request: DestroyVolumeSnapshot) -> Result<(), SvcError> {
         // Fetch the snapshot spec.
         let snapshot = self.specs().volume_snapshot_rsc(request.snap_id()).ok_or(
             SvcError::VolSnapshotNotFound {

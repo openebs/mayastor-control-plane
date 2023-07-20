@@ -7,8 +7,8 @@ use crate::{
         set_volume_replica_reply, share_volume_reply, unpublish_volume_reply,
         volume_grpc_server::{VolumeGrpc, VolumeGrpcServer},
         CreateSnapshotCloneReply, CreateSnapshotCloneRequest, CreateSnapshotReply,
-        CreateSnapshotRequest, CreateVolumeReply, CreateVolumeRequest, DeleteSnapshotReply,
-        DeleteSnapshotRequest, DestroyShutdownTargetReply, DestroyShutdownTargetRequest,
+        CreateSnapshotRequest, CreateVolumeReply, CreateVolumeRequest, DestroyShutdownTargetReply,
+        DestroyShutdownTargetRequest, DestroySnapshotReply, DestroySnapshotRequest,
         DestroyVolumeReply, DestroyVolumeRequest, GetSnapshotsReply, GetSnapshotsRequest,
         GetVolumesReply, GetVolumesRequest, ProbeRequest, ProbeResponse, PublishVolumeReply,
         PublishVolumeRequest, RepublishVolumeReply, RepublishVolumeRequest, SetVolumeReplicaReply,
@@ -219,14 +219,14 @@ impl VolumeGrpc for VolumeServer {
         }
     }
 
-    async fn delete_snapshot(
+    async fn destroy_snapshot(
         &self,
-        request: tonic::Request<DeleteSnapshotRequest>,
-    ) -> Result<tonic::Response<DeleteSnapshotReply>, tonic::Status> {
+        request: tonic::Request<DestroySnapshotRequest>,
+    ) -> Result<tonic::Response<DestroySnapshotReply>, tonic::Status> {
         let req = request.into_inner().validated()?;
-        match self.service.delete_snapshot(&req, None).await {
-            Ok(()) => Ok(Response::new(DeleteSnapshotReply { error: None })),
-            Err(e) => Ok(Response::new(DeleteSnapshotReply {
+        match self.service.destroy_snapshot(&req, None).await {
+            Ok(()) => Ok(Response::new(DestroySnapshotReply { error: None })),
+            Err(e) => Ok(Response::new(DestroySnapshotReply {
                 error: Some(e.into()),
             })),
         }
