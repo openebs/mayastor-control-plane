@@ -9,7 +9,7 @@ use crate::{
                 ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
                 VolumeSnapshot, VolumeSnapshots,
             },
-            traits_snapshots::DeleteVolumeSnapshotInfo,
+            traits_snapshots::DestroyVolumeSnapshotInfo,
         },
         Pagination,
     },
@@ -260,13 +260,13 @@ impl VolumeOperations for VolumeClient {
     }
 
     #[tracing::instrument(name = "VolumeClient::delete_snapshot", level = "debug", skip(self))]
-    async fn delete_snapshot(
+    async fn destroy_snapshot(
         &self,
-        request: &dyn DeleteVolumeSnapshotInfo,
+        request: &dyn DestroyVolumeSnapshotInfo,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
-        let req = self.request(request, ctx, MessageIdVs::DeleteVolumeSnapshot);
-        let response = self.client().delete_snapshot(req).await?.into_inner();
+        let req = self.request(request, ctx, MessageIdVs::DestroyVolumeSnapshot);
+        let response = self.client().destroy_snapshot(req).await?.into_inner();
         match response.error {
             None => Ok(()),
             Some(err) => Err(err.into()),
