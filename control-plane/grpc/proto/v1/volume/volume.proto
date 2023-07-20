@@ -57,8 +57,21 @@ message VolumeSpec {
   bool thin = 9;
   // Affinity Group related information.
   optional AffinityGroup affinity_group = 10;
-  // Indicates if this volume was created as a clone.
-  bool is_clone = 12;
+  // Volume Content Source i.e the snapshot or a volume.
+  optional VolumeContentSource content_source  = 11;
+
+  // Volume Content Source i.e the snapshot or a volume.
+  message VolumeContentSource {
+    oneof volume_content_source {
+        SnapshotAsSource snapshot = 1;
+    }
+  }
+
+  // Snapshot as the volume content source.
+  message SnapshotAsSource {
+    google.protobuf.StringValue snapshot = 1;
+    google.protobuf.StringValue snap_source_vol = 2;
+  }
 }
 
 message Metadata {

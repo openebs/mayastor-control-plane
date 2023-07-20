@@ -14,7 +14,11 @@ use agents::errors::{self, SvcError};
 use stor_port::{
     transport_api::ErrorChain,
     types::v0::{
-        store::{replica::ReplicaSpec, snapshots::volume::VolumeSnapshot, volume::VolumeSpec},
+        store::{
+            replica::ReplicaSpec,
+            snapshots::volume::VolumeSnapshot,
+            volume::{VolumeContentSource, VolumeSpec},
+        },
         transport::{
             CreateVSnapshotClone, Replica, SnapshotCloneId, SnapshotCloneParameters,
             SnapshotCloneSpecParams,
@@ -22,10 +26,20 @@ use stor_port::{
     },
 };
 
-pub(super) struct SnapshotCloneOp<'a>(
-    pub(super) &'a CreateVSnapshotClone,
-    pub(super) &'a mut OperationGuardArc<VolumeSnapshot>,
+pub(crate) struct SnapshotCloneOp<'a>(
+    pub(crate) &'a CreateVSnapshotClone,
+    pub(crate) &'a mut OperationGuardArc<VolumeSnapshot>,
 );
+
+impl SnapshotCloneOp<'_> {
+    /// Get a Snapshot Source for VolumeContentSource from the same.
+    pub(crate) fn to_snapshot_source(&self) -> VolumeContentSource {
+        VolumeContentSource::new_snapshot_source(
+            self.1.uuid().clone(),
+            self.1.as_ref().spec().source_id().clone(),
+        )
+    }
+}
 
 #[async_trait::async_trait]
 impl ResourceCloning for OperationGuardArc<VolumeSnapshot> {

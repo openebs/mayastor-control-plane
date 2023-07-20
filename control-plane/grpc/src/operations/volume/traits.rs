@@ -27,13 +27,13 @@ use stor_port::{
             VolumeShareProtocol, VolumeState, VolumeUsage,
         },
     },
-    IntoOption,
+    IntoOption, TryIntoOption,
 };
 
 use crate::volume::CreateSnapshotCloneRequest;
 use std::{borrow::Borrow, collections::HashMap, convert::TryFrom};
 use stor_port::types::v0::{
-    store::volume::VolumeMetadata,
+    store::volume::{VolumeContentSource, VolumeMetadata},
     transport::{CreateVSnapshotClone, SnapshotId},
 };
 
@@ -154,7 +154,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
                 last_nexus_id: nexus_id.map(|id| id.to_string()),
                 thin: volume_spec.thin,
                 affinity_group: volume_spec.affinity_group.into_opt(),
-                is_clone: volume_spec.is_clone,
+                content_source: volume_spec.content_source.into_opt(),
             }),
             metadata: Some(volume::Metadata {
                 spec_status: spec_status as i32,
@@ -304,7 +304,7 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
                 .map(|map_wrapper| map_wrapper.map),
             affinity_group: volume_spec.affinity_group.into_opt(),
             metadata: VolumeMetadata::new(volume_meta.as_thin),
-            is_clone: volume_spec.is_clone,
+            content_source: volume_spec.content_source.try_into_opt()?,
         };
         Ok(volume_spec)
     }
@@ -1718,5 +1718,43 @@ impl TryFrom<volume::AffinityGroupSpec> for AffinityGroupSpec {
             volumes.push(volume_id)
         }
         Ok(AffinityGroupSpec::new(value.id, volumes))
+    }
+}
+
+impl TryFrom<volume::volume_spec::VolumeContentSource> for VolumeContentSource {
+    type Error = ReplyError;
+
+    fn try_from(value: volume::volume_spec::VolumeContentSource) -> Result<Self, Self::Error> {
+        match value.volume_content_source {
+            None => Err(ReplyError::missing_argument(
+                ResourceKind::Volume,
+                "volume_content_source",
+            )),
+            Some(content_source) => match content_source {
+                volume::volume_spec::volume_content_source::VolumeContentSource::Snapshot(
+                    snap_source,
+                ) => Ok(Self::Snapshot(
+                    SnapshotId::try_from(StringValue(snap_source.snapshot))?,
+                    VolumeId::try_from(StringValue(snap_source.snap_source_vol))?,
+                )),
+            },
+        }
+    }
+}
+
+impl From<VolumeContentSource> for volume::volume_spec::VolumeContentSource {
+    fn from(value: VolumeContentSource) -> Self {
+        match value {
+            VolumeContentSource::Snapshot(snap, vol) => volume::volume_spec::VolumeContentSource {
+                volume_content_source: Some(
+                    volume::volume_spec::volume_content_source::VolumeContentSource::Snapshot(
+                        volume::volume_spec::SnapshotAsSource {
+                            snapshot: Some(snap.to_string()),
+                            snap_source_vol: Some(vol.to_string()),
+                        },
+                    ),
+                ),
+            },
+        }
     }
 }

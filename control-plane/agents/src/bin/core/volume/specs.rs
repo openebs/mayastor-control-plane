@@ -18,14 +18,16 @@ use crate::{
             ResourceFilter,
         },
     },
-    volume::scheduling,
+    volume::{operations::CreateVolumeSource, scheduling},
 };
 use agents::{
     errors,
-    errors::{NotEnough, SvcError, SvcError::VolumeNotFound},
+    errors::{
+        NotEnough, SvcError,
+        SvcError::{VolSnapshotNotFound, VolumeNotFound},
+    },
 };
 use grpc::operations::{PaginatedResult, Pagination};
-
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
@@ -34,22 +36,19 @@ use stor_port::{
             nexus::NexusSpec,
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
+            snapshots::volume::{VolumeSnapshot, VolumeSnapshotUserSpec},
             volume::{AffinityGroupId, AffinityGroupSpec, VolumeOperation, VolumeSpec},
             SpecStatus, SpecTransaction,
         },
         transport::{
             CreateReplica, CreateVolume, NodeId, PoolId, Protocol, ReplicaId, ReplicaName,
-            ReplicaOwners, VolumeId, VolumeShareProtocol, VolumeState, VolumeStatus,
+            ReplicaOwners, SnapshotId, VolumeId, VolumeShareProtocol, VolumeState, VolumeStatus,
         },
     },
 };
 
 use snafu::OptionExt;
 use std::{collections::HashMap, convert::From};
-use stor_port::types::v0::{
-    store::snapshots::volume::{VolumeSnapshot, VolumeSnapshotUserSpec},
-    transport::SnapshotId,
-};
 
 /// CreateReplicaCandidate for volume and Affinity Group.
 pub(crate) struct CreateReplicaCandidate {
@@ -706,8 +705,9 @@ impl ResourceSpecsLocked {
     ) -> Result<OperationGuardArc<VolumeSnapshot>, SvcError> {
         match self.volume_snapshot_rsc(id) {
             Some(spec) => spec.operation_guard_wait().await,
-            None => Err(VolumeNotFound {
-                vol_id: id.to_string(),
+            None => Err(VolSnapshotNotFound {
+                snap_id: id.to_string(),
+                source_id: None,
             }),
         }
     }
@@ -745,12 +745,24 @@ impl ResourceSpecsLocked {
     }
 
     /// Get or Create the resourced VolumeSpec for the given request.
-    pub(crate) fn get_or_create_volume(&self, request: &CreateVolume) -> ResourceMutex<VolumeSpec> {
+    pub(crate) fn get_or_create_volume(
+        &self,
+        request: &CreateVolumeSource,
+    ) -> ResourceMutex<VolumeSpec> {
         let mut specs = self.write();
-        if let Some(volume) = specs.volumes.get(&request.uuid) {
+        if let Some(volume) = specs.volumes.get(&request.source().uuid) {
             volume.clone()
         } else {
-            specs.volumes.insert(VolumeSpec::from(request))
+            match request {
+                CreateVolumeSource::None(_) => {
+                    specs.volumes.insert(VolumeSpec::from(request.source()))
+                }
+                CreateVolumeSource::Snapshot(create_from_snap) => {
+                    let mut spec = VolumeSpec::from(request.source());
+                    spec.set_content_source(Some(create_from_snap.to_snapshot_source()));
+                    specs.volumes.insert(spec)
+                }
+            }
         }
     }
 

@@ -2380,6 +2380,27 @@ components:
           type: string
       required:
         - id
+    VolumeContentSource:
+      description: Volume Content Source i.e the snapshot or the volume.
+      type: object
+      properties:
+        snapshot:
+          $ref: '#/components/schemas/SnapshotAsSource'
+      additionalProperties: false
+      oneOf:
+        - required:
+            - snapshot
+    SnapshotAsSource:
+      description: The snapshot source for the volume content.
+      type: object
+      properties:
+        snapshot:
+          $ref: '#/components/schemas/SnapshotId'
+        volume:
+          $ref: '#/components/schemas/VolumeId'
+      required:
+        - snapshot
+        - volume
     PublishVolumeBody:
       example:
         node: "io-engine-1"
@@ -3186,6 +3207,8 @@ components:
           type: boolean
         affinity_group:
           $ref: '#/components/schemas/AffinityGroup'
+        content_source:
+          $ref: '#/components/schemas/VolumeContentSource'
       required:
         - num_paths
         - num_replicas
