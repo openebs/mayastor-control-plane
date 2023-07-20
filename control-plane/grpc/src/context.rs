@@ -55,11 +55,14 @@ pub fn timeout_grpc(op_id: MessageId, timeout_opts: TimeoutOptions) -> Duration 
                 MessageIdVs::RepublishVolume => min_timeouts.nexus() * 2,
 
                 MessageIdVs::CreateNexus => min_timeouts.nexus(),
+                MessageIdVs::CreateNexusSnapshot => min_timeouts.nexus_snapshot(),
                 MessageIdVs::DestroyNexus => min_timeouts.nexus(),
                 MessageIdVs::ShutdownNexus => min_timeouts.nexus_shutdown(),
 
                 MessageIdVs::CreateReplica => min_timeouts.replica(),
+                MessageIdVs::CreateReplicaSnapshot => min_timeouts.replica_snapshot(),
                 MessageIdVs::DestroyReplica => min_timeouts.replica(),
+                MessageIdVs::DestroyReplicaSnapshot => min_timeouts.replica_snapshot(),
 
                 MessageIdVs::CreatePool => min_timeouts.pool(),
                 MessageIdVs::DestroyPool => min_timeouts.pool(),
