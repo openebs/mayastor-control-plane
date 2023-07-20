@@ -107,9 +107,9 @@ pub trait VolumeOperations: Send + Sync {
         ctx: Option<Context>,
     ) -> Result<VolumeSnapshot, ReplyError>;
     /// Delete a volume snapshot.
-    async fn delete_snapshot(
+    async fn destroy_snapshot(
         &self,
-        request: &dyn DeleteVolumeSnapshotInfo,
+        request: &dyn DestroyVolumeSnapshotInfo,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError>;
     /// List volume snapshots.

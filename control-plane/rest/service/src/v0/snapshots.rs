@@ -1,7 +1,7 @@
 use super::*;
 use grpc::operations::{
     volume::traits::{
-        CreateVolumeSnapshot, DeleteVolumeSnapshot, ReplicaSnapshot, VolumeOperations,
+        CreateVolumeSnapshot, DestroyVolumeSnapshot, ReplicaSnapshot, VolumeOperations,
         VolumeReplicaSnapshotState, VolumeSnapshot,
     },
     MaxEntries, Pagination, StartingToken,
@@ -18,8 +18,8 @@ fn client() -> impl VolumeOperations {
 impl apis::actix_server::Snapshots for RestApi {
     async fn del_snapshot(Path(snapshot_id): Path<Uuid>) -> Result<(), RestError<RestJsonError>> {
         client()
-            .delete_snapshot(
-                &DeleteVolumeSnapshot {
+            .destroy_snapshot(
+                &DestroyVolumeSnapshot {
                     source_id: None,
                     snap_id: snapshot_id.into(),
                 },
@@ -33,8 +33,8 @@ impl apis::actix_server::Snapshots for RestApi {
         Path((volume_id, snapshot_id)): Path<(Uuid, Uuid)>,
     ) -> Result<(), RestError<RestJsonError>> {
         client()
-            .delete_snapshot(
-                &DeleteVolumeSnapshot {
+            .destroy_snapshot(
+                &DestroyVolumeSnapshot {
                     source_id: Some(volume_id.into()),
                     snap_id: snapshot_id.into(),
                 },

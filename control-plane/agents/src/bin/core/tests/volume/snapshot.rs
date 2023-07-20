@@ -3,7 +3,7 @@ use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{
     pool::traits::PoolOperations,
     replica::traits::ReplicaOperations,
-    volume::traits::{CreateVolumeSnapshot, DeleteVolumeSnapshot, VolumeOperations},
+    volume::traits::{CreateVolumeSnapshot, DestroyVolumeSnapshot, VolumeOperations},
 };
 use std::time::Duration;
 use stor_port::{
@@ -96,7 +96,7 @@ async fn snapshot() {
     assert!(!snaps.entries().is_empty());
 
     vol_cli
-        .delete_snapshot(&DeleteVolumeSnapshot::from(&replica_snapshot), None)
+        .destroy_snapshot(&DestroyVolumeSnapshot::from(&replica_snapshot), None)
         .await
         .unwrap();
 
@@ -143,7 +143,7 @@ async fn snapshot() {
 
     tracing::info!("Nexus Snapshot: {nexus_snapshot:?}");
     vol_cli
-        .delete_snapshot(&DeleteVolumeSnapshot::from(&nexus_snapshot), None)
+        .destroy_snapshot(&DestroyVolumeSnapshot::from(&nexus_snapshot), None)
         .await
         .unwrap();
 
@@ -207,7 +207,7 @@ async fn thin_provisioning(cluster: &Cluster, volume: Volume) {
         .await
         .unwrap();
     vol_cli
-        .delete_snapshot(&DeleteVolumeSnapshot::from(&snapshot), None)
+        .destroy_snapshot(&DestroyVolumeSnapshot::from(&snapshot), None)
         .await
         .unwrap();
 
@@ -276,7 +276,7 @@ async fn pool_destroy_validation(cluster: &Cluster) {
     assert_eq!(del_error.kind, ReplyErrorKind::InUse);
 
     vol_cli
-        .delete_snapshot(&DeleteVolumeSnapshot::from(&replica_snapshot), None)
+        .destroy_snapshot(&DestroyVolumeSnapshot::from(&replica_snapshot), None)
         .await
         .unwrap();
 }

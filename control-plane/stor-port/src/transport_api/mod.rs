@@ -528,6 +528,11 @@ impl RequestMinTimeout {
     pub fn nexus_snapshot(&self) -> Duration {
         self.nexus_snapshot
     }
+    /// Minimum timeout for a volume snapshot operation.
+    pub fn volume_snapshot(&self) -> Duration {
+        // not quite sure how much slack to give here, maybe this is enough?
+        self.nexus_snapshot + self.replica_snapshot
+    }
     /// Minimum timeout for a pool operation.
     pub fn pool(&self) -> Duration {
         self.pool
