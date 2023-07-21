@@ -163,8 +163,9 @@ pub struct VolumeSpec {
     /// Flag indicating whether the volume should be thin provisioned.
     #[serde(default)]
     pub thin: bool,
-    #[serde(default, skip_serializing_if = "super::is_default")]
-    pub is_clone: bool,
+    /// Volume Content Source i.e the snapshot or a volume.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_source: Option<VolumeContentSource>,
     /// Last used Target or current Configuration.
     #[serde(default, rename = "target")]
     pub target_config: Option<TargetConfig>,
@@ -177,6 +178,19 @@ pub struct VolumeSpec {
     /// Volume metadata information.
     #[serde(default, skip_serializing_if = "super::is_default")]
     pub metadata: VolumeMetadata,
+}
+
+/// Volume Content Source i.e the snapshot or a volume.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum VolumeContentSource {
+    Snapshot(SnapshotId, VolumeId),
+}
+
+impl VolumeContentSource {
+    /// Create a new `VolumeContentSource::Snapshot` from the params.
+    pub fn new_snapshot_source(snapshot: SnapshotId, snap_source_vol: VolumeId) -> Self {
+        Self::Snapshot(snapshot, snap_source_vol)
+    }
 }
 
 /// Volume meta information.
@@ -381,6 +395,10 @@ impl VolumeSpec {
             return Some(id);
         }
         self.target_config.as_ref().map(|c| &c.target.nexus)
+    }
+    /// Set the content source.
+    pub fn set_content_source(&mut self, content_source: Option<VolumeContentSource>) {
+        self.content_source = content_source;
     }
 }
 
@@ -680,6 +698,7 @@ impl PartialEq<CreateVolume> for VolumeSpec {
         let mut other = VolumeSpec::from(other);
         other.status = self.status.clone();
         other.sequencer = self.sequencer.clone();
+        other.content_source = self.content_source.clone();
         &other == self
     }
 }
@@ -724,7 +743,28 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.thin,
             src.metadata.persisted.snapshot_as_thin,
             src.affinity_group.into_opt(),
+            src.content_source.into_opt(),
         )
+    }
+}
+
+impl From<VolumeContentSource> for models::VolumeContentSource {
+    fn from(value: VolumeContentSource) -> Self {
+        match value {
+            VolumeContentSource::Snapshot(snap_id, vol_id) => {
+                Self::snapshot(models::SnapshotAsSource::new_all(snap_id, vol_id))
+            }
+        }
+    }
+}
+
+impl From<models::VolumeContentSource> for VolumeContentSource {
+    fn from(value: models::VolumeContentSource) -> Self {
+        match value {
+            models::VolumeContentSource::snapshot(snap_source) => {
+                Self::Snapshot(snap_source.snapshot.into(), snap_source.volume.into())
+            }
+        }
     }
 }
 

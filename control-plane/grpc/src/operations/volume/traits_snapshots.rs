@@ -21,6 +21,7 @@ use stor_port::{
     IntoOption,
 };
 
+use crate::misc::traits::StringValue;
 use std::{collections::HashMap, convert::TryFrom, time::UNIX_EPOCH};
 
 /// Volume snapshot creation information.
@@ -779,3 +780,24 @@ trait TryIntoId {
 }
 
 impl TryIntoId for String {}
+
+impl TryFrom<StringValue> for SnapshotId {
+    type Error = ReplyError;
+
+    fn try_from(value: StringValue) -> Result<Self, Self::Error> {
+        match value.0 {
+            Some(id) => match SnapshotId::try_from(id) {
+                Ok(snapshot_id) => Ok(snapshot_id),
+                Err(err) => Err(ReplyError::invalid_argument(
+                    ResourceKind::VolumeSnapshot,
+                    "snapshot.definition.spec.snap_id",
+                    err.to_string(),
+                )),
+            },
+            None => Err(ReplyError::missing_argument(
+                ResourceKind::VolumeSnapshot,
+                "snapshot.definition.spec.snap_id",
+            )),
+        }
+    }
+}

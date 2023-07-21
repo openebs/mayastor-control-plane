@@ -675,7 +675,7 @@ impl ResourceLifecycleExt<CreateVolume> for OperationGuardArc<VolumeSpec> {
     ) -> Result<Self::CreateOutput, SvcError> {
         let specs = registry.specs();
         let mut volume = specs
-            .get_or_create_volume(request)
+            .get_or_create_volume(&CreateVolumeSource::None(request))
             .operation_guard_wait()
             .await?;
         let volume_clone = volume.start_create(registry, request).await?;
@@ -772,7 +772,7 @@ impl ResourceLifecycleExt<CreateVolumeSource<'_>> for OperationGuardArc<VolumeSp
 
         let specs = registry.specs();
         let mut volume = specs
-            .get_or_create_volume(request)
+            .get_or_create_volume(request_src)
             .operation_guard_wait()
             .await?;
         let volume_clone = volume.start_create_update(registry, request).await?;
@@ -799,7 +799,7 @@ impl ResourceLifecycleExt<CreateVolumeSource<'_>> for OperationGuardArc<VolumeSp
 }
 
 /// A volume can be created with different sources for its replicas.
-pub(super) enum CreateVolumeSource<'a> {
+pub(crate) enum CreateVolumeSource<'a> {
     /// Carve out new replicas from a pool matching the requested topology.
     None(&'a CreateVolume),
     /// Clone replica from an existing volume snapshot.
@@ -807,7 +807,8 @@ pub(super) enum CreateVolumeSource<'a> {
 }
 
 impl CreateVolumeSource<'_> {
-    fn source(&self) -> &CreateVolume {
+    /// Get the source create volume request.
+    pub(crate) fn source(&self) -> &CreateVolume {
         match self {
             Self::None(param) => param,
             Self::Snapshot(param) => param.0.params(),
