@@ -764,11 +764,8 @@ impl ResourceLifecycleExt<CreateVolumeSource<'_>> for OperationGuardArc<VolumeSp
         registry: &Registry,
         request_src: &CreateVolumeSource,
     ) -> Result<Self::CreateOutput, SvcError> {
+        request_src.pre_flight_check()?;
         let request = request_src.source();
-        match request_src {
-            CreateVolumeSource::None(params) => params.pre_flight_check()?,
-            CreateVolumeSource::Snapshot(params) => params.pre_flight_check()?,
-        }
 
         let specs = registry.specs();
         let mut volume = specs
@@ -823,7 +820,6 @@ pub(super) struct Context<'a> {
 }
 
 /// Trait that abstracts away the pre-flight validation checks when creating a volume.
-#[async_trait::async_trait]
 pub(super) trait CreateVolumeExeVal: Sync + Send {
     fn pre_flight_check(&self) -> Result<(), SvcError>;
 }
@@ -861,7 +857,6 @@ pub(super) trait CreateVolumeExe: CreateVolumeExeVal {
     async fn undo<'a>(&'a self, context: &mut Context<'a>, replicas: Vec<Replica>);
 }
 
-#[async_trait::async_trait]
 impl CreateVolumeExeVal for CreateVolume {
     fn pre_flight_check(&self) -> Result<(), SvcError> {
         snafu::ensure!(
@@ -941,6 +936,15 @@ impl CreateVolumeExe for CreateVolume {
                     error.full_string()
                 ));
             }
+        }
+    }
+}
+
+impl CreateVolumeExeVal for CreateVolumeSource<'_> {
+    fn pre_flight_check(&self) -> Result<(), SvcError> {
+        match self {
+            CreateVolumeSource::None(params) => params.pre_flight_check(),
+            CreateVolumeSource::Snapshot(params) => params.pre_flight_check(),
         }
     }
 }

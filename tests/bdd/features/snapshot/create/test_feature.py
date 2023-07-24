@@ -310,6 +310,13 @@ def the_snapshot_creation_should_be_fail_with_preconditions_failed():
     assert pytest.exception.status == 412
 
 
+@then("the snapshot creation should be fail with invalid arguments")
+def the_snapshot_creation_should_be_fail_with_preconditions_failed():
+    """the snapshot creation should be fail with invalid arguments."""
+    assert pytest.exception is not None
+    assert pytest.exception.status == 400
+
+
 @then("the snapshot creation should be successful")
 def the_snapshot_creation_should_be_successful(snapshot):
     """the snapshot creation should be successful."""

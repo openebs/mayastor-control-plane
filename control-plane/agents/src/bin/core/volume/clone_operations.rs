@@ -56,7 +56,6 @@ impl ResourceCloning for OperationGuardArc<VolumeSnapshot> {
     }
 }
 
-#[async_trait::async_trait]
 impl CreateVolumeExeVal for SnapshotCloneOp<'_> {
     fn pre_flight_check(&self) -> Result<(), SvcError> {
         let new_volume = self.0.params();

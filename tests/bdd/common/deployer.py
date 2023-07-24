@@ -142,3 +142,26 @@ class Deployer(object):
             return
         deployer_path = os.environ["ROOT_DIR"] + "/target/debug/deployer"
         subprocess.run([deployer_path, "stop"])
+
+    @staticmethod
+    def node_name(id: int):
+        assert id >= 0
+        return f"io-engine-{id + 1}"
+
+    @staticmethod
+    def create_disks(len=1, size=100 * 1024 * 1024):
+        disks = list(map(lambda x: f"/tmp/disk_{x}.img", range(1, len + 1)))
+        for disk in disks:
+            if os.path.exists(disk):
+                os.remove(disk)
+            with open(disk, "w") as file:
+                file.truncate(size)
+        # /tmp is mapped into /host/tmp within the io-engine containers
+        return list(map(lambda file: f"/host{file}", disks))
+
+    @staticmethod
+    def delete_disks(len=1):
+        disks = list(map(lambda x: f"/tmp/disk_{x}.img", range(1, len + 1)))
+        for disk in disks:
+            if os.path.exists(disk):
+                os.remove(disk)
