@@ -1,3 +1,7 @@
+use crate::filesystem::FileSystem;
+use stor_port::types::v0::openapi::models::VolumeShareProtocol;
+use utils::K8S_STS_PVC_NAMING_REGEX;
+
 use regex::Regex;
 use std::{
     collections::HashMap,
@@ -5,39 +9,9 @@ use std::{
     num::ParseIntError,
     str::{FromStr, ParseBoolError},
 };
-use stor_port::types::v0::openapi::models::VolumeShareProtocol;
 use strum_macros::{AsRefStr, Display, EnumString};
 use tracing::log::warn;
-use utils::K8S_STS_PVC_NAMING_REGEX;
-
-/// A type to enumerate used filesystems.
-#[derive(EnumString, Clone, Debug, Eq, PartialEq)]
-#[strum(serialize_all = "lowercase")]
-pub enum FileSystem {
-    Ext4,
-    Xfs,
-    DevTmpFs,
-    Unsupported(String),
-}
-
-// Implement as ref for the FileSystem.
-impl AsRef<str> for FileSystem {
-    fn as_ref(&self) -> &str {
-        match self {
-            FileSystem::Ext4 => "ext4",
-            FileSystem::Xfs => "xfs",
-            FileSystem::DevTmpFs => "devtmpfs",
-            FileSystem::Unsupported(inner) => inner,
-        }
-    }
-}
-
-// Implement Display for the filesystem
-impl std::fmt::Display for FileSystem {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_ref())
-    }
-}
+use uuid::{Error as UuidError, Uuid};
 
 /// Parse string protocol into REST API protocol enum.
 pub fn parse_protocol(proto: Option<&String>) -> Result<VolumeShareProtocol, tonic::Status> {
@@ -70,6 +44,10 @@ pub enum Parameters {
     PvcNamespace,
     #[strum(serialize = "stsAffinityGroup")]
     StsAffinityGroup,
+    #[strum(serialize = "cloneFsIdAsVolumeId")]
+    CloneFsIdAsVolumeId,
+    #[strum(serialize = "fsId")]
+    FsId,
 }
 impl Parameters {
     fn parse_u32(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
@@ -81,6 +59,12 @@ impl Parameters {
     fn parse_bool(value: Option<&String>) -> Result<Option<bool>, ParseBoolError> {
         Ok(match value {
             Some(value) => value.parse::<bool>().map(Some)?,
+            None => None,
+        })
+    }
+    fn parse_uuid(value: Option<&String>) -> Result<Option<Uuid>, UuidError> {
+        Ok(match value {
+            Some(value) => value.parse::<Uuid>().map(Some)?,
             None => None,
         })
     }
@@ -104,15 +88,27 @@ impl Parameters {
     pub fn sts_affinity_group(value: Option<&String>) -> Result<Option<bool>, ParseBoolError> {
         Self::parse_bool(value)
     }
+    /// Parse the value for `Self::CloneFsAsIdVolumeId`
+    pub fn clone_fs_id_as_volume_id(
+        value: Option<&String>,
+    ) -> Result<Option<bool>, ParseBoolError> {
+        Self::parse_bool(value)
+    }
+    /// Parse the value for `Self::FsId`
+    pub fn fs_id(value: Option<&String>) -> Result<Option<Uuid>, UuidError> {
+        Self::parse_uuid(value)
+    }
 }
 
 /// Volume publish parameters.
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct PublishParams {
     io_timeout: Option<u32>,
     ctrl_loss_tmo: Option<u32>,
     keep_alive_tmo: Option<u32>,
     fs_type: Option<FileSystem>,
+    fs_id: Option<Uuid>,
 }
 impl PublishParams {
     /// Get the `Parameters::IoTimeout` value.
@@ -126,6 +122,10 @@ impl PublishParams {
     /// Get the `Parameters::NvmeKeepAliveTmo` value.
     pub fn keep_alive_tmo(&self) -> &Option<u32> {
         &self.keep_alive_tmo
+    }
+    /// Get the `Parameters::FsId` value.
+    pub fn fs_id(&self) -> &Option<Uuid> {
+        &self.fs_id
     }
     /// Convert `Self` into a publish context.
     pub fn into_context(self) -> HashMap<String, String> {
@@ -145,6 +145,9 @@ impl PublishParams {
                 Parameters::NvmeKeepAliveTmo.to_string(),
                 keep_alive_tmo.to_string(),
             );
+        }
+        if let Some(fs_id) = self.fs_id() {
+            publish_context.insert(Parameters::FsId.to_string(), fs_id.to_string());
         }
 
         publish_context
@@ -169,12 +172,15 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
         let keep_alive_tmo =
             Parameters::keep_alive_tmo(args.get(Parameters::NvmeKeepAliveTmo.as_ref()))
                 .map_err(|_| tonic::Status::invalid_argument("Invalid keep_alive_tmo"))?;
+        let fs_id = Parameters::fs_id(args.get(Parameters::FsId.as_ref()))
+            .map_err(|_| tonic::Status::invalid_argument("Invalid fs_id"))?;
 
         Ok(Self {
             io_timeout,
             ctrl_loss_tmo,
             keep_alive_tmo,
             fs_type,
+            fs_id,
         })
     }
 }
@@ -186,6 +192,7 @@ pub struct CreateParams {
     share_protocol: VolumeShareProtocol,
     replica_count: u8,
     sts_affinity_group: Option<String>,
+    clone_fs_id_as_volume_id: Option<bool>,
 }
 impl CreateParams {
     /// Get the `Parameters::ShareProtocol` value.
@@ -200,6 +207,10 @@ impl CreateParams {
     /// Parameters::AffinityGroup` values.
     pub fn sts_affinity_group(&self) -> &Option<String> {
         &self.sts_affinity_group
+    }
+    /// Get the `Parameters::CloneFsIdAsVolumeId` value.
+    pub fn clone_fs_id_as_volume_id(&self) -> &Option<bool> {
+        &self.clone_fs_id_as_volume_id
     }
 }
 impl TryFrom<&HashMap<String, String>> for CreateParams {
@@ -243,11 +254,17 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
             None
         };
 
+        let clone_fs_id_as_volume_id = Parameters::clone_fs_id_as_volume_id(
+            args.get(Parameters::CloneFsIdAsVolumeId.as_ref()),
+        )
+        .map_err(|_| tonic::Status::invalid_argument("Invalid clone_fs_id_as_volume_id"))?;
+
         Ok(Self {
             publish_params,
             share_protocol,
             replica_count,
             sts_affinity_group: sts_affinity_group_name,
+            clone_fs_id_as_volume_id,
         })
     }
 }

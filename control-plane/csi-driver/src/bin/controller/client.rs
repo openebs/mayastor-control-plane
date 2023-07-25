@@ -78,6 +78,7 @@ impl From<clients::tower::Error<RestJsonError>> for ApiClientError {
                         StatusCode::INSUFFICIENT_STORAGE => Self::ResourceExhausted(detailed),
                         StatusCode::SERVICE_UNAVAILABLE => Self::Unavailable(detailed),
                         StatusCode::PRECONDITION_FAILED => Self::PreconditionFailed(detailed),
+                        StatusCode::BAD_REQUEST => Self::InvalidArgument(detailed),
                         status => Self::GenericOperation(status, detailed),
                     }
                 }

@@ -1,5 +1,5 @@
-use crate::error::DeviceError;
-use csi_driver::context::FileSystem;
+use crate::{error::DeviceError, filesystem_ops::FileSystem};
+use csi_driver::filesystem::FileSystem as Fs;
 
 use serde_json::Value;
 use std::{collections::HashMap, process::Command, str::FromStr, string::String, vec::Vec};
@@ -193,14 +193,15 @@ pub(crate) fn get_mountpaths(device_path: &str) -> Result<Vec<DeviceMount>, Devi
                     if let Some(fstype) = entry.get(FSTYPE_KEY) {
                         mountpaths.push(DeviceMount::new(
                             mountpath.to_string(),
-                            FileSystem::from_str(fstype)
-                                .unwrap_or(FileSystem::Unsupported(fstype.to_string())),
+                            Fs::from_str(fstype)
+                                .unwrap_or(Fs::Unsupported(fstype.to_string()))
+                                .into(),
                         ))
                     } else {
                         error!("Missing fstype for {}", mountpath);
                         mountpaths.push(DeviceMount::new(
                             mountpath.to_string(),
-                            FileSystem::Unsupported("".to_string()),
+                            Fs::Unsupported("".to_string()).into(),
                         ))
                     }
                 } else {

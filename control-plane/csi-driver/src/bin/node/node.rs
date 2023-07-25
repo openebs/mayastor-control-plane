@@ -1,12 +1,10 @@
 use crate::{
     block_vol::{publish_block_volume, unpublish_block_volume},
     dev::Device,
+    filesystem_ops::FileSystem,
     filesystem_vol::{publish_fs_volume, stage_fs_volume, unpublish_fs_volume, unstage_fs_volume},
 };
-use csi_driver::{
-    context::FileSystem,
-    csi::volume_capability::{access_mode::Mode, AccessType},
-};
+use csi_driver::csi::volume_capability::{access_mode::Mode, AccessType};
 use rpc::{
     csi,
     csi::{
