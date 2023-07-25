@@ -34,3 +34,4 @@ futures = "0.3.26"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 tower = { version = "0.4.13", features = [ "timeout", "util" ] }
+events-api = { path = "../utils/dependencies/events-api" }

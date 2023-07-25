@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 
 use crate::common;
+use events_api::event::EventMessage;
 use stor_port::types::v0::store::SpecStatus;
 
 /// Module for all corresponding client, server, traits for nexus rpc transport.
@@ -136,4 +137,10 @@ impl From<common::SpecStatus> for SpecStatus<()> {
             common::SpecStatus::Deleted => SpecStatus::Deleted,
         }
     }
+}
+
+/// Event trait definition for creating events.
+pub(crate) trait Event {
+    /// Create event message.
+    fn event(&self) -> EventMessage;
 }

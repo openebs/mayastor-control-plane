@@ -9,6 +9,7 @@ mod fio_spdk;
 mod io_engine;
 mod jaeger;
 mod kibana;
+pub mod nats;
 mod rest;
 
 use super::StartOptions;
@@ -420,6 +421,7 @@ impl Drop for TraceFn {
 impl_component! {
     Empty,          0,
     Jaeger,         0,
+    Nats,           0,
     Dns,            1,
     Etcd,           1,
     Elastic,        1,

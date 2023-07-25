@@ -57,6 +57,7 @@ opentelemetry = { version = "0.18.0", features = ["rt-tokio-current-thread"] }
 tracing = "0.1.37"
 nix = { version = "0.26.2", default-features = false }
 prost-types = "0.11.6"
+url = "2.3.1"
 
 grpc = { path = "../grpc" }
 shutdown = { path = "../../utils/shutdown" }
@@ -71,6 +72,7 @@ tokio-udev = { version = "0.8.0" }
 
 [dev-dependencies]
 deployer-cluster = { path = "../../utils/deployer-cluster" }
+events-api = { path = "../../utils/dependencies/events-api" }
 url = "2.3.1"
 once_cell = "1.17.0"
 

@@ -764,6 +764,11 @@ impl ClusterBuilder {
         self.opts = self.opts.with_build_all(enabled);
         self
     }
+    /// Specify whether eventing is enabled or not.
+    pub fn with_eventing(mut self, enabled: bool) -> Self {
+        self.opts = self.opts.with_eventing(enabled);
+        self
+    }
     /// Build into the resulting Cluster using a composer closure, eg:
     /// .compose_build(|c| c.with_logs(false)).
     pub async fn compose_build<F>(mut self, set: F) -> Result<Cluster, Error>

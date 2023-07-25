@@ -1,6 +1,6 @@
 use crate::{
     misc::traits::ValidateRequestTypes,
-    operations::{volume::traits::VolumeOperations, Pagination},
+    operations::{volume::traits::VolumeOperations, Event, Pagination},
     volume::{
         create_snapshot_clone_reply, create_snapshot_reply, create_volume_reply,
         get_snapshots_reply, get_volumes_reply, publish_volume_reply, republish_volume_reply,
@@ -47,9 +47,12 @@ impl VolumeGrpc for VolumeServer {
     ) -> Result<tonic::Response<CreateVolumeReply>, tonic::Status> {
         let req = request.into_inner().validated()?;
         match self.service.create(&req, None).await {
-            Ok(volume) => Ok(Response::new(CreateVolumeReply {
-                reply: Some(create_volume_reply::Reply::Volume(volume.into())),
-            })),
+            Ok(volume) => {
+                let _ = volume.event().generate();
+                Ok(Response::new(CreateVolumeReply {
+                    reply: Some(create_volume_reply::Reply::Volume(volume.into())),
+                }))
+            }
             Err(err) => Ok(Response::new(CreateVolumeReply {
                 reply: Some(create_volume_reply::Reply::Error(err.into())),
             })),
@@ -61,7 +64,10 @@ impl VolumeGrpc for VolumeServer {
     ) -> Result<tonic::Response<DestroyVolumeReply>, tonic::Status> {
         let req = request.into_inner().validated()?;
         match self.service.destroy(&req, None).await {
-            Ok(()) => Ok(Response::new(DestroyVolumeReply { error: None })),
+            Ok(()) => {
+                let _ = req.event().generate();
+                Ok(Response::new(DestroyVolumeReply { error: None }))
+            }
             Err(e) => Ok(Response::new(DestroyVolumeReply {
                 error: Some(e.into()),
             })),

@@ -1,5 +1,5 @@
 use crate::{
-    operations::pool::traits::PoolOperations,
+    operations::{pool::traits::PoolOperations, Event},
     pool,
     pool::{
         create_pool_reply, get_pools_reply,
@@ -37,9 +37,12 @@ impl PoolGrpc for PoolServer {
     ) -> Result<tonic::Response<pool::CreatePoolReply>, tonic::Status> {
         let req: CreatePoolRequest = request.into_inner();
         match self.service.create(&req, None).await {
-            Ok(pool) => Ok(Response::new(CreatePoolReply {
-                reply: Some(create_pool_reply::Reply::Pool(pool.into())),
-            })),
+            Ok(pool) => {
+                let _ = pool.event().generate();
+                Ok(Response::new(CreatePoolReply {
+                    reply: Some(create_pool_reply::Reply::Pool(pool.into())),
+                }))
+            }
             Err(err) => Ok(Response::new(CreatePoolReply {
                 reply: Some(create_pool_reply::Reply::Error(err.into())),
             })),
@@ -52,7 +55,10 @@ impl PoolGrpc for PoolServer {
     ) -> Result<tonic::Response<DestroyPoolReply>, tonic::Status> {
         let req = request.into_inner();
         match self.service.destroy(&req, None).await {
-            Ok(()) => Ok(Response::new(DestroyPoolReply { error: None })),
+            Ok(()) => {
+                let _ = req.event().generate();
+                Ok(Response::new(DestroyPoolReply { error: None }))
+            }
             Err(e) => Ok(Response::new(DestroyPoolReply {
                 error: Some(e.into()),
             })),

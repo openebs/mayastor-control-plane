@@ -18,5 +18,11 @@ pub fn init_tracing(jaeger: Option<&String>) {
         Err(_) => utils::tracing_telemetry::FmtLayer::None,
     };
 
-    utils::tracing_telemetry::init_tracing_ext(env!("CARGO_PKG_NAME"), tags, jaeger, fmt_layer);
+    utils::tracing_telemetry::init_tracing_ext(
+        env!("CARGO_PKG_NAME"),
+        tags,
+        jaeger,
+        fmt_layer,
+        None,
+    );
 }

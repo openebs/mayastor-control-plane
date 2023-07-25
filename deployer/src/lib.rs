@@ -300,6 +300,9 @@ pub struct StartOptions {
     /// This can be used for userspace io against a volume's nvmf target using the spdk ioengine.
     #[clap(long)]
     pub(crate) fio_spdk: bool,
+
+    #[clap(long, default_value = "false")]
+    pub eventing: bool,
 }
 
 /// List of KeyValues
@@ -482,6 +485,11 @@ impl StartOptions {
     #[must_use]
     pub fn with_fio_spdk(mut self, fio_spdk: bool) -> Self {
         self.fio_spdk = fio_spdk;
+        self
+    }
+    /// Specify whether eventing is enabled or not.
+    pub fn with_eventing(mut self, enabled: bool) -> Self {
+        self.eventing = enabled;
         self
     }
 

@@ -4,7 +4,7 @@ use crate::{
     context::Context,
     misc::traits::{StringValue, ValidateRequestTypes},
     nexus,
-    operations::Pagination,
+    operations::{Event, Pagination},
     replica, volume,
     volume::{
         get_volumes_request, CreateVolumeRequest, DestroyShutdownTargetRequest,
@@ -12,6 +12,7 @@ use crate::{
         SetVolumeReplicaRequest, ShareVolumeRequest, UnpublishVolumeRequest, UnshareVolumeRequest,
     },
 };
+use events_api::event::{EventAction, EventCategory, EventMessage, EventMeta, EventSource};
 use stor_port::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind},
     types::v0::{
@@ -1756,5 +1757,77 @@ impl From<VolumeContentSource> for volume::volume_spec::VolumeContentSource {
                 ),
             },
         }
+    }
+}
+
+// Create volume creation event message from volume data.
+impl Event for Volume {
+    fn event(&self) -> EventMessage {
+        let node_id = match self.spec().target() {
+            Some(target) => target.node().to_string(),
+            None => "".to_string(),
+        };
+        let event_meta = EventMeta::new();
+        let event_source = EventSource::new(node_id);
+        EventMessage {
+            category: EventCategory::Volume as i32,
+            action: EventAction::Create as i32,
+            target: self.uuid().to_string(),
+            metadata: Some(EventMeta {
+                source: Some(event_source),
+                ..event_meta
+            }),
+        }
+    }
+}
+
+// Create volume delete event message.
+impl Event for ValidatedDestroyVolumeRequest {
+    fn event(&self) -> EventMessage {
+        let event_meta = EventMeta::new();
+        EventMessage {
+            category: EventCategory::Volume as i32,
+            action: EventAction::Delete as i32,
+            target: self.uuid.to_string(),
+            metadata: Some(event_meta),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        misc::traits::ValidateRequestTypes, operations::Event, volume::DestroyVolumeRequest,
+    };
+    use events_api::event::{EventAction, EventCategory};
+    use stor_port::types::v0::{
+        store::volume::VolumeSpec,
+        transport::{Volume, VolumeId, VolumeState},
+    };
+
+    #[test]
+    fn volume_creation_event() {
+        let vol = Volume::new(
+            VolumeSpec {
+                uuid: VolumeId::new(),
+                target_config: None,
+                ..Default::default()
+            },
+            VolumeState::default(),
+        );
+        let event = vol.event();
+        assert_eq!(event.category(), EventCategory::Volume);
+        assert_eq!(event.action(), EventAction::Create);
+    }
+
+    #[test]
+    fn volume_deletion_event() {
+        let vol = DestroyVolumeRequest {
+            uuid: Some(VolumeId::new().to_string()),
+        };
+        let req = tonic::Request::new(vol);
+        let event = req.into_inner().validated().unwrap().event();
+        assert_eq!(event.category(), EventCategory::Volume);
+        assert_eq!(event.action(), EventAction::Delete);
     }
 }
