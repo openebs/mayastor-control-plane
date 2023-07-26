@@ -1,4 +1,4 @@
-"""Volume Snapshot Clone Creation - Parameter Validation feature tests."""
+"""Create Volume From Snapshot - Parameter Validation feature tests."""
 import http
 import json
 
@@ -22,12 +22,7 @@ from openapi.model.volume_policy import VolumePolicy
 
 VOLUME_UUID = "8d305974-43a3-484b-8e2c-c74afe2f4400"
 SNAPSHOT_UUID = "8d305974-43a3-484b-8e2c-c74afe2f4401"
-CLONE_UUID = "8d305974-43a3-484b-8e2c-c74afe2f4402"
-
-
-@pytest.fixture(scope="module")
-def clone_uuids():
-    return list(map(lambda x: str(uuid.uuid4()), range(10)))
+RESTORE_UUID = "8d305974-43a3-484b-8e2c-c74afe2f4402"
 
 
 @pytest.fixture(scope="module")
@@ -56,9 +51,9 @@ def test_capacity_smaller_than_the_snapshot():
     """Capacity smaller than the snapshot."""
 
 
-@scenario("create_parameters.feature", "Multi-replica clone")
-def test_multireplica_clone():
-    """Multi-replica clone."""
+@scenario("create_parameters.feature", "Multi-replica restore")
+def test_multireplica_restore():
+    """Multi-replica restore."""
 
 
 @scenario("create_parameters.feature", "Thick provisioning")
@@ -134,18 +129,22 @@ def the_requested_capacity_is_smaller_than_the_snapshot(base_request):
 @then("the request should fail with InvalidArguments")
 def the_request_should_fail_with_invalidarguments(request):
     """the request should fail with InvalidArguments."""
-    clone_expect(request, http.HTTPStatus.BAD_REQUEST, "InvalidArgument")
+    restore_expect(request, http.HTTPStatus.BAD_REQUEST, "InvalidArgument")
 
 
 @then("the request should fail with OutOfRange")
 def the_request_should_fail_with_outofrange(request):
     """the request should fail with OutOfRange."""
-    clone_expect(request, http.HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE, "OutOfRange")
+    restore_expect(
+        request, http.HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE, "OutOfRange"
+    )
 
 
-def clone_expect(request, status, kind):
+def restore_expect(request, status, kind):
     with pytest.raises(openapi.exceptions.ApiException) as exception:
-        ApiClient.volumes_api().put_snapshot_volume(SNAPSHOT_UUID, CLONE_UUID, request)
+        ApiClient.volumes_api().put_snapshot_volume(
+            SNAPSHOT_UUID, RESTORE_UUID, request
+        )
     assert exception.value.status == status
     error_body = json.loads(exception.value.body)
     assert error_body["kind"] == kind

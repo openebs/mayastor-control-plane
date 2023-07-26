@@ -1,15 +1,15 @@
-Feature: Volume Snapshot Clone Creation
+Feature: Create Volume From Snapshot
 
   Background:
     Given a deployer cluster
     And a valid snapshot of a single replica volume
 
-  Scenario: Create a new volume as a snapshot clone from a valid snapshot
+  Scenario: Create a new volume as a snapshot restore from a valid snapshot
     When we create a new volume with the snapshot as its source
     Then a new replica will be created for the new volume
     And the replica's capacity will be same as the snapshot
 
-  Scenario: Create multiple new volumes as snapshot clones for a valid snapshot
+  Scenario: Create multiple new volumes as snapshot restores for a valid snapshot
     When we attempt to create 4 new volumes with the snapshot as their source
     Then all requests should succeed
 

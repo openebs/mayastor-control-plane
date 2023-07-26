@@ -144,7 +144,7 @@ pub enum MessageIdVs {
     /// Get volume snapshots.
     GetVolumeSnapshots,
     /// Create volume as snapshot clone.
-    CreateVSnapshotClone,
+    CreateSnapshotVolume,
     /// Generic JSON gRPC message.
     JsonGrpc,
     /// Get block devices.

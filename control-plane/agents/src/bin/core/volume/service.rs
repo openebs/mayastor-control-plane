@@ -18,7 +18,7 @@ use grpc::{
     context::Context,
     operations::{
         volume::traits::{
-            CreateSnapshotCloneInfo, CreateVolumeInfo, CreateVolumeSnapshot,
+            CreateSnapshotVolumeInfo, CreateVolumeInfo, CreateVolumeSnapshot,
             CreateVolumeSnapshotInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo,
             DestroyVolumeSnapshot, DestroyVolumeSnapshotInfo, PublishVolumeInfo,
             RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo, UnpublishVolumeInfo,
@@ -32,7 +32,7 @@ use stor_port::{
     types::v0::{
         store::{snapshots::volume::VolumeSnapshotUserSpec, volume::VolumeSpec},
         transport::{
-            CreateVSnapshotClone, CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter,
+            CreateSnapshotVolume, CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter,
             PublishVolume, RepublishVolume, SetVolumeReplica, ShareVolume, UnpublishVolume,
             UnshareVolume, Volume,
         },
@@ -209,15 +209,15 @@ impl VolumeOperations for Service {
         Ok(snapshots)
     }
 
-    async fn create_snapshot_clone(
+    async fn create_snapshot_volume(
         &self,
-        req: &dyn CreateSnapshotCloneInfo,
+        req: &dyn CreateSnapshotVolumeInfo,
         _ctx: Option<Context>,
     ) -> Result<Volume, ReplyError> {
         let request = req.into();
         let service = self.clone();
         let volume =
-            Context::spawn(async move { service.create_snap_clone(&request).await }).await??;
+            Context::spawn(async move { service.create_snapshot_volume(&request).await }).await??;
         Ok(volume)
     }
 }
@@ -516,11 +516,11 @@ impl Service {
         })
     }
 
-    /// Create a volume clone from a snapshot using the given parameters.
+    /// Create a new volume from a snapshot using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.params().uuid))]
-    pub(super) async fn create_snap_clone(
+    pub(super) async fn create_snapshot_volume(
         &self,
-        request: &CreateVSnapshotClone,
+        request: &CreateSnapshotVolume,
     ) -> Result<Volume, SvcError> {
         let _permit = self.create_volume_permit().await?;
         let snap_uuid = request.snapshot_uuid();

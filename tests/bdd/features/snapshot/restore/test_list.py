@@ -1,4 +1,4 @@
-"""Volume Snapshot Clone Listing feature tests."""
+"""Volume Snapshot Restore Listing feature tests."""
 
 import pytest
 from pytest_bdd import (
@@ -17,7 +17,7 @@ from openapi.model.volume_policy import VolumePolicy
 
 VOLUME_UUID = "8d305974-43a3-484b-8e2c-c74afe2f4400"
 SNAPSHOT_UUID = "8d305974-43a3-484b-8e2c-c74afe2f4401"
-CLONE_UUID = "8d305974-43a3-484b-8e2c-c74afe2f4402"
+RESTORE_UUID = "8d305974-43a3-484b-8e2c-c74afe2f4402"
 
 
 @pytest.fixture(scope="module")
@@ -36,9 +36,9 @@ def deployer_cluster(disks):
     Deployer.stop()
 
 
-@scenario("list.feature", "List a snapshot clone")
-def test_list_a_snapshot_clone():
-    """List a snapshot clone."""
+@scenario("list.feature", "List new volume created from a snapshot")
+def test_list_new_volume_created_from_a_snapshot():
+    """List new volume created from a snapshot."""
 
 
 @given("a deployer cluster")
@@ -66,7 +66,7 @@ def a_valid_snapshot_of_a_single_replica_volume():
 
 @when(
     "we create a new volume with the snapshot as its source",
-    target_fixture="volume_clone",
+    target_fixture="volume_restore",
 )
 def we_create_a_new_volume_with_the_snapshot_as_its_source():
     """we create a new volume with the snapshot as its source."""
@@ -77,16 +77,16 @@ def we_create_a_new_volume_with_the_snapshot_as_its_source():
         thin=True,
     )
     volume = ApiClient.volumes_api().put_snapshot_volume(
-        SNAPSHOT_UUID, CLONE_UUID, body
+        SNAPSHOT_UUID, RESTORE_UUID, body
     )
     yield volume
-    ApiClient.volumes_api().del_volume(CLONE_UUID)
+    ApiClient.volumes_api().del_volume(RESTORE_UUID)
 
 
 @then("the new volume's source should be the snapshot")
-def the_new_volumes_source_should_be_the_snapshot(volume_clone):
+def the_new_volumes_source_should_be_the_snapshot(volume_restore):
     """the new volume's source should be the snapshot."""
-    source = volume_clone.spec.content_source["snapshot"]
+    source = volume_restore.spec.content_source["snapshot"]
     assert source.snapshot == SNAPSHOT_UUID
     assert source.volume == VOLUME_UUID
 
@@ -96,5 +96,5 @@ def we_should_be_able_to_list_the_new_volume():
     """we should be able to list the new volume."""
     volumes = ApiClient.volumes_api().get_volumes()
     assert len(volumes.entries) == 2
-    volume = ApiClient.volumes_api().get_volume(CLONE_UUID)
-    assert volume.spec.uuid == CLONE_UUID
+    volume = ApiClient.volumes_api().get_volume(RESTORE_UUID)
+    assert volume.spec.uuid == RESTORE_UUID

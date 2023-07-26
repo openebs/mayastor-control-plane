@@ -37,7 +37,7 @@ impl ObjectKey for WatchCfgId {
     }
 }
 
-/// Watch configuration with the resource as a key
+/// Watch configuration with the resource as a key.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 struct WatchCfg {
@@ -51,24 +51,24 @@ impl StorableObject for WatchCfg {
     }
 }
 
-/// Configurable Watch parameters
+/// Configurable Watch parameters.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct WatchParams {
-    /// Watch callback (eg url)
+    /// Watch callback (eg url).
     callback: WatchCallback,
-    /// Type of event to watch
+    /// Type of event to watch.
     #[serde(rename = "type")]
     type_: WatchType,
 }
 
-/// Watch parameters with handle to the watch worker thread
+/// Watch parameters with handle to the watch worker thread.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 struct WatchParamsCfg {
-    /// inner configurable watch parameters
+    /// Inner configurable watch parameters.
     params: WatchParams,
-    /// handle to the watch (logic on the drop)
+    /// Handle to the watch (logic on the drop).
     #[serde(skip)]
     #[allow(dead_code)]
     handle: Option<WatchHandle>,
@@ -110,13 +110,13 @@ impl From<&DeleteWatch> for WatchCfgId {
     }
 }
 
-/// In memory record of existing watches
-/// Gets populated on startup by reading from the store
+/// In memory record of existing watches.
+/// Gets populated on startup by reading from the store.
 #[derive(Debug, Clone)]
 pub(crate) struct StoreWatch {
-    /// clone of the core registry
+    /// Clone of the core registry.
     pub(crate) registry: Registry,
-    /// record of all watches
+    /// Record of all watches.
     watches: Vec<Arc<Mutex<WatchCfg>>>,
 }
 
@@ -130,7 +130,7 @@ impl StoreWatch {
 }
 
 impl WatchCfg {
-    /// Create a new Watch configuration for the given `watch_id`
+    /// Create a new Watch configuration for the given `watch_id`.
     fn new(watch_id: &WatchCfgId) -> Self {
         WatchCfg {
             watch_id: watch_id.clone(),
@@ -138,7 +138,7 @@ impl WatchCfg {
         }
     }
 
-    /// Add a new watch element to this watch
+    /// Add a new watch element to this watch.
     async fn add(
         &mut self,
         watch: &WatchParams,
@@ -170,7 +170,7 @@ impl WatchCfg {
         Ok(())
     }
 
-    /// Map a watch resource to a resource kind
+    /// Map a watch resource to a resource kind.
     fn resource_to_kind(resource: &WatchResourceId) -> ResourceKind {
         match &resource {
             WatchResourceId::Node(_) => ResourceKind::Node,
@@ -183,7 +183,7 @@ impl WatchCfg {
         }
     }
 
-    /// Delete a watch using its parameters
+    /// Delete a watch using its parameters.
     fn del(&mut self, watch: &WatchParams) -> Result<(), SvcError> {
         if !self.watches.iter().any(|item| &item.params == watch) {
             Err(SvcError::WatchNotFound {})
@@ -193,7 +193,7 @@ impl WatchCfg {
         }
     }
 
-    /// Register a callback for the element using the store's watch feature
+    /// Register a callback for the element using the store's watch feature.
     async fn watch(
         &self,
         watch: &WatchParams,
@@ -274,7 +274,7 @@ impl WatchCfg {
         }
     }
 
-    /// Notify the watch using its callback
+    /// Notify the watch using its callback.
     async fn notify(cancel: &mut tokio::sync::broadcast::Receiver<()>, callback: &WatchCallback) {
         let mut tries = 0;
         let mut log_failure = true;
@@ -353,7 +353,7 @@ impl WatchCfg {
 
     /// The current store implementation (etcd) does not persist the watch if
     /// the connection is lost which means we need to reissue the watch.
-    /// todo: this should probably be addressed in the store itself
+    /// todo: this should probably be addressed in the store itself.
     async fn reconnect_watch(
         cancel: &mut tokio::sync::broadcast::Receiver<()>,
         id: &WatchResourceId,
@@ -391,7 +391,7 @@ async fn backoff(tries: &mut u32, max: Duration) {
 }
 
 impl StoreWatch {
-    /// Get all the watches for `watch_id`
+    /// Get all the watches for `watch_id`.
     pub(crate) async fn get_watches(&self, watch_id: &WatchCfgId) -> Result<Watches, SvcError> {
         let watches = match self.get_watch_cfg(watch_id).await {
             Some(db) => {
@@ -411,7 +411,7 @@ impl StoreWatch {
         Ok(Watches(watches))
     }
 
-    /// Get the watch configuration for `watch_id`
+    /// Get the watch configuration for `watch_id`.
     async fn get_watch_cfg(&self, watch_id: &WatchCfgId) -> Option<Arc<Mutex<WatchCfg>>> {
         for db in &self.watches {
             let found = {
@@ -425,7 +425,7 @@ impl StoreWatch {
         None
     }
 
-    /// Gets or creates the watch config for `watch_id` if it does not exist
+    /// Gets or creates the watch config for `watch_id` if it does not exist.
     async fn get_or_create_watch_cfg(&mut self, watch_id: &WatchCfgId) -> Arc<Mutex<WatchCfg>> {
         match self.get_watch_cfg(watch_id).await {
             Some(watch) => watch,
@@ -437,7 +437,7 @@ impl StoreWatch {
         }
     }
 
-    /// Create a new watch with given parameters
+    /// Create a new watch with given parameters.
     pub(crate) async fn create_watch(
         &mut self,
         watch_id: &WatchCfgId,
@@ -455,7 +455,7 @@ impl StoreWatch {
         Ok(())
     }
 
-    /// Delete existing watch with the given parameters
+    /// Delete existing watch with the given parameters.
     pub(crate) async fn delete_watch(
         &mut self,
         watch_id: &WatchCfgId,

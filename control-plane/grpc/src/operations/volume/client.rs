@@ -4,17 +4,17 @@ use crate::{
     operations::{
         volume::{
             traits::{
-                CreateVolumeInfo, CreateVolumeSnapshotInfo, DestroyShutdownTargetsInfo,
-                DestroyVolumeInfo, PublishVolumeInfo, RepublishVolumeInfo, SetVolumeReplicaInfo,
-                ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
-                VolumeSnapshot, VolumeSnapshots,
+                CreateSnapshotVolumeInfo, CreateVolumeInfo, CreateVolumeSnapshotInfo,
+                DestroyShutdownTargetsInfo, DestroyVolumeInfo, PublishVolumeInfo,
+                RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo, UnpublishVolumeInfo,
+                UnshareVolumeInfo, VolumeOperations, VolumeSnapshot, VolumeSnapshots,
             },
             traits_snapshots::DestroyVolumeSnapshotInfo,
         },
         Pagination,
     },
     volume::{
-        create_snapshot_clone_reply, create_snapshot_reply, create_volume_reply,
+        create_snapshot_reply, create_snapshot_volume_reply, create_volume_reply,
         get_snapshots_reply, get_snapshots_request, get_volumes_reply, get_volumes_request,
         publish_volume_reply, republish_volume_reply, set_volume_replica_reply, share_volume_reply,
         unpublish_volume_reply, volume_grpc_client::VolumeGrpcClient, GetSnapshotsRequest,
@@ -27,7 +27,6 @@ use stor_port::{
     types::v0::transport::{Filter, MessageIdVs, Volume},
 };
 
-use crate::operations::volume::traits::CreateSnapshotCloneInfo;
 use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;
 
@@ -328,22 +327,28 @@ impl VolumeOperations for VolumeClient {
     }
 
     #[tracing::instrument(
-        name = "VolumeClient::create_snapshot_clone",
+        name = "VolumeClient::create_snapshot_volume",
         level = "debug",
         skip(self),
         err
     )]
-    async fn create_snapshot_clone(
+    async fn create_snapshot_volume(
         &self,
-        request: &dyn CreateSnapshotCloneInfo,
+        request: &dyn CreateSnapshotVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError> {
-        let req = self.request(request, ctx, MessageIdVs::CreateVSnapshotClone);
-        let response = self.client().create_snapshot_clone(req).await?.into_inner();
+        let req = self.request(request, ctx, MessageIdVs::CreateSnapshotVolume);
+        let response = self
+            .client()
+            .create_snapshot_volume(req)
+            .await?
+            .into_inner();
         match response.reply {
             Some(reply) => match reply {
-                create_snapshot_clone_reply::Reply::Volume(volume) => Ok(Volume::try_from(volume)?),
-                create_snapshot_clone_reply::Reply::Error(err) => Err(err.into()),
+                create_snapshot_volume_reply::Reply::Volume(volume) => {
+                    Ok(Volume::try_from(volume)?)
+                }
+                create_snapshot_volume_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Volume)),
         }

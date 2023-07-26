@@ -30,11 +30,11 @@ use stor_port::{
     IntoOption, TryIntoOption,
 };
 
-use crate::volume::CreateSnapshotCloneRequest;
+use crate::volume::CreateSnapshotVolumeRequest;
 use std::{borrow::Borrow, collections::HashMap, convert::TryFrom};
 use stor_port::types::v0::{
     store::volume::{VolumeContentSource, VolumeMetadata},
-    transport::{CreateVSnapshotClone, SnapshotId},
+    transport::{CreateSnapshotVolume, SnapshotId},
 };
 
 /// All volume crud operations to be a part of the VolumeOperations trait.
@@ -124,10 +124,10 @@ pub trait VolumeOperations: Send + Sync {
         pagination: Option<Pagination>,
         ctx: Option<Context>,
     ) -> Result<VolumeSnapshots, ReplyError>;
-    /// Create a volume clone from a volume snapshot.
-    async fn create_snapshot_clone(
+    /// Create a new volume from a volume snapshot source.
+    async fn create_snapshot_volume(
         &self,
-        req: &dyn CreateSnapshotCloneInfo,
+        req: &dyn CreateSnapshotVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError>;
 }
@@ -755,15 +755,15 @@ impl TryFrom<get_volumes_request::Filter> for Filter {
     }
 }
 
-/// Trait to be implemented for CreateVolume operation.
-pub trait CreateSnapshotCloneInfo: Send + Sync + std::fmt::Debug {
-    /// Get the clone source snapshot uuid.
+/// Trait to be implemented for CreateVolume from Snapshot operation.
+pub trait CreateSnapshotVolumeInfo: Send + Sync + std::fmt::Debug {
+    /// Get the restore source snapshot uuid.
     fn source_snapshot(&self) -> &SnapshotId;
     /// Get the generic volume create parameters.
     fn volume(&self) -> &dyn CreateVolumeInfo;
 }
 
-impl CreateSnapshotCloneInfo for CreateVSnapshotClone {
+impl CreateSnapshotVolumeInfo for CreateSnapshotVolume {
     fn source_snapshot(&self) -> &SnapshotId {
         self.snapshot_uuid()
     }
@@ -773,7 +773,7 @@ impl CreateSnapshotCloneInfo for CreateVSnapshotClone {
     }
 }
 
-impl CreateSnapshotCloneInfo for ValidatedCreateSnapshotCloneRequest {
+impl CreateSnapshotVolumeInfo for ValidatedCreateSnapshotVolumeRequest {
     fn source_snapshot(&self) -> &SnapshotId {
         &self.snapshot_id
     }
@@ -781,8 +781,8 @@ impl CreateSnapshotCloneInfo for ValidatedCreateSnapshotCloneRequest {
         &self.inner
     }
 }
-impl ValidateRequestTypes for CreateSnapshotCloneRequest {
-    type Validated = ValidatedCreateSnapshotCloneRequest;
+impl ValidateRequestTypes for CreateSnapshotVolumeRequest {
+    type Validated = ValidatedCreateSnapshotVolumeRequest;
     fn validated(self) -> Result<Self::Validated, ReplyError> {
         let Some(volume) = self.volume else {
             return Err(ReplyError::missing_argument(
@@ -791,7 +791,7 @@ impl ValidateRequestTypes for CreateSnapshotCloneRequest {
             ))
         };
 
-        Ok(ValidatedCreateSnapshotCloneRequest {
+        Ok(ValidatedCreateSnapshotVolumeRequest {
             snapshot_id: match &self.source_snapshot {
                 Some(id) => SnapshotId::try_from(id.as_str()).map_err(|e| {
                     ReplyError::invalid_argument(ResourceKind::VolumeSnapshot, "source_snapshot", e)
@@ -808,7 +808,7 @@ impl ValidateRequestTypes for CreateSnapshotCloneRequest {
 
 /// Intermediate structure that validates the conversion to CreateVolumeRequest type.
 #[derive(Debug)]
-pub struct ValidatedCreateSnapshotCloneRequest {
+pub struct ValidatedCreateSnapshotVolumeRequest {
     snapshot_id: SnapshotId,
     inner: ValidatedCreateVolumeRequest,
 }
@@ -970,14 +970,14 @@ impl From<&dyn CreateVolumeInfo> for CreateVolumeRequest {
     }
 }
 
-impl From<&dyn CreateSnapshotCloneInfo> for CreateVSnapshotClone {
-    fn from(data: &dyn CreateSnapshotCloneInfo) -> Self {
+impl From<&dyn CreateSnapshotVolumeInfo> for CreateSnapshotVolume {
+    fn from(data: &dyn CreateSnapshotVolumeInfo) -> Self {
         Self::new(data.source_snapshot().clone(), data.volume().into())
     }
 }
 
-impl From<&dyn CreateSnapshotCloneInfo> for CreateSnapshotCloneRequest {
-    fn from(data: &dyn CreateSnapshotCloneInfo) -> Self {
+impl From<&dyn CreateSnapshotVolumeInfo> for CreateSnapshotVolumeRequest {
+    fn from(data: &dyn CreateSnapshotVolumeInfo) -> Self {
         Self {
             source_snapshot: Some(data.source_snapshot().to_string()),
             volume: Some(data.volume().into()),

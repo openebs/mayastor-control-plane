@@ -29,7 +29,7 @@ use stor_port::{
     transport_api::ReplyError,
     types::v0::{
         openapi::models::RestJsonError,
-        transport::{AffinityGroup, CreateVSnapshotClone, HostNqn, HostNqnParseError, SnapshotId},
+        transport::{AffinityGroup, CreateSnapshotVolume, HostNqn, HostNqnParseError, SnapshotId},
     },
 };
 
@@ -238,8 +238,8 @@ impl CreateVolumeBody {
         &self,
         snapshot_id: SnapshotId,
         volume_id: VolumeId,
-    ) -> CreateVSnapshotClone {
-        CreateVSnapshotClone::new(snapshot_id, self.to_create_volume(volume_id))
+    ) -> CreateSnapshotVolume {
+        CreateSnapshotVolume::new(snapshot_id, self.to_create_volume(volume_id))
     }
 }
 
