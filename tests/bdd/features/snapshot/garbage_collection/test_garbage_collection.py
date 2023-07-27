@@ -1,6 +1,5 @@
 """Volume Snapshot garbage collection feature tests."""
 import os
-import time
 
 import pytest
 from pytest_bdd import given, scenario, then, when, parsers

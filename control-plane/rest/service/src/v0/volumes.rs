@@ -148,7 +148,7 @@ impl apis::actix_server::Volumes for RestApi {
     ) -> Result<models::Volume, RestError<RestJsonError>> {
         let create = CreateVolumeBody::from(create_volume_body)
             .to_create_snapshot_volume(snapshot_id.into(), volume_id.into());
-        let volume = client().create_snapshot_clone(&create, None).await?;
+        let volume = client().create_snapshot_volume(&create, None).await?;
         Ok(volume.into())
     }
 

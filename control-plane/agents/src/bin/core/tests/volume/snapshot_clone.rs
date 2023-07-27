@@ -3,7 +3,7 @@ use grpc::operations::volume::traits::{CreateVolumeSnapshot, VolumeOperations};
 use std::time::Duration;
 use stor_port::{
     transport_api::ReplyErrorKind,
-    types::v0::transport::{CreateVSnapshotClone, CreateVolume, Filter, SnapshotId},
+    types::v0::transport::{CreateSnapshotVolume, CreateVolume, Filter, SnapshotId},
 };
 
 #[tokio::test]
@@ -49,8 +49,8 @@ async fn snapshot_clone() {
     tracing::info!("Replica Snapshot: {replica_snapshot:?}");
 
     let error = vol_cli
-        .create_snapshot_clone(
-            &CreateVSnapshotClone::new(
+        .create_snapshot_volume(
+            &CreateSnapshotVolume::new(
                 replica_snapshot.spec().snap_id().clone(),
                 CreateVolume {
                     uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b8".try_into().unwrap(),
@@ -67,8 +67,8 @@ async fn snapshot_clone() {
     assert_eq!(error.kind, ReplyErrorKind::InvalidArgument);
 
     let clone_1 = vol_cli
-        .create_snapshot_clone(
-            &CreateVSnapshotClone::new(
+        .create_snapshot_volume(
+            &CreateSnapshotVolume::new(
                 replica_snapshot.spec().snap_id().clone(),
                 CreateVolume {
                     uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b8".try_into().unwrap(),
@@ -83,8 +83,8 @@ async fn snapshot_clone() {
         .await
         .unwrap();
     let clone_2 = vol_cli
-        .create_snapshot_clone(
-            &CreateVSnapshotClone::new(
+        .create_snapshot_volume(
+            &CreateSnapshotVolume::new(
                 replica_snapshot.spec().snap_id().clone(),
                 CreateVolume {
                     uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b9".try_into().unwrap(),
@@ -106,8 +106,8 @@ async fn snapshot_clone() {
     assert_eq!(volumes.entries.len(), 1);
 
     vol_cli
-        .create_snapshot_clone(
-            &CreateVSnapshotClone::new(
+        .create_snapshot_volume(
+            &CreateSnapshotVolume::new(
                 replica_snapshot.spec().snap_id().clone(),
                 CreateVolume {
                     uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b9".try_into().unwrap(),

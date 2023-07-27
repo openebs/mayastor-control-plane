@@ -32,7 +32,7 @@ Feature: Volume Snapshot Creation
   Scenario: Snapshot creation for multi-replica volume is not supported
     Given we have a multi-replica volume
     When we try to create a snapshot for the volume
-    Then the snapshot creation should be fail with preconditions failed
+    Then the snapshot creation should be fail with invalid arguments
 
   Scenario Outline: Existence of snapshot after node restart
     Given we have a single replica volume

@@ -43,7 +43,7 @@ impl_message!(CreateReplicaSnapshot);
 impl_message!(DestroyReplicaSnapshot);
 impl_message!(ListReplicaSnapshots);
 impl_message!(IoEngCreateSnapshotClone);
-impl_message!(CreateVSnapshotClone);
+impl_message!(CreateSnapshotVolume);
 impl_message!(ListSnapshotClones);
 
 impl_vector_request!(Nexuses, Nexus);

@@ -515,13 +515,13 @@ message ReplicaSnapshot {
   string                             source_id = 5;
 }
 
-message CreateSnapshotCloneRequest {
+message CreateSnapshotVolumeRequest {
   // The snapshot to clone.
   optional string       source_snapshot = 1;
   // The generic create volume parameters.
   CreateVolumeRequest            volume = 2;
 }
-message CreateSnapshotCloneReply {
+message CreateSnapshotVolumeReply {
   oneof reply {
     Volume volume = 1;
     common.ReplyError error = 2;
@@ -546,6 +546,6 @@ service VolumeGrpc {
   rpc DestroySnapshot (DestroySnapshotRequest) returns (DestroySnapshotReply) {}
   rpc GetSnapshots (GetSnapshotsRequest) returns (GetSnapshotsReply) {}
 
-  // Clones
-  rpc CreateSnapshotClone (CreateSnapshotCloneRequest) returns (CreateSnapshotCloneReply) {}
+  // Create a new volume by restoring the snapshot into a new volume by cloning the replica snapshots
+  rpc CreateSnapshotVolume (CreateSnapshotVolumeRequest) returns (CreateSnapshotVolumeReply) {}
 }

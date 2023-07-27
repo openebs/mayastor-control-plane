@@ -20,14 +20,14 @@ use stor_port::{
             volume::{VolumeContentSource, VolumeSpec},
         },
         transport::{
-            CreateVSnapshotClone, Replica, SnapshotCloneId, SnapshotCloneParameters,
+            CreateSnapshotVolume, Replica, SnapshotCloneId, SnapshotCloneParameters,
             SnapshotCloneSpecParams,
         },
     },
 };
 
 pub(crate) struct SnapshotCloneOp<'a>(
-    pub(crate) &'a CreateVSnapshotClone,
+    pub(crate) &'a CreateSnapshotVolume,
     pub(crate) &'a mut OperationGuardArc<VolumeSnapshot>,
 );
 
@@ -43,7 +43,7 @@ impl SnapshotCloneOp<'_> {
 
 #[async_trait::async_trait]
 impl ResourceCloning for OperationGuardArc<VolumeSnapshot> {
-    type Create = CreateVSnapshotClone;
+    type Create = CreateSnapshotVolume;
     type CreateOutput = OperationGuardArc<VolumeSpec>;
 
     async fn create_clone(
@@ -56,7 +56,6 @@ impl ResourceCloning for OperationGuardArc<VolumeSnapshot> {
     }
 }
 
-#[async_trait::async_trait]
 impl CreateVolumeExeVal for SnapshotCloneOp<'_> {
     fn pre_flight_check(&self) -> Result<(), SvcError> {
         let new_volume = self.0.params();

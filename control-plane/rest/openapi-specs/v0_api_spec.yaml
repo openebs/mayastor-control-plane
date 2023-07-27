@@ -3517,7 +3517,7 @@ components:
           type: string
           format: date-time
         ready_as_source:
-          description: Indicates if a snapshot is ready to be used as a clone.
+          description: Indicates if a snapshot is ready to be used as a new volume source.
           type: boolean
           default: false
         replica_snapshots:

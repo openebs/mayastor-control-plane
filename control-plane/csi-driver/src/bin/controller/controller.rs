@@ -856,7 +856,6 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
 fn snapshot_to_csi(snapshot: models::VolumeSnapshot) -> Snapshot {
     Snapshot {
-        // TODO: Revisit this once restoreSize is decided properly.
         size_bytes: snapshot.definition.metadata.spec_size as i64,
         snapshot_id: snapshot.definition.spec.uuid.to_string(),
         source_volume_id: snapshot.definition.spec.source_volume.to_string(),

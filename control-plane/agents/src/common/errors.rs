@@ -817,7 +817,7 @@ impl From<SvcError> for ReplyError {
                 extra,
             },
             SvcError::NReplSnapshotNotAllowed {} => ReplyError {
-                kind: ReplyErrorKind::FailedPrecondition,
+                kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::VolumeSnapshot,
                 source,
                 extra,
@@ -883,7 +883,7 @@ impl From<SvcError> for ReplyError {
                 extra,
             },
             SvcError::ClonedSnapshotVolumeSize {} => ReplyError {
-                kind: ReplyErrorKind::InvalidArgument,
+                kind: ReplyErrorKind::OutOfRange,
                 resource: ResourceKind::VolumeSnapshotClone,
                 source,
                 extra,
@@ -895,7 +895,7 @@ impl From<SvcError> for ReplyError {
                 extra,
             },
             SvcError::SnapshotNotCreated {} => ReplyError {
-                kind: ReplyErrorKind::FailedPrecondition,
+                kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::VolumeSnapshot,
                 source,
                 extra,
