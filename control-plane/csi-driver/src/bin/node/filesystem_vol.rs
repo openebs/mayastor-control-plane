@@ -1,19 +1,22 @@
 //! Functions for CSI stage, unstage, publish and unpublish filesystem volumes.
 use crate::{
+    filesystem_ops::FileSystem,
     format::prepare_device,
     mount::{self, subset, ReadOnly},
 };
 use csi_driver::{
-    context::FileSystem,
     csi::{
         volume_capability::MountVolume, NodePublishVolumeRequest, NodeStageVolumeRequest,
         NodeUnpublishVolumeRequest, NodeUnstageVolumeRequest,
     },
+    filesystem::FileSystem as Fs,
+    PublishParams,
 };
 
 use std::{fs, io::ErrorKind, path::PathBuf};
 use tonic::{Code, Status};
 use tracing::{debug, error, info};
+use uuid::Uuid;
 
 macro_rules! failure {
     (Code::$code:ident, $msg:literal) => {{ error!($msg); Status::new(Code::$code, $msg) }};
@@ -26,7 +29,19 @@ pub(crate) async fn stage_fs_volume(
     mnt: &MountVolume,
     filesystems: &[FileSystem],
 ) -> Result<(), Status> {
-    let volume_id = &msg.volume_id;
+    let volume_uuid = Uuid::parse_str(&msg.volume_id).map_err(|error| {
+        failure!(
+            Code::InvalidArgument,
+            "Failed to stage volume {}: not a valid UUID: {}",
+            &msg.volume_id,
+            error
+        )
+    })?;
+
+    // Extract the fs_id from the context, will only be set if requested and its a clone/restore.
+    let params = PublishParams::try_from(&msg.publish_context)?;
+    let fs_id = params.fs_id();
+
     let fs_staging_path = &msg.staging_target_path;
 
     // One final check for fs volumes, ignore for block volumes.
@@ -36,13 +51,13 @@ pub(crate) async fn stage_fs_volume(
                 Code::Internal,
                 format!(
                     "Failed to create mountpoint {} for volume {}: {}",
-                    &fs_staging_path, volume_id, err
+                    &fs_staging_path, volume_uuid, err
                 ),
             ));
         }
     }
 
-    debug!("Staging volume {} to {}", volume_id, fs_staging_path);
+    debug!("Staging volume {} to {}", volume_uuid, fs_staging_path);
 
     let fstype = if mnt.fs_type.is_empty() {
         &filesystems[0]
@@ -56,7 +71,7 @@ pub(crate) async fn stage_fs_volume(
                 return Err(failure!(
                     Code::InvalidArgument,
                     "Failed to stage volume {}: unsupported filesystem type: {}",
-                    volume_id,
+                    volume_uuid,
                     mnt.fs_type
                 ));
             }
@@ -70,15 +85,33 @@ pub(crate) async fn stage_fs_volume(
         );
         info!(
             %existing,
-            "Volume {} is already staged to {}", volume_id, fs_staging_path
+            "Volume {} is already staged to {}", volume_uuid, fs_staging_path
         );
 
-        // todo: validate other flags?
-        if mnt.mount_flags.readonly() != existing.options.readonly() {
-            mount::remount(fs_staging_path, mnt.mount_flags.readonly())?;
-        }
+        // If clone's fs id change was requested and we were not able to change it in first attempt
+        // unmount and continue the stage again.
+        let continue_stage = if fs_id.is_some() {
+            continue_after_unmount_on_fs_id_diff(fstype ,device_path, fs_staging_path, &volume_uuid)
+                .map_err(|error| {
+                    failure!(
+                    Code::FailedPrecondition,
+                    "Failed to stage volume {}: staging path unmount on fs id difference failed: {}",
+                    volume_uuid,
+                    error
+                )
+                })?
+        } else {
+            false
+        };
 
-        return Ok(());
+        if !continue_stage {
+            // todo: validate other flags?
+            if mnt.mount_flags.readonly() != existing.options.readonly() {
+                mount::remount(fs_staging_path, mnt.mount_flags.readonly())?;
+            }
+
+            return Ok(());
+        }
     }
 
     // abort if device is mounted somewhere else
@@ -86,7 +119,7 @@ pub(crate) async fn stage_fs_volume(
         return Err(failure!(
             Code::AlreadyExists,
             "Failed to stage volume {}: device {} is already mounted elsewhere",
-            volume_id,
+            volume_uuid,
             device_path
         ));
     }
@@ -96,16 +129,31 @@ pub(crate) async fn stage_fs_volume(
         return Err(failure!(
             Code::AlreadyExists,
             "Failed to stage volume {}: another device is already mounted onto {}",
-            volume_id,
+            volume_uuid,
             fs_staging_path
         ));
     }
 
-    if let Err(error) = prepare_device(device_path, fstype).await {
+    let mount_flags = fstype
+        .fs_ops()
+        .map_err(|error| {
+            failure!(
+                Code::Internal,
+                "Failed to stage volume {}: could not get mount flags for {}, {}",
+                volume_uuid,
+                fstype,
+                error
+            )
+        })?
+        .mount_flags(mnt.mount_flags.clone());
+
+    if let Err(error) =
+        prepare_device(fstype, device_path, fs_staging_path, &mount_flags, fs_id).await
+    {
         return Err(failure!(
             Code::Internal,
             "Failed to stage volume {}: error preparing device {}: {}",
-            volume_id,
+            volume_uuid,
             device_path,
             error
         ));
@@ -113,20 +161,19 @@ pub(crate) async fn stage_fs_volume(
 
     debug!("Mounting device {} onto {}", device_path, fs_staging_path);
 
-    if let Err(error) =
-        mount::filesystem_mount(device_path, fs_staging_path, fstype, &mnt.mount_flags)
+    if let Err(error) = mount::filesystem_mount(device_path, fs_staging_path, fstype, &mount_flags)
     {
         return Err(failure!(
             Code::Internal,
             "Failed to stage volume {}: failed to mount device {} onto {}: {}",
-            volume_id,
+            volume_uuid,
             device_path,
             fs_staging_path,
             error
         ));
     }
 
-    info!("Volume {} staged to {}", volume_id, fs_staging_path);
+    info!("Volume {} staged to {}", volume_uuid, fs_staging_path);
 
     Ok(())
 }
@@ -376,4 +423,18 @@ pub(crate) fn unpublish_fs_volume(msg: &NodeUnpublishVolumeRequest) -> Result<()
 
     info!("Volume {} unpublished from {}", volume_id, target_path);
     Ok(())
+}
+
+/// Check if we can continue the staging incase the change fs id failed mid way and we want to retry
+/// the flow.
+fn continue_after_unmount_on_fs_id_diff(
+    fstype: &FileSystem,
+    device_path: &str,
+    fs_staging_path: &str,
+    volume_uuid: &Uuid,
+) -> Result<bool, String> {
+    fstype
+        .fs_ops()?
+        .unmount_on_fs_id_diff(device_path, fs_staging_path, volume_uuid)?;
+    Ok(fstype == &Fs::Xfs.into())
 }

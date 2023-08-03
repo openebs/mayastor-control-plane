@@ -91,6 +91,7 @@ impl From<ApiClientError> for Status {
             ApiClientError::Conflict(reason) => Status::aborted(reason),
             ApiClientError::Aborted(reason) => Status::aborted(reason),
             ApiClientError::Unavailable(reason) => Status::unavailable(reason),
+            ApiClientError::InvalidArgument(reason) => Status::invalid_argument(reason),
             // TODO: Revisit the error mapping. Currently handled specifically for snapshot create.
             // ApiClientError::PreconditionFailed(reason) => Status::resource_exhausted(reason),
             // ApiClientError::ResourceExhausted(reason) => Status::resource_exhausted(reason),
@@ -257,6 +258,8 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             None => false,
         };
 
+        let mut volume_context = args.parameters.clone();
+
         // First check if the volume already exists.
         match IoEngineApiClient::get_client()
             .get_volume_for_create(&parsed_vol_uuid)
@@ -281,7 +284,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
                 let sts_affinity_group_name = context.sts_affinity_group();
 
-                match volume_content_source {
+                let volume = match volume_content_source {
                     Some(snapshot_uuid) => {
                         IoEngineApiClient::get_client()
                             .create_snapshot_volume(
@@ -293,7 +296,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                                 thin,
                                 sts_affinity_group_name.clone().map(AffinityGroup::new),
                             )
-                            .await?;
+                            .await?
                     }
                     None => {
                         IoEngineApiClient::get_client()
@@ -305,8 +308,16 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                                 thin,
                                 sts_affinity_group_name.clone().map(AffinityGroup::new),
                             )
-                            .await?;
+                            .await?
                     }
+                };
+
+                // Append the 'fsId' : 'volume id' to the context if change was requested for the
+                // clone.
+                if volume.spec.content_source.is_some()
+                    && context.clone_fs_id_as_volume_id().unwrap_or(false)
+                {
+                    volume_context.insert("fsId".to_string(), volume_uuid.clone());
                 }
 
                 if let Some(ag_name) = sts_affinity_group_name {
@@ -325,7 +336,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let volume = rpc::csi::Volume {
             capacity_bytes: size as i64,
             volume_id: volume_uuid,
-            volume_context: args.parameters.clone(),
+            volume_context,
             content_source: args.volume_content_source,
             accessible_topology: vt_mapper.volume_accessible_topology(),
         };
@@ -387,9 +398,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let _guard = csi_driver::limiter::VolumeOpGuard::new(volume_id)?;
 
         match args.volume_capability {
-            Some(c) => {
-                check_volume_capabilities(&[c])?;
-            }
+            Some(c) => check_volume_capabilities(&[c])?,
             None => {
                 return Err(Status::invalid_argument("Missing volume capability"));
             }

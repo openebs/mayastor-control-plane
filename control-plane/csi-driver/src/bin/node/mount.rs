@@ -1,10 +1,12 @@
 //! Utility functions for mounting and unmounting filesystems.
-use csi_driver::context::FileSystem;
-
+use crate::filesystem_ops::FileSystem;
+use csi_driver::filesystem::FileSystem as Fs;
 use devinfo::mountinfo::{MountInfo, MountIter};
+
 use std::{collections::HashSet, io::Error};
 use sys_mount::{unmount, FilesystemType, Mount, MountFlags, UnmountFlags};
 use tracing::{debug, info};
+use uuid::Uuid;
 
 // Simple trait for checking if the readonly (ro) option
 // is present in a "list" of options, while allowing for
@@ -88,7 +90,7 @@ pub(super) fn subset(first: &[String], second: &[String]) -> bool {
 
 /// Return supported filesystems.
 pub(crate) fn probe_filesystems() -> Vec<FileSystem> {
-    vec![FileSystem::Xfs, FileSystem::Ext4]
+    vec![Fs::Xfs.into(), Fs::Ext4.into()]
 }
 
 // Utility function to transform a vector of options
@@ -350,4 +352,22 @@ async fn wait_file_removal(
             format!("Timed out waiting for '{proc_str}' to be removed"),
         )),
     }
+}
+
+/// If the filesystem uuid doesn't match with the provided uuid, unmount the device.
+pub(crate) fn unmount_on_fs_id_diff(
+    device_path: &str,
+    fs_staging_path: &str,
+    volume_uuid: &Uuid,
+) -> Result<(), String> {
+    if let Ok(probed_uuid) = FileSystem::property(device_path, "UUID") {
+        if probed_uuid == volume_uuid.to_string() {
+            return Ok(());
+        }
+    }
+    filesystem_unmount(fs_staging_path).map_err(|error| {
+        format!(
+            "Failed to unmount on fs id difference, device {device_path} from {fs_staging_path} for {volume_uuid}, {error}",
+        )
+    })
 }

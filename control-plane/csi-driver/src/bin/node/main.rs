@@ -8,6 +8,8 @@ pub(crate) mod config;
 mod dev;
 #[cfg(target_os = "linux")]
 mod error;
+/// Filesystem specific operations.
+pub(crate) mod filesystem_ops;
 #[cfg(target_os = "linux")]
 mod filesystem_vol;
 #[cfg(target_os = "linux")]

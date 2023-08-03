@@ -1,46 +1,32 @@
 //! Utility function for formatting a device with filesystem
-use csi_driver::context::FileSystem;
+use crate::filesystem_ops::FileSystem;
 
-use devinfo::blkid::probe::Probe;
-use std::process::Command;
-use tracing::{debug, trace};
+use tracing::debug;
+use uuid::Uuid;
 
-pub(crate) async fn prepare_device(device: &str, fstype: &FileSystem) -> Result<(), String> {
+/// Prepare the filesystem before mount, change parameters if requested.
+pub(crate) async fn prepare_device(
+    fstype: &FileSystem,
+    device: &str,
+    staging_path: &str,
+    options: &[String],
+    fs_id: &Option<Uuid>,
+) -> Result<(), String> {
     debug!("Probing device {}", device);
+    let fs = FileSystem::property(device, "TYPE");
 
-    let probe =
-        Probe::new_from_filename(device).map_err(|error| format!("probe setup failed: {error}"))?;
+    let fs_ops = fstype.fs_ops()?;
 
-    if let Err(error) = probe.do_probe() {
-        return Err(format!("probe failed: {error}"));
-    }
-
-    if let Ok(fs) = probe.lookup_value("TYPE") {
+    if let Ok(fs) = fs {
         debug!("Found existing filesystem ({}) on device {}", fs, device);
+        if let Some(fs_id) = fs_id {
+            debug!("Attempting to set uuid for filesystem {fs_id}, device: {device}");
+            fs_ops
+                .set_uuid_with_repair(device, staging_path, options, fs_id)
+                .await?;
+        }
         return Ok(());
     }
-
     debug!("Creating new filesystem ({}) on device {}", fstype, device);
-
-    let binary = format!("mkfs.{fstype}");
-    let output = Command::new(&binary)
-        .arg(device)
-        .output()
-        .map_err(|error| format!("failed to execute {binary}: {error}"))?;
-
-    trace!(
-        "Output from {} command: {}",
-        binary,
-        String::from_utf8(output.stdout.clone()).unwrap()
-    );
-
-    if output.status.success() {
-        return Ok(());
-    }
-
-    Err(format!(
-        "{} command failed: {}",
-        binary,
-        String::from_utf8(output.stderr).unwrap()
-    ))
+    fs_ops.create(device).await
 }
