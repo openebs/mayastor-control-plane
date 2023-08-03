@@ -7,11 +7,14 @@ mod diskpool;
 pub(crate) mod error;
 mod mayastorpool;
 
+use crate::diskpool::client::{
+    create_v1beta_cr, discard_older_schema, migrate_to_v1beta1, v1beta1_api,
+};
 use chrono::Utc;
 use clap::{Arg, ArgMatches};
 use diskpool::{
-    client::{api, create, ensure_crd},
-    crd::*,
+    client::ensure_crd,
+    v1beta1::{CrPoolState, DiskPool, DiskPoolSpec, DiskPoolStatus},
 };
 use error::Error;
 use futures::StreamExt;
@@ -101,7 +104,7 @@ impl OperatorContext {
                     if matches!(
                         resource.status,
                         Some(DiskPoolStatus {
-                            state: PoolState::Created,
+                            cr_state: CrPoolState::Created,
                             ..
                         })
                     ) {
@@ -146,8 +149,8 @@ impl OperatorContext {
 
 impl ResourceContext {
     /// Called when putting our finalizer on top of the resource.
-    #[tracing::instrument(fields(name = ?dsp.name_any()))]
-    pub(crate) async fn put_finalizer(dsp: Arc<DiskPool>) -> Result<Action, Error> {
+    #[tracing::instrument(fields(name = ?_dsp.name_any()))]
+    pub(crate) async fn put_finalizer(_dsp: Arc<DiskPool>) -> Result<Action, Error> {
         Ok(Action::await_change())
     }
 
@@ -172,7 +175,7 @@ impl ResourceContext {
 
     /// Construct an API handle for the resource
     fn api(&self) -> Api<DiskPool> {
-        api(&self.ctx.k8s, &self.namespace().unwrap())
+        v1beta1_api(&self.ctx.k8s, &self.namespace().unwrap())
     }
 
     /// Control plane pool handler.
@@ -646,34 +649,50 @@ async fn reconcile(dsp: Arc<DiskPool>, ctx: Arc<OperatorContext>) -> Result<Acti
 
 async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
     let k8s = Client::try_default().await?;
-
+    use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
     let namespace = args.get_one::<String>("namespace").unwrap();
+    let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
+    let mut beta_version = false;
 
-    // Ensure the DiskPool CRD, otherwise exit.
-    match ensure_crd(&k8s).await {
-        Ok(o) => {
-            info!(crd = ?o.name_any(), "Created");
-            // let the CRD settle this purely to avoid errors messages in the console
-            // that are harmless but can cause some confusion maybe.
-            tokio::time::sleep(Duration::from_secs(5)).await;
+    if let Ok(crd) = crd_api.get_status("diskpools.openebs.io").await {
+        if let Some(status) = crd.status {
+            if status.stored_versions == Some(vec!["v1beta1".to_string()]) {
+                beta_version = true;
+            }
         }
+    }
+    // We do not do any CRD modifications if stored_version is v1beta1. This validation
+    // prevents CRD merge and CR replace when DSP pod restarts.
+    if !beta_version {
+        match ensure_crd(&k8s).await {
+            Ok(o) => {
+                info!(crd = ?o.name_any(), "Created");
+                // let the CRD settle this purely to avoid errors messages in the console
+                // that are harmless but can cause some confusion maybe.
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
 
-        Err(error) => {
-            error!(%error, "Failed to create CRD");
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            std::process::exit(1);
+            Err(error) => {
+                error!(%error, "Failed to create CRD");
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                return Err(error.into());
+            }
         }
+        // Replace allv1alpha1 dsp CR with v1beta1 CR.
+        migrate_to_v1beta1(k8s.clone(), namespace, PAGINATION_LIMIT).await?;
+
+        // Discard old schema from CRD.
+        let _ = discard_older_schema(&k8s, "v1beta1").await;
+    } else {
+        info!("CRD has latest schema. Skipping CRD Operations");
     }
 
     // Migrate the MayastorPool CRs to the DiskPool.
-    let _ = migrate_and_clean_msps(&k8s, namespace)
-        .await
-        .map_err(|error| {
-            error!(%error, "Was not able to fully migrate existing v1 CRs");
-        });
+    migrate_and_clean_msps(&k8s, namespace).await?;
 
-    let dsp: Api<DiskPool> = api(&k8s, namespace);
+    let newdsp: Api<DiskPool> = v1beta1_api(&k8s, namespace);
     let lp = ListParams::default();
+
     let url = Url::parse(args.get_one::<String>("endpoint").unwrap())
         .expect("endpoint is not a valid URL");
 
@@ -705,12 +724,9 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
             .as_secs(),
     };
 
-    info!(
-        "Starting DiskPool Operator (dsp) in namespace {}",
-        namespace
-    );
+    info!(namespace, "Starting DiskPool Operator (dsp)");
 
-    Controller::new(dsp, lp)
+    Controller::new(newdsp, lp)
         .run(reconcile, error_policy, Arc::new(context))
         .for_each(|res| async move {
             match res {
@@ -829,9 +845,10 @@ pub(crate) async fn migrate_and_clean_msps(k8s: &Client, namespace: &str) -> Res
                     })?;
                     let node = msp.spec.node();
                     let disks = msp.spec.disks();
-                    // Create the corresponding DiskPool CRs.
+                    // Create the corresponding v1beta1 DiskPool CRs.
                     if let Err(error) =
-                        create(k8s, namespace, &name, DiskPoolSpec::new(node, disks)).await
+                        create_v1beta_cr(k8s, namespace, &name, DiskPoolSpec::new(node, disks))
+                            .await
                     {
                         error!("Migration failed for {name} with: {error:?}");
                     }

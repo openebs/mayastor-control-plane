@@ -4,4 +4,5 @@
 /// DiskPool client operations.
 pub(crate) mod client;
 /// The DiskPool custom resource definition.
-pub mod crd;
+pub(crate) mod v1alpha1;
+pub(crate) mod v1beta1;

@@ -1,5 +1,4 @@
 use kube::CustomResource;
-use openapi::models::{pool_status::PoolStatus as RestPoolStatus, Pool};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -31,21 +30,6 @@ pub struct DiskPoolSpec {
     node: String,
     /// The disk device the pool is located on
     disks: Vec<String>,
-}
-
-impl DiskPoolSpec {
-    /// Create a new DiskPoolSpec from the node and the disks.
-    pub fn new(node: String, disks: Vec<String>) -> Self {
-        Self { node, disks }
-    }
-    /// The node the pool is placed on.
-    pub fn node(&self) -> String {
-        self.node.clone()
-    }
-    /// The disk devices that compose the pool.
-    pub fn disks(&self) -> Vec<String> {
-        self.disks.clone()
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, JsonSchema)]
@@ -113,103 +97,4 @@ pub struct DiskPoolStatus {
     used: u64,
     /// Available number of bytes.
     available: u64,
-}
-
-impl Default for DiskPoolStatus {
-    fn default() -> Self {
-        Self {
-            state: PoolState::Creating,
-            cr_state: CrPoolState::Creating,
-            pool_status: None,
-            capacity: 0,
-            used: 0,
-            available: 0,
-        }
-    }
-}
-
-impl DiskPoolStatus {
-    /// Set when Pool is not found for some reason.
-    pub fn not_found() -> Self {
-        Self {
-            state: PoolState::Created,
-            pool_status: None,
-            ..Default::default()
-        }
-    }
-
-    /// Set when operator is attempting delete on pool.
-    pub fn terminating(p: Pool) -> Self {
-        let state = p.state.unwrap_or_default();
-        let free = if state.capacity > state.used {
-            state.capacity - state.used
-        } else {
-            0
-        };
-        Self {
-            state: PoolState::Online,
-            cr_state: CrPoolState::Terminating,
-            pool_status: Some(state.status.into()),
-            capacity: state.capacity,
-            used: state.used,
-            available: free,
-        }
-    }
-
-    /// Set when deleting a Pool which is not accessible.
-    pub fn terminating_when_unknown() -> Self {
-        Self {
-            state: PoolState::Unknown,
-            cr_state: CrPoolState::Terminating,
-            pool_status: Some(PoolStatus::Unknown),
-            ..Default::default()
-        }
-    }
-
-    pub fn mark_unknown() -> Self {
-        Self {
-            state: PoolState::Unknown,
-            cr_state: CrPoolState::Created,
-            pool_status: Some(PoolStatus::Unknown),
-            ..Default::default()
-        }
-    }
-}
-
-impl From<RestPoolStatus> for PoolStatus {
-    fn from(p: RestPoolStatus) -> Self {
-        match p {
-            RestPoolStatus::Unknown => Self::Unknown,
-            RestPoolStatus::Online => Self::Online,
-            RestPoolStatus::Degraded => Self::Degraded,
-            RestPoolStatus::Faulted => Self::Faulted,
-        }
-    }
-}
-
-/// Returns DiskPoolStatus from Control plane pool object.
-impl From<Pool> for DiskPoolStatus {
-    fn from(p: Pool) -> Self {
-        if let Some(state) = p.state {
-            let free = if state.capacity > state.used {
-                state.capacity - state.used
-            } else {
-                0
-            };
-            Self {
-                state: PoolState::Online,
-                cr_state: CrPoolState::Created,
-                pool_status: Some(state.status.into()),
-                capacity: state.capacity,
-                used: state.used,
-                available: free,
-            }
-        } else {
-            Self {
-                state: PoolState::Online,
-                cr_state: CrPoolState::Created,
-                ..Default::default()
-            }
-        }
-    }
 }
