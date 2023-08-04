@@ -191,15 +191,19 @@ pub(super) async fn main() -> anyhow::Result<()> {
         endpoint.to_string()
     } else {
         format!("{endpoint}:{GRPC_PORT}")
-    };
+    }
+    .parse()?;
 
     *crate::config::config().nvme_as_mut() = TryFrom::try_from(&matches)?;
-
-    let (csi, grpc) = tokio::join!(
-        CsiServer::run(csi_socket, &matches)?,
-        NodePluginGrpcServer::run(sock_addr.parse().expect("Invalid gRPC endpoint")),
-    );
-    vec![csi, grpc].into_iter().collect()
+    tokio::select! {
+        result = CsiServer::run(csi_socket, &matches)? => {
+            result?;
+        }
+        result = NodePluginGrpcServer::run(sock_addr) => {
+            result?;
+        }
+    }
+    Ok(())
 }
 
 struct CsiServer {}
@@ -248,8 +252,9 @@ impl CsiServer {
                 .serve_with_incoming_shutdown(incoming, Shutdown::wait())
                 .await
                 .map_err(|error| {
-                    error!(?error, "CSI server failed");
-                    anyhow::anyhow!("CSI server failed with error: {}", error)
+                    use stor_port::transport_api::ErrorChain;
+                    error!(error = error.full_string(), "CsiServer failed");
+                    error.into()
                 })
         })
     }

@@ -92,12 +92,12 @@ async fn main() -> anyhow::Result<()> {
     let mover = volume::VolumeMover::new(store, cli.fast_requeue, node_list.clone());
     mover.send_switchover_req(entries).await?;
 
-    info!("starting cluster-agent server");
-    server::ClusterAgent::new(cli.grpc_endpoint, node_list, mover)
+    info!("Starting cluster-agent server");
+    let result = server::ClusterAgent::new(cli.grpc_endpoint, node_list, mover)
         .run()
-        .await
-        .map_err(|e| anyhow::anyhow!("Error running server: {e}"))?;
-
+        .await;
     utils::tracing_telemetry::flush_traces();
+    result?;
+
     Ok(())
 }

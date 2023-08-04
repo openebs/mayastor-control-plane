@@ -135,7 +135,7 @@ def start_csi_plugin(setup, io_queues, staging_target_path):
             "sudo",
             os.environ["WORKSPACE_ROOT"] + "/target/debug/csi-node",
             "--csi-socket=/var/tmp/csi-node.sock",
-            "--grpc-endpoint=0.0.0.0",
+            "--grpc-endpoint=0.0.0.0:50050",
             "--node-name=msn-test",
             f"--nvme-nr-io-queues={io_queues}",
             "-v",

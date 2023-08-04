@@ -10,6 +10,7 @@ use grpc::tracing::OpenTelServer;
 use snafu::Snafu;
 use state::Container;
 use std::{net::SocketAddr, sync::Arc};
+use stor_port::transport_api::ErrorChain;
 
 mod common;
 
@@ -94,7 +95,7 @@ impl Service {
     /// Runs this server as a future until a shutdown signal is received.
     pub async fn run(self, socket: SocketAddr) {
         if let Err(error) = self.run_err(socket).await {
-            tracing::error!(error=?error, "Error running service thread");
+            tracing::error!(error = error.full_string(), "Error running service thread");
         }
     }
 
