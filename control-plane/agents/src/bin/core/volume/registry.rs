@@ -67,17 +67,25 @@ impl Registry {
             }
         };
 
-        let mut total_usage = 0;
-        let mut largest_allocated = 0;
+        let mut total_replica = 0;
+        let mut total_snapshots = 0;
+        let mut largest_replica = 0;
+        let mut largest_snapshot = 0;
+
         // Construct the topological information for the volume replicas.
         let mut replica_topology = HashMap::new();
         for replica_spec in &replica_specs {
             let replica = self.replica_topology(replica_spec, &nexus).await;
             if let Some(usage) = replica.usage() {
-                let allocated = usage.allocated() + usage.allocated_snapshots();
-                total_usage += allocated;
-                if allocated > largest_allocated {
-                    largest_allocated = allocated;
+                let allocated = usage.allocated();
+                let allocated_snaps = usage.allocated_snapshots();
+                total_replica += allocated;
+                total_snapshots += allocated_snaps;
+                if allocated > largest_replica {
+                    largest_replica = allocated;
+                }
+                if allocated_snaps > largest_snapshot {
+                    largest_snapshot = allocated_snaps;
                 }
             }
             replica_topology.insert(replica_spec.uuid.clone(), replica);
@@ -85,8 +93,12 @@ impl Registry {
 
         let usage = Some(VolumeUsage::new(
             volume_spec.size,
-            largest_allocated,
-            total_usage,
+            largest_replica + largest_snapshot,
+            largest_replica,
+            largest_snapshot,
+            total_replica + total_snapshots,
+            total_replica,
+            total_snapshots,
         ));
 
         Ok(if let Some((nexus, mut nexus_state)) = nexus {

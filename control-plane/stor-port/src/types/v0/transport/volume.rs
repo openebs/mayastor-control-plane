@@ -76,23 +76,41 @@ pub struct VolumeState {
 pub struct VolumeUsage {
     /// Capacity of the volume in bytes.
     capacity: u64,
-    /// Allocated size in bytes, related to a single healthy replica.
+    /// Allocated size in bytes, related the largest healthy replica, including snapshots.
     /// For example, if a volume has 2 replicas, each with 1MiB allocated space, then
     /// this field will be 1MiB.
     allocated: u64,
-    /// Allocated size in bytes, accrued from all the replica.
-    /// For example, if a volume has 2 replicas, each with 1MiB allocated space, then
-    /// this field will be 2MiB.
+    /// Allocated size in bytes, related the largest healthy replica, excluding snapshots.
+    allocated_replica: u64,
+    /// Allocated size in bytes, related the healthy replica with the highest snapshot usage.
+    allocated_snapshots: u64,
+    /// Allocated size in bytes, accrued from all the replicas, including snapshots.
     total_allocated: u64,
+    /// Allocated size in bytes, accrued from all the replicas, excluding snapshots.
+    total_allocated_replicas: u64,
+    /// Allocated size in bytes, accrued from all the replica's snapshots.
+    total_allocated_snapshots: u64,
 }
 
 impl VolumeUsage {
     /// Return a new `Self` from the given parameters.
-    pub fn new(capacity: u64, allocated: u64, total_allocated: u64) -> Self {
+    pub fn new(
+        capacity: u64,
+        allocated: u64,
+        allocated_replica: u64,
+        allocated_snapshots: u64,
+        total_allocated: u64,
+        total_allocated_replicas: u64,
+        total_allocated_snapshots: u64,
+    ) -> Self {
         Self {
             capacity,
             allocated,
+            allocated_replica,
+            allocated_snapshots,
             total_allocated,
+            total_allocated_replicas,
+            total_allocated_snapshots,
         }
     }
     /// Get the volume capacity.
@@ -103,9 +121,25 @@ impl VolumeUsage {
     pub fn allocated(&self) -> u64 {
         self.allocated
     }
+    /// Allocated size in bytes, related the largest healthy replica, excluding snapshots.
+    pub fn allocated_replica(&self) -> u64 {
+        self.allocated_replica
+    }
+    /// Allocated size in bytes, related the healthy replica with the highest snapshot usage.
+    pub fn allocated_snapshots(&self) -> u64 {
+        self.allocated_snapshots
+    }
     /// Get the volume total allocated bytes across all replicas.
     pub fn total_allocated(&self) -> u64 {
         self.total_allocated
+    }
+    /// Allocated size in bytes, accrued from all the replicas, excluding snapshots.
+    pub fn total_allocated_replicas(&self) -> u64 {
+        self.total_allocated_replicas
+    }
+    /// Allocated size in bytes, accrued from all the replica's snapshots.
+    pub fn total_allocated_snapshots(&self) -> u64 {
+        self.total_allocated_snapshots
     }
 }
 
@@ -127,7 +161,15 @@ impl From<VolumeState> for models::VolumeState {
 }
 impl From<VolumeUsage> for models::VolumeUsage {
     fn from(value: VolumeUsage) -> Self {
-        Self::new(value.capacity, value.allocated, value.total_allocated)
+        Self::new(
+            value.capacity,
+            value.allocated,
+            value.allocated_replica,
+            value.allocated_snapshots,
+            value.total_allocated,
+            value.total_allocated_replicas,
+            value.total_allocated_snapshots,
+        )
     }
 }
 

@@ -167,14 +167,22 @@ message VolumeState {
 message VolumeUsage {
   // Capacity of the volume in bytes.
   uint64 capacity = 1;
-  // Allocated size in bytes, related to a single healthy replica.
+  // Allocated size in bytes, related the largest healthy replica, including snapshots.
   // For example, if a volume has 2 replicas, each with 1MiB allocated space, then
   // this field will be 1MiB.
   uint64 allocated = 2;
-  // Allocated size in bytes, accrued from all the replica.
+  // Allocated size in bytes, accrued from all the replicas, including snapshots.
   // For example, if a volume has 2 replicas, each with 1MiB allocated space, then
   // this field will be 2MiB.
   uint64 total_allocated = 3;
+  // Allocated size in bytes, related the largest healthy replica, excluding snapshots.
+  uint64 allocated_replica = 4;
+  // Allocated size in bytes, related the healthy replica with the highest snapshot usage.
+  uint64 allocated_snapshots = 5;
+  // Allocated size in bytes, accrued from all the replicas, excluding snapshots.
+  uint64 total_allocated_replicas = 7;
+  // Allocated size in bytes, accrued from all the replica's snapshots.
+  uint64 total_allocated_snapshots = 8;
 }
 
 message ReplicaTopology {
