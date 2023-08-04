@@ -142,8 +142,10 @@ impl SnapshotCloneOp<'_> {
             Some(pool) if pools.is_empty() => Ok(pool),
             // todo: support more than 1 replica snapshots
             Some(_) => Err(SvcError::NReplSnapshotNotAllowed {}),
-            None => Err(SvcError::NoHealthyReplicas {
-                id: new_volume.uuid_str(),
+            // todo: filtering should keep invalid pools/resources and tag them with a reason
+            //   why they cannot be used!
+            None => Err(SvcError::NoSnapshotPools {
+                id: snapshot.spec().uuid().to_string(),
             }),
         }?;
 
