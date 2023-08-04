@@ -19,7 +19,7 @@ class Fio(object):
         direct=True,
         size=None,
         norandommap=True,
-        offset=0,
+        offset="0",
         extra_args="",
     ):
         self.name = name

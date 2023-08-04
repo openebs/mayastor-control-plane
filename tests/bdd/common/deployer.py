@@ -1,7 +1,9 @@
 import os
 import subprocess
-
+import pytest
 from dataclasses import dataclass
+
+import common
 
 
 @dataclass
@@ -126,6 +128,7 @@ class Deployer(object):
             io_engine_coreisol=io_engine_coreisol,
             io_engine_devices=io_engine_devices,
         )
+        pytest.deployer_options = options
         Deployer.start_with_opts(options)
 
     # Start containers with the provided options.
@@ -165,3 +168,12 @@ class Deployer(object):
         for disk in disks:
             if os.path.exists(disk):
                 os.remove(disk)
+
+    @staticmethod
+    def cleanup_disks(len=1):
+        if common.env_cleanup():
+            Deployer.delete_disks(len)
+
+    @staticmethod
+    def cache_period():
+        return pytest.deployer_options.cache_period
