@@ -417,3 +417,169 @@ async fn snapshot_timeout() {
     let tx = snapshot.meta().transactions().get("2").unwrap();
     assert_eq!(tx[0].status().to_string().as_str(), "Created");
 }
+
+#[tokio::test]
+async fn unknown_snapshot_garbage_collector() {
+    let cluster = ClusterBuilder::builder()
+        .with_rest(false)
+        .with_agents(vec!["core"])
+        .with_io_engines(1)
+        .with_pools(1)
+        .with_cache_period("50ms")
+        .with_reconcile_period(Duration::from_millis(50), Duration::from_millis(50))
+        .build()
+        .await
+        .unwrap();
+
+    let vol_cli = cluster.grpc_client().volume();
+    let volume = vol_cli
+        .create(
+            &CreateVolume {
+                uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
+                size: 60 * 1024 * 1024,
+                replicas: 1,
+                thin: false,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    // Create two snapshot id's that we would use to create leaked resources.
+    let parent_repl_snapid = SnapshotId::new();
+    let parent_nexus_snapid = SnapshotId::new();
+
+    // Create one replica snapshot.
+    vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume.uuid(), parent_repl_snapid.clone()),
+            None,
+        )
+        .await
+        .unwrap();
+
+    // Publish the volume to take nexus snapshot.
+    let volume = vol_cli
+        .publish(
+            &PublishVolume {
+                uuid: volume.uuid().clone(),
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    // Create a nexus snapshot.
+    vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume.uuid(), parent_nexus_snapid.clone()),
+            None,
+        )
+        .await
+        .unwrap();
+
+    // Stop the core agent so that we can create the leaked resources.
+    cluster.composer().stop("core").await.unwrap();
+
+    // Extract the nexus and replica to be used to create leaked resources.
+    let volume_state = volume.state();
+    let replica = volume_state.replica_topology.iter().next().unwrap();
+    let nexus = volume_state.target.unwrap();
+
+    // Create the rpc handle.
+    let mut rpc_handle = cluster
+        .grpc_handle(&cluster.node(0))
+        .await
+        .expect("Should get handle");
+    // At this point no leaked resources create so, snapshot count is 2.
+    let snaps = rpc_handle
+        .list_replica_snaps(None, None)
+        .await
+        .expect("Should get replica snaps");
+    assert_eq!(snaps.snapshots.len(), 2);
+
+    // Create the first leaked replica snapshot, with the existing replica snapshot's id.
+    rpc_handle
+        .create_replica_snap(
+            &format!("{parent_repl_snapid}/322"),
+            volume.spec().uuid.as_str(),
+            "322",
+            replica.0.as_str(),
+            SnapshotId::new().as_str(),
+        )
+        .await
+        .unwrap();
+    let snaps = rpc_handle
+        .list_replica_snaps(None, None)
+        .await
+        .expect("Should get replica snaps");
+    assert_eq!(snaps.snapshots.len(), 3);
+
+    // Create the first leaked replica snapshot, with the existing nexus snapshot's id.
+    rpc_handle
+        .create_nexus_snap(
+            nexus.uuid.as_str(),
+            &format!("{parent_nexus_snapid}/766"),
+            volume.spec().uuid.as_str(),
+            "766",
+            replica.0.as_str(),
+            SnapshotId::new().as_str(),
+        )
+        .await
+        .unwrap();
+    let snaps = rpc_handle
+        .list_replica_snaps(None, None)
+        .await
+        .expect("Should get replica snaps");
+    assert_eq!(snaps.snapshots.len(), 4);
+
+    // Create the third leaked replica snapshot, with the snapshot id that no longer exists.
+    rpc_handle
+        .create_nexus_snap(
+            nexus.uuid.as_str(),
+            &format!("{}/54", SnapshotId::new()),
+            volume.spec().uuid.as_str(),
+            "54",
+            replica.0.as_str(),
+            SnapshotId::new().as_str(),
+        )
+        .await
+        .unwrap();
+    let snaps = rpc_handle
+        .list_replica_snaps(None, None)
+        .await
+        .expect("Should get replica snaps");
+    assert_eq!(snaps.snapshots.len(), 5);
+
+    // Create the third leaked replica snapshot, with invalid name. This would not be garbage
+    // collected.
+    rpc_handle
+        .create_nexus_snap(
+            nexus.uuid.as_str(),
+            "snap_54",
+            volume.spec().uuid.as_str(),
+            "54",
+            replica.0.as_str(),
+            SnapshotId::new().as_str(),
+        )
+        .await
+        .unwrap();
+    let snaps = rpc_handle
+        .list_replica_snaps(None, None)
+        .await
+        .expect("Should get replica snaps");
+    assert_eq!(snaps.snapshots.len(), 6);
+
+    cluster
+        .restart_core_with_liveness(None)
+        .await
+        .expect("Core agent should have been up");
+
+    let snaps = rpc_handle
+        .list_replica_snaps(None, None)
+        .await
+        .expect("Should get replica snaps");
+    assert_eq!(snaps.snapshots.len(), 3);
+}

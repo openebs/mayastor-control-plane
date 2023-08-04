@@ -1,7 +1,8 @@
 mod nexus;
+mod snapshot;
 
 use crate::controller::{
-    reconciler::node::nexus::NodeNexusReconciler,
+    reconciler::node::{nexus::NodeNexusReconciler, snapshot::NodeSnapshotGarbageCollector},
     task_poller::{PollContext, PollPeriods, PollResult, PollTimer, TaskPoller},
 };
 
@@ -16,7 +17,10 @@ impl NodeReconciler {
     pub(crate) fn from(period: PollPeriods) -> Self {
         NodeReconciler {
             counter: PollTimer::from(period),
-            poll_targets: vec![Box::new(NodeNexusReconciler::new())],
+            poll_targets: vec![
+                Box::new(NodeNexusReconciler::new()),
+                Box::new(NodeSnapshotGarbageCollector::new()),
+            ],
         }
     }
     /// Return new `Self` with the default period.

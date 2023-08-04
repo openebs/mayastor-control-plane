@@ -220,6 +220,15 @@ impl Cluster {
         self.composer.restart("core").await.unwrap();
     }
 
+    /// Restart the core agent and wait for services to be live.
+    pub async fn restart_core_with_liveness(
+        &self,
+        timeout_opts: Option<TimeoutOptions>,
+    ) -> Result<bool, ReplyError> {
+        self.restart_core().await;
+        self.volume_service_liveness(timeout_opts).await
+    }
+
     /// remove etcd store lock for `name` instance
     pub async fn remove_store_lock(&self, name: ControlPlaneService) {
         let mut store = etcd_client::Client::connect(["0.0.0.0:2379"], None)
