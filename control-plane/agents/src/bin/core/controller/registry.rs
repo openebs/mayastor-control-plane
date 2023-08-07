@@ -177,7 +177,7 @@ impl Registry {
                 .await
                 .map_err(|error| StoreError::Generic {
                     source: Box::new(error),
-                    description: "Deletetion of the v1 nexus_info failed".to_string(),
+                    description: "Deletion of the v1 nexus_info failed".to_string(),
                 })?;
             // Disable the v1 compat mode.
             registry

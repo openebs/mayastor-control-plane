@@ -88,13 +88,17 @@ async fn ping_rest_api() {
 }
 
 impl CsiServer {
-    pub async fn run(csi_socket: String) -> Result<(), String> {
+    pub async fn run(csi_socket: String) -> anyhow::Result<()> {
+        // It seems we're not ensuring only 1 csi server is running at a time because here
+        // we don't bind to a port for example but to a unix socket.
+        // todo: Can we do something about this?
+
         // Remove existing CSI socket from previous runs.
         match fs::remove_file(&csi_socket) {
             Ok(_) => info!("Removed stale CSI socket {}", csi_socket),
             Err(err) => {
                 if err.kind() != ErrorKind::NotFound {
-                    return Err(format!(
+                    return Err(anyhow::anyhow!(
                         "Error removing stale CSI socket {csi_socket}: {err}"
                     ));
                 }
@@ -104,7 +108,7 @@ impl CsiServer {
         debug!("CSI RPC server is listening on {}", csi_socket);
 
         let incoming = {
-            let uds = UnixListener::bind(&csi_socket).map_err(|_e| "Failed to bind CSI socket")?;
+            let uds = UnixListener::bind(&csi_socket)?;
 
             // Change permissions on CSI socket to allow non-privileged clients to access it
             // to simplify testing.
@@ -136,7 +140,11 @@ impl CsiServer {
             .add_service(ControllerServer::new(CsiControllerSvc::new(cfg)))
             .serve_with_incoming_shutdown(incoming, shutdown::Shutdown::wait())
             .await
-            .map_err(|_| "Failed to start gRPC server")?;
+            .map_err(|error| {
+                use stor_port::transport_api::ErrorChain;
+                error!(error = error.full_string(), "NodePluginGrpcServer failed");
+                error
+            })?;
         Ok(())
     }
 }

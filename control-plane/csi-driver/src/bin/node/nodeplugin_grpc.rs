@@ -99,8 +99,9 @@ impl NodePluginGrpcServer {
             .serve_with_shutdown(endpoint, Shutdown::wait())
             .await
             .map_err(|error| {
-                error!(?error, "gRPC server failed");
-                anyhow::anyhow!("gRPC server failed with error: {}", error)
+                use stor_port::transport_api::ErrorChain;
+                error!(error = error.full_string(), "NodePluginGrpcServer failed");
+                error.into()
             })
     }
 }

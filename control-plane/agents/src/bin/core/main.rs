@@ -141,7 +141,7 @@ fn value_parse_percent(value: &str) -> Result<u64, ParseIntError> {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     let cli_args = CliArgs::args();
     utils::print_package_info!();
     println!("Using options: {cli_args:?}");
@@ -151,12 +151,12 @@ async fn main() {
         cli_args.jaeger.clone(),
         cli_args.events_url.clone(),
     );
-    server(cli_args).await;
+    server(cli_args).await
 }
 
-async fn server(cli_args: CliArgs) {
+async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
     stor_port::platform::init_cluster_info_or_panic().await;
-    let registry = match controller::registry::Registry::new(
+    let registry = controller::registry::Registry::new(
         cli_args.cache_period.into(),
         cli_args.store.clone(),
         cli_args.store_timeout.into(),
@@ -173,11 +173,7 @@ async fn server(cli_args: CliArgs) {
         },
         cli_args.thin_args,
     )
-    .await
-    {
-        Ok(registry) => registry,
-        Err(error) => panic!("Could not create registry instance, error: {error:?}"),
-    };
+    .await?;
 
     let service = agents::Service::builder()
         .with_shared_state(
@@ -198,7 +194,9 @@ async fn server(cli_args: CliArgs) {
         .configure(registry::configure);
 
     registry.start().await;
-    service.run(cli_args.grpc_server_addr).await;
+    let result = service.run_err(cli_args.grpc_server_addr).await;
     registry.stop().await;
     utils::tracing_telemetry::flush_traces();
+    result?;
+    Ok(())
 }

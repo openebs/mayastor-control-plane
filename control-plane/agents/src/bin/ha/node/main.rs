@@ -94,7 +94,7 @@ impl Cli {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     let cli_args = Cli::args();
 
     utils::print_package_info!();
@@ -140,11 +140,15 @@ async fn main() {
 
     // Start gRPC server and path failure detection loop.
     tokio::select! {
-        _ = detector.start() => {
-            tracing::info!("Path failure detector stopped")
+        result = detector.start() => {
+            tracing::info!("Path failure detector stopped");
+            result?;
+            Ok(())
         },
-        _ = server.serve() => {
+        result = server.serve() => {
             tracing::info!("gRPC server stopped");
+            result?;
+            Ok(())
         },
     }
 }

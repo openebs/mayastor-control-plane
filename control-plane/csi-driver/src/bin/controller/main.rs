@@ -112,5 +112,5 @@ async fn main() -> anyhow::Result<()> {
     )
     .await;
     utils::tracing_telemetry::flush_traces();
-    result.map_err(|error| anyhow::anyhow!("error: {}", error))
+    result
 }
