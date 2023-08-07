@@ -1,10 +1,20 @@
+import http
+import time
+from urllib.parse import urlparse
+
 from retrying import retry
 
+import common
 import openapi.exceptions
+from openapi.exceptions import ApiException
 from common.apiclient import ApiClient
+from common.deployer import Deployer
 from common.docker import Docker
+from common.fio import Fio
 from openapi.exceptions import NotFoundException
 from openapi.model.node_status import NodeStatus
+from openapi.model.publish_volume_body import PublishVolumeBody
+from openapi.model.protocol import Protocol
 
 
 class Pool(object):
@@ -41,6 +51,36 @@ class Volume(object):
             except NotFoundException:
                 pass
 
+    @staticmethod
+    def cleanup(volume):
+        if Cluster.env_cleanup():
+            try:
+                Volume.__api().del_volume(volume.spec.uuid)
+            except NotFoundException:
+                pass
+
+    @staticmethod
+    def update(volume, cached=True):
+        # this should be built-in the rest server
+        if not cached:
+            Cluster.wait_cache_update()
+        return ApiClient.volumes_api().get_volume(volume.spec.uuid)
+
+    @staticmethod
+    def fio(volume, offset="0", size="4M", rw="write"):
+        try:
+            volume = ApiClient.volumes_api().put_volume_target(
+                volume.spec.uuid,
+                publish_volume_body=PublishVolumeBody({}, Protocol("nvmf")),
+            )
+        except ApiException as e:
+            assert e.status == http.HTTPStatus.PRECONDITION_FAILED
+        uri = urlparse(volume.state.target["deviceUri"])
+        fio = Fio(name="job", rw=rw, uri=uri, offset=offset, size=size)
+        fio.run()
+        volume = Volume.update(volume)
+        return volume
+
 
 class Snapshot(object):
     @staticmethod
@@ -52,9 +92,29 @@ class Snapshot(object):
     def delete_all():
         for snapshot in Snapshot.__api().get_volumes_snapshots().entries:
             try:
-                Snapshot.__api().del_snapshot(snapshot.spec.uuid)
+                Snapshot.__api().del_snapshot(snapshot.definition.spec.uuid)
             except NotFoundException:
                 pass
+
+    @staticmethod
+    def cleanup(snapshot):
+        if Cluster.env_cleanup():
+            try:
+                Snapshot.__api().del_snapshot(snapshot.definition.spec.uuid)
+            except NotFoundException:
+                pass
+
+    @staticmethod
+    def update(snapshot, volume=None, cached=True):
+        if not cached:
+            Cluster.wait_cache_update()
+        if volume is not None:
+            return ApiClient.snapshots_api().get_volume_snapshot(
+                volume.spec.uuid, snapshot.definition.spec.uuid
+            )
+        return ApiClient.snapshots_api().get_volumes_snapshot(
+            snapshot.definition.spec.uuid
+        )
 
 
 class Cluster(object):
@@ -81,6 +141,15 @@ class Cluster(object):
         if pools:
             if waitPools and not Pool.delete_all():
                 wait_pools_deleted()
+
+    @staticmethod
+    def env_cleanup():
+        return common.env_cleanup()
+
+    @staticmethod
+    def wait_cache_update(slack=0.1):
+        cache = common.human_time_to_float(Deployer.cache_period())
+        time.sleep(cache + slack)
 
 
 @retry(wait_fixed=10, stop_max_attempt_number=200)

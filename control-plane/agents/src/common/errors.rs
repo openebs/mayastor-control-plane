@@ -236,6 +236,8 @@ pub enum SvcError {
     NoOnlineReplicas { id: String },
     #[snafu(display("No healthy replicas are available for Volume '{}'", id))]
     NoHealthyReplicas { id: String },
+    #[snafu(display("Pool not ready to take clone of snapshot '{}'", id))]
+    NoSnapshotPools { id: String },
     #[snafu(display(
         "Replica Count of {} is not attainable for {}",
         count,
@@ -735,6 +737,12 @@ impl From<SvcError> for ReplyError {
             SvcError::NoHealthyReplicas { .. } => ReplyError {
                 kind: ReplyErrorKind::VolumeNoReplicas,
                 resource: ResourceKind::Volume,
+                source,
+                extra,
+            },
+            SvcError::NoSnapshotPools { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::VolumeSnapshotClone,
                 source,
                 extra,
             },

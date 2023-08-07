@@ -191,7 +191,15 @@ impl From<Volume> for volume::Volume {
 
 impl From<volume::VolumeUsage> for VolumeUsage {
     fn from(value: volume::VolumeUsage) -> Self {
-        Self::new(value.capacity, value.allocated, value.total_allocated)
+        Self::new(
+            value.capacity,
+            value.allocated,
+            value.allocated_replica,
+            value.allocated_snapshots,
+            value.total_allocated,
+            value.total_allocated_replicas,
+            value.total_allocated_snapshots,
+        )
     }
 }
 impl From<VolumeUsage> for volume::VolumeUsage {
@@ -200,6 +208,10 @@ impl From<VolumeUsage> for volume::VolumeUsage {
             capacity: value.capacity(),
             allocated: value.allocated(),
             total_allocated: value.total_allocated(),
+            allocated_replica: value.allocated_replica(),
+            allocated_snapshots: value.allocated_snapshots(),
+            total_allocated_replicas: value.total_allocated_replicas(),
+            total_allocated_snapshots: value.total_allocated_snapshots(),
         }
     }
 }
