@@ -33,7 +33,10 @@ use std::{fmt::Debug, ops::Deref, sync::Arc};
 use stor_port::{
     pstor::{product_v1_key_prefix, API_VERSION},
     transport_api::ErrorChain,
-    types::v0::{store::snapshots::volume::VolumeSnapshot, transport::SnapshotId},
+    types::v0::{
+        store::{snapshots::volume::VolumeSnapshot, volume::VolumeContentSource},
+        transport::SnapshotId,
+    },
 };
 
 #[derive(Debug, Snafu)]
@@ -936,6 +939,18 @@ impl ResourceSpecsLocked {
             let volume_id = snapshot.immutable_ref().spec().source_id();
             if let Some(volume) = self.read().volumes.get(volume_id) {
                 volume.lock().insert_snapshot(snapshot.uuid());
+            }
+        }
+
+        // add runtime information for volume restores
+        for volume in self.read().volumes.values() {
+            match volume.immutable_ref().content_source.as_ref() {
+                None => continue,
+                Some(VolumeContentSource::Snapshot(snap_uuid, _)) => {
+                    if let Some(snapshot) = self.read().volume_snapshots.get(snap_uuid) {
+                        snapshot.lock().insert_restore(volume.uuid())
+                    }
+                }
             }
         }
 

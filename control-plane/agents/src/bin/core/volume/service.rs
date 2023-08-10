@@ -30,7 +30,10 @@ use grpc::{
 use stor_port::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind},
     types::v0::{
-        store::{snapshots::volume::VolumeSnapshotUserSpec, volume::VolumeSpec},
+        store::{
+            snapshots::volume::VolumeSnapshotUserSpec,
+            volume::{VolumeContentSource, VolumeSpec},
+        },
         transport::{
             CreateSnapshotVolume, CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter,
             PublishVolume, RepublishVolume, SetVolumeReplica, ShareVolume, UnpublishVolume,
@@ -298,8 +301,26 @@ impl Service {
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn destroy_volume(&self, request: &DestroyVolume) -> Result<(), SvcError> {
         let mut volume = self.specs().volume(&request.uuid).await?;
-        volume.destroy(&self.registry, request).await?;
-        Ok(())
+        let content_source = volume.as_ref().content_source.as_ref();
+        let snap_guard = match content_source {
+            None => None,
+            Some(VolumeContentSource::Snapshot(snap_uuid, _)) => {
+                match self.specs().volume_snapshot(snap_uuid).await {
+                    Ok(snap_guard) => Some(snap_guard),
+                    Err(SvcError::VolSnapshotNotFound { .. }) => None,
+                    Err(error) => return Err(error),
+                }
+            }
+        };
+
+        match snap_guard {
+            None => volume.destroy(&self.registry, request).await,
+            Some(mut snap_guard) => {
+                snap_guard
+                    .destroy_clone(&self.registry, request, volume)
+                    .await
+            }
+        }
     }
 
     /// Destroy the shutdown targets associate with the volume.

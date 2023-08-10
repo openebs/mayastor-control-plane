@@ -1,5 +1,6 @@
-use crate::controller::registry::Registry;
+use crate::controller::{registry::Registry, resources::OperationGuardArc};
 use agents::errors::SvcError;
+use stor_port::types::v0::store::volume::VolumeSpec;
 
 /// Resource Cordon Operations.
 #[async_trait::async_trait]
@@ -265,6 +266,7 @@ pub(crate) trait ResourcePruning {
 pub(crate) trait ResourceCloning {
     type Create: Sync + Send;
     type CreateOutput: Sync + Send + Sized;
+    type Destroy: Sync + Send;
 
     /// Create a clone for the `Self` resource.
     async fn create_clone(
@@ -272,4 +274,12 @@ pub(crate) trait ResourceCloning {
         registry: &Registry,
         request: &Self::Create,
     ) -> Result<Self::CreateOutput, SvcError>;
+
+    /// Destroy a clone for the `Self` resource, using the volume life cycle op.
+    async fn destroy_clone(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Destroy,
+        volume: OperationGuardArc<VolumeSpec>,
+    ) -> Result<(), SvcError>;
 }

@@ -3218,6 +3218,11 @@ components:
           $ref: '#/components/schemas/AffinityGroup'
         content_source:
           $ref: '#/components/schemas/VolumeContentSource'
+        num_snapshots:
+          description: Number of snapshots taken on this volume.
+          type: integer
+          format: int32
+          minimum: 0
       required:
         - num_paths
         - num_replicas
@@ -3227,6 +3232,7 @@ components:
         - uuid
         - policy
         - thin
+        - num_snapshots
     VolumeTarget:
       example:
         node: io-engine-1
@@ -3516,6 +3522,11 @@ components:
             type: array
             items:
               $ref: '#/components/schemas/ReplicaSnapshot'
+        num_restores:
+          description: Number of restores done from this snapshot.
+          type: integer
+          format: int32
+          minimum: 0
       required:
         - status
         - size
@@ -3523,6 +3534,7 @@ components:
         - total_allocated_size
         - txn_id
         - transactions
+        - num_restores
     VolumeSnapshotSpec:
       description: |-
         Volume Snapshot Spec information.

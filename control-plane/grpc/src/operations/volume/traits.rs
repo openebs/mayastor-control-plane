@@ -156,6 +156,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
                 thin: volume_spec.thin,
                 affinity_group: volume_spec.affinity_group.into_opt(),
                 content_source: volume_spec.content_source.into_opt(),
+                num_snapshots: volume_spec.metadata.num_snapshots() as u32,
             }),
             metadata: Some(volume::Metadata {
                 spec_status: spec_status as i32,
@@ -320,6 +321,7 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
             affinity_group: volume_spec.affinity_group.into_opt(),
             metadata: VolumeMetadata::new(volume_meta.as_thin),
             content_source: volume_spec.content_source.try_into_opt()?,
+            num_snapshots: volume_spec.num_snapshots,
         };
         Ok(volume_spec)
     }
