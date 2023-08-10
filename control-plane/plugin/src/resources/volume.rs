@@ -1,22 +1,37 @@
 use crate::{
-    operations::{Get, List, Scale},
-    resources::{utils, VolumeId},
+    operations::{Get, ListExt, RebuildHistory, ReplicaTopology, Scale},
+    resources::{
+        utils,
+        utils::{optional_cell, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
+        VolumeId,
+    },
     rest_wrapper::RestClient,
 };
-use async_trait::async_trait;
+use openapi::{models::VolumeContentSource, tower::client::Url};
 
-use crate::{
-    operations::{RebuildHistory, ReplicaTopology},
-    resources::utils::{optional_cell, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
-};
+use async_trait::async_trait;
 use chrono::prelude::*;
-use openapi::tower::client::Url;
 use prettytable::Row;
 use std::{collections::HashMap, str::FromStr};
 
 /// Volumes resource.
 #[derive(clap::Args, Debug)]
 pub struct Volumes {}
+
+#[derive(Debug, Clone, strum_macros::EnumString, strum_macros::AsRefStr, PartialEq)]
+#[strum(serialize_all = "lowercase")]
+enum VolumeSource {
+    None,
+    Snapshot,
+}
+
+#[derive(Debug, Clone, clap::Args)]
+/// Volume args.
+pub struct VolumesArgs {
+    #[clap(long)]
+    /// Shows only volumes created from specific source, viz none, snapshot
+    source: Option<VolumeSource>,
+}
 
 impl CreateRow for openapi::models::Volume {
     fn row(&self) -> Row {
@@ -38,7 +53,13 @@ impl CreateRow for openapi::models::Volume {
                     .usage
                     .as_ref()
                     .map(|u| ::utils::bytes::into_human(u.allocated))
-            )
+            ),
+            self.spec.num_snapshots,
+            optional_cell(self.spec.content_source.as_ref().map(|source| {
+                match source {
+                    VolumeContentSource::snapshot(_) => "Snapshot",
+                }
+            })),
         ]
     }
 }
@@ -58,9 +79,10 @@ impl GetHeaderRow for openapi::models::Volume {
 }
 
 #[async_trait(?Send)]
-impl List for Volumes {
-    async fn list(output: &utils::OutputFormat) {
-        if let Some(volumes) = get_paginated_volumes().await {
+impl ListExt for Volumes {
+    type Context = VolumesArgs;
+    async fn list(output: &OutputFormat, context: &Self::Context) {
+        if let Some(volumes) = get_paginated_volumes(context).await {
             // Print table, json or yaml based on output format.
             utils::print_table(output, volumes);
         }
@@ -70,7 +92,7 @@ impl List for Volumes {
 /// Get the list of volumes over multiple paginated requests if necessary.
 /// If any `get_volumes` request fails, `None` will be returned. This prevents the user from getting
 /// a partial list when they expect a complete list.
-async fn get_paginated_volumes() -> Option<Vec<openapi::models::Volume>> {
+async fn get_paginated_volumes(volume_args: &VolumesArgs) -> Option<Vec<openapi::models::Volume>> {
     // The number of volumes to get per request.
     let max_entries = 200;
     let mut starting_token = Some(0);
@@ -92,6 +114,22 @@ async fn get_paginated_volumes() -> Option<Vec<openapi::models::Volume>> {
                 println!("Failed to list volumes. Error {e}");
                 return None;
             }
+        }
+    }
+
+    match volume_args.source.as_ref() {
+        None => {}
+        Some(VolumeSource::None) => {
+            volumes.retain(|vol| vol.spec.content_source.is_none());
+        }
+        Some(VolumeSource::Snapshot) => {
+            volumes.retain(|vol| {
+                vol.spec.content_source.is_some()
+                    && matches!(
+                        vol.spec.content_source,
+                        Some(VolumeContentSource::snapshot(_))
+                    )
+            });
         }
     }
 
@@ -147,8 +185,9 @@ impl Scale for Volume {
 #[async_trait(?Send)]
 impl ReplicaTopology for Volume {
     type ID = VolumeId;
-    async fn topologies(output: &OutputFormat) {
-        let volumes = VolumeTopologies(get_paginated_volumes().await.unwrap_or_default());
+    type Context = VolumesArgs;
+    async fn topologies(output: &OutputFormat, context: &Self::Context) {
+        let volumes = VolumeTopologies(get_paginated_volumes(context).await.unwrap_or_default());
         utils::print_table(output, volumes);
     }
     async fn topology(id: &Self::ID, output: &OutputFormat) {

@@ -2,6 +2,7 @@ use crate::resources::{
     blockdevice::BlockDeviceArgs,
     node::{DrainNodeArgs, GetNodeArgs},
     snapshot::VolumeSnapshotArgs,
+    volume::VolumesArgs,
 };
 
 pub mod blockdevice;
@@ -29,13 +30,13 @@ pub enum GetResources {
     #[clap(subcommand)]
     Drain(GetDrainArgs),
     /// Get all volumes.
-    Volumes,
+    Volumes(VolumesArgs),
     /// Get volume with the given ID.
     Volume { id: VolumeId },
     /// Get Rebuild history for the volume with the given ID.
     RebuildHistory { id: VolumeId },
     /// Get the replica topology for all volumes.
-    VolumeReplicaTopologies,
+    VolumeReplicaTopologies(VolumesArgs),
     /// Get the replica topology for the volume with the given ID.
     VolumeReplicaTopology { id: VolumeId },
     /// Get volume snapshots based on input args.
