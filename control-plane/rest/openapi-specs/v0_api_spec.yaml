@@ -1780,7 +1780,7 @@ paths:
           name: volume_id
           description: The uuid of the snapshots source volume.
           schema:
-            $ref: '#/components/schemas/SnapshotId'
+            $ref: '#/components/schemas/VolumeId'
           required: false
         - in: query
           name: max_entries

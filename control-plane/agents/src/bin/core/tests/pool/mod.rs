@@ -551,7 +551,7 @@ async fn reconciler_missing_pool_state() {
         .with_io_engines(1)
         .with_pool(0, disk.uri())
         .with_cache_period("1s")
-        .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
+        .with_reconcile_period(Duration::from_secs(1), Duration::from_millis(1))
         .build()
         .await
         .unwrap();
