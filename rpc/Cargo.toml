@@ -6,16 +6,16 @@ edition = "2018"
 
 [build-dependencies]
 tonic-build = "0.8.4"
-prost-build = "0.11.6"
+prost-build = "0.11.9"
 
 [dependencies]
 tonic = "0.8.3"
 bytes = "1.4.0"
-prost = "0.11.6"
-prost-derive = "0.11.6"
-prost-types = "0.11.6"
-serde = { version = "1.0.152", features = ["derive"] }
-serde_derive = "1.0.152"
-serde_json = "1.0.93"
+prost = "0.11.9"
+prost-derive = "0.11.9"
+prost-types = "0.11.9"
+serde = { version = "1.0.183", features = ["derive"] }
+serde_derive = "1.0.183"
+serde_json = "1.0.104"
 strum = "0.24.1"
 strum_macros = "0.24.3"
