@@ -186,6 +186,11 @@ impl ResourceStates {
         self.replicas.get(id)
     }
 
+    /// Returns an iterator of replica states.
+    pub(crate) fn snapshot_states(&self) -> Values<SnapshotId, Resource<ReplicaSnapshotState>> {
+        self.snapshots.values()
+    }
+
     /// Get a snapshot with the given ID.
     pub(crate) fn snapshot_state(
         &self,
