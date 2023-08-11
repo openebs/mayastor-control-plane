@@ -171,7 +171,11 @@ async fn handle_faulted_child(
     let wait_duration = RuleSet::faulted_child_wait(nexus, context.registry());
     let can_partial_rebuild = child.has_io_log == Some(true);
 
-    let Some(child_uuid) = nexus_spec.as_ref().replica_uri(&child.uri).map(|r| r.uuid()) else {
+    let Some(child_uuid) = nexus_spec
+        .as_ref()
+        .replica_uri(&child.uri)
+        .map(|r| r.uuid())
+    else {
         tracing::warn!(%child.uri, "Unknown Child found, a full rebuild is required");
         return faulted_children_remover(nexus_spec, volume, child, context).await;
     };
@@ -265,7 +269,7 @@ async fn child_replica_is_online(child_uuid: &ReplicaId, context: &PollContext) 
 
 /// Tries to mark child as Online. Returns error on failing to do so.
 pub(super) async fn online_nexus_child(
-    nexus: &mut OperationGuardArc<NexusSpec>,
+    nexus: &OperationGuardArc<NexusSpec>,
     child: &ChildUri,
     context: &PollContext,
 ) -> Result<(), SvcError> {

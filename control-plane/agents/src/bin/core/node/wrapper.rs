@@ -1,10 +1,10 @@
 use crate::{
     controller::{
         io_engine::{
-            types::{CreateNexusSnapshot, CreateNexusSnapshotResp, RebuildHistoryResp},
+            types::{CreateNexusSnapshot, CreateNexusSnapshotResp},
             GrpcClient, GrpcClientLocked, GrpcContext, NexusApi, NexusChildActionApi,
-            NexusChildApi, NexusChildRebuildApi, NexusShareApi, NexusSnapshotApi, PoolApi,
-            ReplicaApi, ReplicaSnapshotApi,
+            NexusChildApi, NexusShareApi, NexusSnapshotApi, PoolApi, ReplicaApi,
+            ReplicaSnapshotApi,
         },
         registry::Registry,
         resources::ResourceUid,
@@ -24,12 +24,12 @@ use stor_port::{
         transport::{
             AddNexusChild, ApiVersion, Child, CreateNexus, CreatePool, CreateReplica,
             CreateReplicaSnapshot, DestroyNexus, DestroyPool, DestroyReplica,
-            DestroyReplicaSnapshot, FaultNexusChild, GetRebuildRecord, ImportPool,
-            IoEngCreateSnapshotClone, ListRebuildRecord, ListReplicaSnapshots, ListSnapshotClones,
-            MessageIdVs, Nexus, NexusChildAction, NexusChildActionContext, NexusChildActionKind,
-            NexusId, NodeId, NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register,
-            RemoveNexusChild, Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ShareNexus,
-            ShareReplica, ShutdownNexus, SnapshotId, UnshareNexus, UnshareReplica, VolumeId,
+            DestroyReplicaSnapshot, FaultNexusChild, ImportPool, IoEngCreateSnapshotClone,
+            ListRebuildRecord, ListReplicaSnapshots, ListSnapshotClones, MessageIdVs, Nexus,
+            NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, NodeId,
+            NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register, RemoveNexusChild,
+            Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ShareNexus, ShareReplica,
+            ShutdownNexus, SnapshotId, UnshareNexus, UnshareReplica, VolumeId,
         },
     },
 };
@@ -573,6 +573,13 @@ impl NodeWrapper {
             .snapshot_state(snapshot_id)
             .map(|r| r.inner().snapshot.clone())
     }
+    /// Get all snapshots.
+    pub(crate) fn snapshots(&self) -> Vec<ReplicaSnapshot> {
+        self.resources()
+            .snapshot_states()
+            .map(|r| r.inner().snapshot.clone())
+            .collect()
+    }
     /// Is the node online.
     pub(crate) fn is_online(&self) -> bool {
         self.status() == NodeStatus::Online
@@ -884,6 +891,7 @@ impl NodeStateFetcher {
         Ok((replicas, pools, nexuses, snapshots, rebuild_history))
     }
 
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn fetch_rebuild_history(
         &self,
         client: &mut GrpcClient,
@@ -902,6 +910,7 @@ impl NodeStateFetcher {
     }
 
     /// Fetch all snapshots from this node via gRPC.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn fetch_snapshots(
         &self,
         client: &mut GrpcClient,
@@ -909,6 +918,7 @@ impl NodeStateFetcher {
         client.list_repl_snapshots(&ListReplicaSnapshots::All).await
     }
     /// Fetch all snapshots from this node via gRPC.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn fetch_snapshot(
         &self,
         client: &mut GrpcClient,
@@ -926,6 +936,7 @@ impl NodeStateFetcher {
         }
     }
     /// Fetch the specified replica from this node via gRPC.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn fetch_replica(
         &self,
         client: &mut GrpcClient,
@@ -934,14 +945,17 @@ impl NodeStateFetcher {
         client.get_replica(replica_id).await
     }
     /// Fetch all replicas from this node via gRPC.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn fetch_replicas(&self, client: &mut GrpcClient) -> Result<Vec<Replica>, SvcError> {
         client.list_replicas().await
     }
     /// Fetch all pools from this node via gRPC.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn fetch_pools(&self, client: &mut GrpcClient) -> Result<Vec<PoolState>, SvcError> {
         client.list_pools().await
     }
     /// Fetch all nexuses from the node via gRPC.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn fetch_nexuses(&self, client: &mut GrpcClient) -> Result<Vec<Nexus>, SvcError> {
         client.list_nexuses().await
     }
@@ -1004,6 +1018,8 @@ pub(crate) trait GetterOps {
     async fn volume_nexus(&self, volume_id: &VolumeId) -> Option<Nexus>;
 
     async fn snapshot(&self, snapshot: &SnapshotId) -> Option<ReplicaSnapshot>;
+    async fn snapshots(&self) -> Vec<ReplicaSnapshot>;
+
     async fn rebuild_history(&self, nexus: &NexusId) -> Option<RebuildHistory>;
 }
 
@@ -1049,6 +1065,10 @@ impl GetterOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn snapshot(&self, snapshot: &SnapshotId) -> Option<ReplicaSnapshot> {
         let node = self.read().await;
         node.snapshot(snapshot)
+    }
+    async fn snapshots(&self) -> Vec<ReplicaSnapshot> {
+        let node = self.read().await;
+        node.snapshots()
     }
 
     async fn rebuild_history(&self, nexus: &NexusId) -> Option<RebuildHistory> {
@@ -1450,25 +1470,6 @@ impl NexusShareApi<String, ()> for Arc<tokio::sync::RwLock<NodeWrapper>> {
 }
 
 #[async_trait]
-impl NexusChildRebuildApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
-    async fn get_rebuild_history(
-        &self,
-        request: &GetRebuildRecord,
-    ) -> Result<RebuildHistory, SvcError> {
-        let dataplane = self.grpc_client_locked(request.id()).await?;
-        dataplane.get_rebuild_history(request).await
-    }
-
-    async fn list_rebuild_record(
-        &self,
-        request: &ListRebuildRecord,
-    ) -> Result<RebuildHistoryResp, SvcError> {
-        let dataplane = self.grpc_client_locked(request.id()).await?;
-        dataplane.list_rebuild_record(request).await
-    }
-}
-
-#[async_trait]
 impl NexusChildApi<Child, (), ()> for Arc<tokio::sync::RwLock<NodeWrapper>> {
     /// Add a child to a nexus via gRPC.
     async fn add_child(&self, request: &AddNexusChild) -> Result<Child, SvcError> {
@@ -1608,7 +1609,7 @@ impl ReplicaSnapshotApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
         &self,
         request: &ListReplicaSnapshots,
     ) -> Result<Vec<ReplicaSnapshot>, SvcError> {
-        let dataplane = self.grpc_client_locked(request.id()).await?;
+        let dataplane = self.read().await.grpc_client().await?;
         dataplane.list_repl_snapshots(request).await
     }
 
@@ -1627,7 +1628,7 @@ impl ReplicaSnapshotApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
         &self,
         request: &ListSnapshotClones,
     ) -> Result<Vec<Replica>, SvcError> {
-        let dataplane = self.grpc_client_locked(request.id()).await?;
+        let dataplane = self.read().await.grpc_client().await?;
         dataplane.list_snapshot_clones(request).await
     }
 }

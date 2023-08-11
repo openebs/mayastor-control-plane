@@ -798,10 +798,7 @@ impl ValidateRequestTypes for CreateSnapshotVolumeRequest {
     type Validated = ValidatedCreateSnapshotVolumeRequest;
     fn validated(self) -> Result<Self::Validated, ReplyError> {
         let Some(volume) = self.volume else {
-            return Err(ReplyError::missing_argument(
-                ResourceKind::Volume,
-                "volume",
-            ))
+            return Err(ReplyError::missing_argument(ResourceKind::Volume, "volume"));
         };
 
         Ok(ValidatedCreateSnapshotVolumeRequest {

@@ -102,9 +102,9 @@ where
         // any /v0 services must either live within this scope or be
         // declared beforehand
         web::scope("/v0")
-            .app_data(web::PathConfig::default().error_handler(|e, r| json_error(e, r)))
-            .app_data(web::JsonConfig::default().error_handler(|e, r| json_error(e, r)))
-            .app_data(web::QueryConfig::default().error_handler(|e, r| json_error(e, r)))
+            .app_data(web::PathConfig::default().error_handler(json_error))
+            .app_data(web::JsonConfig::default().error_handler(json_error))
+            .app_data(web::QueryConfig::default().error_handler(json_error))
             .configure(configure),
     )
 }

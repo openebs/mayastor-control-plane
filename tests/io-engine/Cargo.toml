@@ -12,7 +12,7 @@ name = "testlib"
 path = "src/lib.rs"
 
 [dev-dependencies]
-tokio = { version = "1.25.0", features = ["full"] }
+tokio = { version = "1.30.0", features = ["full"] }
 openapi = { path = "../../openapi", features = [ "tower-client", "tower-trace" ] }
 deployer-cluster = { path = "../../utils/deployer-cluster" }
 stor-port = { path = "../../control-plane/stor-port" }

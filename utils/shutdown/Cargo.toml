@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.25.0", features = ["full"] }
+tokio = { version = "1.30.0", features = ["full"] }
 tracing = "0.1.37"
 lazy_static = "1.4.0"
-async-trait = "0.1.64"
+async-trait = "0.1.72"

@@ -1,13 +1,16 @@
-use crate::controller::{
-    io_engine::ReplicaSnapshotApi,
-    reconciler::poller::ReconcilerWorker,
-    resources::{OperationGuardArc, ResourceUid},
-    task_poller::{PollContext, PollResult, PollTimer, PollerState, TaskPoller},
+use crate::{
+    controller::{
+        io_engine::ReplicaSnapshotApi,
+        reconciler::poller::ReconcilerWorker,
+        resources::{OperationGuardArc, ResourceUid},
+        task_poller::{PollContext, PollResult, PollTimer, PollerState, TaskPoller},
+    },
+    node::wrapper::GetterOps,
 };
 use agents::errors::SvcError;
 use stor_port::types::v0::{
     store::node::NodeSpec,
-    transport::{DestroyReplicaSnapshot, ListReplicaSnapshots, SnapshotId},
+    transport::{DestroyReplicaSnapshot, SnapshotId},
 };
 
 /// Node snapshot garbage collector.
@@ -50,36 +53,32 @@ async fn delete_unknown_volume_snapshot_reconciler(
 ) -> PollResult {
     let node_wrapper = context.registry().node_wrapper(node_spec.uid()).await?;
 
-    if let Ok(snaps) = node_wrapper
-        .list_repl_snapshots(&ListReplicaSnapshots::All)
-        .await
-    {
-        for snap in snaps {
-            if let Some((snap_uuid, txn_id)) = extract_uuid_txn_id(snap.snap_name()) {
-                let _guard = match context.registry().specs().volume_snapshot(&snap_uuid).await {
-                    Ok(snap_guard)
-                        if !snap_guard
-                            .as_ref()
-                            .metadata()
-                            .transactions()
-                            .contains_key(txn_id) =>
-                    {
-                        Some(snap_guard)
-                    }
-                    Ok(_snap_guard) => continue,
-                    Err(SvcError::VolSnapshotNotFound { .. }) => None,
-                    Err(_) => continue,
-                };
-                if node_wrapper
-                    .destroy_repl_snapshot(&DestroyReplicaSnapshot::new(
-                        snap.snap_uuid().clone(),
-                        snap.pool_uuid().clone(),
-                    ))
-                    .await
-                    .is_ok()
+    let snapshots = node_wrapper.snapshots().await;
+    for snap in snapshots {
+        if let Some((snap_uuid, txn_id)) = extract_uuid_txn_id(snap.snap_name()) {
+            let _guard = match context.registry().specs().volume_snapshot(&snap_uuid).await {
+                Ok(snap_guard)
+                    if !snap_guard
+                        .as_ref()
+                        .metadata()
+                        .transactions()
+                        .contains_key(txn_id) =>
                 {
-                    tracing::warn!(snapshot.uuid=%snap.snap_uuid(), snapshot.pool_uuid=%snap.pool_uuid(), "Deleted unknown replica snapshot from pool");
+                    Some(snap_guard)
                 }
+                Ok(_snap_guard) => continue,
+                Err(SvcError::VolSnapshotNotFound { .. }) => None,
+                Err(_) => continue,
+            };
+            if node_wrapper
+                .destroy_repl_snapshot(&DestroyReplicaSnapshot::new(
+                    snap.snap_uuid().clone(),
+                    snap.pool_uuid().clone(),
+                ))
+                .await
+                .is_ok()
+            {
+                tracing::warn!(snapshot.uuid=%snap.snap_uuid(), snapshot.pool_uuid=%snap.pool_uuid(), "Deleted unknown replica snapshot from pool");
             }
         }
     }

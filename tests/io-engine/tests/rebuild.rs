@@ -553,21 +553,15 @@ async fn run_fio_vol_verify(
     let device_path = response.into_inner().device_path;
     let device_path = device_path.trim_end();
     let fio_cmd = fio_builder(device_path);
+    let fio_cmdline = fio_cmd
+        .iter()
+        .fold(String::new(), |acc, next| format!("{acc} {next}"));
     let composer = cluster.composer().clone();
 
     tokio::spawn(async move {
         let code = loop {
             let (code, out) = composer.exec("csi-node-1", fio_cmd.clone()).await.unwrap();
-            tracing::info!(
-                "{:?}: {}, code: {:?}",
-                fio_cmd
-                    .iter()
-                    .map(|e| format!("{e} "))
-                    .collect::<String>()
-                    .trim_end(),
-                out,
-                code
-            );
+            tracing::info!("{}: {}, code: {:?}", fio_cmdline, out, code);
             if code != Some(0) {
                 return code;
             }

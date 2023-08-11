@@ -68,7 +68,7 @@ macro_rules! rpc_impl_string_id_inner {
 
         impl $Name {
             /// Build Self from a string trait id.
-            pub fn as_str<'a>(&'a self) -> &'a str {
+            pub fn as_str(&self) -> &str {
                 self.0.as_str()
             }
         }
@@ -180,7 +180,7 @@ macro_rules! rpc_impl_string_uuid_inner {
 
         impl $Name {
             /// Build Self from a string trait id.
-            pub fn as_str<'a>(&'a self) -> &'a str {
+            pub fn as_str(&self) -> &str {
                 self.1.as_str()
             }
             /// Get a reference to a `uuid::Uuid` container.

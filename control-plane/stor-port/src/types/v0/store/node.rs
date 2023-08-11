@@ -372,7 +372,7 @@ impl NodeSpec {
     /// Add the draining volumes to the node spec for checking shutdown nexuses.
     pub fn add_draining_volumes(&mut self, draining_volumes: HashSet<VolumeId>) {
         if !draining_volumes.is_empty() {
-            self.draining_volumes.extend(draining_volumes.into_iter());
+            self.draining_volumes.extend(draining_volumes);
             self.draining_timestamp = Some(SystemTime::now())
         }
     }

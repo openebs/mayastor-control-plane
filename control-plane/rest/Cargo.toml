@@ -18,35 +18,35 @@ path = "./src/lib.rs"
 [dependencies]
 # Actix Server, telemetry
 rustls = "0.20.8"
-rustls-pemfile = "1.0.2"
-actix-web = { version = "4.3.0", features = ["rustls"] }
+rustls-pemfile = "1.0.3"
+actix-web = { version = "4.3.1", features = ["rustls"] }
 actix-service = "2.0.2"
 opentelemetry = { version = "0.18.0", features = ["rt-tokio-current-thread"] }
 actix-web-opentelemetry = "0.13.0"
 tracing = "0.1.37"
-once_cell = "1.17.0"
-async-trait = "0.1.64"
-serde_json = { version = "1.0.93", features = ["preserve_order"] }
-serde_yaml = "0.9.17"
-clap = { version = "4.1.4", features = ["color", "derive", "env", "string"] }
-futures = "0.3.26"
-anyhow = "1.0.69"
-snafu = "0.7.4"
-url = "2.3.1"
-http = "0.2.8"
+once_cell = "1.18.0"
+async-trait = "0.1.72"
+serde_json = { version = "1.0.104", features = ["preserve_order"] }
+serde_yaml = "0.9.25"
+clap = { version = "4.3.21", features = ["color", "derive", "env", "string"] }
+futures = "0.3.28"
+anyhow = "1.0.72"
+snafu = "0.7.5"
+url = "2.4.0"
+http = "0.2.9"
 tinytemplate = "1.2.1"
-jsonwebtoken = "8.2.0"
+jsonwebtoken = "8.3.0"
 stor-port = { path = "../stor-port" }
 utils = { path = "../../utils/utils-lib" }
 humantime = "2.1.0"
 grpc = { path = "../grpc" }
-num_cpus = "1.15.0"
+num_cpus = "1.16.0"
 
 [dev-dependencies]
-tokio = { version = "1.25.0", features = ["full"] }
+tokio = { version = "1.30.0", features = ["full"] }
 composer = { path = "../../utils/dependencies/composer", default-features = false }
 deployer-cluster = { path = "../../utils/deployer-cluster" }
 
 [dependencies.serde]
 features = ["derive"]
-version = "1.0.152"
+version = "1.0.183"
