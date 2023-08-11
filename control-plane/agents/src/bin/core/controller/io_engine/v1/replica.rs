@@ -2,7 +2,7 @@ use super::translation::{rpc_replica_to_agent, AgentToIoEngine};
 use crate::controller::io_engine::translation::TryIoEngineToAgent;
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::{
-    replica::ListReplicaOptions,
+    replica::{ListReplicaOptions, ReplicaType},
     snapshot::{destroy_snapshot_request, DestroySnapshotRequest},
 };
 use stor_port::{
@@ -52,6 +52,7 @@ impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
                 poolname: None,
                 uuid: Some(replica_id.to_string()),
                 pooluuid: None,
+                replicatype: ReplicaType::AllReplicas as i32,
             })
             .await
             .context(GrpcRequestError {

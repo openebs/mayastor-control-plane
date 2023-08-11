@@ -32,6 +32,10 @@ pub struct ReplicaSpaceUsage {
     pub allocated_bytes: u64,
     /// Amount of actually allocated disk space for this replica's snapshots in bytes.
     pub allocated_bytes_snapshots: u64,
+    /// Amount of actually allocated disk space for this replica's snapshots and its predecessors
+    /// in bytes.
+    /// For a restored/cloned replica this includes snapshots from the parent source.
+    pub allocated_bytes_all_snapshots: u64,
     /// Cluster size in bytes.
     pub cluster_size: u64,
     /// Total number of clusters.
@@ -370,6 +374,7 @@ impl From<ReplicaSpaceUsage> for models::ReplicaSpaceUsage {
             src.capacity_bytes,
             src.allocated_bytes,
             src.allocated_bytes_snapshots,
+            src.allocated_bytes_all_snapshots,
             src.cluster_size,
             src.clusters,
             src.allocated_clusters,

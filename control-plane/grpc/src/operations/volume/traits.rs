@@ -196,6 +196,7 @@ impl From<volume::VolumeUsage> for VolumeUsage {
             value.allocated,
             value.allocated_replica,
             value.allocated_snapshots,
+            value.allocated_all_snapshots,
             value.total_allocated,
             value.total_allocated_replicas,
             value.total_allocated_snapshots,
@@ -210,6 +211,7 @@ impl From<VolumeUsage> for volume::VolumeUsage {
             total_allocated: value.total_allocated(),
             allocated_replica: value.allocated_replica(),
             allocated_snapshots: value.allocated_snapshots(),
+            allocated_all_snapshots: value.allocated_all_snapshots(),
             total_allocated_replicas: value.total_allocated_replicas(),
             total_allocated_snapshots: value.total_allocated_snapshots(),
         }
@@ -447,7 +449,12 @@ impl TryFrom<volume::ReplicaTopology> for ReplicaTopology {
 
 impl From<volume::ReplicaUsage> for ReplicaUsage {
     fn from(value: volume::ReplicaUsage) -> Self {
-        Self::new(value.capacity, value.allocated, value.allocated_snaps)
+        Self::new(
+            value.capacity,
+            value.allocated,
+            value.allocated_snaps,
+            value.allocated_all_snaps,
+        )
     }
 }
 impl From<ReplicaTopology> for volume::ReplicaTopology {
@@ -477,6 +484,7 @@ impl From<&ReplicaUsage> for volume::ReplicaUsage {
             capacity: value.capacity(),
             allocated: value.allocated(),
             allocated_snaps: value.allocated_snapshots(),
+            allocated_all_snaps: value.allocated_all_snapshots(),
         }
     }
 }

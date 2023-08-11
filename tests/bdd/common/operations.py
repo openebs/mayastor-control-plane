@@ -75,6 +75,7 @@ class Volume(object):
             )
         except ApiException as e:
             assert e.status == http.HTTPStatus.PRECONDITION_FAILED
+            volume = Volume.update(volume)
         uri = urlparse(volume.state.target["deviceUri"])
         fio = Fio(name="job", rw=rw, uri=uri, offset=offset, size=size)
         fio.run()

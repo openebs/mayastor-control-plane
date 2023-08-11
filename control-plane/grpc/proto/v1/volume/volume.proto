@@ -179,6 +179,9 @@ message VolumeUsage {
   uint64 allocated_replica = 4;
   // Allocated size in bytes, related the healthy replica with the highest snapshot usage.
   uint64 allocated_snapshots = 5;
+  // For a restored/cloned volume, allocated size in bytes, related to the healthy replica with
+  // largest parent snapshot allocation.
+  uint64 allocated_all_snapshots = 6;
   // Allocated size in bytes, accrued from all the replicas, excluding snapshots.
   uint64 total_allocated_replicas = 7;
   // Allocated size in bytes, accrued from all the replica's snapshots.
@@ -210,6 +213,9 @@ message ReplicaUsage {
   uint64 allocated = 2;
   // Allocated size in bytes from all its snapshots.
   uint64 allocated_snaps = 3;
+  // Amount of actually allocated disk space for this replica's snapshots and its predecessors
+  // in bytes. For a restored/cloned replica this includes snapshots from the parent source.
+  uint64 allocated_all_snaps = 4;
 }
 
 message GetVolumesRequest {
