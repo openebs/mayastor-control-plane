@@ -2823,6 +2823,15 @@ components:
           format: int64
           minimum: 0
           default: 0
+        allocated_bytes_all_snapshots:
+          description: |
+            Amount of actually allocated disk space for this replica's snapshots and its predecessors in bytes.
+            For a restored/cloned replica this includes snapshots from the parent source.
+          example: 80241024
+          type: integer
+          format: int64
+          minimum: 0
+          default: 0
         cluster_size:
           description: Cluster size in bytes.
           example: 80241024
@@ -3374,6 +3383,13 @@ components:
           type: integer
           format: int64
           minimum: 0
+        allocated_all_snapshots:
+          description: -|
+            For a restored/cloned volume, allocated size in bytes, related to the healthy replica with
+            largest parent snapshot allocation.
+          type: integer
+          format: int64
+          minimum: 0
         total_allocated:
           description: -|
             Allocated size in bytes, accrued from all the replicas, including snapshots.
@@ -3396,6 +3412,7 @@ components:
         - allocated
         - allocated_replica
         - allocated_snapshots
+        - allocated_all_snapshots
         - total_allocated
         - total_allocated_replicas
         - total_allocated_snapshots
@@ -3694,10 +3711,20 @@ components:
           format: int64
           minimum: 0
           default: 0
+        allocated_all_snapshots:
+          description: |
+            Amount of actually allocated disk space for this replica's snapshots and its predecessors in bytes.
+            For a restored/cloned replica this includes snapshots from the parent source.
+          example: 80241024
+          type: integer
+          format: int64
+          minimum: 0
+          default: 0
       required:
         - capacity
         - allocated
         - allocated_snapshots
+        - allocated_all_snapshots
     CordonDrainState:
       description: The drain state
       type: object

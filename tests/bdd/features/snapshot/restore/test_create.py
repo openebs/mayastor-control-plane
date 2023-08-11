@@ -119,7 +119,11 @@ def we_attempt_to_create_4_new_volumes_with_the_snapshot_as_their_source(
 
 @when(
     "we create a new volume with the snapshot as its source",
-    target_fixture="new_volume",
+    target_fixture="restored_volume",
+)
+@given(
+    "we create a new volume with the snapshot as its source",
+    target_fixture="restored_volume",
 )
 def we_create_a_new_volume_with_the_snapshot_as_its_source(
     volume_uuids, snapshot_uuids
@@ -131,10 +135,11 @@ def we_create_a_new_volume_with_the_snapshot_as_its_source(
         size=20 * 1024 * 1024,
         thin=True,
     )
-    yield ApiClient.volumes_api().put_snapshot_volume(
+    volume = ApiClient.volumes_api().put_snapshot_volume(
         snapshot_uuids[0], volume_uuids[1], body
     )
-    ApiClient.volumes_api().del_volume(volume_uuids[1])
+    yield volume
+    Volume.cleanup(volume)
 
 
 @then(parsers.parse("we create a snapshot from volume restore {index:d}"))
@@ -149,12 +154,12 @@ def we_create_a_snapshot_from_volume_restore_index(volume_uuids, snapshot_uuids,
 
 
 @then("a new replica will be created for the new volume")
-def a_new_replica_will_be_created_for_the_new_volume(volume_uuids, new_volume):
+def a_new_replica_will_be_created_for_the_new_volume(volume_uuids, restored_volume):
     """a new replica will be created for the new volume."""
     # check volume has a replica in the topology
-    assert new_volume.spec.uuid == volume_uuids[1]
-    assert new_volume.spec.num_replicas == 1
-    assert new_volume.spec.status == SpecStatus("Created")
+    assert restored_volume.spec.uuid == volume_uuids[1]
+    assert restored_volume.spec.num_replicas == 1
+    assert restored_volume.spec.status == SpecStatus("Created")
 
 
 @then("all requests should succeed", target_fixture="created_restores")
@@ -172,14 +177,13 @@ def all_requests_should_succeed(snaprestore_attempts):
 
 
 @then("the replica's capacity will be same as the snapshot")
-def the_replicas_capacity_will_be_same_as_the_snapshot(new_volume):
+def the_replicas_capacity_will_be_same_as_the_snapshot(restored_volume):
     """the replica's capacity will be same as the snapshot."""
-    replicas = list(new_volume.state.replica_topology.values())
+    replicas = list(restored_volume.state.replica_topology.values())
     assert len(replicas) == 1
-    assert replicas[0].usage.capacity == new_volume.spec.size
+    assert replicas[0].usage.capacity == restored_volume.spec.size
     assert replicas[0].usage.allocated == 0
-    # Seems allocated_snapshots also reports snapshots usage for a restore !?
-    assert replicas[0].usage.allocated_snapshots == 0  # new_volume.spec.size
+    assert replicas[0].usage.allocated_snapshots == 0
 
 
 @then(
@@ -229,27 +233,6 @@ def the_restored_volumes_own_allocated_snapshot_size_should_be_0(created_restore
         assert restore.state.usage.total_allocated == 0
 
 
-@given(
-    "we create a new volume with the snapshot as its source",
-    target_fixture="restored_volume",
-)
-def we_create_a_new_volume_with_the_snapshot_as_its_source(
-    volume_uuids, snapshot_uuids
-):
-    """we create a new volume with the snapshot as its source."""
-    body = CreateVolumeBody(
-        VolumePolicy(True),
-        replicas=1,
-        size=20 * 1024 * 1024,
-        thin=True,
-    )
-    volume = ApiClient.volumes_api().put_snapshot_volume(
-        snapshot_uuids[0], volume_uuids[1], body
-    )
-    yield volume
-    Volume.cleanup(volume)
-
-
 @then("we allocate 4MiB of data of the restored volume")
 @when("we allocate 4MiB of data of the restored volume")
 def we_allocate_4mib_of_data_of_the_restored_volume(restored_volume):
@@ -287,11 +270,30 @@ def the_snapshot_allocated_size_should_be_4mib(restore_snapshot):
     assert restore_snapshot.state.allocated_size == 4 * 1024 * 1024
 
 
+@then("the snapshot 2 allocated size should be 4MiB")
+def the_snapshot_2_allocated_size_should_be_4mib(restore_snapshot_2):
+    """the snapshot 2 allocated size should be 4MiB."""
+    assert restore_snapshot_2.state.allocated_size == 4 * 1024 * 1024
+
+
 @then("we create a snapshot of the restored volume", target_fixture="restore_snapshot")
 def we_create_a_snapshot_of_the_restored_volume(snapshot_uuids, volume_uuids):
     """we create a snapshot of the restored volume."""
     snapshot = ApiClient.snapshots_api().put_volume_snapshot(
         volume_uuids[1], snapshot_uuids[1]
+    )
+    yield snapshot
+    Snapshot.cleanup(snapshot)
+
+
+@then(
+    "we create another snapshot of the restored volume",
+    target_fixture="restore_snapshot_2",
+)
+def we_create_another_snapshot_of_the_restored_volume(snapshot_uuids, volume_uuids):
+    """we create another snapshot of the restored volume."""
+    snapshot = ApiClient.snapshots_api().put_volume_snapshot(
+        volume_uuids[1], snapshot_uuids[2]
     )
     yield snapshot
     Snapshot.cleanup(snapshot)

@@ -133,7 +133,10 @@ impl IoEngineToAgent for v1::replica::ReplicaSpaceUsage {
         transport::ReplicaSpaceUsage {
             capacity_bytes: self.capacity_bytes,
             allocated_bytes: self.allocated_bytes,
-            allocated_bytes_snapshots: self.allocated_bytes_snapshots,
+            allocated_bytes_snapshots: self
+                .allocated_bytes_snapshot_from_clone
+                .unwrap_or(self.allocated_bytes_snapshots),
+            allocated_bytes_all_snapshots: self.allocated_bytes_snapshots,
             cluster_size: self.cluster_size,
             clusters: self.num_clusters,
             allocated_clusters: self.num_allocated_clusters,
@@ -573,6 +576,7 @@ impl AgentToIoEngine for transport::ListReplicaSnapshots {
         v1::snapshot::ListSnapshotsRequest {
             source_uuid: source.map(ToString::to_string),
             snapshot_uuid: snapshot.map(ToString::to_string),
+            snapshot_query_type: v1::snapshot::SnapshotQueryType::AllSnapshots as i32,
         }
     }
 }

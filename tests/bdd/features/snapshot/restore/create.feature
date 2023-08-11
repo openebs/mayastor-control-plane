@@ -24,8 +24,8 @@ Feature: Create Volume From Snapshot
     Then the snapshot allocated size should be 4MiB
     And the restored volume total allocation size should be 4MiB
     Then we allocate 4MiB of data of the restored volume
-    And we create a snapshot of the restored volume
-    Then the snapshot allocated size should be 4MiB
+    And we create another snapshot of the restored volume
+    Then the snapshot 2 allocated size should be 4MiB
     And the restored volume total allocation size should be 8MiB
 
   Scenario: Create a chain of restored volumes

@@ -84,6 +84,9 @@ pub struct VolumeUsage {
     allocated_replica: u64,
     /// Allocated size in bytes, related the healthy replica with the highest snapshot usage.
     allocated_snapshots: u64,
+    /// For a restored/cloned volume, allocated size in bytes, related to the healthy replica with
+    /// largest parent snapshot allocation.
+    allocated_all_snapshots: u64,
     /// Allocated size in bytes, accrued from all the replicas, including snapshots.
     total_allocated: u64,
     /// Allocated size in bytes, accrued from all the replicas, excluding snapshots.
@@ -94,11 +97,13 @@ pub struct VolumeUsage {
 
 impl VolumeUsage {
     /// Return a new `Self` from the given parameters.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         capacity: u64,
         allocated: u64,
         allocated_replica: u64,
         allocated_snapshots: u64,
+        allocated_all_snapshots: u64,
         total_allocated: u64,
         total_allocated_replicas: u64,
         total_allocated_snapshots: u64,
@@ -108,6 +113,7 @@ impl VolumeUsage {
             allocated,
             allocated_replica,
             allocated_snapshots,
+            allocated_all_snapshots,
             total_allocated,
             total_allocated_replicas,
             total_allocated_snapshots,
@@ -128,6 +134,11 @@ impl VolumeUsage {
     /// Allocated size in bytes, related the healthy replica with the highest snapshot usage.
     pub fn allocated_snapshots(&self) -> u64 {
         self.allocated_snapshots
+    }
+    /// For a restored/cloned volume, allocated size in bytes, related to the healthy replica with
+    /// largest parent snapshot allocation.
+    pub fn allocated_all_snapshots(&self) -> u64 {
+        self.allocated_all_snapshots
     }
     /// Get the volume total allocated bytes across all replicas.
     pub fn total_allocated(&self) -> u64 {
@@ -166,6 +177,7 @@ impl From<VolumeUsage> for models::VolumeUsage {
             value.allocated,
             value.allocated_replica,
             value.allocated_snapshots,
+            value.allocated_all_snapshots,
             value.total_allocated,
             value.total_allocated_replicas,
             value.total_allocated_snapshots,
@@ -694,14 +706,23 @@ pub struct ReplicaUsage {
     allocated: u64,
     /// Allocated space in bytes from all its snapshots.
     allocated_snaps: u64,
+    /// Allocated space in bytes from all its snapshots, including parents if this
+    /// is a restored/cloned replica.
+    allocated_all_snaps: u64,
 }
 impl ReplicaUsage {
     /// Return a new `Self` from the given parameters.
-    pub fn new(capacity: u64, allocated: u64, allocated_snaps: u64) -> Self {
+    pub fn new(
+        capacity: u64,
+        allocated: u64,
+        allocated_snaps: u64,
+        allocated_all_snaps: u64,
+    ) -> Self {
         Self {
             capacity,
             allocated,
             allocated_snaps,
+            allocated_all_snaps,
         }
     }
     /// Get the replica capacity in bytes.
@@ -716,6 +737,10 @@ impl ReplicaUsage {
     pub fn allocated_snapshots(&self) -> u64 {
         self.allocated_snaps
     }
+    /// Get the replica's all snapshots allocated bytes.
+    pub fn allocated_all_snapshots(&self) -> u64 {
+        self.allocated_all_snaps
+    }
 }
 impl From<ReplicaSpaceUsage> for ReplicaUsage {
     fn from(value: ReplicaSpaceUsage) -> Self {
@@ -723,6 +748,7 @@ impl From<ReplicaSpaceUsage> for ReplicaUsage {
             value.capacity_bytes,
             value.allocated_bytes,
             value.allocated_bytes_snapshots,
+            value.allocated_bytes_all_snapshots,
         )
     }
 }
@@ -822,7 +848,12 @@ impl From<&ReplicaTopology> for models::ReplicaTopology {
 }
 impl From<&ReplicaUsage> for models::ReplicaUsage {
     fn from(value: &ReplicaUsage) -> Self {
-        Self::new(value.capacity, value.allocated, value.allocated_snaps)
+        Self::new(
+            value.capacity,
+            value.allocated,
+            value.allocated_snaps,
+            value.allocated_all_snaps,
+        )
     }
 }
 

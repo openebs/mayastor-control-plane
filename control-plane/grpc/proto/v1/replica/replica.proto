@@ -47,6 +47,9 @@ message ReplicaSpaceUsage {
   uint64 allocated_clusters = 5; // number of actually used clusters
   uint64 allocated_bytes_snapshots = 6; // amount of actually allocated disk space for this replica's snapshots in bytes
   uint64 allocated_clusters_snapshots = 7; // number of actually used clusters for this replica's snapshots in bytes
+  // Amount of actually allocated disk space for this replica's snapshots and its predecessors in bytes.
+  // For a restored/cloned replica this includes snapshots from the parent source.
+  uint64 allocated_bytes_all_snapshots = 8;
 }
 
 // State of the Replica

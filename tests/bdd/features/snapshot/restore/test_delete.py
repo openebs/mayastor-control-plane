@@ -44,19 +44,16 @@ def deployer_cluster(disks):
 
 
 @scenario("delete.feature", "Deleting in creation order")
-@pytest.mark.skip("This test is awaiting changes from data-plane & control-plane")
 def test_deleting_in_creation_order():
     """Deleting in creation order."""
 
 
 @scenario("delete.feature", "Deleting in reverse creation order")
-@pytest.mark.skip("This test is awaiting changes from data-plane & control-plane")
 def test_deleting_in_reverse_creation_order():
     """Deleting in reverse creation order."""
 
 
 @scenario("delete.feature", "Delete a chain of restored volumes")
-@pytest.mark.skip("This test is awaiting changes from data-plane & control-plane")
 def test_delete_a_chain_of_restored_volumes():
     """Delete a chain of restored volumes."""
 
@@ -206,6 +203,13 @@ def the_restored_volume_1_allocated_snapshot_size_should_be_zero(restored_volume
     assert volume.state.usage.allocated_snapshots == 0
 
 
+@then("the restored volume 1 allocated_snapshot size should be 8MiB")
+def the_restored_volume_1_allocated_snapshot_size_should_be_8mib(restored_volume):
+    """the restored volume 1 allocated_snapshot size should be 8MiB."""
+    volume = Volume.update(restored_volume)
+    assert volume.state.usage.allocated_snapshots == 8 * 1024 * 1024
+
+
 @given("we allocate 4MiB of the restored volume 1")
 @then("we allocate 4MiB of the restored volume 1")
 def we_allocate_4mib_of_the_restored_volume_1(restored_volume):
@@ -342,8 +346,8 @@ def the_restored_volume_2_allocation_size_should_be_4mib(volume_2_from_snapshot_
     """the restored volume 2 allocation size should be 4MiB."""
     volume = Volume.update(volume_2_from_snapshot_2, cached=False)
     assert volume.state.usage.allocated_replica == 4 * 1024 * 1024
-    assert volume.state.usage.allocated_snapshots == 4 * 1024 * 1024
-    assert volume.state.usage.allocated == 8 * 1024 * 1024
+    assert volume.state.usage.allocated_snapshots == 0
+    assert volume.state.usage.allocated == 4 * 1024 * 1024
 
 
 @then(
@@ -461,7 +465,11 @@ def the_pool_space_usage_should_reflect_the_restored_volume_2_and_deleted_snapsh
     pool = ApiClient.pools_api().get_pool(POOL)
     volume_2_from_snapshot_2 = Volume.update(volume_2_from_snapshot_2)
 
-    assert pool.state.used == volume_2_from_snapshot_2.state.usage.allocated
+    assert (
+        pool.state.used
+        == volume_2_from_snapshot_2.state.usage.allocated
+        + volume_2_from_snapshot_2.state.usage.allocated_all_snapshots
+    )
     assert pool.state.used == 16 * 1024 * 1024
 
 

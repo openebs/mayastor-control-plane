@@ -71,6 +71,7 @@ impl Registry {
         let mut total_snapshots = 0;
         let mut largest_replica = 0;
         let mut largest_snapshot = 0;
+        let mut largest_all_snapshot = 0;
 
         // Construct the topological information for the volume replicas.
         let mut replica_topology = HashMap::new();
@@ -87,6 +88,9 @@ impl Registry {
                 if allocated_snaps > largest_snapshot {
                     largest_snapshot = allocated_snaps;
                 }
+                if usage.allocated_all_snapshots() > largest_all_snapshot {
+                    largest_all_snapshot = usage.allocated_all_snapshots();
+                }
             }
             replica_topology.insert(replica_spec.uuid.clone(), replica);
         }
@@ -96,6 +100,7 @@ impl Registry {
             largest_replica + largest_snapshot,
             largest_replica,
             largest_snapshot,
+            largest_all_snapshot,
             total_replica + total_snapshots,
             total_replica,
             total_snapshots,
