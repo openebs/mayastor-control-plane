@@ -44,7 +44,7 @@ pub(crate) async fn enospc_children_onliner(
 }
 
 pub(super) async fn child_enospc_onlineable(
-    nexus: &mut OperationGuardArc<NexusSpec>,
+    nexus: &OperationGuardArc<NexusSpec>,
     child: &Child,
     registry: &Registry,
 ) -> Result<(), SvcError> {
@@ -126,7 +126,7 @@ pub(super) async fn child_enospc_onlineable(
 }
 
 async fn online_enospc(
-    nexus: &mut OperationGuardArc<NexusSpec>,
+    nexus: &OperationGuardArc<NexusSpec>,
     child: &Child,
     registry: &Registry,
 ) -> Result<(), SvcError> {

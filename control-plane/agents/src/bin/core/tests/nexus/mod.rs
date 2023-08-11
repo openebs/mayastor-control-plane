@@ -310,27 +310,27 @@ async fn nexus_child_op_transaction_store(
     assert_eq!(spec.children.len(), children);
     assert_eq!(spec.share, share);
 
-    if share_request.is_some() {
+    if let Some(request) = share_request {
         nexus_client
-            .share(&share_request.unwrap(), None)
+            .share(&request, None)
             .await
             .expect_err("operation already performed");
     }
-    if unshare_request.is_some() {
+    if let Some(request) = unshare_request {
         nexus_client
-            .unshare(&unshare_request.unwrap(), None)
+            .unshare(&request, None)
             .await
             .expect_err("operation already performed");
     }
-    if add_nexus_child_request.is_some() {
+    if let Some(request) = add_nexus_child_request {
         nexus_client
-            .add_nexus_child(&add_nexus_child_request.unwrap(), None)
+            .add_nexus_child(&request, None)
             .await
             .expect_err("operation already performed");
     }
-    if remove_nexus_child_request.is_some() {
+    if let Some(request) = remove_nexus_child_request {
         nexus_client
-            .remove_nexus_child(&remove_nexus_child_request.unwrap(), None)
+            .remove_nexus_child(&request, None)
             .await
             .expect_err("operation already performed");
     }

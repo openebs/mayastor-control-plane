@@ -394,7 +394,7 @@ impl Components {
 }
 impl PartialOrd for Component {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.boot_order().partial_cmp(&other.boot_order())
+        Some(self.cmp(other))
     }
 }
 impl Ord for Component {

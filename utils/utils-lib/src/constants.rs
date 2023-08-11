@@ -122,7 +122,7 @@ pub const DEFAULT_HOST_ACCESS_CONTROL: &str = "nexuses,replicas";
 /// K8s sts pvc naming convention regex expression.
 /// The naming format is {pvc-name-common}-{sts-name}-{index}.
 /// A valid sts pvc name of above format is matched by the regex below.
-pub const K8S_STS_PVC_NAMING_REGEX: &str = r#"^([a-z0-9](?:[-a-z0-9]*[a-z0-9])?)-\d+$"#;
+pub const K8S_STS_PVC_NAMING_REGEX: &str = r"^([a-z0-9](?:[-a-z0-9]*[a-z0-9])?)-\d+$";
 
 /// Maximum number of snapshot transactions to be pruned per call.
 pub const SNAPSHOT_TRANSACTION_PRUNE_LIMIT: usize = 10;

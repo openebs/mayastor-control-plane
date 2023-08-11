@@ -864,7 +864,7 @@ mod test {
     #[test]
     fn normalize_disk() {
         use super::*;
-        let disks = vec![
+        let disks = [
             "aio:///dev/null",
             "uring:///dev/null",
             "uring://dev/null", // this URL is invalid

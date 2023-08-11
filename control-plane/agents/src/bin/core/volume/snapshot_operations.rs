@@ -289,8 +289,8 @@ impl OperationGuardArc<VolumeSnapshot> {
         let Some(parameters) = self.as_ref().prepare() else {
             return Err(SvcError::AlreadyExists {
                 id: self.uuid().to_string(),
-                kind: ResourceKind::VolumeSnapshot
-            })
+                kind: ResourceKind::VolumeSnapshot,
+            });
         };
         let volume = self.as_ref().spec().source_id();
         let generic_params = parameters.params().clone();

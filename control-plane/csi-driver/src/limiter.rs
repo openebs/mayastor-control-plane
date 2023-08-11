@@ -1,11 +1,11 @@
-///! Volume Concurrency Limiter Module
-///
-/// In general the Cluster Orchestrator (CO) is responsible for ensuring that there is no more
-/// than one call “in-flight” per volume at a given time. However, in some circumstances, the
-/// CO MAY lose state (for example when the CO crashes and restarts), and MAY issue multiple
-/// calls simultaneously for the same volume. The plugin SHOULD handle this as gracefully as
-/// possible. The error code ABORTED MAY be returned by the plugin in this case (see the Error
-/// Scheme section for details).
+//! Volume Concurrency Limiter Module
+//!
+//! In general the Cluster Orchestrator (CO) is responsible for ensuring that there is no more
+//! than one call “in-flight” per volume at a given time. However, in some circumstances, the
+//! CO MAY lose state (for example when the CO crashes and restarts), and MAY issue multiple
+//! calls simultaneously for the same volume. The plugin SHOULD handle this as gracefully as
+//! possible. The error code ABORTED MAY be returned by the plugin in this case (see the Error
+//! Scheme section for details).
 use once_cell::sync::OnceCell;
 use snafu::Snafu;
 use std::{collections::HashSet, sync::Mutex};

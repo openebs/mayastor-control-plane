@@ -61,6 +61,7 @@ pub fn raw_version_string() -> String {
 pub fn raw_version_str() -> &'static str {
     // to keep clippy happy
     #[allow(dead_code)]
+    #[allow(clippy::option_env_unwrap)]
     fn fallback() -> &'static str {
         option_env!("GIT_VERSION").expect("git version fallback")
     }
@@ -76,6 +77,7 @@ pub fn raw_version_str() -> &'static str {
 pub fn long_raw_version_str() -> &'static str {
     // to keep clippy happy
     #[allow(dead_code)]
+    #[allow(clippy::option_env_unwrap)]
     fn fallback() -> &'static str {
         option_env!("GIT_VERSION_LONG").expect("git version fallback")
     }

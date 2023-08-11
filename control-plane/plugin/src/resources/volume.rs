@@ -288,7 +288,9 @@ impl CreateRows for openapi::models::RebuildHistory {
 }
 
 fn child_uuid(uri: &str) -> String {
-    let Ok(uri) = Url::from_str(uri) else { return "".into();};
+    let Ok(uri) = Url::from_str(uri) else {
+        return "".into();
+    };
     match uri.query_pairs().find(|(q, _)| q == "uuid") {
         Some((_, uuid)) => uuid.to_string(),
         _ => "".into(),

@@ -1,5 +1,6 @@
 /// OpenTelemetry KeyVal for Processor Tags
 pub use opentelemetry::{global, trace, Context, KeyValue};
+use std::{future::Future, pin::Pin};
 
 use event_publisher::event_handler::EventHandle;
 use opentelemetry::sdk::{propagation::TraceContextPropagator, Resource};
@@ -123,7 +124,14 @@ pub fn init_tracing_ext<T: std::net::ToSocketAddrs>(
         Some(url) => {
             let events_filter =
                 filter::Targets::new().with_target("mbus-events-target", Level::INFO);
-            Some(EventHandle::init(url.to_string(), service_name).with_filter(events_filter))
+            Some(
+                EventHandle::init::<fn(Pin<Box<dyn Future<Output = ()> + Send>>)>(
+                    url.to_string(),
+                    service_name,
+                    None,
+                )
+                .with_filter(events_filter),
+            )
         }
         None => None,
     };

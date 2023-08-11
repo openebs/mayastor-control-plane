@@ -884,6 +884,7 @@ impl NodeStateFetcher {
         Ok((replicas, pools, nexuses, snapshots, rebuild_history))
     }
 
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn fetch_rebuild_history(
         &self,
         client: &mut GrpcClient,
@@ -902,6 +903,7 @@ impl NodeStateFetcher {
     }
 
     /// Fetch all snapshots from this node via gRPC.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn fetch_snapshots(
         &self,
         client: &mut GrpcClient,
@@ -909,6 +911,7 @@ impl NodeStateFetcher {
         client.list_repl_snapshots(&ListReplicaSnapshots::All).await
     }
     /// Fetch all snapshots from this node via gRPC.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn fetch_snapshot(
         &self,
         client: &mut GrpcClient,
@@ -926,6 +929,7 @@ impl NodeStateFetcher {
         }
     }
     /// Fetch the specified replica from this node via gRPC.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn fetch_replica(
         &self,
         client: &mut GrpcClient,
@@ -934,14 +938,17 @@ impl NodeStateFetcher {
         client.get_replica(replica_id).await
     }
     /// Fetch all replicas from this node via gRPC.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn fetch_replicas(&self, client: &mut GrpcClient) -> Result<Vec<Replica>, SvcError> {
         client.list_replicas().await
     }
     /// Fetch all pools from this node via gRPC.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn fetch_pools(&self, client: &mut GrpcClient) -> Result<Vec<PoolState>, SvcError> {
         client.list_pools().await
     }
     /// Fetch all nexuses from the node via gRPC.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     async fn fetch_nexuses(&self, client: &mut GrpcClient) -> Result<Vec<Nexus>, SvcError> {
         client.list_nexuses().await
     }

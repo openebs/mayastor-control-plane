@@ -82,7 +82,7 @@ async fn nexus_persistence_test(cluster: &Cluster) {
         (cluster.node(0), cluster.node(1)),
         (cluster.node(1), cluster.node(0)),
     ] {
-        for test in vec![FaultTest::Local, FaultTest::Remote, FaultTest::Unclean] {
+        for test in [FaultTest::Local, FaultTest::Remote, FaultTest::Unclean] {
             nexus_persistence_test_iteration(local, remote, test, cluster).await;
         }
     }
