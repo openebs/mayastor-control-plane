@@ -37,7 +37,9 @@ VOLUME_SIZE = 10485761
 def init():
     Deployer.start(1)
     ApiClient.pools_api().put_node_pool(
-        NODE_NAME, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
+        NODE_NAME,
+        POOL_UUID,
+        CreatePoolBody(["malloc:///disk?size_mb=50"]),
     )
     ApiClient.volumes_api().put_volume(
         VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False)
@@ -80,6 +82,7 @@ def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
         VOLUME_UUID,
         VolumePolicy(False),
         False,
+        0,
     )
 
     volume = volume_ctx[VOLUME_CTX_KEY]
