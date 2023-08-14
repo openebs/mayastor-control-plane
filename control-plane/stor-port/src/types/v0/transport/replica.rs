@@ -179,10 +179,13 @@ pub struct ReplicaSnapshotDescr {
     ready_as_source: bool,
     /// The amount of bytes allocated to all predecessor snapshots.
     predecessor_alloc_size: u64,
+    /// A discarded snapshot has been "deleted" by the control-plane and will be deleted by
+    /// the dataplane when last reference to it (clone) is also deleted.
+    discarded: bool,
 }
 impl ReplicaSnapshotDescr {
     #[allow(clippy::too_many_arguments)]
-    // Creates a new descriptor from given input values.
+    /// Creates a new descriptor from given input values.
     pub fn new(
         snap_uuid: SnapshotId,
         snap_name: String,
@@ -198,6 +201,7 @@ impl ReplicaSnapshotDescr {
         valid: bool,
         ready_as_source: bool,
         predecessor_alloc_size: u64,
+        discarded: bool,
     ) -> Self {
         Self {
             snap_uuid,
@@ -214,6 +218,7 @@ impl ReplicaSnapshotDescr {
             valid,
             ready_as_source,
             predecessor_alloc_size,
+            discarded,
         }
     }
 
@@ -238,6 +243,12 @@ impl ReplicaSnapshotDescr {
     /// Get a reference to the pool uuid.
     pub fn pool_uuid(&self) -> &PoolUuid {
         &self.pool_uuid
+    }
+
+    /// A discarded snapshot has been "deleted" by the control-plane and will be deleted by
+    /// the dataplane when last reference to it (clone) is also deleted.
+    pub fn discarded(&self) -> bool {
+        self.discarded
     }
 
     /// Get a reference to the pool id.

@@ -63,6 +63,5 @@ Feature: Deleting Restored Snapshot Volume
     Then the pool space usage should reflect the snapshot 2, restored volume 2, and deleted snapshot and deleted restored volume 1 (16MiB)
     When we delete the restored volume 1 snapshot 2
     Then the pool space usage should reflect the restored volume 2, and deleted snapshot 1,2 and deleted restored volume 1 (16MiB)
-    # BUG: dataplane bug where snapshots become replicas..
-    #When we delete the restored volume 2
-    #Then the pool space usage should be zero
+    When we delete the restored volume 2
+    Then the pool space usage should be zero

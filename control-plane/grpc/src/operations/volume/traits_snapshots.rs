@@ -573,6 +573,7 @@ impl TryFrom<&snapshot::ReplicaSnapshotState> for ReplicaSnapshotState {
                 val.valid,
                 val.ready_as_source,
                 val.predecessor_alloc_size,
+                val.discarded,
             ),
         })
     }
@@ -638,7 +639,7 @@ impl TryFrom<VolumeSnapshot> for volume::VolumeSnapshot {
             state: Some(volume::VolumeSnapshotState {
                 state: Some(snapshot::SnapshotState {
                     uuid: value.state().uuid().to_string(),
-                    status: 0,
+                    status: snapshot::SnapshotStatus::Online as i32,
                     timestamp: value.state().timestamp().cloned(),
                     allocated_size: value.state().allocated_size().unwrap_or_default(),
                     source_id: value.state().source_id().to_string(),
@@ -667,6 +668,7 @@ impl TryFrom<VolumeSnapshot> for volume::VolumeSnapshot {
                                         valid: state.valid(),
                                         ready_as_source: state.ready_as_source(),
                                         predecessor_alloc_size: state.predecessor_alloc_size(),
+                                        discarded: state.discarded(),
                                     },
                                 )
                             }
@@ -770,6 +772,7 @@ impl TryFrom<snapshot::ReplicaSnapshotState> for transport::ReplicaSnapshot {
             value.valid,
             value.ready_as_source,
             value.predecessor_alloc_size,
+            value.discarded,
         ))
     }
 }

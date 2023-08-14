@@ -252,6 +252,7 @@ impl TryIoEngineToAgent for v1::snapshot::SnapshotInfo {
             self.valid_snapshot,
             self.ready_as_source,
             self.referenced_bytes,
+            self.discarded_snapshot,
         ))
     }
 }
@@ -576,7 +577,8 @@ impl AgentToIoEngine for transport::ListReplicaSnapshots {
         v1::snapshot::ListSnapshotsRequest {
             source_uuid: source.map(ToString::to_string),
             snapshot_uuid: snapshot.map(ToString::to_string),
-            snapshot_query_type: v1::snapshot::SnapshotQueryType::AllSnapshots as i32,
+            snapshot_query_type:
+                v1::snapshot::SnapshotQueryType::AllSnapshotsExceptDiscardedSnapshots as i32,
         }
     }
 }

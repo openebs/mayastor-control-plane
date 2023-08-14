@@ -59,4 +59,7 @@ message ReplicaSnapshotState {
   string                    entity_id = 14;
   // ready for usage, i,e source for another volume.
   bool                ready_as_source = 15;
+  // A discarded snapshot has been "deleted" by the control-plane and will be deleted by
+  // the dataplane when last reference to it (clone) is also deleted.
+  bool                      discarded = 16;
 }
