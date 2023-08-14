@@ -2,8 +2,8 @@ use crate::{
     controller::{
         registry::Registry,
         resources::{
-            operations::{ResourceCloning, ResourceLifecycleExt},
-            operations_helper::SpecOperationsHelper,
+            operations::{ResourceCloning, ResourceLifecycle, ResourceLifecycleExt},
+            operations_helper::{GuardedOperationsHelper, SpecOperationsHelper},
             OperationGuardArc, TraceStrLog,
         },
         scheduling::{volume::CloneVolumeSnapshot, ResourceFilter},
@@ -16,11 +16,13 @@ use stor_port::{
     types::v0::{
         store::{
             replica::ReplicaSpec,
-            snapshots::volume::VolumeSnapshot,
+            snapshots::volume::{
+                CreateRestoreInfo, DestroyRestoreInfo, VolumeSnapshot, VolumeSnapshotOperation,
+            },
             volume::{VolumeContentSource, VolumeSpec},
         },
         transport::{
-            CreateSnapshotVolume, Replica, SnapshotCloneId, SnapshotCloneParameters,
+            CreateSnapshotVolume, DestroyVolume, Replica, SnapshotCloneId, SnapshotCloneParameters,
             SnapshotCloneSpecParams,
         },
     },
@@ -45,14 +47,52 @@ impl SnapshotCloneOp<'_> {
 impl ResourceCloning for OperationGuardArc<VolumeSnapshot> {
     type Create = CreateSnapshotVolume;
     type CreateOutput = OperationGuardArc<VolumeSpec>;
+    type Destroy = DestroyVolume;
 
     async fn create_clone(
         &mut self,
         registry: &Registry,
         request: &Self::Create,
     ) -> Result<Self::CreateOutput, SvcError> {
+        let spec_clone = self
+            .start_update(
+                registry,
+                self.as_ref(),
+                VolumeSnapshotOperation::CreateRestore(CreateRestoreInfo::new(
+                    request.params().uuid.clone(),
+                )),
+            )
+            .await?;
         let request = CreateVolumeSource::Snapshot(SnapshotCloneOp(request, self));
-        OperationGuardArc::<VolumeSpec>::create_ext(registry, &request).await
+
+        // Create the restore using the volume op guard.
+        let create_result = OperationGuardArc::<VolumeSpec>::create_ext(registry, &request).await;
+
+        self.complete_update(registry, create_result, spec_clone)
+            .await
+    }
+
+    async fn destroy_clone(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Destroy,
+        mut volume: OperationGuardArc<VolumeSpec>,
+    ) -> Result<(), SvcError> {
+        let spec_clone = self
+            .start_update(
+                registry,
+                self.as_ref(),
+                VolumeSnapshotOperation::DestroyRestore(DestroyRestoreInfo::new(
+                    request.uuid.clone(),
+                )),
+            )
+            .await?;
+
+        // Destroy the restore using the volume op guard.
+        let destroy_result = volume.destroy(registry, request).await;
+
+        self.complete_update(registry, destroy_result, spec_clone)
+            .await
     }
 }
 

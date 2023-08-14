@@ -2,8 +2,8 @@ use clap::Parser;
 use openapi::tower::client::Url;
 use plugin::{
     operations::{
-        Cordoning, Drain, Get, GetBlockDevices, GetSnapshots, List, Operations, RebuildHistory,
-        ReplicaTopology, Scale,
+        Cordoning, Drain, Get, GetBlockDevices, GetSnapshots, List, ListExt, Operations,
+        RebuildHistory, ReplicaTopology, Scale,
     },
     resources::{
         blockdevice, cordon, drain, node, pool, snapshot, volume, CordonResources, DrainResources,
@@ -83,13 +83,15 @@ async fn execute(cli_args: CliArgs) {
                 }
                 GetDrainArgs::Nodes => drain::NodeDrains::list(&cli_args.output).await,
             },
-            GetResources::Volumes => volume::Volumes::list(&cli_args.output).await,
+            GetResources::Volumes(vol_args) => {
+                volume::Volumes::list(&cli_args.output, vol_args).await
+            }
             GetResources::Volume { id } => volume::Volume::get(id, &cli_args.output).await,
             GetResources::RebuildHistory { id } => {
                 volume::Volume::rebuild_history(id, &cli_args.output).await
             }
-            GetResources::VolumeReplicaTopologies => {
-                volume::Volume::topologies(&cli_args.output).await
+            GetResources::VolumeReplicaTopologies(vol_args) => {
+                volume::Volume::topologies(&cli_args.output, vol_args).await
             }
             GetResources::VolumeReplicaTopology { id } => {
                 volume::Volume::topology(id, &cli_args.output).await

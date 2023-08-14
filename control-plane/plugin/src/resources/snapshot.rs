@@ -56,7 +56,8 @@ impl CreateRow for openapi::models::VolumeSnapshot {
             ::utils::bytes::into_human(meta.spec_size),
             ::utils::bytes::into_human(state.allocated_size),
             ::utils::bytes::into_human(meta.total_allocated_size),
-            state.source_volume
+            state.source_volume,
+            self.definition.metadata.num_restores
         ]
     }
 }

@@ -82,6 +82,21 @@ impl VolumeSnapshot {
             .retain(|key, _| key == &self.metadata.txn_id);
         self.metadata.transactions.extend(transactions)
     }
+    /// Insert a restore to runtime meta restores.
+    pub fn insert_restore(&mut self, restored_volume: &VolumeId) {
+        self.metadata
+            .runtime_meta
+            .restores
+            .insert(restored_volume.clone())
+    }
+    /// Remove a restore from runtime meta restores.
+    pub fn remove_restore(&mut self, restored_volume: &VolumeId) {
+        self.metadata.runtime_meta.restores.remove(restored_volume)
+    }
+    /// Number of restores done from this snapshot.
+    pub fn num_restores(&self) -> u32 {
+        self.metadata.runtime_meta.restores.len()
+    }
 }
 impl From<&VolumeSnapshotUserSpec> for VolumeSnapshot {
     fn from(value: &VolumeSnapshotUserSpec) -> Self {
@@ -115,6 +130,9 @@ pub struct VolumeSnapshotMeta {
     /// The "actual" snapshots can be accessed by the key `txn_id`.
     /// Failed transactions are any other key.
     transactions: HashMap<SnapshotTxId, Vec<ReplicaSnapshot>>,
+    /// VolumeSnapshot runtime metadata information.
+    #[serde(skip)]
+    runtime_meta: VolumeSnapshotRuntimeMetadata,
 }
 impl VolumeSnapshotMeta {
     /// Get the snapshot operation state.
@@ -170,6 +188,38 @@ impl VolumeSnapshotMeta {
     }
 }
 
+/// VolumeSnapshot runtime metadata information.
+#[derive(Debug, Clone, PartialEq, Default)]
+struct VolumeSnapshotRuntimeMetadata {
+    /// Runtime list of all restores done from this snapshot.
+    restores: VolumeRestoreList,
+}
+
+/// List of all volume snapshot restore and related information.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct VolumeRestoreList {
+    /// Runtime list of all volumes restored from this snapshot.
+    pub(crate) restores: HashSet<VolumeId>,
+}
+impl VolumeRestoreList {
+    /// Insert restored volume id into the list.
+    pub fn insert(&mut self, restored_volume: VolumeId) {
+        self.restores.insert(restored_volume);
+    }
+    /// Remove restored volume id from the list.
+    pub fn remove(&mut self, restored_volume: &VolumeId) {
+        self.restores.remove(restored_volume);
+    }
+    /// Check if restores are empty.
+    pub fn is_empty(&self) -> bool {
+        self.restores.is_empty()
+    }
+    /// Number of restores.
+    pub fn len(&self) -> u32 {
+        self.restores.len() as u32
+    }
+}
+
 /// Operation State for a VolumeSnapshot resource.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct VolumeSnapshotOperationState {
@@ -186,6 +236,8 @@ pub enum VolumeSnapshotOperation {
     Create(VolumeSnapshotCreateInfo),
     Destroy,
     CleanupStaleTransactions,
+    CreateRestore(CreateRestoreInfo),
+    DestroyRestore(DestroyRestoreInfo),
 }
 
 /// Completion info for volume snapshot create operation.
@@ -231,6 +283,40 @@ impl PartialEq<VolumeSnapshotCreateInfo> for VolumeSnapshot {
         // same as we don't allow reusing the txn_id. Instead, if we have the same txn_id then
         // we should check if all is created and ready!
         self.metadata.txn_id.ne(&other.txn_id)
+    }
+}
+
+/// CreateRestore Operation info.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct CreateRestoreInfo {
+    volume_uuid: VolumeId,
+}
+
+impl CreateRestoreInfo {
+    /// Create a new CreateRestoreInfo.
+    pub fn new(volume_uuid: VolumeId) -> Self {
+        Self { volume_uuid }
+    }
+    /// Get the restore volume uuid.
+    pub fn volume_uuid(&self) -> &VolumeId {
+        &self.volume_uuid
+    }
+}
+
+/// Destroy Operation info.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct DestroyRestoreInfo {
+    volume_uuid: VolumeId,
+}
+
+impl DestroyRestoreInfo {
+    /// Destroy a new CreateRestoreInfo.
+    pub fn new(volume_uuid: VolumeId) -> Self {
+        Self { volume_uuid }
+    }
+    /// Get the restore volume uuid.
+    pub fn volume_uuid(&self) -> &VolumeId {
+        &self.volume_uuid
     }
 }
 
@@ -318,6 +404,10 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
                 }
             }
             VolumeSnapshotOperation::CleanupStaleTransactions => {}
+            VolumeSnapshotOperation::CreateRestore(info) => self.insert_restore(info.volume_uuid()),
+            VolumeSnapshotOperation::DestroyRestore(info) => {
+                self.remove_restore(info.volume_uuid())
+            }
         }
     }
 
@@ -344,6 +434,8 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
             }
             VolumeSnapshotOperation::Destroy => {}
             VolumeSnapshotOperation::CleanupStaleTransactions => {}
+            VolumeSnapshotOperation::CreateRestore(_) => {}
+            VolumeSnapshotOperation::DestroyRestore(_) => {}
         }
     }
 
@@ -425,6 +517,10 @@ impl VolumeSnapshotList {
     /// Check if there's any snapshot.
     pub fn is_empty(&self) -> bool {
         self.snapshots.is_empty()
+    }
+    /// Number of snapshots.
+    pub fn len(&self) -> usize {
+        self.snapshots.len()
     }
 }
 

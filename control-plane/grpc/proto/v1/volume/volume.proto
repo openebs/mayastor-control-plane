@@ -59,6 +59,8 @@ message VolumeSpec {
   optional AffinityGroup affinity_group = 10;
   // Volume Content Source i.e the snapshot or a volume.
   optional VolumeContentSource content_source  = 11;
+  // Number of snapshots taken on this volume.
+  uint32 num_snapshots = 12;
 
   // Volume Content Source i.e the snapshot or a volume.
   message VolumeContentSource {
@@ -513,6 +515,8 @@ message VolumeSnapshotMeta {
   uint64                             spec_size = 6;
   // Size taken by the snapshot and its predecessors.
   uint64                  total_allocated_size = 7;
+  // Number of restores done from this snapshot.
+  uint32                          num_restores = 8;
 
   message ReplicaSnapshots {
     repeated ReplicaSnapshot         snapshots = 1;

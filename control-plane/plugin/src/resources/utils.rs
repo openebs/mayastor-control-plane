@@ -20,7 +20,9 @@ lazy_static! {
         "STATUS",
         "SIZE",
         "THIN-PROVISIONED",
-        "ALLOCATED"
+        "ALLOCATED",
+        "SNAPSHOTS",
+        "SOURCE"
     ];
     pub static ref SNAPSHOT_HEADERS: Row = row![
         "ID",
@@ -28,7 +30,8 @@ lazy_static! {
         "SOURCE-SIZE",
         "ALLOCATED-SIZE",
         "TOTAL-ALLOCATED-SIZE",
-        "SOURCE-VOL"
+        "SOURCE-VOL",
+        "RESTORES"
     ];
     pub static ref POOLS_HEADERS: Row = row![
         "ID",

@@ -107,6 +107,7 @@ impl From<&stor_port::types::v0::store::snapshots::volume::VolumeSnapshot> for V
                 total_allocated_size: value.metadata().total_allocated_size(),
                 txn_id: value.metadata().txn_id().clone(),
                 transactions,
+                num_restores: value.num_restores(),
             },
         }
     }
@@ -137,7 +138,10 @@ pub struct VolumeSnapshotMeta {
     /// The "actual" snapshots can be accessed by the key `txn_id`.
     /// Failed transactions are any other key.
     transactions: HashMap<String, Vec<ReplicaSnapshot>>,
+    /// The number of restores done from this snapshot.
+    num_restores: u32,
 }
+
 impl VolumeSnapshotMeta {
     /// Get the volume snapshot status.
     pub fn status(&self) -> &SpecStatus<()> {
@@ -166,6 +170,10 @@ impl VolumeSnapshotMeta {
     /// Get the snapshot total allocated size in bytes.
     pub fn total_allocated_size(&self) -> u64 {
         self.total_allocated_size
+    }
+    /// The number of restores done from this snapshot.
+    pub fn num_restores(&self) -> u32 {
+        self.num_restores
     }
 }
 
@@ -468,6 +476,7 @@ impl TryFrom<volume::VolumeSnapshot> for VolumeSnapshot {
                         snapshots.map(|s| (k, s))
                     })
                     .collect::<Result<HashMap<_, _>, _>>()?,
+                num_restores: meta.num_restores,
             },
             state: VolumeSnapshotState {
                 info,
@@ -624,6 +633,7 @@ impl TryFrom<VolumeSnapshot> for volume::VolumeSnapshot {
                 size: value.meta.size,
                 spec_size: value.meta.spec_size,
                 total_allocated_size: value.meta.total_allocated_size,
+                num_restores: value.meta.num_restores,
             }),
             state: Some(volume::VolumeSnapshotState {
                 state: Some(snapshot::SnapshotState {

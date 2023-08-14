@@ -175,6 +175,9 @@ pub struct VolumeSpec {
     /// Affinity Group related information.
     #[serde(default)]
     pub affinity_group: Option<AffinityGroup>,
+    /// Number of snapshots taken on this volume.
+    #[serde(skip)]
+    pub num_snapshots: u32,
     /// Volume metadata information.
     #[serde(default, skip_serializing_if = "super::is_default")]
     pub metadata: VolumeMetadata,
@@ -218,6 +221,10 @@ impl VolumeMetadata {
         self.runtime.snapshots.insert(snapshot);
         // we become thin provisioned!
         self.persisted.snapshot_as_thin = Some(true);
+    }
+    /// Number of snapshots taken on this volume.
+    pub fn num_snapshots(&self) -> usize {
+        self.runtime.snapshots.len()
     }
 }
 
@@ -744,6 +751,7 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.metadata.persisted.snapshot_as_thin,
             src.affinity_group.into_opt(),
             src.content_source.into_opt(),
+            src.num_snapshots,
         )
     }
 }

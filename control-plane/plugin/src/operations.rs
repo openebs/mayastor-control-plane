@@ -41,6 +41,14 @@ pub trait List {
     async fn list(output: &utils::OutputFormat);
 }
 
+/// List trait.
+/// To be implemented by resources which support the 'list' operation, with context.
+#[async_trait(?Send)]
+pub trait ListExt {
+    type Context;
+    async fn list(output: &utils::OutputFormat, context: &Self::Context);
+}
+
 /// Get trait.
 /// To be implemented by resources which support the 'get' operation.
 #[async_trait(?Send)]
@@ -62,7 +70,8 @@ pub trait Scale {
 #[async_trait(?Send)]
 pub trait ReplicaTopology {
     type ID;
-    async fn topologies(output: &utils::OutputFormat);
+    type Context;
+    async fn topologies(output: &utils::OutputFormat, context: &Self::Context);
     async fn topology(id: &Self::ID, output: &utils::OutputFormat);
 }
 

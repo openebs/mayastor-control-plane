@@ -474,6 +474,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object_with_topology(
         VOLUME_UUID,
         VolumePolicy(False),
         False,
+        0,
         topology=Topology(
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(
@@ -499,7 +500,13 @@ def volume_creation_should_succeed_with_a_returned_volume_object_without_pool_to
 ):
     """volume creation should succeed with a returned volume object without pool topology."""
     expected_spec = VolumeSpec(
-        1, VOLUME_SIZE, SpecStatus("Created"), VOLUME_UUID, VolumePolicy(False), False
+        1,
+        VOLUME_SIZE,
+        SpecStatus("Created"),
+        VOLUME_UUID,
+        VolumePolicy(False),
+        False,
+        0,
     )
 
     # Check the volume object returned is as expected
