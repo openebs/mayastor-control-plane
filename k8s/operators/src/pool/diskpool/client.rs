@@ -189,7 +189,7 @@ async fn update_stored_version(
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
     if let Ok(mut crd) = crd_api.get_status(crd_name).await {
         let param = PatchParams::apply("status_patch").force();
-        if let Some(mut status) = crd.status.as_mut() {
+        if let Some(status) = crd.status.as_mut() {
             status.stored_versions = Some(vec![new_version.to_string()]);
         } else {
             return Err(Error::CrdFieldMissing {
