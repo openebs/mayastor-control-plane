@@ -55,7 +55,10 @@ class Volume(object):
     def cleanup(volume):
         if Cluster.env_cleanup():
             try:
-                Volume.__api().del_volume(volume.spec.uuid)
+                if hasattr(volume, "spec"):
+                    Volume.__api().del_volume(volume.spec.uuid)
+                else:
+                    Volume.__api().del_volume(volume)
             except NotFoundException:
                 pass
 
@@ -101,7 +104,10 @@ class Snapshot(object):
     def cleanup(snapshot):
         if Cluster.env_cleanup():
             try:
-                Snapshot.__api().del_snapshot(snapshot.definition.spec.uuid)
+                if hasattr(snapshot, "definition"):
+                    Snapshot.__api().del_snapshot(snapshot.definition.spec.uuid)
+                else:
+                    Snapshot.__api().del_snapshot(snapshot)
             except NotFoundException:
                 pass
 
@@ -151,6 +157,10 @@ class Cluster(object):
     def wait_cache_update(slack=0.1):
         cache = common.human_time_to_float(Deployer.cache_period())
         time.sleep(cache + slack)
+
+    @staticmethod
+    def restart_node(node_name):
+        Deployer.restart_node(node_name)
 
 
 @retry(wait_fixed=10, stop_max_attempt_number=200)

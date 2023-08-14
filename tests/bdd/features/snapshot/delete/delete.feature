@@ -57,3 +57,14 @@ Feature: Volume Snapshot deletion
       | publish_status |
       | published      |
       | unpublished    |
+
+  Scenario: Delete Snapshots in Order
+    Given we have a single replica unpublished volume
+    And we've created a snapshot for the volume
+    And we've created a snapshot 2 for the volume
+    And we've deleted the volume
+    And the snapshot is deleted
+    When the io-engine node where snapshot 2 resides on is restarted
+    Then the snapshot 2 should still be online
+    When the snapshot 2 is deleted
+    Then the pool usage should be zero
