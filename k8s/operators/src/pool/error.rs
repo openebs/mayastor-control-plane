@@ -1,3 +1,4 @@
+use kube::core::crd::MergeError;
 use openapi::{clients, models::RestJsonError};
 use snafu::Snafu;
 
@@ -42,6 +43,15 @@ pub enum Error {
     },
     Generic {
         message: String,
+    },
+    #[snafu(display("CRD merge failed"))]
+    CrdMergeError {
+        source: MergeError,
+    },
+    #[snafu(display("{} for CRD : {}", field, name))]
+    CrdFieldMissing {
+        name: String,
+        field: String,
     },
 }
 
