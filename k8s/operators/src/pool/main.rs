@@ -8,7 +8,7 @@ pub(crate) mod error;
 mod mayastorpool;
 
 use crate::diskpool::client::{
-    create_v1beta_cr, discard_older_schema, migrate_to_v1beta1, v1beta1_api,
+    create_missing_cr, create_v1beta1_cr, discard_older_schema, migrate_to_v1beta1, v1beta1_api,
 };
 use chrono::Utc;
 use clap::{Arg, ArgMatches};
@@ -713,9 +713,9 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
     )?;
 
     let context = OperatorContext {
-        k8s,
+        k8s: k8s.clone(),
         inventory: tokio::sync::RwLock::new(HashMap::new()),
-        http: clients::tower::ApiClient::new(cfg),
+        http: clients::tower::ApiClient::new(cfg.clone()),
         interval: args
             .get_one::<String>("interval")
             .unwrap()
@@ -723,6 +723,8 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
             .expect("interval value is invalid")
             .as_secs(),
     };
+
+    create_missing_cr(&k8s, clients::tower::ApiClient::new(cfg.clone()), namespace).await?;
 
     info!(namespace, "Starting DiskPool Operator (dsp)");
 
@@ -847,7 +849,7 @@ pub(crate) async fn migrate_and_clean_msps(k8s: &Client, namespace: &str) -> Res
                     let disks = msp.spec.disks();
                     // Create the corresponding v1beta1 DiskPool CRs.
                     if let Err(error) =
-                        create_v1beta_cr(k8s, namespace, &name, DiskPoolSpec::new(node, disks))
+                        create_v1beta1_cr(k8s, namespace, &name, DiskPoolSpec::new(node, disks))
                             .await
                     {
                         error!("Migration failed for {name} with: {error:?}");
