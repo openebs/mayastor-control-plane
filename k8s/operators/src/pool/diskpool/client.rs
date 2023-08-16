@@ -9,8 +9,8 @@ use kube::{
     core::crd::merge_crds,
     Api, Client, CustomResourceExt, ResourceExt,
 };
-use openapi::apis::StatusCode;
-use tracing::{error, info};
+use openapi::{apis::StatusCode, clients};
+use tracing::{error, info, warn};
 
 /// Get the DiskPool v1beta1 api.
 pub(crate) fn v1beta1_api(client: &Client, namespace: &str) -> Api<DiskPool> {
@@ -18,7 +18,7 @@ pub(crate) fn v1beta1_api(client: &Client, namespace: &str) -> Api<DiskPool> {
 }
 
 /// Create a v1beta1 disk pool CR, with the given name and spec.
-pub(crate) async fn create_v1beta_cr(
+pub(crate) async fn create_v1beta1_cr(
     client: &Client,
     namespace: &str,
     name: &str,
@@ -175,6 +175,36 @@ pub(crate) async fn migrate_to_v1beta1(
             message: "Error in listing v1alpha1 CR".to_string(),
         });
     };
+    Ok(())
+}
+
+/// Reconciles control-plane pools into CRs by listing pools from the control plane
+/// and creating equivalent CRs if respective CR is not present.
+pub(crate) async fn create_missing_cr(
+    k8s: &Client,
+    control_client: clients::tower::ApiClient,
+    namespace: &str,
+) -> Result<(), Error> {
+    if let Ok(pools) = control_client.pools_api().get_pools().await {
+        let pools_api: Api<DiskPool> = v1beta1_api(k8s, namespace);
+        let param = PostParams::default();
+        for pool in pools.into_body().iter_mut() {
+            match pools_api.get(&pool.id).await {
+                Err(kube::Error::Api(e)) if e.code == StatusCode::NOT_FOUND => {
+                    if let Some(spec) = &pool.spec {
+                        warn!(pool.id, spec.node, "DiskPool CR is missing");
+                        let cr_spec: DiskPoolSpec =
+                            DiskPoolSpec::new(spec.node.clone(), spec.disks.clone());
+                        let new_disk_pool: DiskPool = DiskPool::new(&pool.id, cr_spec);
+                        if let Err(error) = pools_api.create(&param, &new_disk_pool).await {
+                            info!(pool.id, spec.node, %error, "Failed to create CR for missing DiskPool");
+                        }
+                    }
+                }
+                _ => continue,
+            };
+        }
+    }
     Ok(())
 }
 
