@@ -54,32 +54,33 @@ async fn delete_unknown_volume_snapshot_reconciler(
     let node_wrapper = context.registry().node_wrapper(node_spec.uid()).await?;
 
     let snapshots = node_wrapper.snapshots().await;
-    for snap in snapshots {
-        if let Some((snap_uuid, txn_id)) = extract_uuid_txn_id(snap.snap_name()) {
-            let _guard = match context.registry().specs().volume_snapshot(&snap_uuid).await {
-                Ok(snap_guard)
-                    if !snap_guard
-                        .as_ref()
-                        .metadata()
-                        .transactions()
-                        .contains_key(txn_id) =>
-                {
-                    Some(snap_guard)
-                }
-                Ok(_snap_guard) => continue,
-                Err(SvcError::VolSnapshotNotFound { .. }) => None,
-                Err(_) => continue,
-            };
-            if node_wrapper
-                .destroy_repl_snapshot(&DestroyReplicaSnapshot::new(
-                    snap.snap_uuid().clone(),
-                    snap.pool_uuid().clone(),
-                ))
-                .await
-                .is_ok()
+    for snap in snapshots.into_iter().filter(|s| !s.discarded()) {
+        let Some((snap_uuid, txn_id)) = extract_uuid_txn_id(snap.snap_name()) else {
+            continue;
+        };
+        // Keeps the guard to ensure nothing else is modifying the snapshot.
+        let _guard = match context.registry().specs().volume_snapshot(&snap_uuid).await {
+            Ok(snap_guard)
+                if !snap_guard
+                    .as_ref()
+                    .metadata()
+                    .transactions()
+                    .contains_key(txn_id) =>
             {
-                tracing::warn!(snapshot.uuid=%snap.snap_uuid(), snapshot.pool_uuid=%snap.pool_uuid(), "Deleted unknown replica snapshot from pool");
+                Some(snap_guard)
             }
+            Err(SvcError::VolSnapshotNotFound { .. }) => None,
+            Ok(_) | Err(_) => continue,
+        };
+        if node_wrapper
+            .destroy_repl_snapshot(&DestroyReplicaSnapshot::new(
+                snap.snap_uuid().clone(),
+                snap.pool_uuid().clone(),
+            ))
+            .await
+            .is_ok()
+        {
+            tracing::warn!(snapshot.uuid=%snap.snap_uuid(), snapshot.pool_uuid=%snap.pool_uuid(), "Deleted unknown replica snapshot from pool");
         }
     }
 

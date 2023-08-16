@@ -4,6 +4,7 @@ import pytest
 from dataclasses import dataclass
 
 import common
+from common.docker import Docker
 
 
 @dataclass
@@ -177,3 +178,7 @@ class Deployer(object):
     @staticmethod
     def cache_period():
         return pytest.deployer_options.cache_period
+
+    @staticmethod
+    def restart_node(node_name):
+        Docker.restart_container(node_name)

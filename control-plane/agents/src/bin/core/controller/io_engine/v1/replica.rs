@@ -21,7 +21,13 @@ impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
     async fn list_replicas(&self) -> Result<Vec<Replica>, SvcError> {
         let rpc_replicas = self
             .replica()
-            .list_replicas(ListReplicaOptions::default())
+            .list_replicas(ListReplicaOptions {
+                name: None,
+                poolname: None,
+                uuid: None,
+                pooluuid: None,
+                replicatype: ReplicaType::AllReplicasExceptSnapshots as i32,
+            })
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Replica,
