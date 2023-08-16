@@ -7,6 +7,9 @@
 # For faster test cycle, the env variable FAST can be set to anything, which will skip building certain dependencies.
 # Before using it, make sure they are already built!
 # Eg: FAST=1 scripts/python/test.sh tests/bdd/features/volume/create/test_feature.py -k test_sufficient_suitable_pools
+# To avoid cleanup/teardown of the cluster and resources you can use this:
+# Eg: CLEAN=0 scripts/python/test.sh tests/bdd/features/volume/create/test_feature.py
+# This way the cluster will remain in place, which sometimes can help figure out why it failed.
 
 set -e
 
@@ -36,7 +39,7 @@ fi
 
 # Extra arguments will be provided directly to pytest, otherwise the bdd folder will be tested with default arguments
 if [ $# -eq 0 ]; then
-  pytest "$BDD_TEST_DIR"
+  pytest "$BDD_TEST_DIR" --durations=20
 else
   pytest "$@"
 fi

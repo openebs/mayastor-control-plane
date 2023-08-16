@@ -8,6 +8,7 @@ import openapi
 from common.docker import Docker
 from common.apiclient import ApiClient
 from common.deployer import Deployer
+from common.operations import Volume, Snapshot, wait_node_online
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.protocol import Protocol
@@ -53,8 +54,11 @@ def create_pool_disk_images():
 def setup(create_pool_disk_images):
     Deployer.start(
         io_engines=1,
-        cache_period="250ms",
-        reconcile_period="350ms",
+        cache_period="50ms",
+        reconcile_period="50ms",
+        request_timeout="300ms",
+        no_min_timeouts=True,
+        io_engine_env="MAYASTOR_HB_INTERVAL_SEC=1",
     )
     ApiClient.pools_api().put_node_pool(
         NODE1,
@@ -97,10 +101,7 @@ def we_have_single_replica_publish_status_volume(publish_status):
             ),
         )
     yield
-    try:
-        ApiClient.volumes_api().del_volume(VOLUME1_UUID)
-    except:
-        pass
+    Volume.cleanup(VOLUME1_UUID)
 
 
 @when("a get snapshot call is made for the snapshot")
@@ -112,6 +113,7 @@ def a_get_snapshot_call_is_made_for_the_snapshot():
 def the_node_hosting_the_replica_is_unpaused():
     """the node hosting the replica is unpaused."""
     Docker.unpause_container(NODE1)
+    wait_node_online(NODE1)
 
 
 @when("the source volume is deleted")
@@ -128,10 +130,7 @@ def we_attempt_to_create_a_snapshot_for_the_volume():
     except openapi.exceptions.ServiceException as e:
         pytest.exception = e
     yield
-    try:
-        ApiClient.snapshots_api().del_snapshot(SNAP1_UUID)
-    except:
-        pass
+    Snapshot.cleanup(SNAP1_UUID)
 
 
 @when("we attempt to create a snapshot with the same id for the volume")
@@ -149,14 +148,11 @@ def we_attempt_to_create_a_snapshot_with_the_same_id_for_the_volume():
     except openapi.exceptions.ServiceException as service_exception:
         pytest.exception = service_exception
     yield
-    try:
-        ApiClient.snapshots_api().del_snapshot(SNAP1_UUID)
-    except:
-        pass
+    Snapshot.cleanup(SNAP1_UUID)
 
 
 @then("the corresponding snapshot stuck in creating state should be deleted")
-@retry(wait_fixed=200, stop_max_attempt_number=50)
+@retry(wait_fixed=100, stop_max_attempt_number=50)
 def the_corresponding_snapshot_stuck_in_creating_state_should_be_deleted():
     """the corresponding snapshot stuck in creating state should be deleted."""
     try:
@@ -174,14 +170,15 @@ def the_corresponding_snapshot_stuck_in_creating_state_should_be_deleted():
 
 
 @then("the response should not contain the failed transactions")
-@retry(wait_fixed=200, stop_max_attempt_number=50)
+@retry(wait_fixed=100, stop_max_attempt_number=50)
 def the_response_should_not_contain_the_failed_transactions():
     """the response should not contain the failed transactions."""
     response = ApiClient.snapshots_api().get_volumes_snapshot(SNAP1_UUID)
     assert len(response.definition.metadata.transactions) == 1
-    assert response.definition.metadata.transactions["2"] is not None
-    assert len(response.definition.metadata.transactions["2"]) == 1
-    assert str(response.definition.metadata.transactions["2"][0]["status"]) == "Created"
+    transactions = list(response.definition.metadata.transactions.values())[0]
+    assert transactions is not None
+    assert len(transactions) == 1
+    assert str(transactions[0]["status"]) == "Created"
 
 
 @then("the snapshot creation should be successful")

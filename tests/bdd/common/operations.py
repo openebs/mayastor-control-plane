@@ -1,8 +1,8 @@
 import http
 import time
 from urllib.parse import urlparse
-
 from retrying import retry
+import sys
 
 import common
 import openapi.exceptions
@@ -53,7 +53,7 @@ class Volume(object):
 
     @staticmethod
     def cleanup(volume):
-        if Cluster.env_cleanup():
+        if Cluster.fixture_cleanup():
             try:
                 if hasattr(volume, "spec"):
                     Volume.__api().del_volume(volume.spec.uuid)
@@ -102,7 +102,7 @@ class Snapshot(object):
 
     @staticmethod
     def cleanup(snapshot):
-        if Cluster.env_cleanup():
+        if Cluster.fixture_cleanup():
             try:
                 if hasattr(snapshot, "definition"):
                     Snapshot.__api().del_snapshot(snapshot.definition.spec.uuid)
@@ -152,6 +152,10 @@ class Cluster(object):
     @staticmethod
     def env_cleanup():
         return common.env_cleanup()
+
+    @staticmethod
+    def fixture_cleanup():
+        return common.env_cleanup() or not hasattr(sys, "last_traceback")
 
     @staticmethod
     def wait_cache_update(slack=0.1):

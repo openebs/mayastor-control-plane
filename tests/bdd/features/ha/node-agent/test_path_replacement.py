@@ -35,7 +35,7 @@ TARGET_NODE_1 = "io-engine-1"
 TARGET_NODE_2 = "io-engine-2"
 NEXUS_NQN = "nqn.2019-05.io.openebs:%s" % VOLUME_UUID
 # Interval to wait before HA Node agent classifies broken path as failed
-PATH_DETECTION_TIME = 6
+PATH_DETECTION_TIME = 2
 # FIO should be active long enough to outlive the detection interval.
 FIO_RUNTIME = PATH_DETECTION_TIME * 2
 
@@ -114,6 +114,7 @@ def background():
         csi_node=True,
         cache_period="1s",
         io_engine_coreisol=True,
+        agents_env="DETECTION_PERIOD=100ms,SUBSYS_REFRESH_PERIOD=100ms",
     )
 
     ApiClient.pools_api().put_node_pool(

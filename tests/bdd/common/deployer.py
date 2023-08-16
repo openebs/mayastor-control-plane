@@ -19,6 +19,7 @@ class StartOptions:
     io_engine_env: str = ""
     agents_env: str = ""
     node_deadline: str = ""
+    node_conn_timeout: str = ""
     jaeger: bool = True
     cluster_uid: str = "bdd"
     extra_args: [str] = ()
@@ -30,6 +31,8 @@ class StartOptions:
     fio_spdk: bool = False
     io_engine_coreisol: bool = False
     io_engine_devices: [str] = ()
+    request_timeout: str = ""
+    no_min_timeouts: bool = False
 
     def args(self):
         args = [
@@ -53,6 +56,8 @@ class StartOptions:
             args.append(f"--cache-period={self.cache_period}")
         if len(self.node_deadline) > 0:
             args.append(f"--node-deadline={self.node_deadline}")
+        if len(self.node_conn_timeout) > 0:
+            args.append(f"--node-conn-timeout={self.node_conn_timeout}")
         if len(self.io_engine_env) > 0:
             args.append(f"--io-engine-env={self.io_engine_env}")
         if len(self.agents_env) > 0:
@@ -71,6 +76,10 @@ class StartOptions:
             args.append("--io-engine-isolate")
         for device in self.io_engine_devices:
             args.append(f"--io-engine-devices={device}")
+        if len(self.request_timeout) > 0:
+            args.append(f"--request-timeout={self.request_timeout}")
+        if self.no_min_timeouts:
+            args.append(f"--no-min-timeouts")
 
         agent_arg = "--agents=Core"
         if self.ha_node_agent:
@@ -99,6 +108,7 @@ class Deployer(object):
         agents_env="",
         rest_env="",
         node_deadline="",
+        node_conn_timeout="",
         jaeger=True,
         max_rebuilds="",
         cluster_agent=False,
@@ -107,6 +117,8 @@ class Deployer(object):
         fio_spdk=False,
         io_engine_coreisol=False,
         io_engine_devices=[],
+        request_timeout="",
+        no_min_timeouts=False,
     ):
         options = StartOptions(
             io_engines,
@@ -120,6 +132,7 @@ class Deployer(object):
             agents_env=agents_env,
             rest_env=rest_env,
             node_deadline=node_deadline,
+            node_conn_timeout=node_conn_timeout,
             jaeger=jaeger,
             max_rebuilds=max_rebuilds,
             ha_node_agent=node_agent,
@@ -128,6 +141,8 @@ class Deployer(object):
             fio_spdk=fio_spdk,
             io_engine_coreisol=io_engine_coreisol,
             io_engine_devices=io_engine_devices,
+            request_timeout=request_timeout,
+            no_min_timeouts=no_min_timeouts,
         )
         pytest.deployer_options = options
         Deployer.start_with_opts(options)

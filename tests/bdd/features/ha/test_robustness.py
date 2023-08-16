@@ -49,14 +49,15 @@ ETCD_CLIENT = Etcd()
 def init():
     Deployer.start(
         2,
-        cache_period="500ms",
-        reconcile_period="600ms",
+        cache_period="100ms",
+        reconcile_period="200ms",
         cluster_agent=True,
-        cluster_agent_fast="1s",
+        cluster_agent_fast="100ms",
         node_agent=True,
         csi_node=True,
         io_engine_coreisol=True,
         io_engine_env="MAYASTOR_HB_INTERVAL_SEC=0",
+        agents_env="DETECTION_PERIOD=100ms,SUBSYS_REFRESH_PERIOD=100ms",
     )
     yield
     Deployer.stop()
@@ -103,7 +104,7 @@ def a_connected_nvme_initiator(connect_to_first_path):
     """a connected nvme initiator."""
     volume = pytest.volume
     device_uri = volume.state["target"]["deviceUri"]
-    nvme_set_reconnect_delay(device_uri, 2)
+    nvme_set_reconnect_delay(device_uri, 1)
 
 
 @given("a deployer cluster")
@@ -116,7 +117,7 @@ def a_reconnect_delay_set_to_15s():
     """a reconnect_delay set to 15s."""
     volume = pytest.volume
     device_uri = volume.state["target"]["deviceUri"]
-    nvme_set_reconnect_delay(device_uri, 15)
+    nvme_set_reconnect_delay(device_uri, 7)
 
 
 @given("a single replica volume")
@@ -187,7 +188,7 @@ def we_uncordon_the_nontarget_node():
 def the_ha_clustering_fails_a_few_times():
     """the ha clustering fails a few times."""
     # we have no way of determining this? maybe through etcd?
-    time.sleep(5)
+    time.sleep(1)
 
 
 @then("the path should be established")
@@ -206,7 +207,7 @@ def we_restart_the_volume_target_node():
 def the_ha_clustering_fails_as_there_is_no_other_node():
     """the ha clustering fails as there is no other node."""
     # we have no way of determining this? maybe through etcd?
-    time.sleep(10)
+    time.sleep(2)
 
 
 @when("the volume target node has io-path broken")
@@ -215,7 +216,7 @@ def the_volume_target_node_has_iopath_broken():
     simulate_network_failure(TARGET_NODE_1, NVME_SVC_PORT)
     # Restart container to speed up the failure
     Docker.stop_container(TARGET_NODE_1)
-    time.sleep(2)
+    time.sleep(1)
     Docker.restart_container(TARGET_NODE_1)
     yield
     remove_network_failure(TARGET_NODE_1, NVME_SVC_PORT, False)

@@ -16,7 +16,7 @@ use utils::{
     package_description, tracing_telemetry::KeyValue, version_info_str,
     DEFAULT_CLUSTER_AGENT_CLIENT_ADDR, DEFAULT_NODE_AGENT_SERVER_ADDR,
     NVME_PATH_AGGREGATION_PERIOD, NVME_PATH_CHECK_PERIOD, NVME_PATH_CONNECTION_PERIOD,
-    NVME_PATH_RETRANSMISSION_PERIOD,
+    NVME_PATH_RETRANSMISSION_PERIOD, NVME_SUBSYS_REFRESH_PERIOD,
 };
 mod detector;
 mod path_provider;
@@ -61,6 +61,10 @@ struct Cli {
     /// Connection timeout for path replacement operation.
     #[clap(short, long, env = "PATH_CONNECTION_TIMEOUT", default_value = NVME_PATH_CONNECTION_PERIOD)]
     path_connection_timeout: humantime::Duration,
+
+    /// NVMe subsystem refresh period when monitoring its state.
+    #[clap(short, long, env = "SUBSYS_REFRESH_PERIOD", default_value = NVME_SUBSYS_REFRESH_PERIOD)]
+    subsys_refresh_period: humantime::Duration,
 
     /// Sends opentelemetry spans to the Jaeger endpoint agent.
     #[clap(long, short)]

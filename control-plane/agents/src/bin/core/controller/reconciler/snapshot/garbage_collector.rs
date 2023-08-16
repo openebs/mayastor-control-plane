@@ -110,6 +110,7 @@ async fn deleting_volume_snapshot_reconciler(
         Err(error) => {
             tracing::error!(
                 snapshot.uuid = %snapshot.uuid(),
+                %error,
                 "Failed to delete volumeSnapshot"
             );
             Err(error)
@@ -150,6 +151,7 @@ async fn creating_orphaned_volume_snapshot_reconciler(
         Err(error) => {
             tracing::error!(
                 snapshot.uuid = %snapshot.uuid(),
+                %error,
                 "Failed to delete volumeSnapshot"
             );
             Err(error)
