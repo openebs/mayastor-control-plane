@@ -19,7 +19,7 @@ use clap::Parser;
 use composer::{Builder, BuilderConfigure, ComposeTest};
 use futures::future::{join_all, try_join_all};
 use paste::paste;
-use std::{cmp::Ordering, convert::TryFrom, str::FromStr};
+use std::{cmp::Ordering, collections::HashMap, convert::TryFrom, str::FromStr};
 use strum_macros::{Display, EnumVariantNames};
 
 /// Error type used by the deployer.
@@ -152,7 +152,7 @@ impl Components {
                     }
                 }
             }
-            tokio::time::sleep(get_timeout).await;
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
     }
     /// Start all components and wait up to the provided timeout.
@@ -218,18 +218,21 @@ impl Components {
         }
         Ok(())
     }
-    pub fn shutdown_order(&self) -> Vec<String> {
-        let ordered = self
-            .0
-            .iter()
-            .rev()
-            // todo: this is wrong, get the actual name!
-            .map(|c| c.to_string().to_ascii_lowercase())
-            .collect::<Vec<_>>();
-        ordered
+    #[allow(unused)]
+    fn components_ordered(&self) -> HashMap<u32, Vec<&Component>> {
+        let components = self.0.iter();
+        components.fold(HashMap::<u32, Vec<&Component>>::new(), |mut acc, n| {
+            acc.entry(n.boot_order())
+                .and_modify(|e| e.push(n))
+                .or_insert(vec![n]);
+            acc
+        })
+    }
+    pub fn shutdown_order(&self) -> Vec<Vec<String>> {
+        todo!("Must get actual container names!")
     }
 
-    /// to check whether core agent is being deployed or not
+    /// Check whether core agent is being deployed.
     pub fn core_enabled(&self) -> bool {
         self.0.contains(&Component::CoreAgent(Default::default()))
     }
@@ -373,7 +376,14 @@ impl Components {
     ) -> Result<(), Error> {
         let mut futures = vec![];
         for component in components {
-            futures.push(async move { component.wait_on(&self.1, cfg).await })
+            futures.push(async move {
+                let before = std::time::Instant::now();
+                let result = component.wait_on(&self.1, cfg).await;
+                if before.elapsed() > std::time::Duration::from_secs(1) {
+                    tracing::debug!("waited {:?} for {:?}", before.elapsed(), component);
+                }
+                result
+            })
         }
         let result = join_all(futures).await;
         result.iter().for_each(|result| {
@@ -402,17 +412,18 @@ impl Ord for Component {
         self.boot_order().cmp(&other.boot_order())
     }
 }
-struct TraceFn(String, String);
+struct TraceFn(String, String, std::time::Instant);
 impl TraceFn {
     fn new(component: &Component, func: &str) -> Self {
         let component = component.to_string();
         tracing::trace!(component=%component, func=%func, "Entering");
-        Self(component, func.to_string())
+        Self(component, func.to_string(), std::time::Instant::now())
     }
 }
 impl Drop for TraceFn {
     fn drop(&mut self) {
-        tracing::trace!(component=%self.0, func=%self.1, "Exiting");
+        let elapsed = self.2.elapsed();
+        tracing::trace!(component=%self.0, func=%self.1, ?elapsed, "Exiting");
     }
 }
 
@@ -422,19 +433,19 @@ impl_component! {
     Empty,          0,
     Jaeger,         0,
     Nats,           0,
-    Dns,            1,
-    Etcd,           1,
+    Dns,            0,
+    Etcd,           0,
+    FioSpdk,        0,
     Elastic,        1,
     Kibana,         1,
-    CoreAgent,      3,
-    JsonGrpcAgent,  3,
-    Rest,           3,
-    HaClusterAgent, 3,
-    FioSpdk,        3,
-    IoEngine,       4,
-    CsiNode,        5,
-    CsiController,  5,
-    HaNodeAgent,    5,
+    CoreAgent,      2,
+    JsonGrpcAgent,  2,
+    Rest,           2,
+    HaClusterAgent, 2,
+    IoEngine,       3,
+    CsiNode,        3,
+    CsiController,  3,
+    HaNodeAgent,    3,
 }
 
 // Control Plane Agents

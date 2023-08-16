@@ -135,12 +135,13 @@ impl Registry {
         tracing::info!("Connected to persistent store at {}", store_endpoint);
 
         // Check for the product v1 prefix presence.
-        let product_v1_prefix = detect_product_v1_prefix(&mut store)
-            .await
-            .map_err(|error| StoreError::Generic {
-                source: Box::new(error),
-                description: "Product v1 prefix detection failed".to_string(),
-            })?;
+        let legacy_prefix_present =
+            detect_product_v1_prefix(&mut store)
+                .await
+                .map_err(|error| StoreError::Generic {
+                    source: Box::new(error),
+                    description: "Product v1 prefix detection failed".to_string(),
+                })?;
 
         let mut registry = Self {
             inner: Arc::new(RegistryInner {
@@ -154,7 +155,7 @@ impl Registry {
                 faulted_child_wait_period,
                 reconciler: ReconcilerControl::new(),
                 config: parking_lot::RwLock::new(
-                    Self::get_config(&mut store, product_v1_prefix)
+                    Self::get_config(&mut store, legacy_prefix_present)
                         .await
                         .map_err(|error| StoreError::Generic {
                             source: Box::new(error),
@@ -164,7 +165,7 @@ impl Registry {
                 max_rebuilds,
                 create_volume_limit,
                 host_acl,
-                legacy_prefix_present: product_v1_prefix,
+                legacy_prefix_present,
                 thin_args,
             }),
         };
