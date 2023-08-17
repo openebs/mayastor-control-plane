@@ -9,7 +9,7 @@ use crate::controller::{
     },
     wrapper::NodeWrapper,
 };
-use agents::errors::{NotEnough, SvcError};
+use agents::errors::SvcError;
 use stor_port::types::v0::{store::nexus::NexusSpec, transport::NodeId};
 
 /// Return healthy replicas for volume/nexus
@@ -49,24 +49,17 @@ pub(crate) async fn healthy_nexus_children(
     Ok(children)
 }
 
-/// Return the suitable node target to publish the volume for nexus placement on
+/// Return the suitable node targets to publish the volume for nexus placement on
 /// volume publish or nexus failover.
-pub(crate) async fn target_node_candidate(
+pub(crate) async fn target_node_candidates(
     request: impl Into<GetSuitableNodes>,
     registry: &Registry,
     preferred_node: &Option<NodeId>,
-) -> Result<NodeWrapper, SvcError> {
-    let candidates: Vec<NodeWrapper> =
-        nexus::NexusTargetNode::builder_with_defaults(request, registry, preferred_node)
-            .await
-            .collect()
-            .into_iter()
-            .map(|i| i.into_node_wrapper())
-            .collect();
-    match candidates.first() {
-        None => Err(SvcError::NotEnoughResources {
-            source: NotEnough::OfNodes { have: 0, need: 1 },
-        }),
-        Some(node) => Ok(node.clone()),
-    }
+) -> Vec<NodeWrapper> {
+    nexus::NexusTargetNode::builder_with_defaults(request, registry, preferred_node)
+        .await
+        .collect()
+        .into_iter()
+        .map(|i| i.into_node_wrapper())
+        .collect::<Vec<_>>()
 }
