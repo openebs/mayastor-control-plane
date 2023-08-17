@@ -15,6 +15,9 @@ impl ComponentAction for Etcd {
                     "http://0.0.0.0:2379",
                     "--listen-client-urls",
                     "http://0.0.0.0:2379",
+                    // these ensure fast startup since it's not a cluster anyway
+                    "--heartbeat-interval=1",
+                    "--election-timeout=5",
                 ]),
             )
             .with_portmap("2379", "2379")

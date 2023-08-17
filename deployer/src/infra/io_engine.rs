@@ -42,7 +42,8 @@ impl ComponentAction for IoEngine {
             .with_env("MAYASTOR_NVMF_HOSTID", Uuid::new_v4().to_string().as_str())
             .with_env("NEXUS_NVMF_RESV_ENABLE", "1")
             .with_env("NEXUS_NVMF_ANA_ENABLE", "1")
-            .with_bind("/tmp", "/host/tmp");
+            .with_bind("/tmp", "/host/tmp")
+            .with_bind("/var/run/dpdk", "/var/run/dpdk");
 
             let core_list = match options.io_engine_isolate {
                 true => {
@@ -95,8 +96,13 @@ impl ComponentAction for IoEngine {
             let name = Self::name(i, options);
             let container_ip = cfg.container_ip_as_ref(&name);
             let socket = SocketAddr::new(IpAddr::from(*container_ip), 10124);
-            let mut hdl =
-                RpcHandle::connect(options.latest_io_api_version(), &name, socket).await?;
+            let mut hdl = RpcHandle::connect(
+                options.latest_io_api_version(),
+                &name,
+                socket,
+                tokio::time::sleep,
+            )
+            .await?;
             hdl.ping().await.unwrap();
         }
         for i in 0 .. options.io_engines {

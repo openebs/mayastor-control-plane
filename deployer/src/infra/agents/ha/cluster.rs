@@ -16,6 +16,11 @@ impl ComponentAction for HaClusterAgent {
         )
         .with_portmap("11500", "11500");
 
+        if let Some(env) = &options.agents_env {
+            for kv in env {
+                spec = spec.with_env(kv.key.as_str(), kv.value.as_str().as_ref());
+            }
+        }
         if let Some(period) = options.cluster_fast_requeue {
             spec = spec.with_args(vec!["--fast-requeue", period.to_string().as_str()]);
         }
@@ -48,7 +53,7 @@ impl ComponentAction for HaClusterAgent {
             .await
             {
                 Ok(_) => break,
-                Err(_) => sleep(Duration::from_millis(100)).await,
+                Err(_) => sleep(Duration::from_millis(25)).await,
             }
         }
         Ok(())

@@ -12,11 +12,7 @@ extern crate tonic;
 #[allow(clippy::upper_case_acronyms)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 pub mod io_engine {
-    use std::{
-        net::{SocketAddr, TcpStream},
-        str::FromStr,
-        time::Duration,
-    };
+    use std::{future::Future, net::SocketAddr, str::FromStr, time::Duration};
     use strum_macros::{Display, EnumString};
     use tonic::{transport::Channel, Status};
 
@@ -547,30 +543,32 @@ pub mod io_engine {
 
         /// Connect to the container and return a handle to `Self`
         /// Note: The initial connection with a timeout is using blocking calls
-        pub async fn connect(
+        pub async fn connect<S: Fn(Duration) -> F, F: Future<Output = ()>>(
             version: IoEngineApiVersion,
             name: &str,
             endpoint: SocketAddr,
+            sleep: S,
         ) -> Result<Self, String> {
-            let mut attempts = 40;
-            loop {
-                if TcpStream::connect_timeout(&endpoint, Duration::from_millis(100)).is_ok() {
-                    break;
-                } else {
-                    std::thread::sleep(Duration::from_millis(100));
-                }
-                attempts -= 1;
-                if attempts == 0 {
-                    return Err(format!("Failed to connect to {name}/{endpoint}"));
-                }
-            }
-
             let endpoint_str = format!("http://{endpoint}");
-            let channel = tonic::transport::Endpoint::new(endpoint_str)
-                .map_err(|e| e.to_string())?
-                .connect()
-                .await
-                .map_err(|e| e.to_string())?;
+            let mut attempts = 20;
+            let channel = loop {
+                match tonic::transport::Endpoint::new(endpoint_str.clone())
+                    .map_err(|e| e.to_string())?
+                    .connect_timeout(Duration::from_millis(100))
+                    .connect()
+                    .await
+                {
+                    Ok(channel) => break channel,
+                    Err(_) => {
+                        sleep(Duration::from_millis(50)).await;
+                        attempts -= 1;
+                        if attempts == 0 {
+                            return Err(format!("Failed to connect to {name}/{endpoint}"));
+                        }
+                        continue;
+                    }
+                }
+            };
 
             let client = match version {
                 IoEngineApiVersion::V0 => IoEngineClient::V0(IoEngineClientV0::new(channel)),

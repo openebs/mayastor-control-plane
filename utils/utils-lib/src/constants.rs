@@ -116,6 +116,9 @@ pub const NVME_PATH_RETRANSMISSION_PERIOD: &str = "10s";
 /// Period for aggregating multiple failed paths before reporting them.
 pub const NVME_PATH_AGGREGATION_PERIOD: &str = "1s";
 
+/// NVMe subsystem refresh period when monitoring its state.
+pub const NVME_SUBSYS_REFRESH_PERIOD: &str = "500ms";
+
 /// Period for aggregating multiple failed paths before reporting them.
 pub const DEFAULT_HOST_ACCESS_CONTROL: &str = "nexuses,replicas";
 

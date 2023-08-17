@@ -30,17 +30,20 @@ fn new_node(
 
 #[tokio::test]
 async fn node() {
+    let rpc_timeout = stor_port::transport_api::TimeoutOptions::default()
+        .with_req_timeout(Duration::from_secs(1))
+        .with_connect_timeout(Duration::from_millis(150))
+        .with_timeout_backoff(Duration::from_millis(150))
+        .with_max_retries(12);
+
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
         .with_agents(vec!["core"])
         .with_node_deadline("2s")
+        .with_req_timeouts(rpc_timeout.connect_timeout(), rpc_timeout.base_timeout())
         .build()
         .await
         .unwrap();
-    let rpc_timeout = stor_port::transport_api::TimeoutOptions::default()
-        .with_req_timeout(Duration::from_secs(1))
-        .with_timeout_backoff(Duration::from_millis(100))
-        .with_max_retries(6);
 
     let maya_name = cluster.node(0);
     let grpc = format!("{}:10124", cluster.node_ip(0));

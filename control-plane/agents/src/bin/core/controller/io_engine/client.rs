@@ -55,7 +55,8 @@ impl GrpcContext {
             .unwrap_or_else(|| comms_timeouts.request());
 
         let endpoint = tonic::transport::Endpoint::from(uri)
-            .connect_timeout(comms_timeouts.connect() + Duration::from_millis(500))
+            // todo: why are we adding slack here, connect should be respected?
+            .connect_timeout(comms_timeouts.connect() + Duration::from_millis(250))
             .timeout(timeout);
 
         Ok(Self {
@@ -72,7 +73,8 @@ impl GrpcContext {
         self.endpoint = self
             .endpoint
             .clone()
-            .connect_timeout(self.comms_timeouts.connect() + Duration::from_millis(500))
+            // todo: why are we adding slack here, connect should be respected?
+            .connect_timeout(self.comms_timeouts.connect() + Duration::from_millis(250))
             .timeout(match request {
                 None => self.comms_timeouts.request(),
                 Some(request) => timeout_grpc(request, self.comms_timeouts.opts().clone()),

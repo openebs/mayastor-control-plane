@@ -32,14 +32,12 @@ use utils::NVME_TARGET_NQN_PREFIX;
 /// Common error source name for all gRPC errors in HA Node agent.
 const HA_AGENT_ERR_SOURCE: &str = "HA Node agent gRPC server";
 
-/// NVMe subsystem refresh interval when monitoring its state, in milliseconds.
-const SUBSYSTEM_STATE_REFRESH_INTERVAL_MS: u64 = 500;
-
 /// High-level object that represents HA Node agent gRPC server.
 pub(crate) struct NodeAgentApiServer {
     endpoint: SocketAddr,
     path_cache: NvmePathCache,
     path_connection_timeout: Duration,
+    subsys_refresh_period: Duration,
 }
 
 impl NodeAgentApiServer {
@@ -49,6 +47,7 @@ impl NodeAgentApiServer {
             endpoint: args.grpc_endpoint,
             path_cache,
             path_connection_timeout: *args.path_connection_timeout,
+            subsys_refresh_period: *args.subsys_refresh_period,
         }
     }
 
@@ -57,10 +56,12 @@ impl NodeAgentApiServer {
         let r = NodeAgentServer::new(Arc::new(NodeAgentSvc::new(
             self.path_cache.clone(),
             self.path_connection_timeout,
+            self.subsys_refresh_period,
         )));
         tracing::info!(
             endpoint=?self.endpoint,
             path_connection_timeout=?self.path_connection_timeout,
+            subsys_refresh_period=?self.subsys_refresh_period,
             "Starting gRPC server"
         );
         agents::Service::builder()
@@ -74,14 +75,20 @@ impl NodeAgentApiServer {
 struct NodeAgentSvc {
     path_cache: NvmePathCache,
     path_connection_timeout: Duration,
+    subsys_refresh_period: Duration,
 }
 
 impl NodeAgentSvc {
     /// Returns a new `Self` with the given parameters.
-    pub(crate) fn new(path_cache: NvmePathCache, path_connection_timeout: Duration) -> Self {
+    pub(crate) fn new(
+        path_cache: NvmePathCache,
+        path_connection_timeout: Duration,
+        subsys_refresh_period: Duration,
+    ) -> Self {
         Self {
             path_cache,
             path_connection_timeout,
+            subsys_refresh_period,
         }
     }
 }
@@ -212,7 +219,7 @@ impl NodeAgentSvc {
         // proceeds to 'connecting' till the connection is fully established,
         // so wait a bit before checking the state.
         loop {
-            sleep(Duration::from_millis(SUBSYSTEM_STATE_REFRESH_INTERVAL_MS)).await;
+            sleep(self.subsys_refresh_period).await;
 
             // Refresh subsystem to get the latest state.
             if let Err(error) = subsystem.sync() {

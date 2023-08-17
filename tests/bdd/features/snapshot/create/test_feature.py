@@ -57,7 +57,13 @@ def disks(tmp_files):
 
 @pytest.fixture(scope="module")
 def deployer_cluster(disks):
-    Deployer.start(2, cache_period="200ms", reconcile_period="250ms")
+    Deployer.start(
+        2,
+        cache_period="150ms",
+        reconcile_period="150ms",
+        request_timeout="1s",
+        no_min_timeouts=True,
+    )
     ApiClient.pools_api().put_node_pool(NODE_NAME, "pool-1", CreatePoolBody([disks[0]]))
     yield
     Deployer.stop()

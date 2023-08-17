@@ -1,6 +1,4 @@
 """Swap ANA enabled Nexus on ANA enabled host feature tests."""
-import http
-
 from pytest_bdd import (
     given,
     scenario,
@@ -26,7 +24,6 @@ from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.protocol import Protocol
-from openapi.exceptions import ApiException
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
@@ -34,7 +31,7 @@ POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL_NODE = "io-engine-3"
 TARGET_NODE_1 = "io-engine-1"
 TARGET_NODE_2 = "io-engine-2"
-FIO_RUNTIME = 10
+FIO_RUNTIME = 4
 
 
 @scenario(
@@ -107,9 +104,8 @@ def background():
     Deployer.start(
         3,
         cache_period="1s",
-        io_engine_env="NEXUS_NVMF_ANA_ENABLE=1,NEXUS_NVMF_RESV_ENABLE=1",
-        agents_env="TEST_NEXUS_NVMF_ANA_ENABLE=1",
         io_engine_coreisol=True,
+        node_conn_timeout="100ms",
     )
 
     ApiClient.pools_api().put_node_pool(
@@ -120,9 +116,7 @@ def background():
     )
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=TARGET_NODE_1, frontend_node=""
-        ),
+        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=TARGET_NODE_1),
     )
     yield volume
     Deployer.stop()
@@ -161,20 +155,15 @@ def publish_to_node_2(background):
     volume = background
     device_uri = volume.state["target"]["deviceUri"]
 
-    try:
-        ApiClient.volumes_api().del_volume_target(VOLUME_UUID)
-    except ApiException as e:
-        # Timeout or node not online
-        assert (
-            e.status == http.HTTPStatus.SERVICE_UNAVAILABLE
-            or e.status == http.HTTPStatus.PRECONDITION_FAILED
-        )
-
-    ApiClient.volumes_api().del_volume_target(VOLUME_UUID, force="true")
     volume_updated = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=TARGET_NODE_2, frontend_node=""
+            {},
+            Protocol("nvmf"),
+            node=TARGET_NODE_2,
+            reuse_existing=False,
+            republish=True,
+            force=True,
         ),
     )
     device_uri_2 = volume_updated.state["target"]["deviceUri"]

@@ -145,6 +145,8 @@ pipeline {
             }
             sh 'printenv'
             sh 'nix-shell --run "cargo build --bins"'
+            // builds the tests
+            sh 'nix-shell --run "./scripts/rust/test.sh --no-run"'
             sh 'nix-shell --run "./scripts/rust/test.sh"'
           }
           post {

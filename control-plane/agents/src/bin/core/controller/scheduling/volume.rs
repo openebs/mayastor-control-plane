@@ -700,7 +700,7 @@ impl CloneVolumeSnapshot {
                 GetSuitablePoolsContext {
                     registry: registry.clone(),
                     spec: spec.clone(),
-                    allocated_bytes: None,
+                    allocated_bytes: Some(0),
                     move_repl: None,
                     snap_repl: false,
                     ag_restricted_nodes: None,

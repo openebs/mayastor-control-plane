@@ -166,7 +166,7 @@ impl CsiNode {
                 .await
             {
                 Ok(channel) => break channel,
-                Err(_) => sleep(Duration::from_millis(150)).await,
+                Err(_) => sleep(Duration::from_millis(25)).await,
             }
         };
 
@@ -179,7 +179,7 @@ impl CsiNode {
                 .await
             {
                 Ok(_) => break,
-                Err(_) => sleep(Duration::from_millis(150)).await,
+                Err(_) => sleep(Duration::from_millis(25)).await,
             }
         }
 

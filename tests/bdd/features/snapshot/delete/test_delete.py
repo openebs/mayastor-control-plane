@@ -96,10 +96,7 @@ def weve_created_a_snapshot_for_the_volume():
     """we've created a snapshot for the volume."""
     ApiClient.snapshots_api().put_volume_snapshot(VOLUME1_UUID, SNAP1_UUID)
     yield
-    try:
-        ApiClient.snapshots_api().del_snapshot(SNAP1_UUID)
-    except openapi.exceptions.ApiException:
-        pass
+    Snapshot.cleanup(SNAP1_UUID)
 
 
 @when("the snapshot is deleted")

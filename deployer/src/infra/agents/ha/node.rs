@@ -9,7 +9,7 @@ use tonic::transport::Endpoint;
 
 #[async_trait]
 impl ComponentAction for HaNodeAgent {
-    fn configure(&self, _options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
+    fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         let socket = format!("-g{}:11600", cfg.next_ip_for_name("agent-ha-node")?);
         let mut spec = ContainerSpec::from_binary(
             "agent-ha-node",
@@ -27,6 +27,11 @@ impl ComponentAction for HaNodeAgent {
         .with_privileged(Some(true))
         .with_portmap("11600", "11600");
 
+        if let Some(env) = &options.agents_env {
+            for kv in env {
+                spec = spec.with_env(kv.key.as_str(), kv.value.as_str().as_ref());
+            }
+        }
         if cfg.container_exists("jaeger") {
             let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
             spec = spec.with_args(vec!["--jaeger", &jaeger_config])
@@ -52,7 +57,7 @@ impl ComponentAction for HaNodeAgent {
             .await
             {
                 Ok(_) => break,
-                Err(_) => sleep(Duration::from_millis(1000)).await,
+                Err(_) => sleep(Duration::from_millis(25)).await,
             }
         }
         Ok(())

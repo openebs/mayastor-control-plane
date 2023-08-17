@@ -593,6 +593,10 @@ impl TimeoutOptions {
     pub fn base_timeout(&self) -> Duration {
         self.request_timeout
     }
+    /// Get the base timeout.
+    pub fn backoff_timeout(&self) -> Duration {
+        self.timeout_step
+    }
     /// Default http2 Keep Alive interval.
     pub(crate) fn default_keep_alive_interval() -> std::time::Duration {
         Duration::from_secs(10)

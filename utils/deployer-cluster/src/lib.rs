@@ -34,6 +34,7 @@ use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
     net::SocketAddr,
+    ops::Deref,
     str::FromStr,
     sync::Arc,
     time::Duration,
@@ -80,10 +81,80 @@ pub fn default_options() -> StartOptions {
         .with_env_tags(vec!["CARGO_PKG_NAME"])
 }
 
+struct ComposeTestNt {
+    logs_on_panic: bool,
+    clean: bool,
+    allow_clean_on_panic: bool,
+    composer: ComposeTest,
+    shutdown_order: Vec<Vec<String>>,
+}
+impl ComposeTestNt {
+    async fn new(composer: Builder) -> Result<Self, Error> {
+        let composer = composer.build().await?;
+        Ok(Self {
+            logs_on_panic: composer.logs_on_panic(),
+            clean: composer.clean(),
+            allow_clean_on_panic: composer.clean_on_panic(),
+            composer,
+            shutdown_order: vec![],
+        })
+    }
+}
+impl Deref for ComposeTestNt {
+    type Target = ComposeTest;
+    fn deref(&self) -> &Self::Target {
+        &self.composer
+    }
+}
+impl Drop for ComposeTestNt {
+    fn drop(&mut self) {
+        if std::thread::panicking() && self.logs_on_panic {
+            self.print_all_logs();
+        }
+
+        if self.clean && (!std::thread::panicking() || self.allow_clean_on_panic) {
+            let sh = self.shutdown_order.drain(..);
+            sh.into_iter().for_each(|c| {
+                c.into_iter()
+                    .map(|c| {
+                        std::thread::spawn(move || {
+                            std::process::Command::new("docker")
+                                .args(["kill", "-s", "term", c.as_str()])
+                                .output()
+                                .unwrap();
+                        })
+                    })
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .for_each(|h| {
+                        h.join().ok();
+                    });
+            });
+            self.composer
+                .containers()
+                .keys()
+                .map(|k| {
+                    let name = k.clone();
+                    std::thread::spawn(move || {
+                        std::process::Command::new("docker")
+                            .args(["kill", "-s", "term", name.as_str()])
+                            .output()
+                            .unwrap();
+                    })
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
+                .for_each(|h| {
+                    h.join().ok();
+                });
+        }
+    }
+}
+
 /// Cluster with the composer, the rest client and the jaeger pipeline
 #[allow(unused)]
 pub struct Cluster {
-    composer: ComposeTest,
+    composer: ComposeTestNt,
     rest_client: rest_client::RestClient,
     grpc_client: Option<CoreClient>,
     trace_guard: Arc<tracing::subscriber::DefaultGuard>,
@@ -148,8 +219,9 @@ impl Cluster {
         let timeout_opts = match timeout_opts {
             Some(opts) => opts,
             None => TimeoutOptions::new()
-                .with_req_timeout(Duration::from_millis(500))
-                .with_max_retries(10),
+                .with_req_timeout(Duration::from_millis(100))
+                .with_timeout_backoff(Duration::from_millis(25))
+                .with_max_retries(100),
         };
         for x in 1 .. timeout_opts.max_retries().unwrap_or_default() {
             match client
@@ -159,7 +231,7 @@ impl Cluster {
                 Ok(resp) => return Ok(resp),
                 Err(_) => {
                     tracing::debug!("Node Service not available, Retrying ....{}", x);
-                    tokio::time::sleep(timeout_opts.base_timeout()).await;
+                    tokio::time::sleep(timeout_opts.backoff_timeout()).await;
                 }
             }
         }
@@ -177,6 +249,7 @@ impl Cluster {
                 format!("{}:10124", container.1 .1)
                     .parse::<SocketAddr>()
                     .unwrap(),
+                tokio::time::sleep,
             )
             .await?),
             None => Err(format!("Container {name} not found!")),
@@ -198,7 +271,7 @@ impl Cluster {
                 .await
             {
                 Ok(channel) => break channel,
-                Err(_) => tokio::time::sleep(Duration::from_millis(150)).await,
+                Err(_) => tokio::time::sleep(Duration::from_millis(50)).await,
             }
         };
 
@@ -309,7 +382,7 @@ impl Cluster {
         grpc_timeout: TimeoutOptions,
         bearer_token: Option<String>,
         components: Components,
-        composer: ComposeTest,
+        composer: ComposeTestNt,
     ) -> Result<Cluster, Error> {
         let rest_client = rest_client::RestClient::new_timeout(
             "http://localhost:8081",
@@ -851,8 +924,7 @@ impl ClusterBuilder {
             false => tracing::subscriber::set_default(subscriber),
         });
 
-        let compose_builder = compose_builder.with_shutdown_order(components.shutdown_order());
-        let composer = compose_builder.build().await?;
+        let composer = ComposeTestNt::new(compose_builder).await?;
 
         let cluster = Cluster::new(
             self.trace,
