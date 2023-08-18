@@ -48,7 +48,7 @@ use stor_port::{
 };
 
 use snafu::OptionExt;
-use std::{collections::HashMap, convert::From};
+use std::convert::From;
 
 /// CreateReplicaCandidate for volume and Affinity Group.
 pub(crate) struct CreateReplicaCandidate {
@@ -805,15 +805,9 @@ impl ResourceSpecsLocked {
     }
 
     /// Get the list of nodes where the replicas of the volume are currently placed.
-    pub(crate) fn get_volume_replica_nodes(&self, volume_id: &VolumeId) -> Vec<NodeId> {
+    pub(crate) fn volume_replica_nodes(&self, volume_id: &VolumeId) -> Vec<NodeId> {
         let specs = self.read();
-        // Map of pool id to the node id.
-        let mut pool_node_map: HashMap<PoolId, NodeId> = HashMap::with_capacity(specs.pools.len());
-        // Fetch all pools and create the map.
-        for pool in specs.pools.values() {
-            let pool = pool.lock();
-            pool_node_map.insert(pool.id.clone(), pool.node.clone());
-        }
+
         // Map the replica's pool to the node and return the list of nodes.
         let replicas_ref = specs.replicas.values();
         replicas_ref
@@ -821,7 +815,12 @@ impl ResourceSpecsLocked {
                 let replica = replica.lock();
                 replica
                     .owned_by(volume_id)
-                    .then_some(pool_node_map.get(replica.pool_name()).cloned())
+                    .then_some(
+                        specs
+                            .pools
+                            .get(replica.pool_name())
+                            .map(|p| p.lock().node.clone()),
+                    )
                     .flatten()
             })
             .collect()

@@ -11,7 +11,7 @@ while [ "$#" -gt 0 ]; do
       DO_ARGS="y"
       shift;;
     *)
-      if [ -n "$DO_ARGS" ]; then
+      if [ "$DO_ARGS" == "y" ]; then
         ARGS="$ARGS $1"
       else
         OPTS="$OPTS $1"
@@ -35,8 +35,8 @@ set -euxo pipefail
 cargo build --bins
 
 cargo_test="cargo test"
-for test in deployer-cluster grpc agents rest io-engine-tests shutdown csi-driver; do
-    cargo_test="$cargo_test -p $test"
+for package in deployer-cluster grpc agents rest io-engine-tests shutdown csi-driver; do
+    cargo_test="$cargo_test -p $package"
 done
 
 $cargo_test ${OPTS} -- ${ARGS} --test-threads=1

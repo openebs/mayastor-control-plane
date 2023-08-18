@@ -8,6 +8,7 @@ use crate::controller::{
     task_poller::{PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState},
 };
 use agents::errors::SvcError;
+use itertools::Either;
 use std::{collections::HashSet, time::Duration};
 use stor_port::types::v0::{
     store::{
@@ -35,7 +36,7 @@ impl NodeNexusReconciler {
 
 #[async_trait::async_trait]
 impl TaskPoller for NodeNexusReconciler {
-    /// Identify draining nodes and attempt to drain them,
+    /// Identify draining nodes and attempt to drain them.
     async fn poll(&mut self, context: &PollContext) -> PollResult {
         let nodes = context.specs().nodes();
         let mut results = Vec::with_capacity(nodes.len());
@@ -65,10 +66,11 @@ async fn republish_volume(
     context: &PollContext,
     vol_uuid: &VolumeId,
     frontend_node: &NodeId,
+    target_node: Option<NodeId>,
 ) -> Result<(), SvcError> {
     let request = RepublishVolume::new(
         vol_uuid.clone(),
-        None,
+        target_node,
         frontend_node.clone(),
         VolumeShareProtocol::Nvmf,
         false,
@@ -76,6 +78,7 @@ async fn republish_volume(
     );
     tracing::info!(
         volume.uuid = vol_uuid.as_str(),
+        target_node = ?request.target_node,
         "Attempting to republish volume"
     );
 
@@ -161,55 +164,15 @@ async fn check_and_drain_node(
     // set of draining volumes stored in the node spec.
     for vol_spec in vol_specs {
         match vol_spec.operation_guard() {
-            Ok(mut guarded_vol_spec) => {
-                if let Some(target) = guarded_vol_spec.as_ref().target() {
-                    if target.node() != node_spec.as_ref().id() {
-                        continue; // some other node's volume, ignore
-                    }
-                    let nexus_id = target.nexus().clone();
-                    let vol_id = guarded_vol_spec.as_ref().uuid.clone();
-
-                    let config = match guarded_vol_spec.as_ref().config() {
-                        None => {
-                            tracing::error!(
-                                volume.id = vol_id.as_str(),
-                                "Failed to get volume config"
-                            );
-                            move_failures = true;
-                            continue;
-                        }
-                        Some(config) => config,
-                    };
-                    let frontend_node = config.frontend().node_name().unwrap_or_default();
-                    let frontend_node_id: NodeId = frontend_node.into();
-                    // frontend_node could be "", republish will still be allowed.
-                    tracing::info!(
-                        volume.uuid = vol_id.as_str(),
-                        nexus.uuid = nexus_id.as_str(),
-                        node.id = node_spec.as_ref().id().as_str(),
-                        "Moving volume"
-                    );
-                    if let Err(e) =
-                        republish_volume(&mut guarded_vol_spec, context, &vol_id, &frontend_node_id)
-                            .await
-                    {
-                        tracing::error!(
-                            error=%e,
-                            volume.uuid = vol_id.as_str(),
-                            nexus.uuid = nexus_id.as_str(),
-                            node.id = node_spec.as_ref().id().as_str(),
-                            "Failed to republish volume"
-                        );
+            Ok(guarded_vol_spec) => {
+                match drain_volume_target(context, node_spec, guarded_vol_spec).await {
+                    Either::Left(true) => {
                         move_failures = true;
-                        continue;
                     }
-                    tracing::info!(
-                        volume.uuid = vol_id.as_str(),
-                        nexus.uuid = nexus_id.as_str(),
-                        node.id = node_spec.as_ref().id().as_str(),
-                        "Moved volume"
-                    );
-                    new_draining_volumes.insert(vol_id.clone());
+                    Either::Left(false) => {}
+                    Either::Right(vol_id) => {
+                        new_draining_volumes.insert(vol_id);
+                    }
                 }
             }
             Err(_) => {
@@ -265,4 +228,112 @@ async fn check_and_drain_node(
         }
     }
     PollResult::Ok(PollerState::Idle)
+}
+
+async fn drain_volume_target(
+    context: &PollContext,
+    node_spec: &OperationGuardArc<NodeSpec>,
+    mut guarded_vol_spec: OperationGuardArc<VolumeSpec>,
+) -> Either<bool, VolumeId> {
+    let Some(target) = guarded_vol_spec.as_ref().target() else {
+        return Either::Left(false);
+    };
+
+    let drain_node_id = node_spec.as_ref().id();
+    let Some(target_node) =
+        select_drain_target_node(context, target.node(), drain_node_id, &guarded_vol_spec)
+    else {
+        return Either::Left(false);
+    };
+
+    let nexus_id = target.nexus().clone();
+    let vol_id = guarded_vol_spec.as_ref().uuid.clone();
+
+    let Some(config) = guarded_vol_spec.as_ref().config() else {
+        tracing::error!(volume.id = vol_id.as_str(), "Failed to get volume config");
+        return Either::Left(true);
+    };
+    let frontend_node = config.frontend().node_name().unwrap_or_default();
+    let frontend_node_id: NodeId = frontend_node.into();
+    // frontend_node could be "", republish will still be allowed.
+    tracing::info!(
+        volume.uuid = vol_id.as_str(),
+        nexus.uuid = nexus_id.as_str(),
+        node.id = drain_node_id.as_str(),
+        "Moving volume"
+    );
+    if let Err(error) = republish_volume(
+        &mut guarded_vol_spec,
+        context,
+        &vol_id,
+        &frontend_node_id,
+        target_node,
+    )
+    .await
+    {
+        tracing::error!(
+            %error,
+            volume.uuid = vol_id.as_str(),
+            nexus.uuid = nexus_id.as_str(),
+            node.id = drain_node_id.as_str(),
+            "Failed to republish volume"
+        );
+        return Either::Left(true);
+    }
+    tracing::info!(
+        volume.uuid = vol_id.as_str(),
+        nexus.uuid = nexus_id.as_str(),
+        node.id = drain_node_id.as_str(),
+        "Moved volume"
+    );
+
+    Either::Right(vol_id)
+}
+
+/// Select a desired target node where we'll move the volume target to.
+/// For multi-replica volumes, leave as None which we'll allow the core scheduling logic to
+/// select the most appropriate node.
+/// For single-replica volumes, move target together with the replica if not already.
+fn select_drain_target_node(
+    context: &PollContext,
+    target_node: &NodeId,
+    drain_node: &NodeId,
+    volume: &OperationGuardArc<VolumeSpec>,
+) -> Option<Option<NodeId>> {
+    if volume.as_ref().num_replicas != 1 {
+        return if drain_node != target_node {
+            // Nothing to drain here..
+            None
+        } else {
+            // Let scheduler decide where to move it to..
+            Some(None)
+        };
+    }
+    select_drain_1r_target(context, target_node, drain_node, volume)
+}
+fn select_drain_1r_target(
+    context: &PollContext,
+    target_node: &NodeId,
+    drain_node: &NodeId,
+    volume: &OperationGuardArc<VolumeSpec>,
+) -> Option<Option<NodeId>> {
+    if drain_node != target_node {
+        // Nothing to drain here..
+        // todo: we might want to move targets to the replica node!
+        return None;
+    }
+
+    let mut nodes = context.specs().volume_replica_nodes(volume.uuid());
+    let Some(replica_node) = nodes.pop() else {
+        // Can't find the replica node.. move anywhere?
+        return Some(None);
+    };
+
+    if target_node == &replica_node {
+        // All local already, don't move the target!
+        None
+    } else {
+        // Since we're moving the target, move it to the replica node!
+        Some(Some(replica_node))
+    }
 }

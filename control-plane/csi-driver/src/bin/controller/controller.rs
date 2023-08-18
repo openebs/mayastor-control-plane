@@ -467,8 +467,10 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     Ok(node) if node.state.as_ref().map(|n| n.status).unwrap_or(NodeStatus::Unknown) != NodeStatus::Online || cordon_check(node.spec.as_ref()) => {
                         Ok(None)
                     },
-                    Ok(_) if volume.spec.num_replicas > 1 => Ok(Some(node_id.as_str())),
-                    Ok(_) => Ok(None),
+                    // For 1-replica volumes, don't pre-select the target node. This will allow the
+                    // control-plane to pin the target to the replica node.
+                    Ok(_) if volume.spec.num_replicas == 1 => Ok(None),
+                    Ok(_) => Ok(Some(node_id.as_str())),
                 }?;
 
                 // Volume is not published.
