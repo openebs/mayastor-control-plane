@@ -1,7 +1,7 @@
 use crate::controller::{
     reconciler::{PollContext, TaskPoller},
     resources::{
-        operations::{ResourceDrain, ResourcePublishing},
+        operations::{ResourceDrain, ResourcePublishing, ResourceShutdownOperations},
         operations_helper::OperationSequenceGuard,
         OperationGuard, OperationGuardArc, ResourceMutex,
     },
@@ -10,15 +10,20 @@ use crate::controller::{
 use agents::errors::SvcError;
 use itertools::Either;
 use std::{collections::HashSet, time::Duration};
-use stor_port::types::v0::{
-    store::{
-        node::{DrainingVolumes, NodeSpec},
-        volume::VolumeSpec,
+use stor_port::{
+    platform,
+    types::v0::{
+        store::{
+            node::{DrainingVolumes, NodeSpec},
+            volume::VolumeSpec,
+        },
+        transport::{
+            DestroyShutdownTargets, NodeId, RepublishVolume, VolumeId, VolumeShareProtocol,
+        },
     },
-    transport::{NodeId, RepublishVolume, VolumeId, VolumeShareProtocol},
 };
 
-const DRAINING_VOLUME_TIMEOUT_SECONDS: u64 = 120;
+const DRAINING_VOLUME_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Node drain reconciler.
 #[derive(Debug)]
@@ -98,7 +103,7 @@ async fn find_shutdown_volumes(
         return Ok(());
     };
     let elapsed = draining_starttime.elapsed();
-    if elapsed.is_ok() && elapsed.unwrap() < Duration::from_secs(DRAINING_VOLUME_TIMEOUT_SECONDS) {
+    if elapsed.is_ok() && elapsed.unwrap() < DRAINING_VOLUME_TIMEOUT {
         let draining_volumes = node_spec.node_draining_volumes().await;
         let mut draining_volumes_to_remove: HashSet<VolumeId> = HashSet::new();
 
@@ -133,6 +138,19 @@ async fn find_shutdown_volumes(
             .await?;
     } else {
         // else the drain operation is timed out
+
+        // todo: this should be handled better..
+        if platform::current_plaform_type() == platform::PlatformType::Deployer {
+            for vi in node_spec.node_draining_volumes().await {
+                let mut volume = context.specs().volume(&vi).await?;
+                let request = DestroyShutdownTargets::new(vi, None);
+                volume
+                    .remove_shutdown_targets(context.registry(), &request)
+                    .await
+                    .ok();
+            }
+        }
+
         node_spec
             .remove_all_draining_volumes(context.registry())
             .await?;
