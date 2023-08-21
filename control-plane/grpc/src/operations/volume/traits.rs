@@ -7,9 +7,10 @@ use crate::{
     operations::{Event, Pagination},
     replica, volume,
     volume::{
-        get_volumes_request, CreateVolumeRequest, DestroyShutdownTargetRequest,
-        DestroyVolumeRequest, PublishVolumeRequest, RegisteredTargets, RepublishVolumeRequest,
-        SetVolumeReplicaRequest, ShareVolumeRequest, UnpublishVolumeRequest, UnshareVolumeRequest,
+        get_volumes_request, CreateSnapshotVolumeRequest, CreateVolumeRequest,
+        DestroyShutdownTargetRequest, DestroyVolumeRequest, PublishVolumeRequest,
+        RegisteredTargets, RepublishVolumeRequest, SetVolumeReplicaRequest, ShareVolumeRequest,
+        UnpublishVolumeRequest, UnshareVolumeRequest,
     },
 };
 use events_api::event::{EventAction, EventCategory, EventMessage, EventMeta, EventSource};
@@ -17,26 +18,22 @@ use stor_port::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind},
     types::v0::{
         store::volume::{
-            AffinityGroupSpec, FrontendConfig, TargetConfig, VolumeSpec, VolumeTarget,
+            AffinityGroupSpec, FrontendConfig, InitiatorAC, TargetConfig, VolumeContentSource,
+            VolumeMetadata, VolumeSpec, VolumeTarget,
         },
         transport::{
-            AffinityGroup, CreateVolume, DestroyShutdownTargets, DestroyVolume,
-            ExplicitNodeTopology, Filter, LabelledTopology, Nexus, NexusId, NexusNvmfConfig,
-            NodeId, NodeTopology, PoolTopology, PublishVolume, ReplicaId, ReplicaStatus,
-            ReplicaTopology, ReplicaUsage, RepublishVolume, SetVolumeReplica, ShareVolume,
-            Topology, UnpublishVolume, UnshareVolume, Volume, VolumeId, VolumeLabels, VolumePolicy,
-            VolumeShareProtocol, VolumeState, VolumeUsage,
+            AffinityGroup, CreateSnapshotVolume, CreateVolume, DestroyShutdownTargets,
+            DestroyVolume, ExplicitNodeTopology, Filter, LabelledTopology, Nexus, NexusId,
+            NexusNvmfConfig, NodeId, NodeTopology, NvmeNqn, PoolTopology, PublishVolume, ReplicaId,
+            ReplicaStatus, ReplicaTopology, ReplicaUsage, RepublishVolume, SetVolumeReplica,
+            ShareVolume, SnapshotId, Topology, UnpublishVolume, UnshareVolume, Volume, VolumeId,
+            VolumeLabels, VolumePolicy, VolumeShareProtocol, VolumeState, VolumeUsage,
         },
     },
-    IntoOption, TryIntoOption,
+    IntoOption, IntoVec, TryIntoOption,
 };
 
-use crate::volume::CreateSnapshotVolumeRequest;
 use std::{borrow::Borrow, collections::HashMap, convert::TryFrom};
-use stor_port::types::v0::{
-    store::volume::{VolumeContentSource, VolumeMetadata},
-    transport::{CreateSnapshotVolume, SnapshotId},
-};
 
 /// All volume crud operations to be a part of the VolumeOperations trait.
 #[tonic::async_trait]
@@ -136,7 +133,7 @@ pub trait VolumeOperations: Send + Sync {
 impl From<VolumeSpec> for volume::VolumeDefinition {
     fn from(volume_spec: VolumeSpec) -> Self {
         let nexus_id = volume_spec.health_info_id().cloned();
-        let target = volume_spec.target().cloned();
+        let target = volume_spec.active_config().into_opt();
         let target_config = volume_spec.config().clone().into_opt();
         let as_thin = volume_spec.snapshot_as_thin();
         let spec_status: common::SpecStatus = volume_spec.status.into();
@@ -149,7 +146,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
                     .labels
                     .map(|labels| crate::common::StringMapValue { value: labels }),
                 num_replicas: volume_spec.num_replicas.into(),
-                target: target.map(|target| target.into()),
+                target,
                 policy: Some(volume_spec.policy.into()),
                 topology: volume_spec.topology.map(|topology| topology.into()),
                 last_nexus_id: nexus_id.map(|id| id.to_string()),
@@ -218,6 +215,19 @@ impl From<VolumeUsage> for volume::VolumeUsage {
         }
     }
 }
+impl From<volume::FrontendNode> for InitiatorAC {
+    fn from(value: volume::FrontendNode) -> Self {
+        InitiatorAC::new(
+            value.name,
+            NvmeNqn::try_from(&value.nqn).unwrap_or(NvmeNqn::Invalid { nqn: value.nqn }),
+        )
+    }
+}
+impl From<volume::FrontendConfig> for FrontendConfig {
+    fn from(value: volume::FrontendConfig) -> Self {
+        FrontendConfig::from_acls(value.nodes.into_vec())
+    }
+}
 
 impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
     type Error = ReplyError;
@@ -241,6 +251,7 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
                 ))
             }
         };
+
         let volume_spec_status = match common::SpecStatus::from_i32(volume_meta.spec_status) {
             Some(status) => status.into(),
             None => {
@@ -269,10 +280,15 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
                             err.to_string(),
                         )
                     })?;
+                    let frontend = match volume_meta.target_config.and_then(|c| c.frontend) {
+                        None => Default::default(),
+                        Some(frontend) => frontend,
+                    };
+
                     Some(TargetConfig::new(
                         target,
                         NexusNvmfConfig::default(),
-                        Default::default(),
+                        frontend.into(),
                     ))
                 }
                 None => None,
@@ -681,11 +697,11 @@ impl From<VolumePolicy> for volume::VolumePolicy {
 
 impl TryFrom<volume::VolumeTarget> for VolumeTarget {
     type Error = ReplyError;
-    fn try_from(volume_target_grpc_type: volume::VolumeTarget) -> Result<Self, Self::Error> {
+    fn try_from(target: volume::VolumeTarget) -> Result<Self, Self::Error> {
         let target = VolumeTarget::new(
-            volume_target_grpc_type.node_id.into(),
-            NexusId::try_from(StringValue(volume_target_grpc_type.nexus_id))?,
-            match volume_target_grpc_type.protocol {
+            target.node_id.into(),
+            NexusId::try_from(StringValue(target.nexus_id))?,
+            match target.protocol {
                 Some(i) => match volume::VolumeShareProtocol::from_i32(i) {
                     Some(protocol) => Some(protocol.into()),
                     None => {
@@ -702,8 +718,9 @@ impl TryFrom<volume::VolumeTarget> for VolumeTarget {
         Ok(target)
     }
 }
-impl From<VolumeTarget> for volume::VolumeTarget {
-    fn from(target: VolumeTarget) -> Self {
+impl From<&TargetConfig> for volume::VolumeTarget {
+    fn from(config: &TargetConfig) -> Self {
+        let target = config.target();
         volume::VolumeTarget {
             node_id: target.node().to_string(),
             nexus_id: Some(target.nexus().to_string()),
@@ -743,8 +760,23 @@ impl TryFrom<volume::TargetConfig> for TargetConfig {
 impl From<TargetConfig> for volume::TargetConfig {
     fn from(src: TargetConfig) -> Self {
         volume::TargetConfig {
-            target: Some(src.target().clone().into()),
+            target: Some((&src).into()),
             config: Some(src.config().clone().into()),
+            frontend: Some(src.frontend().into()),
+        }
+    }
+}
+impl From<&FrontendConfig> for volume::FrontendConfig {
+    fn from(src: &FrontendConfig) -> Self {
+        volume::FrontendConfig {
+            nodes: src
+                .nodes_info()
+                .iter()
+                .map(|n| volume::FrontendNode {
+                    name: n.node_name().to_string(),
+                    nqn: n.node_nqn().to_string(),
+                })
+                .collect::<Vec<_>>(),
         }
     }
 }

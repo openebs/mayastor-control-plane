@@ -3245,8 +3245,28 @@ components:
           type: string
         protocol:
           $ref: '#/components/schemas/VolumeShareProtocol'
+        frontend_nodes:
+          description: |-
+            The nodes where the front-end workload resides.
+            If the workload moves then the volume must be republished.
+          type: array
+          items:
+            $ref: '#/components/schemas/NodeAccessInfo'
       required:
         - node
+    NodeAccessInfo:
+      description: Frontend Node access information.
+      type: object
+      properties:
+        name:
+          description: The nodename of the node.
+          type: string
+        nqn:
+          description: The Nvme Nqn of the node's initiator.
+          type: string
+      required:
+        - name
+        - nqn
     SpecStatus:
       description: Common base state for a resource
       type: string

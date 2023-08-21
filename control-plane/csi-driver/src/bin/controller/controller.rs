@@ -81,6 +81,24 @@ fn get_volume_share_location(volume: &Volume) -> Option<(String, String)> {
         .as_ref()
         .map(|nexus| (nexus.node.to_string(), nexus.device_uri.to_string()))
 }
+fn frontend_nodes_allowed<'a>(
+    target: &'a models::VolumeTarget,
+    node: &str,
+) -> Result<(), Vec<&'a str>> {
+    match &target.frontend_nodes {
+        None => {
+            // Volume is accessible to all frontend_nodes
+            Ok(())
+        }
+        Some(nodes) => {
+            if nodes.iter().any(|n| n.name == node) {
+                Ok(())
+            } else {
+                Err(nodes.iter().map(|n| n.name.as_str()).collect::<Vec<_>>())
+            }
+        }
+    }
+}
 
 impl From<ApiClientError> for Status {
     fn from(error: ApiClientError) -> Self {
@@ -428,16 +446,16 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     }
 
                     if let Some((node, uri)) = get_volume_share_location(&volume) {
-                        // Make sure volume is published at the same node.
-                        if node_id != node {
+                        // Make sure volume is accessible from the same app node.
+                        if let Err(allowed) = frontend_nodes_allowed(target, &node_id) {
                             let m = format!(
-                                "Volume {volume_id} already published on a different node: {node}",
+                                "Volume {volume_id} is only accessible to nodes: {allowed:?}, and not to {node_id}"
                             );
-                            error!("{}", m);
+                            error!("{m}");
                             return Err(Status::failed_precondition(m));
                         }
 
-                        debug!("Volume {} already published at {}", volume_id, uri);
+                        debug!("Volume {volume_id} already published for {node_id} on {node} => {uri}");
                         uri
                     } else {
                         let m = format!(

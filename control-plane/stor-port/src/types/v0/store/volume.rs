@@ -70,6 +70,10 @@ impl FrontendConfig {
     pub fn node_nqns(&self) -> Vec<HostNqn> {
         self.host_acl.iter().map(|h| h.node_nqn.clone()).collect()
     }
+    /// Get the frontend nodes information reference.
+    pub fn nodes_info(&self) -> &Vec<InitiatorAC> {
+        &self.host_acl
+    }
 }
 
 /// Volume Frontend
@@ -130,9 +134,29 @@ impl VolumeTarget {
         self.protocol.as_ref()
     }
 }
-impl From<VolumeTarget> for models::VolumeTarget {
-    fn from(src: VolumeTarget) -> Self {
-        Self::new_all(src.node, src.protocol.into_opt())
+impl From<&InitiatorAC> for models::NodeAccessInfo {
+    fn from(node: &InitiatorAC) -> Self {
+        models::NodeAccessInfo::new_all(node.node_name(), node.node_nqn().to_string())
+    }
+}
+impl From<&TargetConfig> for models::VolumeTarget {
+    fn from(src: &TargetConfig) -> Self {
+        let node_names = &src.frontend.nodes_info();
+        let node_names = if node_names.is_empty() {
+            None
+        } else {
+            Some(
+                node_names
+                    .iter()
+                    .map(|n| n.into())
+                    .collect::<Vec<models::NodeAccessInfo>>(),
+            )
+        };
+        Self::new_all(
+            src.target.node.clone(),
+            src.target.protocol.into_opt(),
+            node_names,
+        )
     }
 }
 
@@ -736,14 +760,14 @@ impl PartialEq<transport::VolumeState> for VolumeSpec {
 
 impl From<VolumeSpec> for models::VolumeSpec {
     fn from(src: VolumeSpec) -> Self {
-        let target = src.target().cloned();
+        let target_cfg = src.active_config().into_opt();
         Self::new_all(
             src.labels,
             src.num_replicas,
             src.operation.into_opt(),
             src.size,
             src.status,
-            target.into_opt(),
+            target_cfg,
             src.uuid,
             src.topology.into_opt(),
             src.policy,
