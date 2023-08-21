@@ -81,7 +81,7 @@ message Metadata {
   common.SpecStatus spec_status = 1;
   // Persistent Configuration of the target (current/last)
   TargetConfig target_config = 2;
-  // Publish Context of the volme.
+  // Publish Context of the volume.
   optional common.MapWrapper publish_context = 3;
   // A volume may get temporarily converted into thin-provisioned
   optional bool as_thin = 4;
@@ -95,9 +95,23 @@ message AffinityGroup {
 
 message TargetConfig {
   // Persistent Configuration of the target (current/last)
-  VolumeTarget target = 1;
+  VolumeTarget target              = 1;
   // The nvmf configuration
-  nexus.NexusNvmfConfig config = 2;
+  nexus.NexusNvmfConfig     config = 2;
+  // Frontend configuration.
+  optional FrontendConfig frontend = 3;
+}
+
+message FrontendConfig {
+  // List of allowed frontend nodes.
+  repeated FrontendNode nodes = 1;
+}
+
+message FrontendNode {
+  // The node name.
+  string name = 1;
+  // The node Nvme NQN.
+  string nqn  = 2;
 }
 
 message VolumeTarget {

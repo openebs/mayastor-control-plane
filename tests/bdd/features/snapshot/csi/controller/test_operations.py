@@ -13,6 +13,7 @@ import grpc
 
 import openapi.exceptions
 from common.apiclient import ApiClient
+from common.operations import Snapshot, Volume, Cluster
 from openapi.model.create_pool_body import CreatePoolBody
 
 from common.csi import CsiHandle
@@ -77,17 +78,15 @@ def a_running_csi_controller_plugin(setup):
 def we_have_a_single_replica_volume():
     """we have a single replica volume."""
     yield csi_create_1_replica_nvmf_volume1()
-    csi_delete_1_replica_nvmf_volume1()
+    if Cluster.fixture_cleanup():
+        csi_delete_1_replica_nvmf_volume1()
 
 
 @given("a snapshot is created for that volume")
 def a_snapshot_is_created_for_that_volume():
     ApiClient.snapshots_api().put_volume_snapshot(VOLUME1_UUID, SNAP1_UUID)
     yield
-    try:
-        ApiClient.snapshots_api().del_snapshot(SNAP1_UUID)
-    except:
-        pass
+    Snapshot.cleanup(SNAP1_UUID)
 
 
 @when(
@@ -135,10 +134,7 @@ def the_creation_should_succeed(snapshot_response):
     """the creation should succeed."""
     assert snapshot_response.snapshot.source_volume_id == VOLUME1_UUID
     yield
-    try:
-        ApiClient.snapshots_api().del_snapshot(SNAP1_UUID)
-    except:
-        pass
+    Snapshot.cleanup(SNAP1_UUID)
 
 
 @then("the deletion should succeed")
@@ -205,10 +201,7 @@ def a_CreateVolumeRequest_request_with_snapshot_as_source_is_sent_to_the_CSI_con
     except grpc.RpcError as grpc_error:
         return grpc_error
     yield
-    try:
-        ApiClient.volumes_api().del_volume(VOLUME2_UUID)
-    except openapi.exceptions.NotFoundException:
-        pass
+    Volume.cleanup(VOLUME2_UUID)
 
 
 @then("the volume creation should succeed")

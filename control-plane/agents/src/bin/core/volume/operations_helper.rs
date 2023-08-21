@@ -10,11 +10,13 @@ use crate::{
         },
         scheduling::resources::{HealthyChildItems, ReplicaItem},
     },
-    nexus::scheduling::target_node_candidate,
-    volume::specs::{
-        healthy_volume_replicas, nexus_attach_candidates, nexus_child_remove_candidates,
-        volume_replica_candidates, volume_replica_remove_candidate,
-        volume_unused_replica_remove_candidates, NexusNodeCandidate,
+    volume::{
+        scheduling::target_node_candidate,
+        specs::{
+            healthy_volume_replicas, nexus_attach_candidates, nexus_child_remove_candidates,
+            volume_replica_candidates, volume_replica_remove_candidate,
+            volume_unused_replica_remove_candidates, NexusNodeCandidate,
+        },
     },
 };
 use agents::errors::{NotEnough, SvcError, SvcError::ReplicaRemovalNoCandidates};
@@ -644,6 +646,7 @@ impl OperationGuardArc<VolumeSpec> {
         &self,
         registry: &Registry,
         request: &impl PublishVolumeInfo,
+        state: &VolumeState,
         republish: bool,
     ) -> Result<NexusNodeCandidate, SvcError> {
         // Create a ag guard to prevent candidate collision.
@@ -681,7 +684,8 @@ impl OperationGuardArc<VolumeSpec> {
                 // determine a suitable node for the same and in case of affinity group, let
                 // control-plane decide with specified node as the preferred node.
                 let candidate =
-                    target_node_candidate(self.as_ref(), registry, &request.target_node()).await?;
+                    target_node_candidate(self.as_ref(), registry, state, &request.target_node())
+                        .await?;
                 tracing::debug!(node.id=%candidate.id(), "Node selected for volume publish by the core-agent");
                 Ok(NexusNodeCandidate::new(candidate.id().clone(), ag_guard))
             }

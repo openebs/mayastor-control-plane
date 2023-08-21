@@ -28,7 +28,7 @@ pub(crate) fn get_restricted_nodes(
             // Fetch the list of nodes where the volume replicas are placed. If some
             // volume doesn't exist yet, this list will be empty
             // for that volume.
-            let node_ids = specs.get_volume_replica_nodes(volume);
+            let node_ids = specs.volume_replica_nodes(volume);
             // Add a new node in the list if it doesn't already exist.
             let filtered_nodes: Vec<NodeId> = node_ids
                 .into_iter()

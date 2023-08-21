@@ -19,6 +19,7 @@ import json
 from common.apiclient import ApiClient
 from common.csi import CsiHandle
 from common.deployer import Deployer
+from common.operations import Cluster
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.exceptions import NotFoundException
 
@@ -61,11 +62,12 @@ def setup():
         CreatePoolBody(["malloc:///disk?size_mb=128"], labels=pool_labels),
     )
     yield
-    try:
-        pool_api.del_pool(POOL1_UUID)
-        pool_api.del_pool(POOL2_UUID)
-    except:
-        pass
+    if Cluster.env_cleanup():
+        try:
+            pool_api.del_pool(POOL1_UUID)
+            pool_api.del_pool(POOL2_UUID)
+        except:
+            pass
     Deployer.stop()
 
 
@@ -222,7 +224,8 @@ def populate_published_volume(_create_1_replica_nvmf_volume):
 @pytest.fixture
 def _create_2_replica_nvmf_volume():
     yield csi_create_2_replica_nvmf_volume4()
-    csi_delete_2_replica_nvmf_volume4()
+    if Cluster.fixture_cleanup():
+        csi_delete_2_replica_nvmf_volume4()
 
 
 @pytest.fixture
@@ -316,7 +319,7 @@ def check_republish_volume_on_a_different_node(republish_volume_on_a_different_n
     assert (
         grpc_error.code() == grpc.StatusCode.FAILED_PRECONDITION
     ), "Unexpected gRPC error code: %s" + str(grpc_error.code())
-    assert "already published on a different node" in grpc_error.details(), (
+    assert "is only accessible to nodes" in grpc_error.details(), (
         "Error message reflects a different failure: %s" % grpc_error.details()
     )
 
@@ -790,14 +793,16 @@ def csi_delete_1_replica_nvmf_volume2():
 @pytest.fixture
 def _create_1_replica_nvmf_volume():
     yield csi_create_1_replica_nvmf_volume1()
-    csi_delete_1_replica_nvmf_volume1()
+    if Cluster.fixture_cleanup():
+        csi_delete_1_replica_nvmf_volume1()
 
 
 @pytest.fixture
 def _create_1_replica_local_nvmf_volume():
     csi_delete_1_replica_local_nvmf_volume1()
     yield csi_create_1_replica_local_nvmf_volume()
-    csi_delete_1_replica_local_nvmf_volume1()
+    if Cluster.fixture_cleanup():
+        csi_delete_1_replica_local_nvmf_volume1()
 
 
 @pytest.fixture
@@ -806,7 +811,8 @@ def _create_1_replica_nvmf_volume_local_false(context):
     result = csi_create_1_replica_nvmf_volume_local(True, False)
     context["create_result"] = result
     yield result
-    csi_delete_1_replica_nvmf_volume_local()
+    if Cluster.fixture_cleanup():
+        csi_delete_1_replica_nvmf_volume_local()
 
 
 @pytest.fixture
@@ -815,7 +821,8 @@ def _create_1_replica_nvmf_volume_local_unset(context):
     result = csi_create_1_replica_nvmf_volume_local(False)
     context["create_result"] = result
     yield result
-    csi_delete_1_replica_nvmf_volume_local()
+    if Cluster.fixture_cleanup():
+        csi_delete_1_replica_nvmf_volume_local()
 
 
 @pytest.fixture
@@ -825,8 +832,9 @@ def _create_2_volumes_1_replica():
 
     yield [vol1, vol2]
 
-    csi_delete_1_replica_nvmf_volume1()
-    csi_delete_1_replica_nvmf_volume2()
+    if Cluster.fixture_cleanup():
+        csi_delete_1_replica_nvmf_volume1()
+        csi_delete_1_replica_nvmf_volume2()
 
 
 @pytest.fixture(scope="function")

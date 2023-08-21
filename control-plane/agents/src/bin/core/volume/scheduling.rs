@@ -1,17 +1,24 @@
-use crate::controller::{
-    registry::Registry,
-    scheduling::{
-        nexus,
-        nexus::GetPersistedNexusChildren,
-        resources::HealthyChildItems,
-        volume,
-        volume::{GetChildForRemoval, GetSuitablePools},
-        ResourceFilter,
+use crate::{
+    controller::{
+        registry::Registry,
+        scheduling::{
+            nexus,
+            nexus::{GetPersistedNexusChildren, GetSuitableNodes},
+            resources::HealthyChildItems,
+            volume,
+            volume::{GetChildForRemoval, GetSuitablePools},
+            ResourceFilter,
+        },
+        wrapper::PoolWrapper,
     },
-    wrapper::PoolWrapper,
+    nexus::scheduling::target_node_candidates,
+    node::wrapper::NodeWrapper,
 };
-use agents::errors::SvcError;
-use stor_port::types::v0::store::{nexus::NexusSpec, volume::VolumeSpec};
+use agents::errors::{NotEnough, SvcError};
+use stor_port::types::v0::{
+    store::{nexus::NexusSpec, volume::VolumeSpec},
+    transport::{NodeId, VolumeState},
+};
 
 /// Return a list of pre sorted pools to be used by a volume.
 pub(crate) async fn volume_pool_candidates(
@@ -92,4 +99,30 @@ pub(crate) async fn snapshoteable_replica(
     }
     let items = builder.collect();
     Ok(HealthyChildItems::All(info, items))
+}
+
+/// Return the suitable node target to publish the volume for nexus placement on volume publish.
+pub(crate) async fn target_node_candidate(
+    request: impl Into<GetSuitableNodes>,
+    registry: &Registry,
+    state: &VolumeState,
+    preferred_node: &Option<NodeId>,
+) -> Result<NodeWrapper, SvcError> {
+    let request = request.into();
+    let replicas = request.num_replicas;
+    let candidates = target_node_candidates(request, registry, preferred_node).await;
+    if replicas == 1 {
+        // For 1replica volumes, pin the volume target to the replica node.
+        if let Some(Some(node)) = state.replica_topology.values().last().map(|r| r.node()) {
+            if let Some(node) = candidates.iter().find(|n| n.id() == node) {
+                return Ok(node.clone());
+            }
+        }
+    }
+    match candidates.first() {
+        None => Err(SvcError::NotEnoughResources {
+            source: NotEnough::OfNodes { have: 0, need: 1 },
+        }),
+        Some(node) => Ok(node.clone()),
+    }
 }
