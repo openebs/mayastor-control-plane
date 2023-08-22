@@ -140,9 +140,6 @@ def the_pool_space_usage_should_be_zero():
 def the_pool_space_usage_should_reflect_the_original_volume(original_volume):
     """the pool space usage should reflect the original volume."""
     pool = ApiClient.pools_api().get_pool(POOL)
-    # Bug, dataplane caches allocated, requires a restart until fixed
-    Docker.restart_container(NODE)
-    wait_node_online(NODE)
     volume = Volume.update(original_volume, cached=False)
     assert pool.state.used == volume.state.usage.allocated
 
@@ -264,8 +261,6 @@ def the_restored_volume_1_snapshot_1_allocation_size_should_be_12mib(
     restored_1_snapshot_1,
 ):
     """the restored volume 1 snapshot 1 allocation size should be 12MiB."""
-    Docker.restart_container(NODE)
-    wait_node_online(NODE)
     Cluster.wait_cache_update()
     snapshot = Snapshot.update(restored_1_snapshot_1)
     assert snapshot.state.allocated_size == 12 * 1024 * 1024
@@ -438,9 +433,6 @@ def the_pool_space_usage_should_reflect_the_snapshot_2_restored_volume_2_and_del
     restored_1_snapshot_2,
 ):
     """the pool space usage should reflect the snapshot 2, restored volume 2, and deleted snapshot and deleted restored volume 1 (16MiB)."""
-    # Bug, dataplane caches allocated, requires a restart until fixed
-    Docker.restart_container(NODE)
-    wait_node_online(NODE)
     Cluster.wait_cache_update()
 
     pool = ApiClient.pools_api().get_pool(POOL)
