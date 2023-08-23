@@ -574,11 +574,17 @@ impl AgentToIoEngine for transport::ListReplicaSnapshots {
             transport::ListReplicaSnapshots::ReplicaSnapshots(id) => (Some(id), None),
             transport::ListReplicaSnapshots::Snapshot(id) => (None, Some(id)),
         };
+
+        // All snapshots except the discarded ones.
+        let non_discarded_snaps = v1::snapshot::list_snapshots_request::Query {
+            invalid: None,
+            discarded: Some(false),
+        };
+
         v1::snapshot::ListSnapshotsRequest {
             source_uuid: source.map(ToString::to_string),
             snapshot_uuid: snapshot.map(ToString::to_string),
-            snapshot_query_type:
-                v1::snapshot::SnapshotQueryType::AllSnapshotsExceptDiscardedSnapshots as i32,
+            query: Some(non_discarded_snaps),
         }
     }
 }
