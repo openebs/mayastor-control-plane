@@ -42,6 +42,7 @@ impl ComponentAction for IoEngine {
             .with_env("MAYASTOR_NVMF_HOSTID", Uuid::new_v4().to_string().as_str())
             .with_env("NEXUS_NVMF_RESV_ENABLE", "1")
             .with_env("NEXUS_NVMF_ANA_ENABLE", "1")
+            .with_env("NVMF_TGT_CRDT", "0")
             .with_bind("/tmp", "/host/tmp")
             .with_bind("/var/run/dpdk", "/var/run/dpdk");
 
