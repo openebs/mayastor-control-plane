@@ -2,7 +2,7 @@ use super::translation::{rpc_replica_to_agent, AgentToIoEngine};
 use crate::controller::io_engine::translation::TryIoEngineToAgent;
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::{
-    replica::{ListReplicaOptions, ReplicaType},
+    replica::{list_replica_options, ListReplicaOptions},
     snapshot::{destroy_snapshot_request, DestroySnapshotRequest},
 };
 use stor_port::{
@@ -19,6 +19,11 @@ use snafu::ResultExt;
 #[async_trait::async_trait]
 impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
     async fn list_replicas(&self) -> Result<Vec<Replica>, SvcError> {
+        let replicas_except_snapshots_query = list_replica_options::Query {
+            replica: true,
+            snapshot: false,
+            clone: true,
+        };
         let rpc_replicas = self
             .replica()
             .list_replicas(ListReplicaOptions {
@@ -26,7 +31,7 @@ impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
                 poolname: None,
                 uuid: None,
                 pooluuid: None,
-                replicatype: ReplicaType::AllReplicasExceptSnapshots as i32,
+                query: Some(replicas_except_snapshots_query),
             })
             .await
             .context(GrpcRequestError {
@@ -58,7 +63,7 @@ impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
                 poolname: None,
                 uuid: Some(replica_id.to_string()),
                 pooluuid: None,
-                replicatype: ReplicaType::AllReplicas as i32,
+                query: None,
             })
             .await
             .context(GrpcRequestError {
