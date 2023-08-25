@@ -130,6 +130,15 @@ impl DiskPoolStatus {
         }
     }
 
+    /// Set when deletion timestamp is set and control plane is unavailable.
+    pub fn terminating_when_core_unavailable() -> Self {
+        Self {
+            cr_state: CrPoolState::Terminating,
+            pool_status: None,
+            ..Default::default()
+        }
+    }
+
     /// Set when deleting a Pool which is not accessible.
     pub fn terminating_when_unknown() -> Self {
         Self {
