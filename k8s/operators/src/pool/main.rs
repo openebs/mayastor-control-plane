@@ -228,6 +228,13 @@ impl ResourceContext {
         Ok(Action::await_change())
     }
 
+    /// Patch the resource state to terminating and pool_status empty.
+    async fn mark_terminating_when_core_unavailable(&self) -> Result<Action, Error> {
+        self.patch_status(DiskPoolStatus::terminating_when_core_unavailable())
+            .await?;
+        Ok(Action::requeue(Duration::from_secs(self.ctx.interval)))
+    }
+
     /// Patch the resource state to terminating.
     async fn mark_terminating_when_unknown(&self) -> Result<Action, Error> {
         self.patch_status(DiskPoolStatus::terminating_when_unknown())
@@ -440,14 +447,20 @@ impl ResourceContext {
                     }
                 } else if response.status() == clients::tower::StatusCode::SERVICE_UNAVAILABLE || response.status() == clients::tower::StatusCode::REQUEST_TIMEOUT {
                     // Probably grpc server is not yet up
-                    self.k8s_notify(
-                        "Unreachable",
-                        "Check",
-                        "Could not reach Rest API service. Please check control plane health",
-                        "Warning",
-                    )
-                        .await;
-                    self.mark_pool_not_found().await
+                    if self.metadata.deletion_timestamp.is_some() {
+                        self.mark_terminating_when_core_unavailable().await
+                    } else {
+                        self.k8s_notify(
+                            "Unreachable",
+                            "Check",
+                            "Could not reach Rest API service. Please check control plane health",
+                            "Warning",
+                        )
+                            .await;
+                        self.mark_pool_not_found().await
+                    }
+
+
                 } else {
                     self.k8s_notify(
                         "Missing",
