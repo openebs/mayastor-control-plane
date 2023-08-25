@@ -107,6 +107,7 @@ impl DiskPoolStatus {
     /// Set when Pool is not found for some reason.
     pub fn not_found() -> Self {
         Self {
+            cr_state: CrPoolState::Created,
             pool_status: None,
             ..Default::default()
         }
