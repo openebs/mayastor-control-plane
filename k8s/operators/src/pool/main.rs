@@ -217,7 +217,8 @@ impl ResourceContext {
 
     /// Mark Pool state as None as couldnt find already provisioned pool in control plane.
     async fn mark_pool_not_found(&self) -> Result<Action, Error> {
-        self.patch_status(DiskPoolStatus::not_found()).await?;
+        self.patch_status(DiskPoolStatus::not_found(&self.inner.status))
+            .await?;
         error!(name = ?self.name_any(), "Pool not found, clearing status");
         Ok(Action::requeue(Duration::from_secs(30)))
     }
@@ -440,15 +441,16 @@ impl ResourceContext {
                     }
                 } else if response.status() == clients::tower::StatusCode::SERVICE_UNAVAILABLE || response.status() == clients::tower::StatusCode::REQUEST_TIMEOUT {
                     // Probably grpc server is not yet up
-                    self.k8s_notify(
-                        "Unreachable",
-                        "Check",
-                        "Could not reach Rest API service. Please check control plane health",
-                        "Warning",
-                    )
-                        .await;
-                    self.mark_pool_not_found().await
-                } else {
+                        self.k8s_notify(
+                            "Unreachable",
+                            "Check",
+                            "Could not reach Rest API service. Please check control plane health",
+                            "Warning",
+                        )
+                            .await;
+                        self.mark_pool_not_found().await
+                    }
+                 else {
                     self.k8s_notify(
                         "Missing",
                         "Check",
