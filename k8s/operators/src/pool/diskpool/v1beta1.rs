@@ -105,8 +105,9 @@ impl Default for DiskPoolStatus {
 
 impl DiskPoolStatus {
     /// Set when Pool is not found for some reason.
-    pub fn not_found() -> Self {
+    pub fn not_found(status: &Option<Self>) -> Self {
         Self {
+            cr_state: status.clone().unwrap_or_default().cr_state,
             pool_status: None,
             ..Default::default()
         }
