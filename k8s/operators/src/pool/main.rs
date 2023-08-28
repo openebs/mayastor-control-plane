@@ -217,7 +217,8 @@ impl ResourceContext {
 
     /// Mark Pool state as None as couldnt find already provisioned pool in control plane.
     async fn mark_pool_not_found(&self) -> Result<Action, Error> {
-        self.patch_status(DiskPoolStatus::not_found()).await?;
+        self.patch_status(DiskPoolStatus::not_found(&self.inner.status))
+            .await?;
         error!(name = ?self.name_any(), "Pool not found, clearing status");
         Ok(Action::requeue(Duration::from_secs(30)))
     }
@@ -226,13 +227,6 @@ impl ResourceContext {
     async fn is_missing(&self) -> Result<Action, Error> {
         self.patch_status(DiskPoolStatus::default()).await?;
         Ok(Action::await_change())
-    }
-
-    /// Patch the resource state to terminating and pool_status empty.
-    async fn mark_terminating_when_core_unavailable(&self) -> Result<Action, Error> {
-        self.patch_status(DiskPoolStatus::terminating_when_core_unavailable())
-            .await?;
-        Ok(Action::requeue(Duration::from_secs(self.ctx.interval)))
     }
 
     /// Patch the resource state to terminating.
@@ -447,9 +441,6 @@ impl ResourceContext {
                     }
                 } else if response.status() == clients::tower::StatusCode::SERVICE_UNAVAILABLE || response.status() == clients::tower::StatusCode::REQUEST_TIMEOUT {
                     // Probably grpc server is not yet up
-                    if self.metadata.deletion_timestamp.is_some() {
-                        self.mark_terminating_when_core_unavailable().await
-                    } else {
                         self.k8s_notify(
                             "Unreachable",
                             "Check",
@@ -459,9 +450,7 @@ impl ResourceContext {
                             .await;
                         self.mark_pool_not_found().await
                     }
-
-
-                } else {
+                 else {
                     self.k8s_notify(
                         "Missing",
                         "Check",
