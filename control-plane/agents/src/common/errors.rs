@@ -298,6 +298,10 @@ pub enum SvcError {
     },
     #[snafu(display("Snapshots for multi-replica volumes are not allowed"))]
     NReplSnapshotNotAllowed {},
+    #[snafu(display(
+        "Cannot create a multi-replica volume from a snapshot of a single-replica volume"
+    ))]
+    NReplSnapshotCloneCreationNotAllowed {},
     #[snafu(display("Replica's {} snapshot was unexpectedly skipped", replica))]
     ReplicaSnapSkipped { replica: String },
     #[snafu(display("Replica's {} snapshot was unexpectedly not taken", replica))]
@@ -827,6 +831,12 @@ impl From<SvcError> for ReplyError {
             SvcError::NReplSnapshotNotAllowed {} => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::VolumeSnapshot,
+                source,
+                extra,
+            },
+            SvcError::NReplSnapshotCloneCreationNotAllowed {} => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::VolumeSnapshotClone,
                 source,
                 extra,
             },

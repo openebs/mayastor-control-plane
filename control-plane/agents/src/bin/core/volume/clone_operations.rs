@@ -101,7 +101,10 @@ impl CreateVolumeExeVal for SnapshotCloneOp<'_> {
         let new_volume = self.0.params();
         let snapshot = self.1.as_ref();
 
-        snafu::ensure!(new_volume.replicas == 1, errors::NReplSnapshotNotAllowed {});
+        snafu::ensure!(
+            new_volume.replicas == 1,
+            errors::NReplSnapshotCloneCreationNotAllowed {}
+        );
         snafu::ensure!(
             new_volume.allowed_nodes().is_empty()
                 || new_volume.allowed_nodes().len() >= new_volume.replicas as usize,
@@ -171,7 +174,7 @@ impl SnapshotCloneOp<'_> {
             None | Some([]) => Err(SvcError::NoHealthyReplicas {
                 id: new_volume.uuid_str(),
             }),
-            _ => Err(SvcError::NReplSnapshotNotAllowed {}),
+            _ => Err(SvcError::NReplSnapshotCloneCreationNotAllowed {}),
         }?;
 
         let mut pools = CloneVolumeSnapshot::builder_with_defaults(registry, new_volume, snapshot)
@@ -181,7 +184,7 @@ impl SnapshotCloneOp<'_> {
         let pool = match pools.pop() {
             Some(pool) if pools.is_empty() => Ok(pool),
             // todo: support more than 1 replica snapshots
-            Some(_) => Err(SvcError::NReplSnapshotNotAllowed {}),
+            Some(_) => Err(SvcError::NReplSnapshotCloneCreationNotAllowed {}),
             // todo: filtering should keep invalid pools/resources and tag them with a reason
             //   why they cannot be used!
             None => Err(SvcError::NoSnapshotPools {
