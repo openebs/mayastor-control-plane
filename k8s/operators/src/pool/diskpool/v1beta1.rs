@@ -105,9 +105,9 @@ impl Default for DiskPoolStatus {
 
 impl DiskPoolStatus {
     /// Set when Pool is not found for some reason.
-    pub fn not_found() -> Self {
+    pub fn not_found(status: &Option<Self>) -> Self {
         Self {
-            cr_state: CrPoolState::Created,
+            cr_state: status.clone().unwrap_or_default().cr_state,
             pool_status: None,
             ..Default::default()
         }
@@ -127,15 +127,6 @@ impl DiskPoolStatus {
             capacity: state.capacity,
             used: state.used,
             available: free,
-        }
-    }
-
-    /// Set when deletion timestamp is set and control plane is unavailable.
-    pub fn terminating_when_core_unavailable() -> Self {
-        Self {
-            cr_state: CrPoolState::Terminating,
-            pool_status: None,
-            ..Default::default()
         }
     }
 
