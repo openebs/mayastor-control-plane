@@ -12,7 +12,15 @@ use openapi::models::CordonDrainState;
 use prettytable::{Cell, Row};
 use serde::Serialize;
 use std::time;
+use strum_macros::{AsRefStr, Display, EnumString};
 use tokio::time::Duration;
+
+#[derive(AsRefStr, EnumString, Display)]
+enum NodeCordonDrainState {
+    Cordoned,
+    Draining,
+    Drained,
+}
 
 #[derive(Debug, Clone, clap::Args)]
 /// Arguments used when getting a node.
@@ -45,12 +53,29 @@ impl CreateRow for openapi::models::Node {
             status: openapi::models::NodeStatus::Unknown,
             node_nqn: spec.node_nqn,
         });
-        row![
-            self.id,
-            state.grpc_endpoint,
-            state.status,
-            spec.cordondrainstate.is_some(),
-        ]
+        let statuses = match spec.cordondrainstate {
+            None => format!("{:?}", state.status),
+            Some(CordonDrainState::cordonedstate(_)) => {
+                format!("{:?}, {}", state.status, NodeCordonDrainState::Cordoned)
+            }
+            Some(CordonDrainState::drainingstate(_)) => {
+                format!(
+                    "{:?}, {}, {}",
+                    state.status,
+                    NodeCordonDrainState::Cordoned,
+                    NodeCordonDrainState::Draining
+                )
+            }
+            Some(CordonDrainState::drainedstate(_)) => {
+                format!(
+                    "{:?}, {}, {}",
+                    state.status,
+                    NodeCordonDrainState::Cordoned,
+                    NodeCordonDrainState::Drained
+                )
+            }
+        };
+        row![self.id, state.grpc_endpoint, statuses]
     }
 }
 
