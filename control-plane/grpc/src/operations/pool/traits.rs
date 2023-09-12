@@ -1,11 +1,9 @@
 use crate::{
     common,
     context::Context,
-    operations::Event,
     pool,
     pool::{get_pools_request, CreatePoolRequest, DestroyPoolRequest},
 };
-use events_api::event::{EventAction, EventCategory, EventMessage, EventMeta, EventSource};
 use std::convert::TryFrom;
 use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind},
@@ -384,40 +382,6 @@ impl From<PoolSpecStatus> for common::SpecStatus {
             PoolSpecStatus::Created(_) => Self::Created,
             PoolSpecStatus::Deleting => Self::Deleting,
             PoolSpecStatus::Deleted => Self::Deleted,
-        }
-    }
-}
-
-// Create pool creation event message from pool data.
-impl Event for Pool {
-    fn event(&self) -> EventMessage {
-        let event_meta = EventMeta::new();
-        let event_source = EventSource::new(self.node().to_string());
-        EventMessage {
-            category: EventCategory::Pool as i32,
-            action: EventAction::Create as i32,
-            target: self.id().to_string(),
-            metadata: Some(EventMeta {
-                source: Some(event_source),
-                ..event_meta
-            }),
-        }
-    }
-}
-
-// Create pool deletion event message.
-impl Event for DestroyPoolRequest {
-    fn event(&self) -> EventMessage {
-        let event_meta = EventMeta::new();
-        let event_source = EventSource::new(self.node_id().to_string());
-        EventMessage {
-            category: EventCategory::Pool as i32,
-            action: EventAction::Delete as i32,
-            target: self.pool_id().to_string(),
-            metadata: Some(EventMeta {
-                source: Some(event_source),
-                ..event_meta
-            }),
         }
     }
 }

@@ -82,6 +82,12 @@ impl ComponentAction for IoEngine {
                 let etcd = format!("etcd.{}:2379", options.cluster_label.name());
                 spec = spec.with_args(vec!["-p", &etcd]);
             }
+
+            if options.eventing {
+                let nats_server_url = "nats://nats:4222";
+                spec = spec.with_args(vec!["--events-url", nats_server_url]);
+            }
+
             cfg = cfg.add_container_spec(spec)
         }
         Ok(cfg)
