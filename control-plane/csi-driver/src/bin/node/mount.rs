@@ -90,7 +90,7 @@ pub(super) fn subset(first: &[String], second: &[String]) -> bool {
 
 /// Return supported filesystems.
 pub(crate) fn probe_filesystems() -> Vec<FileSystem> {
-    vec![Fs::Xfs.into(), Fs::Ext4.into()]
+    vec![Fs::Xfs.into(), Fs::Ext4.into(), Fs::Btrfs.into()]
 }
 
 // Utility function to transform a vector of options

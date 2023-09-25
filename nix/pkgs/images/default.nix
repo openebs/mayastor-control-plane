@@ -2,7 +2,7 @@
 # avoid dependency on docker tool chain. Though the maturity of OCI
 # builder in nixpkgs is questionable which is why we postpone this step.
 
-{ xfsprogs_5_16, busybox, dockerTools, lib, e2fsprogs, utillinux, fetchurl, control-plane, tini, img_tag ? "" }:
+{ xfsprogs_5_16, busybox, dockerTools, lib, e2fsprogs, btrfs-progs, utillinux, fetchurl, control-plane, tini, img_tag ? "" }:
 let
   xfsprogs = xfsprogs_5_16;
   e2fsprogs_1_46_2 = (e2fsprogs.overrideAttrs (oldAttrs: rec {
@@ -96,11 +96,12 @@ let
       inherit buildType;
       name = "node";
       config = {
-        Env = [ "PATH=${lib.makeBinPath [ "/" xfsprogs e2fsprogs_1_46_2 utillinux ]}" ];
+        Env = [ "PATH=${lib.makeBinPath [ "/" xfsprogs e2fsprogs_1_46_2 btrfs-progs utillinux ]}" ];
       };
     };
   };
 in
+
 let
   build-images = { buildType }: {
     agents = build-agent-images { inherit buildType; } // {

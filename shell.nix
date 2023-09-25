@@ -43,6 +43,7 @@ mkShell {
   ++ pkgs.lib.optionals (system != "aarch64-darwin") [
     e2fsprogs
     xfsprogs_5_16
+    btrfs-progs
     nvme-cli
     # python3.9-pyopenssl-22.0.0 marked as broken but fixed on master..
     pytest_inputs
