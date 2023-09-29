@@ -7,6 +7,7 @@ use strum_macros::EnumString;
 pub enum FileSystem {
     Ext4,
     Xfs,
+    Btrfs,
     DevTmpFs,
     Unsupported(String),
 }
@@ -17,6 +18,7 @@ impl AsRef<str> for FileSystem {
         match self {
             FileSystem::Ext4 => "ext4",
             FileSystem::Xfs => "xfs",
+            FileSystem::Btrfs => "btrfs",
             FileSystem::DevTmpFs => "devtmpfs",
             FileSystem::Unsupported(inner) => inner,
         }

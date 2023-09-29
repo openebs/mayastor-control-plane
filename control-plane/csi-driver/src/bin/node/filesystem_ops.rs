@@ -22,6 +22,8 @@ type Error = String;
 pub(crate) struct Ext4Fs;
 /// XFS filesystem type.
 pub(crate) struct XFs;
+/// BTRFS filesystem type.
+pub(crate) struct BtrFs;
 
 /// Filesystem type for csi node ops, wrapper over the parent Filesystem enum.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -51,9 +53,11 @@ impl FileSystem {
     pub(crate) fn fs_ops(&self) -> Result<&dyn FileSystemOps, Error> {
         static EXT4FS: Ext4Fs = Ext4Fs {};
         static XFS: XFs = XFs {};
+        static BRTFS: BtrFs = BtrFs {};
         match self.0 {
             Fs::Ext4 => Ok(&EXT4FS),
             Fs::Xfs => Ok(&XFS),
+            Fs::Btrfs => Ok(&BRTFS),
             _ => Err(format!("Unsupported filesystem {self}")),
         }
     }
@@ -262,6 +266,104 @@ impl FileSystemOps for XFs {
         let binary = "xfs_admin".to_string();
         let output = Command::new(&binary)
             .arg("-U")
+            .arg(volume_uuid.to_string())
+            .arg(device)
+            .output()
+            .await
+            .map_err(|error| format!("failed to execute {binary}: {error}"))?;
+
+        if !output.status.success() {
+            return Err(format!(
+                "{} command failed: {}",
+                binary,
+                String::from_utf8(output.stderr).unwrap()
+            ));
+        }
+
+        let probe_uuid = FileSystem::property(device, "UUID")
+            .map_err(|error| format!("Failed to get UUID of device {device}: {error}"))?;
+
+        if volume_uuid.to_string() != probe_uuid {
+            return Err(format!(
+                "failed to set filesystem uuid using : {binary}, {}",
+                String::from_utf8(output.stdout).unwrap_or_default()
+            ));
+        }
+        debug!("Changed filesystem uuid to {volume_uuid} for {device}");
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl FileSystemOps for BtrFs {
+    async fn create(&self, device: &str) -> Result<(), Error> {
+        let binary = format!("mkfs.{}", "btrfs");
+        let output = Command::new(&binary)
+            .arg(device)
+            .output()
+            .await
+            .map_err(|error| format!("failed to execute {binary}: {error}"))?;
+        ack_command_output(output, binary)
+    }
+
+    fn mount_flags(&self, mount_flags: Vec<String>) -> Vec<String> {
+        mount_flags
+    }
+
+    fn unmount_on_fs_id_diff(
+        &self,
+        device_path: &str,
+        fs_staging_path: &str,
+        volume_uuid: &Uuid,
+    ) -> Result<(), Error> {
+        mount::unmount_on_fs_id_diff(device_path, fs_staging_path, volume_uuid)
+    }
+
+    /// `btrfs check --readonly` is a not a `DANGEROUS OPTION` as it only exists to calm potential
+    /// panic when users are going to run the checker and doesn't try to attempt to fix problems.
+    async fn repair(
+        &self,
+        device: &str,
+        _staging_path: &str,
+        _options: &[String],
+        _volume_uuid: &Uuid,
+    ) -> Result<(), Error> {
+        let binary = "btrfs".to_string();
+        let output = Command::new(&binary)
+            .arg("check")
+            .arg("--readonly")
+            .arg(device)
+            .output()
+            .await
+            .map_err(|error| format!("failed to execute {binary}: {error}"))?;
+
+        trace!(
+            "Output from {} command: {}, status code: {:?}",
+            binary,
+            String::from_utf8(output.stdout.clone()).unwrap(),
+            output.status.code()
+        );
+
+        if !output.status.success() {
+            return Err(format!(
+                "{} command failed: {}",
+                binary,
+                String::from_utf8(output.stderr).unwrap()
+            ));
+        }
+        Ok(())
+    }
+
+    async fn set_uuid(&self, device: &str, volume_uuid: &Uuid) -> Result<(), Error> {
+        if let Ok(probed_uuid) = FileSystem::property(device, "UUID") {
+            if probed_uuid == volume_uuid.to_string() {
+                return Ok(());
+            }
+        }
+
+        let binary = "btrfstune".to_string();
+        let output = Command::new(&binary)
+            .arg("-M")
             .arg(volume_uuid.to_string())
             .arg(device)
             .output()
