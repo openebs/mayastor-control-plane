@@ -7,21 +7,21 @@ description = "Persistent store and transport associated information for the con
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-url = "2.4.0"
+url = "2.4.1"
 uuid = { version = "1.4.1", features = ["v4"] }
 strum = "0.24.1"
 strum_macros = "0.24.3"
-serde_json = "1.0.104"
+serde_json = "1.0.107"
 percent-encoding = "2.3.0"
-tokio = { version = "1.30.0", features = [ "full" ] }
+tokio = { version = "1.32.0", features = [ "full" ] }
 snafu = "0.7.5"
-serde = { version = "1.0.183", features = ["derive"] }
+serde = { version = "1.0.188", features = ["derive"] }
 serde_tuple = "0.5.0"
-async-trait = "0.1.72"
+async-trait = "0.1.73"
 dyn-clonable = "0.9.0"
 rand = "0.8.5"
 tonic = "0.8.3"
-chrono = { version = "0.4.26", features = ["serde"] }
+chrono = { version = "0.4.31", features = ["serde"] }
 tracing = "0.1.37"
 prost-types = "0.11.9"
 
