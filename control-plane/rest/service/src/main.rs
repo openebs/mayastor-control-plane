@@ -233,7 +233,8 @@ async fn main() -> anyhow::Result<()> {
             .expect("Expect to be initialised only once");
     }
 
-    let server = HttpServer::new(app).bind_rustls(CliArgs::args().https, get_certificates()?)?;
+    let server =
+        HttpServer::new(app).bind_rustls_021(CliArgs::args().https, get_certificates()?)?;
     let result = if let Some(http) = CliArgs::args().http {
         server.bind(http).map_err(anyhow::Error::from)?
     } else {

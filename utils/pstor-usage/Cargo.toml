@@ -16,8 +16,8 @@ anyhow = "1.0.75"
 clap = { version = "4.4.6", features = ["color", "derive", "env", "string"] }
 parse-size = { version = "1.0.0", features = [ "std" ] }
 async-trait = "0.1.73"
-etcd-client = "0.10.4"
+etcd-client = "0.12.1"
 prettytable-rs = "0.10.0"
 serde = "1.0.188"
 serde_yaml = "0.9.25"
-itertools = "0.10.5"
+itertools = "0.11.0"

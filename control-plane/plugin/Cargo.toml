@@ -21,8 +21,8 @@ tls = [ "openapi/tower-client-tls" ]
 [dependencies]
 openapi = { path = "../../openapi", default-features = false, features = [ "tower-trace" ] }
 utils = { path = "../../utils/utils-lib" }
-strum = "0.24.1"
-strum_macros = "0.24.3"
+strum = "0.25.0"
+strum_macros = "0.25.2"
 tokio = { version = "1.32.0" }
 anyhow = "1.0.75"
 async-trait = "0.1.73"

@@ -20,10 +20,10 @@ use error::Error;
 use futures::StreamExt;
 use k8s_openapi::{api::core::v1::Event, apimachinery::pkg::apis::meta::v1::MicroTime};
 use kube::{
-    api::{Api, ListParams, ObjectMeta, Patch, PatchParams, PostParams},
+    api::{Api, ObjectMeta, Patch, PatchParams, PostParams},
     runtime::{
         controller::{Action, Controller},
-        finalizer,
+        finalizer, watcher,
     },
     Client, Resource, ResourceExt,
 };
@@ -693,7 +693,6 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
     migrate_and_clean_msps(&k8s, namespace).await?;
 
     let newdsp: Api<DiskPool> = v1beta1_api(&k8s, namespace);
-    let lp = ListParams::default();
 
     let url = Url::parse(args.get_one::<String>("endpoint").unwrap())
         .expect("endpoint is not a valid URL");
@@ -730,7 +729,7 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
 
     info!(namespace, "Starting DiskPool Operator (dsp)");
 
-    Controller::new(newdsp, lp)
+    Controller::new(newdsp, watcher::Config::default())
         .run(reconcile, error_policy, Arc::new(context))
         .for_each(|res| async move {
             match res {
