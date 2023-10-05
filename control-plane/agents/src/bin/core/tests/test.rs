@@ -1,5 +1,6 @@
 mod controller;
 mod deserializer;
+mod event;
 mod nexus;
 mod node;
 mod pool;

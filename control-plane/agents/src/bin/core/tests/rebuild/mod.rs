@@ -28,6 +28,7 @@ async fn build_cluster(num_ioe: u32, pool_size: u64) -> Cluster {
         .with_cache_period("250ms")
         .with_tmpfs_pool(pool_size)
         .with_options(|b| b.with_isolated_io_engine(true))
+        .with_eventing(true)
         .build()
         .await
         .unwrap()

@@ -2,7 +2,6 @@
 
 mod affinity_group;
 mod capacity;
-mod events;
 mod garbage_collection;
 mod helpers;
 mod hotspare;

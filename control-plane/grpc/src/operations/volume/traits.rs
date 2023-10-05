@@ -1818,16 +1818,12 @@ impl Event for Volume {
             Some(target) => target.node().to_string(),
             None => "".to_string(),
         };
-        let event_meta = EventMeta::new();
         let event_source = EventSource::new(node_id);
         EventMessage {
             category: EventCategory::Volume as i32,
             action: EventAction::Create as i32,
             target: self.uuid().to_string(),
-            metadata: Some(EventMeta {
-                source: Some(event_source),
-                ..event_meta
-            }),
+            metadata: Some(EventMeta::from_source(event_source)),
         }
     }
 }
@@ -1835,12 +1831,12 @@ impl Event for Volume {
 // Create volume delete event message.
 impl Event for ValidatedDestroyVolumeRequest {
     fn event(&self) -> EventMessage {
-        let event_meta = EventMeta::new();
+        let event_source = EventSource::new("".to_string()); // TODO: add node_name
         EventMessage {
             category: EventCategory::Volume as i32,
             action: EventAction::Delete as i32,
             target: self.uuid.to_string(),
-            metadata: Some(event_meta),
+            metadata: Some(EventMeta::from_source(event_source)),
         }
     }
 }
