@@ -83,7 +83,7 @@ pub const DEFAULT_GRPC_CLIENT_CONCURRENCY: usize = 25;
 
 /// The default quiet filters in addition to `RUST_LOG`.
 pub const RUST_LOG_SILENCE_DEFAULTS: &str =
-    "actix_web=info,actix_server=info,h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,tokio_tungstenite=info,tungstenite=info,async_io=info,polling=info,tonic=info,want=info,mio=info";
+    "actix_web=info,actix_server=info,async_nats=info,h2=info,hyper=info,tower_buffer=info,tower=info,rustls=info,reqwest=info,tokio_util=info,tokio_tungstenite=info,tungstenite=info,async_io=info,polling=info,tonic=info,want=info,mio=info";
 
 /// The default value to be assigned as cluster agent GRPC server addr if not overridden.
 pub const DEFAULT_CLUSTER_AGENT_SERVER_ADDR: &str = "0.0.0.0:11500";
