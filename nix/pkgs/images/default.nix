@@ -19,7 +19,7 @@ let
       inherit tag;
       created = "now";
       name = "openebs/mayastor-${name}${image_suffix.${buildType}}";
-      contents = [ tini busybox package ];
+      copyToRoot = [ tini busybox package ];
       config = {
         Entrypoint = [ "tini" "--" package.binary ];
       } // config;
