@@ -119,8 +119,8 @@ fn parse(options: &[String]) -> (bool, String) {
 fn show(options: &[String]) -> String {
     let list: Vec<String> = options
         .iter()
+        .filter(|value| value.as_str() != "rw")
         .cloned()
-        .filter(|value| value != "rw")
         .collect();
 
     if list.is_empty() {
