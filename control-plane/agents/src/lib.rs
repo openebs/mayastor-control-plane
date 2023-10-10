@@ -8,7 +8,7 @@
 use futures::Future;
 use grpc::tracing::OpenTelServer;
 use snafu::Snafu;
-use state::Container;
+use state::TypeMap;
 use std::{net::SocketAddr, sync::Arc};
 use stor_port::transport_api::ErrorChain;
 
@@ -27,7 +27,7 @@ pub enum ServiceError {
 type LayerStack = tower::layer::util::Stack<OpenTelServer, tower::layer::util::Identity>;
 /// An agent service with shareable state and a tonic server for gRPC services.
 pub struct Service<S = tonic::transport::server::Router<LayerStack>> {
-    shared_state: Arc<Container![Send + Sync]>,
+    shared_state: Arc<TypeMap![Send + Sync]>,
     tonic_server: S,
 }
 /// A `Service` that has not yet been added any routes.
@@ -62,7 +62,7 @@ impl Service {
     /// Setup default service with an opentelemetry layer configured on the tonic server.
     pub fn builder() -> Service<tonic::transport::Server<LayerStack>> {
         Service::<tonic::transport::Server<LayerStack>> {
-            shared_state: Arc::new(<Container![Send + Sync]>::new()),
+            shared_state: Arc::new(<TypeMap![Send + Sync]>::new()),
             tonic_server: tonic::transport::Server::builder().layer(OpenTelServer::new(vec![
                 // This is a bit of hack, but tonic doesn't seem to provide access to this uri
                 // path in any way.

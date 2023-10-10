@@ -93,6 +93,9 @@ pipeline {
   triggers {
     cron(cronSchedule())
   }
+  environment {
+    CARGO_INCREMENTAL = "1"
+  }
 
   stages {
     stage('init') {

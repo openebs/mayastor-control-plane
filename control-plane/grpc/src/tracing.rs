@@ -1,16 +1,18 @@
 use opentelemetry::{
     global,
     trace::{FutureExt, SpanKind, TraceContextExt, Tracer, TracerProvider},
-    KeyValue,
+    Key, KeyValue,
 };
 use opentelemetry_http::HeaderInjector;
-use opentelemetry_semantic_conventions::trace::{HTTP_STATUS_CODE, RPC_GRPC_STATUS_CODE};
+use opentelemetry_semantic_conventions::trace::RPC_GRPC_STATUS_CODE;
 use std::{future::Future, pin::Pin};
 use tonic::{
     codegen::http::{Request, Response},
     transport::Channel,
 };
 use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+const HTTP_STATUS_CODE: Key = Key::from_static_str("http.status_code");
 
 /// Add OpenTelemetry Span to the Http Headers
 #[derive(Default)]
@@ -141,6 +143,7 @@ where
         let tracer = global::tracer_provider().versioned_tracer(
             "grpc-server",
             Some(env!("CARGO_PKG_VERSION")),
+            None::<std::borrow::Cow<'static, str>>,
             None,
         );
         let extractor = opentelemetry_http::HeaderExtractor(request.headers());

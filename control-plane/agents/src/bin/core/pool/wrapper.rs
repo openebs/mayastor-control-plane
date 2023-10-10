@@ -171,7 +171,7 @@ impl From<&PoolWrapper> for Vec<Replica> {
 // are not active)
 impl PartialOrd for PoolWrapper {
     // todo: change code to support using cmp
-    #[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
+    #[allow(clippy::non_canonical_partial_ord_impl)]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match self.state.status.partial_cmp(&other.state.status) {
             Some(Ordering::Greater) => Some(Ordering::Greater),

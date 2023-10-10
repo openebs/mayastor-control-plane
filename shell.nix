@@ -22,6 +22,7 @@ in
 mkShell {
   name = "control-plane-shell";
   buildInputs = [
+    llvmPackages.bintools
     clang
     commitlint
     cowsay
@@ -50,6 +51,10 @@ mkShell {
     tini
     udev
   ] ++ pkgs.lib.optional (system == "aarch64-darwin") darwin.apple_sdk.frameworks.Security;
+
+  # Use lld linker to work around issue when building all tests where all ram is gobbled up!
+  # This helps reduce memory usage, though not completely.
+  NIX_CFLAGS_LINK = " -fuse-ld=lld";
 
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";

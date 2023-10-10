@@ -7,15 +7,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-kube = { version = "0.78.0", features = [ "ws" ] }
-k8s-openapi = { version = "0.17.0", default-features = false, features = ["v1_20"] }
-tokio = { version = "1.30.0", features = [ "full" ] }
+kube = { version = "0.85.0", features = [ "ws" ] }
+k8s-openapi = { version = "0.19.0", default-features = false, features = ["v1_20"] }
+tokio = { version = "1.32.0", features = [ "full" ] }
 tokio-stream = { version = "0.1.14", features = ["net"] }
 futures = "0.3.28"
-anyhow = "1.0.72"
+anyhow = "1.0.75"
 tracing = "0.1.37"
 shutdown = { path = "../../utils/shutdown" }
-serde_json = "1.0.104"
+serde_json = "1.0.107"
 hyper = { version = "0.14.27", features = [ "client", "http1", "http2", "tcp", "stream" ] }
 
 [dev-dependencies]

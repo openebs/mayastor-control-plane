@@ -180,6 +180,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
             utils::tracing_telemetry::global::tracer_provider().versioned_tracer(
                 "core-agent",
                 Some(env!("CARGO_PKG_VERSION")),
+                None::<std::borrow::Cow<'static, str>>,
                 None,
             ),
         )

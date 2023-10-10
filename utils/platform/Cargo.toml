@@ -7,7 +7,8 @@ description = "A library used to identify which platfrom we're running under."
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.30.0", features = [ "full" ] }
-k8s-openapi = { version = "0.17.0", features = ["v1_20"] }
-kube = { version = "0.78.0", features = ["derive"] }
+tokio = { version = "1.32.0", features = [ "full" ] }
+# Version 0.20.0 brings support for 1_28 but removes support from 1_20 and 1_21..
+k8s-openapi = { version = "0.19.0", features = ["v1_20"] }
+kube = { version = "0.85.0", features = ["derive"] }
 tracing = "0.1.37"

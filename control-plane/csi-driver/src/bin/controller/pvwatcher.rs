@@ -1,8 +1,7 @@
 use futures::TryStreamExt;
 use k8s_openapi::api::core::v1::PersistentVolume;
-
 use kube::{
-    api::{Api, ListParams},
+    api::Api,
     runtime::{watcher, WatchStreamExt},
     Client, ResourceExt,
 };
@@ -35,7 +34,7 @@ impl PvGarbageCollector {
         tokio::spawn(async move {
             cloned_self.handle_missed_events().await;
         });
-        watcher(self.pv_handle.clone(), ListParams::default())
+        watcher(self.pv_handle.clone(), watcher::Config::default())
             .touched_objects()
             .try_for_each(|pvol| async {
                 self.process_object(pvol).await;

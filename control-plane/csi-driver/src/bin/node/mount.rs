@@ -115,22 +115,12 @@ fn parse(options: &[String]) -> (bool, String) {
     (readonly, list.join(","))
 }
 
-// Utility function to wrap a string in an Option.
-// Note that, in particular, the empty string is mapped to None.
-fn option(value: &str) -> Option<&str> {
-    if value.is_empty() {
-        None
-    } else {
-        Some(value)
-    }
-}
-
 // Utility function used for displaying a list of options.
 fn show(options: &[String]) -> String {
     let list: Vec<String> = options
         .iter()
+        .filter(|value| value.as_str() != "rw")
         .cloned()
-        .filter(|value| value != "rw")
         .collect();
 
     if list.is_empty() {
@@ -155,13 +145,15 @@ pub(crate) fn filesystem_mount(
         flags.insert(MountFlags::RDONLY);
     }
 
-    let mount = Mount::new(
-        device,
-        target,
-        FilesystemType::Manual(fstype.as_ref()),
-        flags,
-        option(&value),
-    )?;
+    // I'm not certain if it's fine to pass "" so keep existing behaviour
+    let mount = if value.is_empty() {
+        Mount::builder()
+    } else {
+        Mount::builder().data(&value)
+    }
+    .fstype(FilesystemType::Manual(fstype.as_ref()))
+    .flags(flags)
+    .mount(device, target)?;
 
     debug!(
         "Filesystem ({}) on device {} mounted onto target {} (options: {})",
@@ -197,7 +189,10 @@ pub(crate) fn bind_mount(source: &str, target: &str, file: bool) -> Result<Mount
         flags.insert(MountFlags::RDONLY);
     }
 
-    let mount = Mount::new(source, target, FilesystemType::Manual("none"), flags, None)?;
+    let mount = Mount::builder()
+        .fstype(FilesystemType::Manual("none"))
+        .flags(flags)
+        .mount(source, target)?;
 
     debug!("Source {} bind mounted onto target {}", source, target);
 
@@ -219,13 +214,14 @@ pub(crate) fn bind_remount(target: &str, options: &[String]) -> Result<Mount, Er
 
     flags.insert(MountFlags::REMOUNT);
 
-    let mount = Mount::new(
-        "none",
-        target,
-        FilesystemType::Manual("none"),
-        flags,
-        option(&value),
-    )?;
+    let mount = if value.is_empty() {
+        Mount::builder()
+    } else {
+        Mount::builder().data(&value)
+    }
+    .fstype(FilesystemType::Manual("none"))
+    .flags(flags)
+    .mount("none", target)?;
 
     debug!(
         "Target {} bind remounted (options: {})",
@@ -257,7 +253,10 @@ pub(crate) fn remount(target: &str, ro: bool) -> Result<Mount, Error> {
         flags.insert(MountFlags::RDONLY);
     }
 
-    let mount = Mount::new("", target, FilesystemType::Manual("none"), flags, None)?;
+    let mount = Mount::builder()
+        .fstype(FilesystemType::Manual("none"))
+        .flags(flags)
+        .mount("", target)?;
 
     debug!("Target {} remounted with {:?}", target, flags);
 
@@ -275,15 +274,21 @@ pub(crate) fn blockdevice_mount(
     let mut flags = MountFlags::empty();
     flags.insert(MountFlags::BIND);
 
-    let mount = Mount::new(source, target, FilesystemType::Manual("none"), flags, None)?;
+    let mount = Mount::builder()
+        .fstype(FilesystemType::Manual("none"))
+        .flags(flags)
+        .mount(source, target)?;
     info!("Block device {} mounted to {}", source, target,);
 
     if readonly {
         flags.insert(MountFlags::REMOUNT);
         flags.insert(MountFlags::RDONLY);
 
-        let mount = Mount::new("", target, FilesystemType::Manual(""), flags, None)?;
-        info!("Remounted block device {} (readonly) to {}", source, target,);
+        let mount = Mount::builder()
+            .fstype(FilesystemType::Manual(""))
+            .flags(flags)
+            .mount("", target)?;
+        info!("Remounted block device {} (readonly) to {}", source, target);
         return Ok(mount);
     }
 
