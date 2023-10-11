@@ -5,4 +5,4 @@ urllib3==1.26.15
 docker==5.0.3
 asyncssh==2.13.1
 etcd3==0.12.0
-requests==2.25.0
+requests==2.31.0
