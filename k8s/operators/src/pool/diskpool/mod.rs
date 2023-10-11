@@ -3,7 +3,6 @@
 
 /// DiskPool client operations.
 pub(crate) mod client;
-pub(crate) mod context;
 /// The DiskPool custom resource definition.
 pub(crate) mod v1alpha1;
 pub(crate) mod v1beta1;

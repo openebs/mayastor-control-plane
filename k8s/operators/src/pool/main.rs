@@ -3,6 +3,7 @@
 //!
 //! Successfully created pools are recreated by the control plane.
 
+pub(crate) mod context;
 mod diskpool;
 pub(crate) mod error;
 mod mayastorpool;
@@ -12,16 +13,19 @@ use crate::diskpool::client::{
 };
 use chrono::Utc;
 use clap::{Arg, ArgMatches};
+use context::OperatorContext;
 use diskpool::{
     client::ensure_crd,
-    context::OperatorContext,
     v1beta1::{CrPoolState, DiskPool, DiskPoolSpec, DiskPoolStatus},
 };
 use error::Error;
 use futures::StreamExt;
 use kube::{
-    api::{Api, ListParams},
-    runtime::{controller::{Action, Controller}, watcher},
+    api::Api,
+    runtime::{
+        controller::{Action, Controller},
+        watcher,
+    },
     Client, ResourceExt,
 };
 use mayastorpool::client::{check_crd, delete, list};

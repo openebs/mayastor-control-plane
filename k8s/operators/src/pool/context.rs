@@ -1,5 +1,7 @@
-use super::v1beta1::{CrPoolState, DiskPool, DiskPoolStatus};
-use crate::error::Error;
+use super::{
+    diskpool::v1beta1::{CrPoolState, DiskPool, DiskPoolStatus},
+    error::Error,
+};
 use k8s_openapi::{api::core::v1::Event, apimachinery::pkg::apis::meta::v1::MicroTime};
 use kube::{
     api::{Api, ObjectMeta, PatchParams},
@@ -12,7 +14,7 @@ use openapi::{
     models::{CreatePoolBody, Pool},
 };
 
-use crate::{normalize_disk, v1beta1_api};
+use super::{normalize_disk, v1beta1_api};
 use chrono::Utc;
 use kube::api::{Patch, PostParams};
 use serde_json::json;
@@ -61,6 +63,7 @@ pub(crate) struct OperatorContext {
 }
 
 impl OperatorContext {
+    /// Constructor for Operator context.
     pub(crate) fn new(
         k8s: Client,
         inventory: tokio::sync::RwLock<HashMap<String, ResourceContext>>,
@@ -138,8 +141,7 @@ impl OperatorContext {
     /// Remove the resource from the operator
     pub(crate) async fn remove(&self, name: String) -> Option<ResourceContext> {
         let mut i = self.inventory.write().await;
-        let removed = i.remove(&name);
-        if let Some(removed) = removed {
+        if let Some(removed) = i.remove(&name) {
             info!(name =? removed.name_any(), "removed from inventory");
             return Some(removed);
         }
@@ -164,7 +166,12 @@ impl ResourceContext {
         if attempt_delete {
             resource.delete_pool().await?;
         }
-        ctx.remove(resource.name_any()).await;
+        if ctx.remove(resource.name_any()).await.is_none() {
+            // In an unlikely event where we cant remove from inventory. We will requeue and
+            // reattempt again in 10 seconds.
+            error!(name = ?resource.name_any(), "Failed to remove from inventory");
+            return Ok(Action::requeue(Duration::from_secs(10)));
+        }
         Ok(Action::await_change())
     }
 
