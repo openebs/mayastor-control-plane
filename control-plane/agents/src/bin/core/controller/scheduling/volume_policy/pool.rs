@@ -74,9 +74,15 @@ impl PoolBaseFilters {
         match request.registry().specs().pool(&item.pool.id) {
             Ok(spec) => match spec.labels {
                 None => false,
-                Some(label) => volume_pool_topology_labels.keys().all(|k| {
-                    label.contains_key(k) && (volume_pool_topology_labels.get(k) == label.get(k))
-                }),
+                Some(label) => volume_pool_topology_labels
+                    .iter()
+                    .all(|(vol_key, vol_val)| {
+                        // See `InclusiveLabel` doc comment.
+                        // todo: add exclusion
+                        label
+                            .get(vol_key)
+                            .is_some_and(|pool_value| vol_val.is_empty() || pool_value == vol_val)
+                    }),
             },
             Err(_) => false,
         }
