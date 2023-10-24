@@ -334,19 +334,19 @@ impl From<BlockDevice> for blockdevice::BlockDevice {
             devpath: bd.devpath,
             devlinks: bd.devlinks,
             size: bd.size,
-            partition: Some(blockdevice::Partition {
-                parent: bd.partition.parent,
-                number: bd.partition.number,
-                name: bd.partition.name,
-                scheme: bd.partition.scheme,
-                typeid: bd.partition.typeid,
-                uuid: bd.partition.uuid,
+            partition: bd.partition.map(|bd| blockdevice::Partition {
+                parent: bd.parent,
+                number: bd.number,
+                name: bd.name,
+                scheme: bd.scheme,
+                typeid: bd.typeid,
+                uuid: bd.uuid,
             }),
-            filesystem: Some(blockdevice::Filesystem {
-                fstype: bd.filesystem.fstype,
-                label: bd.filesystem.label,
-                uuid: bd.filesystem.uuid,
-                mountpoint: bd.filesystem.mountpoint,
+            filesystem: bd.filesystem.map(|bd| blockdevice::Filesystem {
+                fstype: bd.fstype,
+                label: bd.label,
+                uuid: bd.uuid,
+                mountpoint: bd.mountpoint,
             }),
             available: bd.available,
         }
@@ -365,38 +365,20 @@ impl TryFrom<blockdevice::BlockDevice> for BlockDevice {
             devpath: bd.devpath,
             devlinks: bd.devlinks,
             size: bd.size,
-            partition: match bd.partition {
-                Some(partition) => Partition {
-                    parent: partition.parent,
-                    number: partition.number,
-                    name: partition.name,
-                    scheme: partition.scheme,
-                    typeid: partition.typeid,
-                    uuid: partition.uuid,
-                },
-                None => {
-                    return Err(ReplyError::invalid_argument(
-                        ResourceKind::Block,
-                        "bd.partition",
-                        "".to_string(),
-                    ))
-                }
-            },
-            filesystem: match bd.filesystem {
-                Some(filesystem) => Filesystem {
-                    fstype: filesystem.fstype,
-                    label: filesystem.label,
-                    uuid: filesystem.uuid,
-                    mountpoint: filesystem.mountpoint,
-                },
-                None => {
-                    return Err(ReplyError::invalid_argument(
-                        ResourceKind::Block,
-                        "bd.partition",
-                        "".to_string(),
-                    ))
-                }
-            },
+            partition: bd.partition.map(|partition| Partition {
+                parent: partition.parent,
+                number: partition.number,
+                name: partition.name,
+                scheme: partition.scheme,
+                typeid: partition.typeid,
+                uuid: partition.uuid,
+            }),
+            filesystem: bd.filesystem.map(|filesystem| Filesystem {
+                fstype: filesystem.fstype,
+                label: filesystem.label,
+                uuid: filesystem.uuid,
+                mountpoint: filesystem.mountpoint,
+            }),
             available: bd.available,
         })
     }

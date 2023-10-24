@@ -2,8 +2,8 @@ use crate::{
     operations::GetBlockDevices,
     resources::{
         utils::{
-            print_table, CreateRow, GetHeaderRow, OutputFormat, BLOCKDEVICE_HEADERS_ALL,
-            BLOCKDEVICE_HEADERS_USABLE,
+            optional_cell, print_table, CreateRow, GetHeaderRow, OutputFormat,
+            BLOCKDEVICE_HEADERS_ALL, BLOCKDEVICE_HEADERS_USABLE,
         },
         NodeId,
     },
@@ -50,6 +50,7 @@ impl BlockDeviceArgs {
 impl CreateRow for BlockDeviceAll {
     fn row(&self) -> Row {
         let device = self.0.clone();
+        let filesystem = device.filesystem.as_ref();
         row![
             device.devname,
             device.devtype,
@@ -59,10 +60,10 @@ impl CreateRow for BlockDeviceAll {
             device.devpath,
             device.devmajor,
             device.devminor,
-            device.filesystem.fstype,
-            device.filesystem.uuid,
-            device.filesystem.mountpoint,
-            get_partition_type(&device.partition),
+            optional_cell(filesystem.map(|f| &f.fstype)),
+            optional_cell(filesystem.map(|f| &f.uuid)),
+            optional_cell(filesystem.map(|f| &f.mountpoint)),
+            optional_cell(device.partition.map(get_partition_type)),
             device
                 .devlinks
                 .iter()
@@ -97,11 +98,11 @@ impl CreateRow for BlockDeviceUsable {
     }
 }
 
-fn get_partition_type(partition: &openapi::models::BlockDevicePartition) -> String {
+fn get_partition_type(partition: openapi::models::BlockDevicePartition) -> String {
     if !partition.scheme.is_empty() && !partition.typeid.is_empty() {
         return format!("{}:{}", partition.scheme, partition.typeid);
     }
-    "".to_string()
+    "??".to_string()
 }
 
 // GetHeaderRow being trait for BlockDeviceAll would return the Header Row for

@@ -67,18 +67,14 @@ impl IoEngineToAgent for v1::host::BlockDevice {
             devpath: self.devpath.clone(),
             devlinks: self.devlinks.clone(),
             size: self.size,
-            partition: match &self.partition {
-                Some(partition) => partition.to_agent(),
-                None => transport::Partition {
-                    ..Default::default()
-                },
-            },
-            filesystem: match &self.filesystem {
-                Some(filesystem) => filesystem.to_agent(),
-                None => transport::Filesystem {
-                    ..Default::default()
-                },
-            },
+            partition: self
+                .partition
+                .as_ref()
+                .map(|partition| partition.to_agent()),
+            filesystem: self
+                .filesystem
+                .as_ref()
+                .map(|filesystem| filesystem.to_agent()),
             available: self.available,
         }
     }

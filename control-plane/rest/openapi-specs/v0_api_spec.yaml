@@ -1953,29 +1953,6 @@ components:
       type: string
       format: uuid
     BlockDevice:
-      example:
-        available: false
-        devlinks:
-          - ''
-        devmajor: 0
-        devminor: 0
-        devname: ''
-        devpath: ''
-        devtype: ''
-        filesystem:
-          fstype: ''
-          label: ''
-          mountpoint: ''
-          uuid: ''
-        model: ''
-        partition:
-          name: ''
-          number: 0
-          parent: ''
-          scheme: ''
-          typeid: ''
-          uuid: ''
-        size: 0
       description: Block device information
       type: object
       properties:
@@ -2036,13 +2013,6 @@ components:
           description: device model - useful for identifying devices
           type: string
         partition:
-          example:
-            name: ''
-            number: 0
-            parent: ''
-            scheme: ''
-            typeid: ''
-            uuid: ''
           description: partition information in case where device represents a partition
           type: object
           properties:
@@ -2085,9 +2055,7 @@ components:
         - devname
         - devpath
         - devtype
-        - filesystem
         - model
-        - partition
         - size
     ChildState:
       example: Online
