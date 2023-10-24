@@ -57,7 +57,7 @@ impl crate::controller::io_engine::HostApi for super::RpcClient {
                     .map(|v| {
                         // Get the list of supported api versions from dataplane
                         registration::traits::ApiVersion(
-                            rpc::v1::registration::ApiVersion::from_i32(v).unwrap_or_default(),
+                            rpc::v1::registration::ApiVersion::try_from(v).unwrap_or_default(),
                         )
                         .into()
                     })

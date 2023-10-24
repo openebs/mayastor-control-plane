@@ -90,12 +90,12 @@ impl TryFrom<node::Node> for Node {
         };
         let node_state = match node_grpc_type.state {
             Some(state) => {
-                let status: NodeStatus = match node::NodeStatus::from_i32(state.status) {
-                    Some(status) => Ok(status.into()),
-                    None => Err(Self::Error::invalid_argument(
+                let status: NodeStatus = match node::NodeStatus::try_from(state.status) {
+                    Ok(status) => Ok(status.into()),
+                    Err(error) => Err(Self::Error::invalid_argument(
                         ResourceKind::Node,
                         "node.state.status",
-                        "".to_string(),
+                        error,
                     )),
                 }?;
                 // todo: pass proper apiversion on the upper layer once openapi has the changes

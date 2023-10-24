@@ -94,8 +94,8 @@ fn check_access_mode(
 ) -> Result<(), String> {
     match volume_capability {
         Some(capability) => match &capability.access_mode {
-            Some(access) => match Mode::from_i32(access.mode) {
-                Some(mode) => match mode {
+            Some(access) => match Mode::try_from(access.mode) {
+                Ok(mode) => match mode {
                     Mode::SingleNodeWriter | Mode::MultiNodeSingleWriter => Ok(()),
                     Mode::SingleNodeReaderOnly | Mode::MultiNodeReaderOnly => {
                         if readonly {
@@ -108,7 +108,7 @@ fn check_access_mode(
                         "volume capability: unsupported access mode: {mode:?}"
                     )),
                 },
-                None => Err(format!(
+                Err(_) => Err(format!(
                     "volume capability: invalid access mode: {}",
                     access.mode
                 )),

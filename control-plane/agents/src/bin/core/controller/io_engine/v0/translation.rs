@@ -144,7 +144,7 @@ impl TryIoEngineToAgent for v0::NexusV2 {
                 kind: ResourceKind::Nexus,
             })?,
             size: self.size,
-            status: ExternalType(v0::NexusState::from_i32(self.state).unwrap_or_default()).into(),
+            status: ExternalType(v0::NexusState::try_from(self.state).unwrap_or_default()).into(),
             children: self.children.iter().map(|c| c.to_agent()).collect(),
             device_uri: self.device_uri.clone(),
             rebuilds: self.rebuilds,
@@ -173,7 +173,7 @@ impl TryIoEngineToAgent for v0::Nexus {
             name: self.uuid.clone(),
             uuid: Default::default(),
             size: self.size,
-            status: ExternalType(v0::NexusState::from_i32(self.state).unwrap_or_default()).into(),
+            status: ExternalType(v0::NexusState::try_from(self.state).unwrap_or_default()).into(),
             children: self.children.iter().map(|c| c.to_agent()).collect(),
             device_uri: self.device_uri.clone(),
             rebuilds: self.rebuilds,
@@ -243,10 +243,10 @@ impl IoEngineToAgent for v0::Child {
         Self::AgentMessage {
             uri: self.uri.clone().into(),
             state: ChildState::from(ExternalType(
-                v0::ChildState::from_i32(self.state).unwrap_or(v0::ChildState::ChildUnknown),
+                v0::ChildState::try_from(self.state).unwrap_or(v0::ChildState::ChildUnknown),
             )),
             rebuild_progress: u8::try_from(self.rebuild_progress).ok(),
-            state_reason: v0::ChildStateReason::from_i32(self.reason)
+            state_reason: v0::ChildStateReason::try_from(self.reason)
                 .map(|f| From::from(ExternalType(f)))
                 .unwrap_or(ChildStateReason::Unknown),
             faulted_at: None,

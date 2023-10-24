@@ -333,7 +333,7 @@ impl TryIoEngineToAgent for v1::nexus::Nexus {
                 kind: ResourceKind::Nexus,
             })?,
             size: self.size,
-            status: ExternalType(v1::nexus::NexusState::from_i32(self.state).unwrap_or_default())
+            status: ExternalType(v1::nexus::NexusState::try_from(self.state).unwrap_or_default())
                 .into(),
             children: self.children.iter().map(|c| c.to_agent()).collect(),
             device_uri: self.device_uri.clone(),
@@ -404,11 +404,11 @@ impl IoEngineToAgent for v1::nexus::Child {
         Self::AgentMessage {
             uri: self.uri.clone().into(),
             state: ChildState::from(ExternalType(
-                v1::nexus::ChildState::from_i32(self.state)
+                v1::nexus::ChildState::try_from(self.state)
                     .unwrap_or(v1::nexus::ChildState::Unknown),
             )),
             rebuild_progress: u8::try_from(self.rebuild_progress).ok(),
-            state_reason: v1::nexus::ChildStateReason::from_i32(self.state_reason)
+            state_reason: v1::nexus::ChildStateReason::try_from(self.state_reason)
                 .map(|f| From::from(ExternalType(f)))
                 .unwrap_or(ChildStateReason::Unknown),
             faulted_at: self
@@ -710,7 +710,7 @@ impl TryFrom<ExternalType<v1::nexus::RebuildHistoryRecord>> for transport::Rebui
                 .map_err(|_| SvcError::InvalidArguments {})?,
             src_uri: transport::ChildUri::try_from(value.0.src_uri)
                 .map_err(|_| SvcError::InvalidArguments {})?,
-            state: v1::nexus::RebuildJobState::from_i32(value.0.state)
+            state: v1::nexus::RebuildJobState::try_from(value.0.state)
                 .map(|f| From::from(ExternalType(f)))
                 .unwrap_or_default(),
             blocks_total: value.0.blocks_total,

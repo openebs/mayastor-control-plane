@@ -155,10 +155,10 @@ impl From<ReplyError> for crate::common::ReplyError {
 impl From<crate::common::ReplyError> for ReplyError {
     fn from(err: crate::common::ReplyError) -> Self {
         ReplyError {
-            kind: common::ReplyErrorKind::from_i32(err.clone().kind)
+            kind: common::ReplyErrorKind::try_from(err.clone().kind)
                 .unwrap_or(common::ReplyErrorKind::Aborted)
                 .into(),
-            resource: common::ResourceKind::from_i32(err.clone().resource)
+            resource: common::ResourceKind::try_from(err.clone().resource)
                 .unwrap_or(common::ResourceKind::Unknown)
                 .into(),
             source: err.clone().source,

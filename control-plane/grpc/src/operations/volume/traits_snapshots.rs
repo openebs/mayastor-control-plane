@@ -456,7 +456,7 @@ impl TryFrom<volume::VolumeSnapshot> for VolumeSnapshot {
         Ok(Self {
             spec: info.clone(),
             meta: VolumeSnapshotMeta {
-                status: common::SpecStatus::from_i32(meta.spec_status)
+                status: common::SpecStatus::try_from(meta.spec_status)
                     .unwrap_or_default()
                     .into(),
                 timestamp: meta.timestamp,
@@ -507,7 +507,7 @@ impl TryFrom<volume::VolumeSnapshot> for VolumeSnapshot {
                                 );
                                 let spec = ReplicaSnapshotSpec::new(&source, snapshot_id);
                                 let status =
-                                    crate::snapshot::SnapshotStatus::from_i32(state.status)
+                                    crate::snapshot::SnapshotStatus::try_from(state.status)
                                         .unwrap_or_default();
                                 Ok(match status {
                                     crate::snapshot::SnapshotStatus::Unknown => {
@@ -583,7 +583,7 @@ impl TryFrom<volume::ReplicaSnapshot> for ReplicaSnapshot {
     type Error = ReplyError;
     fn try_from(value: volume::ReplicaSnapshot) -> Result<Self, Self::Error> {
         Ok(ReplicaSnapshot {
-            status: common::SpecStatus::from_i32(value.spec_status)
+            status: common::SpecStatus::try_from(value.spec_status)
                 .unwrap_or_default()
                 .into(),
             uuid: value

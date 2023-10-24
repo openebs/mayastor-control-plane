@@ -21,7 +21,7 @@ clap = { version = "4.4.6", features = ["derive", "env", "string"] }
 backtrace = "0.3.69"
 etcd-client = "0.12.1"
 grpc = { path = "../../control-plane/grpc" }
-tonic = "0.9.2"
+tonic = "0.10.2"
 tower = { version = "0.4.13", features = [ "timeout", "util" ] }
 # Tracing
 tracing = "0.1.37"

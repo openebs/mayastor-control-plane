@@ -20,10 +20,10 @@ serde_tuple = "0.5.0"
 async-trait = "0.1.73"
 dyn-clonable = "0.9.0"
 rand = "0.8.5"
-tonic = "0.9.2"
+tonic = "0.10.2"
 chrono = { version = "0.4.31", features = ["serde"] }
 tracing = "0.1.37"
-prost-types = "0.11.9"
+prost-types = "0.12.1"
 
 openapi = { path = "../../openapi", features = [ "actix-server", "tower-client", "tower-trace" ] }
 platform = { path = "../../utils/platform" }
