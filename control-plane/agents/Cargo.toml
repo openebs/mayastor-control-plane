@@ -35,7 +35,7 @@ uuid = { version = "1.4.1", features = ["serde", "v4"] }
 chrono = "0.4.31"
 clap = { version = "4.4.6", features = ["color", "derive", "env", "string"] }
 tokio = { version = "1.32.0", features = ["full"] }
-tonic = "0.9.2"
+tonic = "0.10.2"
 futures = "0.3.28"
 serde_json = "1.0.107"
 async-trait = "0.1.73"
@@ -56,7 +56,7 @@ hyper = { version = "0.14.27", features = [ "client", "http1", "http2", "tcp", "
 opentelemetry = { version = "0.20.0", features = ["rt-tokio-current-thread"] }
 tracing = "0.1.37"
 nix = { version = "0.27.1", default-features = false }
-prost-types = "0.11.9"
+prost-types = "0.12.1"
 url = "2.4.1"
 
 grpc = { path = "../grpc" }

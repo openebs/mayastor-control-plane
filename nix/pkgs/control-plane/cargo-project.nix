@@ -12,7 +12,7 @@
 , gitVersions
 , openapi-generator
 , which
-, udev
+, systemdMinimal
 , utillinux
   # with allInOne set to true all components are built as part of the same "cargo build" derivation
   # this allows for a quicker build of all components but slower single components
@@ -56,6 +56,7 @@ let
   src_list = [
     "Cargo.lock"
     "Cargo.toml"
+    ".cargo"
     "common"
     "control-plane"
     "deployer"
@@ -77,8 +78,8 @@ let
     GIT_VERSION = "${gitVersions.tag_or_long}";
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
-    nativeBuildInputs = [ clang pkg-config openapi-generator which git ];
-    buildInputs = [ llvmPackages.libclang protobuf openssl udev utillinux ];
+    nativeBuildInputs = [ clang pkg-config openapi-generator which git llvmPackages.bintools ];
+    buildInputs = [ llvmPackages.libclang protobuf openssl.dev systemdMinimal.dev utillinux.dev ];
     doCheck = false;
   };
   release_build = { "release" = true; "debug" = false; };

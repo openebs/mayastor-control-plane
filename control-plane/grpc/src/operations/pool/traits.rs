@@ -59,7 +59,7 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
                 ))
             }
         };
-        let pool_spec_status = match common::SpecStatus::from_i32(pool_meta.spec_status) {
+        let pool_spec_status = match common::SpecStatus::try_from(pool_meta.spec_status).ok() {
             Some(status) => status.into(),
             None => {
                 return Err(ReplyError::invalid_argument(
@@ -92,13 +92,13 @@ impl TryFrom<pool::PoolState> for PoolState {
             node: pool_state.node_id.into(),
             id: pool_state.pool_id.into(),
             disks: pool_state.disks_uri.iter().map(|i| i.into()).collect(),
-            status: match pool::PoolStatus::from_i32(pool_state.status) {
-                Some(status) => status.into(),
-                None => {
+            status: match pool::PoolStatus::try_from(pool_state.status) {
+                Ok(status) => status.into(),
+                Err(error) => {
                     return Err(ReplyError::invalid_argument(
                         ResourceKind::Pool,
                         "pool.state.status",
-                        "".to_string(),
+                        error,
                     ))
                 }
             },

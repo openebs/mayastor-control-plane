@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::IntoOption;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
@@ -71,9 +72,9 @@ pub struct BlockDevice {
     /// size of device in (512 byte) blocks
     pub size: u64,
     /// partition information in case where device represents a partition
-    pub partition: Partition,
+    pub partition: Option<Partition>,
     /// filesystem information in case where a filesystem is present
-    pub filesystem: Filesystem,
+    pub filesystem: Option<Filesystem>,
     /// identifies if device is available for use (ie. is not "currently" in
     /// use)
     pub available: bool,
@@ -81,7 +82,7 @@ pub struct BlockDevice {
 
 impl From<BlockDevice> for models::BlockDevice {
     fn from(src: BlockDevice) -> Self {
-        models::BlockDevice::new(
+        models::BlockDevice::new_all(
             src.available,
             src.devlinks,
             src.devmajor as i32,
@@ -89,9 +90,9 @@ impl From<BlockDevice> for models::BlockDevice {
             src.devname,
             src.devpath,
             src.devtype,
-            src.filesystem,
+            src.filesystem.into_opt(),
             src.model,
-            src.partition,
+            src.partition.into_opt(),
             src.size,
         )
     }

@@ -252,13 +252,13 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
             }
         };
 
-        let volume_spec_status = match common::SpecStatus::from_i32(volume_meta.spec_status) {
-            Some(status) => status.into(),
-            None => {
+        let volume_spec_status = match common::SpecStatus::try_from(volume_meta.spec_status) {
+            Ok(status) => status.into(),
+            Err(error) => {
                 return Err(ReplyError::invalid_argument(
                     ResourceKind::Volume,
                     "volume.metadata.spec_status",
-                    "".to_string(),
+                    error.to_string(),
                 ))
             }
         };
@@ -368,13 +368,13 @@ impl TryFrom<volume::Volume> for Volume {
         let volume_state = VolumeState {
             uuid: VolumeId::try_from(StringValue(grpc_state.uuid))?,
             size: grpc_state.size,
-            status: match nexus::NexusStatus::from_i32(grpc_state.status) {
-                Some(status) => status.into(),
-                None => {
+            status: match nexus::NexusStatus::try_from(grpc_state.status) {
+                Ok(status) => status.into(),
+                Err(error) => {
                     return Err(ReplyError::invalid_argument(
                         ResourceKind::Volume,
                         "volume.state.status",
-                        "".to_string(),
+                        error,
                     ))
                 }
             },
@@ -456,10 +456,10 @@ impl TryFrom<volume::ReplicaTopology> for ReplicaTopology {
             topology.usage.into_opt(),
             topology
                 .child_status
-                .and_then(|s| nexus::ChildState::from_i32(s).into_opt()),
+                .and_then(|s| nexus::ChildState::try_from(s).ok().into_opt()),
             topology
                 .child_status_reason
-                .and_then(|s| nexus::ChildStateReason::from_i32(s).into_opt()),
+                .and_then(|s| nexus::ChildStateReason::try_from(s).ok().into_opt()),
             topology.rebuild_progress.and_then(|r| u8::try_from(r).ok()),
         ))
     }
@@ -702,13 +702,13 @@ impl TryFrom<volume::VolumeTarget> for VolumeTarget {
             target.node_id.into(),
             NexusId::try_from(StringValue(target.nexus_id))?,
             match target.protocol {
-                Some(i) => match volume::VolumeShareProtocol::from_i32(i) {
-                    Some(protocol) => Some(protocol.into()),
-                    None => {
+                Some(i) => match volume::VolumeShareProtocol::try_from(i) {
+                    Ok(protocol) => Some(protocol.into()),
+                    Err(error) => {
                         return Err(ReplyError::invalid_argument(
                             ResourceKind::Volume,
                             "target.protocol",
-                            "is empty".to_string(),
+                            error,
                         ))
                     }
                 },
@@ -1140,13 +1140,13 @@ impl ValidateRequestTypes for ShareVolumeRequest {
     fn validated(self) -> Result<Self::Validated, ReplyError> {
         Ok(ValidatedShareVolumeRequest {
             uuid: VolumeId::try_from(StringValue(self.uuid))?,
-            share: match volume::VolumeShareProtocol::from_i32(self.share) {
-                Some(share) => share.into(),
-                None => {
+            share: match volume::VolumeShareProtocol::try_from(self.share) {
+                Ok(share) => share.into(),
+                Err(error) => {
                     return Err(ReplyError::invalid_argument(
                         ResourceKind::Volume,
                         "share_volume_request.share",
-                        "".to_string(),
+                        error,
                     ))
                 }
             },
@@ -1321,13 +1321,13 @@ impl ValidateRequestTypes for PublishVolumeRequest {
         Ok(ValidatedPublishVolumeRequest {
             uuid: VolumeId::try_from(StringValue(self.uuid.clone()))?,
             share: match self.share {
-                Some(share) => match volume::VolumeShareProtocol::from_i32(share) {
-                    Some(share) => Some(share.into()),
-                    None => {
+                Some(share) => match volume::VolumeShareProtocol::try_from(share) {
+                    Ok(share) => Some(share.into()),
+                    Err(error) => {
                         return Err(ReplyError::invalid_argument(
                             ResourceKind::Volume,
                             "publish_volume_request.share",
-                            "".to_string(),
+                            error,
                         ))
                     }
                 },
@@ -1481,13 +1481,13 @@ impl ValidateRequestTypes for RepublishVolumeRequest {
     fn validated(self) -> Result<Self::Validated, ReplyError> {
         Ok(ValidatedRepublishVolumeRequest {
             uuid: VolumeId::try_from(StringValue(self.uuid.clone()))?,
-            share: match volume::VolumeShareProtocol::from_i32(self.share) {
-                Some(share) => share.into(),
-                None => {
+            share: match volume::VolumeShareProtocol::try_from(self.share) {
+                Ok(share) => share.into(),
+                Err(error) => {
                     return Err(ReplyError::invalid_argument(
                         ResourceKind::Volume,
                         "republish_volume_request.share",
-                        "".to_string(),
+                        error,
                     ))
                 }
             },

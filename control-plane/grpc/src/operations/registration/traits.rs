@@ -79,7 +79,7 @@ impl RegisterInfo for RegisterRequest {
                 .clone()
                 .into_iter()
                 .map(|v| {
-                    ApiVersion(rpc::v1::registration::ApiVersion::from_i32(v).unwrap_or_default())
+                    ApiVersion(rpc::v1::registration::ApiVersion::try_from(v).unwrap_or_default())
                         .into()
                 })
                 .collect(),

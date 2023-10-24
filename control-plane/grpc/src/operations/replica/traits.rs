@@ -133,29 +133,29 @@ impl TryFrom<replica::Replica> for Replica {
             thin: replica.thin,
             size: replica.size,
             space: replica.space.into_opt(),
-            share: match common::Protocol::from_i32(replica.share) {
-                Some(share) => share.into(),
-                None => {
+            share: match common::Protocol::try_from(replica.share) {
+                Ok(share) => share.into(),
+                Err(error) => {
                     return Err(ReplyError::invalid_argument(
                         ResourceKind::Replica,
                         "replica.share",
-                        "".to_string(),
+                        error,
                     ))
                 }
             },
             uri: replica.uri,
-            status: match replica::ReplicaStatus::from_i32(replica.status) {
-                Some(status) => status.into(),
-                None => {
+            status: match replica::ReplicaStatus::try_from(replica.status) {
+                Ok(status) => status.into(),
+                Err(error) => {
                     return Err(ReplyError::invalid_argument(
                         ResourceKind::Replica,
                         "replica.status",
-                        "".to_string(),
+                        error,
                     ))
                 }
             },
             allowed_hosts: vec![],
-            kind: replica::ReplicaKind::from_i32(replica.kind)
+            kind: replica::ReplicaKind::try_from(replica.kind)
                 .unwrap_or_default()
                 .into(),
         })
@@ -413,13 +413,13 @@ impl ValidateRequestTypes for CreateReplicaRequest {
     fn validated(self) -> Result<Self::Validated, ReplyError> {
         Ok(ValidatedCreateReplicaRequest {
             uuid: ReplicaId::try_from(StringValue(self.replica_id.clone()))?,
-            share: match common::Protocol::from_i32(self.share) {
-                Some(share) => share.into(),
-                None => {
+            share: match common::Protocol::try_from(self.share) {
+                Ok(share) => share.into(),
+                Err(error) => {
                     return Err(ReplyError::invalid_argument(
                         ResourceKind::Replica,
                         "create_replica_request.share",
-                        "".to_string(),
+                        error.to_string(),
                     ))
                 }
             },
@@ -659,24 +659,24 @@ impl ValidateRequestTypes for ShareReplicaRequest {
     fn validated(self) -> Result<Self::Validated, ReplyError> {
         Ok(ValidatedShareReplicaRequest {
             uuid: ReplicaId::try_from(StringValue(self.replica_id.clone()))?,
-            protocol: match replica::ReplicaShareProtocol::from_i32(self.protocol) {
-                Some(protocol) => protocol.into(),
-                None => {
+            protocol: match replica::ReplicaShareProtocol::try_from(self.protocol) {
+                Ok(protocol) => protocol.into(),
+                Err(error) => {
                     return Err(ReplyError::invalid_argument(
                         ResourceKind::Replica,
                         "share_replica_request.protocol",
-                        "".to_string(),
+                        error,
                     ))
                 }
             },
             pool_uuid: match self.pool_uuid.clone() {
                 Some(uuid) => Some(match PoolUuid::try_from(uuid) {
                     Ok(uuid) => uuid,
-                    Err(err) => {
+                    Err(error) => {
                         return Err(ReplyError::invalid_argument(
                             ResourceKind::Replica,
                             "replica.pool_uuid",
-                            err.to_string(),
+                            error,
                         ))
                     }
                 }),
@@ -1024,13 +1024,13 @@ impl TryFrom<replica::ReplicaSpec> for ReplicaSpec {
     type Error = ReplyError;
 
     fn try_from(value: replica::ReplicaSpec) -> Result<Self, Self::Error> {
-        let replica_spec_status = match common::SpecStatus::from_i32(value.spec_status) {
-            Some(status) => status.into(),
-            None => {
+        let replica_spec_status = match common::SpecStatus::try_from(value.spec_status) {
+            Ok(status) => status.into(),
+            Err(error) => {
                 return Err(ReplyError::invalid_argument(
                     ResourceKind::ReplicaSpec,
                     "replica_spec.status",
-                    "".to_string(),
+                    error.to_string(),
                 ))
             }
         };
@@ -1054,13 +1054,13 @@ impl TryFrom<replica::ReplicaSpec> for ReplicaSpec {
                 ),
                 None => PoolRef::Named(value.pool_id.into()),
             },
-            share: match common::Protocol::from_i32(value.share) {
-                Some(share) => share.into(),
-                None => {
+            share: match common::Protocol::try_from(value.share) {
+                Ok(share) => share.into(),
+                Err(error) => {
                     return Err(ReplyError::invalid_argument(
                         ResourceKind::ReplicaSpec,
                         "replica_spec.share",
-                        "".to_string(),
+                        error,
                     ))
                 }
             },
@@ -1084,7 +1084,7 @@ impl TryFrom<replica::ReplicaSpec> for ReplicaSpec {
             allowed_hosts: vec![],
             kind: value
                 .kind
-                .map(replica::ReplicaKind::from_i32)
+                .map(replica::ReplicaKind::try_from)
                 .map(|k| k.unwrap_or_default().into()),
         })
     }

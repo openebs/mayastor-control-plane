@@ -20,7 +20,7 @@ use tokio::time::timeout;
 const CHILD_WAIT: Duration = Duration::from_millis(1);
 
 async fn build_cluster(num_ioe: u32, pool_size: u64) -> Cluster {
-    let reconcile_period = Duration::from_millis(300);
+    let reconcile_period = Duration::from_millis(100);
     ClusterBuilder::builder()
         .with_rest(true)
         .with_io_engines(num_ioe)
@@ -154,6 +154,18 @@ async fn pool_deletion_event_test(sub: &mut BusSubscription<EventMessage>) {
 }
 
 async fn volume_creation_event_test(sub: &mut BusSubscription<EventMessage>) {
+    let replica_creation_message = timeout(Duration::from_millis(10), sub.next())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(replica_creation_message.category(), EventCategory::Replica);
+    assert_eq!(replica_creation_message.action(), EventAction::Create);
+    let replica_creation_message = timeout(Duration::from_millis(10), sub.next())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(replica_creation_message.category(), EventCategory::Replica);
+    assert_eq!(replica_creation_message.action(), EventAction::Create);
     let vol_creation_message = timeout(Duration::from_millis(10), sub.next())
         .await
         .unwrap()
@@ -163,6 +175,18 @@ async fn volume_creation_event_test(sub: &mut BusSubscription<EventMessage>) {
 }
 
 async fn volume_deletion_event_test(sub: &mut BusSubscription<EventMessage>) {
+    let replica_deletion_message = timeout(Duration::from_millis(10), sub.next())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(replica_deletion_message.category(), EventCategory::Replica);
+    assert_eq!(replica_deletion_message.action(), EventAction::Delete);
+    let replica_deletion_message = timeout(Duration::from_millis(10), sub.next())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(replica_deletion_message.category(), EventCategory::Replica);
+    assert_eq!(replica_deletion_message.action(), EventAction::Delete);
     let vol_deletion_message = timeout(Duration::from_millis(10), sub.next())
         .await
         .unwrap()
@@ -190,6 +214,12 @@ async fn nexus_deletion_event_test(sub: &mut BusSubscription<EventMessage>) {
 }
 
 async fn rebuild_begin_event_test(sub: &mut BusSubscription<EventMessage>) {
+    let replica_creation_message = timeout(Duration::from_millis(300), sub.next())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(replica_creation_message.category(), EventCategory::Replica);
+    assert_eq!(replica_creation_message.action(), EventAction::Create);
     let rebuid_start_event_message = timeout(Duration::from_millis(300), sub.next())
         .await
         .unwrap()

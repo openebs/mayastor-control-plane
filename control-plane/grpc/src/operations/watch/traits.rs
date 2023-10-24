@@ -200,9 +200,13 @@ impl TryFrom<watch::Watch> for Watch {
                     ))
                 }
             },
-            watch_type: watch::WatchType::from_i32(value.watch_type)
-                .ok_or_else(|| {
-                    ReplyError::invalid_argument(ResourceKind::Watch, "watch_type", "".to_string())
+            watch_type: watch::WatchType::try_from(value.watch_type)
+                .map_err(|error| {
+                    ReplyError::invalid_argument(
+                        ResourceKind::Watch,
+                        "watch_type",
+                        error.to_string(),
+                    )
                 })?
                 .into(),
         })
@@ -306,13 +310,13 @@ impl ValidateRequestTypes for watch::Watch {
                     ))
                 }
             })?,
-            watch_type: match watch::WatchType::from_i32(self.watch_type) {
-                Some(watch_type) => watch_type.into(),
-                None => {
+            watch_type: match watch::WatchType::try_from(self.watch_type) {
+                Ok(watch_type) => watch_type.into(),
+                Err(error) => {
                     return Err(ReplyError::invalid_argument(
                         ResourceKind::Watch,
                         "watch_type",
-                        "".to_string(),
+                        error,
                     ))
                 }
             },

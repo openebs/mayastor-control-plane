@@ -103,26 +103,26 @@ impl TryFrom<nexus::Nexus> for Nexus {
             name: nexus_grpc_type.name,
             uuid: NexusId::try_from(StringValue(nexus_grpc_type.uuid))?,
             size: nexus_grpc_type.size,
-            status: match nexus::NexusStatus::from_i32(nexus_grpc_type.status) {
-                Some(status) => status.into(),
-                None => {
+            status: match nexus::NexusStatus::try_from(nexus_grpc_type.status) {
+                Ok(status) => status.into(),
+                Err(error) => {
                     return Err(ReplyError::invalid_argument(
                         ResourceKind::Nexus,
                         "nexus.status",
-                        "".to_string(),
+                        error,
                     ))
                 }
             },
             children,
             device_uri: nexus_grpc_type.device_uri,
             rebuilds: nexus_grpc_type.rebuilds,
-            share: match common::Protocol::from_i32(nexus_grpc_type.share) {
-                Some(share) => share.into(),
-                None => {
+            share: match common::Protocol::try_from(nexus_grpc_type.share) {
+                Ok(share) => share.into(),
+                Err(error) => {
                     return Err(ReplyError::invalid_argument(
                         ResourceKind::Nexus,
                         "nexus.share",
-                        "".to_string(),
+                        error,
                     ))
                 }
             },
@@ -275,7 +275,10 @@ impl TryFrom<nexus::Child> for Child {
     fn try_from(child_grpc_type: nexus::Child) -> Result<Self, Self::Error> {
         let child = Child {
             uri: child_grpc_type.uri.into(),
-            state: match nexus::ChildState::from_i32(child_grpc_type.state).map(ChildState::from) {
+            state: match nexus::ChildState::try_from(child_grpc_type.state)
+                .ok()
+                .map(ChildState::from)
+            {
                 Some(state) => state,
                 None => {
                     return Err(ReplyError::invalid_argument(
@@ -286,7 +289,8 @@ impl TryFrom<nexus::Child> for Child {
                 }
             },
             rebuild_progress: child_grpc_type.rebuild_progress.map(|i| i as u8),
-            state_reason: nexus::ChildStateReason::from_i32(child_grpc_type.reason)
+            state_reason: nexus::ChildStateReason::try_from(child_grpc_type.reason)
+                .ok()
                 .map(ChildStateReason::from)
                 .unwrap_or(ChildStateReason::Unknown),
             faulted_at: None,
@@ -376,7 +380,10 @@ impl TryFrom<RebuildHistoryRecord> for RebuildRecord {
                     ))
                 }
             },
-            state: match nexus::RebuildJobState::from_i32(value.state).map(RebuildJobState::from) {
+            state: match nexus::RebuildJobState::try_from(value.state)
+                .ok()
+                .map(RebuildJobState::from)
+            {
                 Some(state) => state,
                 None => {
                     return Err(ReplyError::invalid_argument(
@@ -482,13 +489,13 @@ impl TryFrom<nexus::NexusSpec> for NexusSpec {
     type Error = ReplyError;
 
     fn try_from(value: nexus::NexusSpec) -> Result<Self, Self::Error> {
-        let nexus_spec_status = match common::SpecStatus::from_i32(value.spec_status) {
-            Some(status) => status.into(),
-            None => {
+        let nexus_spec_status = match common::SpecStatus::try_from(value.spec_status) {
+            Ok(status) => status.into(),
+            Err(error) => {
                 return Err(ReplyError::invalid_argument(
                     ResourceKind::Nexus,
                     "nexus_spec.status",
-                    "".to_string(),
+                    error,
                 ))
             }
         };
@@ -505,13 +512,13 @@ impl TryFrom<nexus::NexusSpec> for NexusSpec {
             },
             size: value.size,
             spec_status: nexus_spec_status,
-            share: match common::Protocol::from_i32(value.share) {
-                Some(share) => share.into(),
-                None => {
+            share: match common::Protocol::try_from(value.share) {
+                Ok(share) => share.into(),
+                Err(error) => {
                     return Err(ReplyError::invalid_argument(
                         ResourceKind::Nexus,
                         "nexus_spec.share",
-                        "".to_string(),
+                        error,
                     ))
                 }
             },
@@ -663,7 +670,7 @@ impl TryFrom<nexus::NexusNvmfConfig> for NexusNvmfConfig {
             {
                 match data
                     .reservation_type
-                    .and_then(nexus::NvmeReservation::from_i32)
+                    .and_then(|f| nexus::NvmeReservation::try_from(f).ok())
                 {
                     None => {
                         return Err(ReplyError::invalid_argument(
@@ -675,7 +682,7 @@ impl TryFrom<nexus::NexusNvmfConfig> for NexusNvmfConfig {
                     Some(s) => s.into(),
                 }
             },
-            match nexus::NexusNvmePreemption::from_i32(data.preempt_policy) {
+            match nexus::NexusNvmePreemption::try_from(data.preempt_policy).ok() {
                 None => {
                     return Err(ReplyError::invalid_argument(
                         ResourceKind::Nexus,
@@ -1077,13 +1084,13 @@ impl ValidateRequestTypes for ShareNexusRequest {
     fn validated(self) -> Result<Self::Validated, ReplyError> {
         Ok(ValidatedShareNexusRequest {
             uuid: NexusId::try_from(StringValue(self.nexus_id.clone()))?,
-            protocol: match nexus::NexusShareProtocol::from_i32(self.protocol) {
-                Some(protocol) => protocol.into(),
-                None => {
+            protocol: match nexus::NexusShareProtocol::try_from(self.protocol) {
+                Ok(protocol) => protocol.into(),
+                Err(error) => {
                     return Err(ReplyError::invalid_argument(
                         ResourceKind::Nexus,
                         "share_nexus_request.protocol",
-                        "".to_string(),
+                        error,
                     ))
                 }
             },
