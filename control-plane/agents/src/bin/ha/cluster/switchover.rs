@@ -1,6 +1,10 @@
 use crate::{core_grpc, etcd::EtcdStore, nodes::NodeList};
+use agents::Event;
 use anyhow::anyhow;
 use chrono::Utc;
+use events_api::event::{
+    EventAction, EventCategory, EventMessage, EventMeta, EventSource, SwitchOverStatus,
+};
 use grpc::operations::{
     ha_node::{client::NodeAgentClient, traits::NodeAgentOperations},
     volume::traits::VolumeOperations,
@@ -526,16 +530,28 @@ impl SwitchOverEngine {
     async fn work_request(&self, mut request: SwitchOverRequest) {
         loop {
             let result = match request.stage() {
-                Stage::Init => request.initialize(&self.etcd).await,
+                Stage::Init => {
+                    request.event(EventAction::SwitchOver).generate();
+                    request.initialize(&self.etcd).await
+                }
                 Stage::RepublishVolume => request.republish_volume(&self.etcd).await,
                 Stage::ReplacePath => request.replace_path(&self.etcd, &self.nodes).await,
                 Stage::DeleteTarget => request.delete_target(&self.etcd).await,
-                Stage::Errored => match request.errored_switchover(&self.etcd, &self.nodes).await {
-                    Ok(_) => break,
-                    Err(e) => Err(e),
-                },
+                Stage::Errored => {
+                    let event = request.event(EventAction::SwitchOver);
+                    match request.errored_switchover(&self.etcd, &self.nodes).await {
+                        Ok(_) => {
+                            event.generate();
+                            break;
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
                 Stage::Successful => match request.delete_switchover(&self.etcd).await {
-                    Ok(_) => break,
+                    Ok(_) => {
+                        request.event(EventAction::SwitchOver).generate();
+                        break;
+                    }
                     Err(e) => Err(e),
                 },
             };
@@ -643,6 +659,32 @@ impl From<Operation> for Stage {
             Operation::DeleteTarget => Stage::DeleteTarget,
             Operation::Successful => Stage::Successful,
             Operation::Errored(_) => Stage::Errored,
+        }
+    }
+}
+
+impl Event for SwitchOverRequest {
+    fn event(&self, action: EventAction) -> EventMessage {
+        let node_id = &self.node_name;
+        let status = match self.stage() {
+            Stage::Init => SwitchOverStatus::SwitchOverStarted,
+            Stage::Successful => SwitchOverStatus::SwitchOverCompleted,
+            Stage::Errored => SwitchOverStatus::SwitchOverFailed,
+            _ => SwitchOverStatus::UnknownSwitchOverStatus,
+        };
+
+        let event_source = EventSource::new(node_id.to_string()).with_switch_over_data(
+            status,
+            self.timestamp,
+            &self.existing_nqn,
+            self.new_path.clone(),
+            self.retry_count,
+        );
+        EventMessage {
+            category: EventCategory::HighAvailability as i32,
+            action: action as i32,
+            target: self.volume_id.to_string(),
+            metadata: Some(EventMeta::from_source(event_source)),
         }
     }
 }

@@ -66,6 +66,7 @@ stor-port = { path = "../stor-port" }
 utils = { path = "../../utils/utils-lib" }
 nvmeadm = { path = "../../utils/dependencies/nvmeadm" }
 weighted-scoring = { path = "../../utils/weighted-scoring" }
+events-api = { path = "../../utils/dependencies/events-api" }
 
 [target.'cfg(target_os="linux")'.dependencies]
 tokio-udev = { version = "0.9.1" }

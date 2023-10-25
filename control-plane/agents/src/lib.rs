@@ -5,6 +5,7 @@
 //! It's meant to facilitate the creation of agents with a helper builder to
 //! subscribe handlers for different message identifiers.
 
+use events_api::event::{EventAction, EventMessage};
 use futures::Future;
 use grpc::tracing::OpenTelServer;
 use snafu::Snafu;
@@ -170,4 +171,10 @@ impl<L> Service<L> {
     {
         configure(self).await
     }
+}
+
+/// Event trait definition for creating events.
+pub trait Event {
+    /// Create event message.
+    fn event(&self, event_action: EventAction) -> EventMessage;
 }
