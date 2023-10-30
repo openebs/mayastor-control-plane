@@ -40,24 +40,6 @@ pub fn set_jaeger_env() {
     }
 }
 
-/// Mix the `RUST_LOG` `EnvFilter` with `RUST_LOG_SILENCE`.
-/// This is useful when we want to bulk-silence certain crates by default.
-pub fn rust_log_add_quiet_defaults(
-    current: tracing_subscriber::EnvFilter,
-) -> tracing_subscriber::EnvFilter {
-    let rust_log_silence = std::env::var("RUST_LOG_SILENCE");
-    let silence = match &rust_log_silence {
-        Ok(quiets) => quiets.as_str(),
-        Err(_) => super::constants::RUST_LOG_SILENCE_DEFAULTS,
-    };
-
-    tracing_subscriber::EnvFilter::try_new(match silence.is_empty() {
-        true => current.to_string(),
-        false => format!("{current},{silence}"),
-    })
-    .unwrap()
-}
-
 /// Initialise tracing and optionally opentelemetry and eventing.
 /// Tracing will have a stdout subscriber with pretty formatting.
 pub fn init_tracing_with_eventing(
@@ -100,11 +82,7 @@ pub fn init_tracing_ext<T: std::net::ToSocketAddrs>(
     fmt_layer: FmtLayer,
     events_url: Option<url::Url>,
 ) {
-    let filter = rust_log_add_quiet_defaults(
-        tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-    );
-
+    let filter = tracing_filter::rust_log_filter();
     let (stdout, stderr) = match fmt_layer {
         FmtLayer::Stdout => (Some(tracing_subscriber::fmt::layer().pretty()), None),
         FmtLayer::Stderr => (

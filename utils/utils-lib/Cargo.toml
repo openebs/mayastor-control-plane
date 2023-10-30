@@ -13,3 +13,4 @@ git-version-macro = { path = "../dependencies/git-version-macro" }
 tracing = "0.1.37"
 url = "2.4.1"
 event-publisher = { path = "../dependencies/event-publisher" }
+tracing-filter = { path = "../dependencies/tracing-filter" }
