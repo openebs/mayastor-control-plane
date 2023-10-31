@@ -4,7 +4,10 @@ pub use opentelemetry::{global, trace, Context, KeyValue};
 use event_publisher::event_handler::EventHandle;
 use opentelemetry::sdk::{propagation::TraceContextPropagator, Resource};
 use tracing::Level;
-use tracing_subscriber::{filter, layer::SubscriberExt, util::SubscriberInitExt, Layer, Registry};
+use tracing_subscriber::{
+    filter, fmt::writer::MakeWriterExt, layer::SubscriberExt, util::SubscriberInitExt, Layer,
+    Registry,
+};
 
 /// Parse KeyValues from structopt's cmdline arguments
 pub fn parse_key_value(source: &str) -> Result<KeyValue, String> {
@@ -82,14 +85,21 @@ pub fn init_tracing_ext<T: std::net::ToSocketAddrs>(
     fmt_layer: FmtLayer,
     events_url: Option<url::Url>,
 ) {
-    let filter = tracing_filter::rust_log_filter();
+    const EVENT_BUS: &str = "mbus-events-target";
     let (stdout, stderr) = match fmt_layer {
-        FmtLayer::Stdout => (Some(tracing_subscriber::fmt::layer().pretty()), None),
+        FmtLayer::Stdout => (
+            Some(
+                tracing_subscriber::fmt::layer()
+                    .with_writer(std::io::stdout.with_filter(|meta| meta.target() != EVENT_BUS))
+                    .pretty(),
+            ),
+            None,
+        ),
         FmtLayer::Stderr => (
             None,
             Some(
                 tracing_subscriber::fmt::layer()
-                    .with_writer(std::io::stderr)
+                    .with_writer(std::io::stderr.with_filter(|meta| meta.target() != EVENT_BUS))
                     .pretty(),
             ),
         ),
@@ -99,15 +109,14 @@ pub fn init_tracing_ext<T: std::net::ToSocketAddrs>(
     // Get the optional eventing layer.
     let events_layer = match events_url {
         Some(url) => {
-            let events_filter =
-                filter::Targets::new().with_target("mbus-events-target", Level::INFO);
-            Some(EventHandle::init(url.to_string(), service_name).with_filter(events_filter))
+            let target = filter::Targets::new().with_target(EVENT_BUS, Level::INFO);
+            Some(EventHandle::init(url.to_string(), service_name).with_filter(target))
         }
         None => None,
     };
 
     let subscriber = Registry::default()
-        .with(filter)
+        .with(tracing_filter::rust_log_filter())
         .with(stdout)
         .with(stderr)
         .with(events_layer);
