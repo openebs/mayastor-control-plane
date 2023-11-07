@@ -73,6 +73,10 @@ struct Cli {
     /// The csi-node socket file for grpc over uds.
     #[clap(long)]
     csi_socket: std::path::PathBuf,
+
+    /// Events message-bus endpoint url.
+    #[clap(long, short)]
+    events_url: Option<url::Url>,
 }
 
 static CLUSTER_AGENT_CLIENT: OnceCell<ClusterAgentClient> = OnceCell::new();
@@ -103,10 +107,11 @@ async fn main() -> anyhow::Result<()> {
 
     utils::print_package_info!();
 
-    utils::tracing_telemetry::init_tracing(
+    utils::tracing_telemetry::init_tracing_with_eventing(
         "agent-ha-node",
         cli_args.tracing_tags.clone(),
         cli_args.jaeger.clone(),
+        cli_args.events_url.clone(),
     );
 
     CLUSTER_AGENT_CLIENT
