@@ -17,7 +17,6 @@ use grpc::{
 use stor_port::transport_api::{ErrorChain, ReplyError, ResourceKind};
 
 use grpc::operations::ha_node::traits::GetControllerInfo;
-use nvmeadm::nvmf_subsystem::SubsystemAddr;
 use stor_port::{
     transport_api::v0::NvmeSubsystems as NvmeSubsys,
     types::v0::transport::NvmeSubsystem as NvmeCtrller,
@@ -113,7 +112,10 @@ fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Result<(),
                 });
             }
 
-            if subsystem.address == SubsystemAddr::new(parsed_path.host(), parsed_path.port()) {
+            if subsystem
+                .address
+                .match_host_port(parsed_path.host(), &parsed_path.port().to_string())
+            {
                 tracing::info!(path = ctrlr.path, "Not disconnecting same NVMe controller");
                 Ok(())
             } else {
@@ -164,13 +166,13 @@ impl NodeAgentSvc {
         // Check if the NVMe subsystem already exists to not
         // delete it in case of unsuccessful path replacement.
         let preexisted_subsystem = Subsystem::get(
-            parsed_uri.host().as_str(),
+            parsed_uri.host(),
             &parsed_uri.port(),
             parsed_uri.nqn().as_str(),
         )
         .is_ok();
 
-        // Open connection to the new nexus: ANA will automatically create
+        // Open connection to the new target: ANA will automatically create
         // the second path and add it as an alternative for the first broken one,
         // which immediately resumes all stalled I/O
         let mut subsystem = match client
@@ -181,7 +183,7 @@ impl NodeAgentSvc {
             .await
         {
             Ok(_) => match Subsystem::get(
-                parsed_uri.host().as_str(),
+                parsed_uri.host(),
                 &parsed_uri.port(),
                 parsed_uri.nqn().as_str(),
             ) {
@@ -193,7 +195,7 @@ impl NodeAgentSvc {
                     return Err(SubsystemNotFound {
                         nqn,
                         details: error.to_string(),
-                    })
+                    });
                 }
             },
             Err(error) => {
@@ -278,7 +280,7 @@ impl NodeAgentSvc {
                 // Re-read the subsystem to get the most recent data on raw device path.
                 if !preexisted_subsystem {
                     let curr_subsystem = match Subsystem::get(
-                        parsed_uri.host().as_str(),
+                        parsed_uri.host(),
                         &parsed_uri.port(),
                         parsed_uri.nqn().as_str(),
                     ) {
@@ -330,7 +332,7 @@ impl NodeAgentOperations for NodeAgentSvc {
             .await
             .map_err(|_| {
                 ReplyError::failed_precondition(
-                    ResourceKind::Nexus,
+                    ResourceKind::NvmePath,
                     HA_AGENT_ERR_SOURCE.to_string(),
                     "Failed to lookup controller".to_string(),
                 )
@@ -378,7 +380,7 @@ impl NodeAgentOperations for NodeAgentSvc {
             Ok(subsys_list) => {
                 let controller_list = subsys_list
                     .into_iter()
-                    .map(|controller| NvmeCtrller::new(controller.address))
+                    .map(|controller| NvmeCtrller::new(controller.address.to_raw()))
                     .collect();
                 Ok(NvmeSubsys(controller_list))
             }
@@ -414,8 +416,8 @@ impl ParsedUri {
 
         Ok(Self { host, port, nqn })
     }
-    fn host(&self) -> String {
-        self.host.clone()
+    fn host(&self) -> &str {
+        &self.host
     }
     fn port(&self) -> u16 {
         self.port
