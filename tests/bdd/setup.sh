@@ -8,7 +8,7 @@ TESTS_DIR="$ROOT_DIR"/tests
 BDD_DIR="$TESTS_DIR"/bdd
 VENV_DIR="$BDD_DIR/venv"
 CSI_OUT="$DIR_NAME/autogen"
-CSI_PROTO="$DIR_NAME"/../../rpc/api/protobuf/
+CSI_PROTO="$DIR_NAME"/../../utils/dependencies/apis/csi/protobuf/
 HA_OUT="$DIR_NAME/autogen"
 HA_PROTO_PARENT_DIR="$DIR_NAME"/../../control-plane/grpc/proto/
 
