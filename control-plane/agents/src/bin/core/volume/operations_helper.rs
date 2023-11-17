@@ -490,7 +490,7 @@ impl OperationGuardArc<VolumeSpec> {
     ) -> Result<Vec<ReplicaId>, SvcError> {
         let mut created_replicas = Vec::with_capacity(count);
         let mut candidate_error = None;
-
+        tracing::info!(" Inside create_volume_replicas");
         for iter in 0 .. count {
             let candidates = match volume_replica_candidates(registry, self.as_ref()).await {
                 Ok(candidates) => candidates,

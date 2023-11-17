@@ -63,6 +63,23 @@ pub(crate) async fn replace_with_v1beta1(
     }
 }
 
+pub(crate) async fn update_crd_with_topology(k8s: &Client) -> Result<(), Error> {
+    let mut crd_with_topology = DiskPool::crd();
+    let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
+    if let Ok(existing) = crd_api.get_status("diskpools.openebs.io").await {
+        crd_with_topology.metadata.resource_version = existing.resource_version();
+        info!(
+            "Replacing CRD: {}",
+            serde_json::to_string_pretty(&crd_with_topology).unwrap()
+        );
+        let pp = PostParams::default();
+        _ = crd_api
+            .replace("diskpools.openebs.io", &pp, &crd_with_topology)
+            .await
+    }
+    Ok(())
+}
+
 /// Ensure the CRD is installed. This creates a chicken and egg problem. When the CRD is removed,
 /// the operator will fail to list the CRD going into a error loop.
 ///
@@ -159,7 +176,7 @@ pub(crate) async fn migrate_to_v1beta1(
                     &name,
                     ns,
                     Some(res_ver.clone()),
-                    DiskPoolSpec::new(node, disk),
+                    DiskPoolSpec::new(node, disk, None),
                 )
                 .await?;
                 info!(crd = ?dsp.name_any(), "CR creation successful");
@@ -194,7 +211,7 @@ pub(crate) async fn create_missing_cr(
                     if let Some(spec) = &pool.spec {
                         warn!(pool.id, spec.node, "DiskPool CR is missing");
                         let cr_spec: DiskPoolSpec =
-                            DiskPoolSpec::new(spec.node.clone(), spec.disks.clone());
+                            DiskPoolSpec::new(spec.node.clone(), spec.disks.clone(), None);
                         let new_disk_pool: DiskPool = DiskPool::new(&pool.id, cr_spec);
                         if let Err(error) = pools_api.create(&param, &new_disk_pool).await {
                             info!(pool.id, spec.node, %error, "Failed to create CR for missing DiskPool");

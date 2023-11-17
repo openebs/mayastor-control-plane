@@ -2,6 +2,7 @@ use kube::CustomResource;
 use openapi::models::{pool_status::PoolStatus as RestPoolStatus, Pool};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(
     CustomResource, Serialize, Deserialize, Default, Debug, Eq, PartialEq, Clone, JsonSchema,
@@ -31,12 +32,26 @@ pub struct DiskPoolSpec {
     node: String,
     /// The disk device the pool is located on
     disks: Vec<String>,
+    /// The topology for data placement.
+    topology: Option<Topology>,
+}
+
+/// Placement pool topology used by volume operations.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, JsonSchema)]
+pub struct Topology {
+    /// Label for topology
+    #[serde(default)]
+    pub labelled: HashMap<String, String>,
 }
 
 impl DiskPoolSpec {
     /// Create a new DiskPoolSpec from the node and the disks.
-    pub fn new(node: String, disks: Vec<String>) -> Self {
-        Self { node, disks }
+    pub fn new(node: String, disks: Vec<String>, topology: Option<Topology>) -> Self {
+        Self {
+            node,
+            disks,
+            topology,
+        }
     }
     /// The node the pool is placed on.
     pub fn node(&self) -> String {

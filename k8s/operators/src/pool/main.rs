@@ -15,7 +15,7 @@ use chrono::Utc;
 use clap::{Arg, ArgMatches};
 use context::OperatorContext;
 use diskpool::{
-    client::ensure_crd,
+    client::{ensure_crd, update_crd_with_topology},
     v1beta1::{CrPoolState, DiskPool, DiskPoolSpec, DiskPoolStatus},
 };
 use error::Error;
@@ -126,6 +126,8 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
         // Discard old schema from CRD.
         let _ = discard_older_schema(&k8s, "v1beta1").await;
     } else {
+        info!(" Migrating to add topology field ");
+        update_crd_with_topology(&k8s).await?;
         info!("CRD has latest schema. Skipping CRD Operations");
     }
 
@@ -289,9 +291,13 @@ pub(crate) async fn migrate_and_clean_msps(k8s: &Client, namespace: &str) -> Res
                     let node = msp.spec.node();
                     let disks = msp.spec.disks();
                     // Create the corresponding v1beta1 DiskPool CRs.
-                    if let Err(error) =
-                        create_v1beta1_cr(k8s, namespace, &name, DiskPoolSpec::new(node, disks))
-                            .await
+                    if let Err(error) = create_v1beta1_cr(
+                        k8s,
+                        namespace,
+                        &name,
+                        DiskPoolSpec::new(node, disks, None),
+                    )
+                    .await
                     {
                         error!("Migration failed for {name} with: {error:?}");
                     }

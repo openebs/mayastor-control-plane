@@ -52,6 +52,8 @@ impl PoolBaseFilters {
     }
     /// Should only attempt to use pools having specific creation label if topology has it.
     pub(crate) fn topology(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+        tracing::info!("Aashvi in topology  {:?}", request.topology.clone());
+        tracing::info!("Aashvi in item  {:?}", item);
         let volume_pool_topology_labels: HashMap<String, String>;
         match request.topology.clone() {
             None => return true,
@@ -70,6 +72,7 @@ impl PoolBaseFilters {
                 },
             },
         };
+        tracing::info!("volume_pool_topology_labels Alpha {:?}", volume_pool_topology_labels);
         // We will reach this part of code only if the volume has pool topology labels.
         match request.registry().specs().pool(&item.pool.id) {
             Ok(spec) => match spec.labels {
@@ -77,6 +80,8 @@ impl PoolBaseFilters {
                 Some(label) => volume_pool_topology_labels
                     .iter()
                     .all(|(vol_key, vol_val)| {
+                        tracing::info!("Durga mata  Alpha {:?}", vol_key);
+                        tracing::info!("Durga mata  Alpha {:?}", vol_val);
                         // See `InclusiveLabel` doc comment.
                         // todo: add exclusion
                         label

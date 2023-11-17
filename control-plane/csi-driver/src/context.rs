@@ -1,7 +1,6 @@
 use crate::filesystem::FileSystem;
 use stor_port::types::v0::openapi::models::VolumeShareProtocol;
 use utils::K8S_STS_PVC_NAMING_REGEX;
-
 use regex::Regex;
 use std::{
     collections::HashMap,
@@ -9,6 +8,7 @@ use std::{
     num::ParseIntError,
     str::{FromStr, ParseBoolError},
 };
+use serde_json::Value;
 use strum_macros::{AsRefStr, Display, EnumString};
 use tracing::log::warn;
 use uuid::{Error as UuidError, Uuid};
@@ -52,7 +52,30 @@ pub enum Parameters {
     CloneFsIdAsVolumeId,
     #[strum(serialize = "fsId")]
     FsId,
+    #[strum(serialize = "PoolTopologyInclusion")]
+    PoolTopologyInclusion,
 }
+
+// /// Placement pool topology used by volume operations.
+// #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+// pub enum Labelled { 
+//     PoolTopology(LabelledTopology),
+// }
+
+// impl Default for Labelled {
+//     fn default() -> Self {
+//         Labelled::PoolTopology(LabelledTopology{ inclusion : HashMap::new() })
+//     }
+// }
+
+// /// Volume placement topology using resource labels.
+// #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+// pub struct LabelledTopology {
+//     /// Inclusive labels.
+//     #[serde(default)]
+//     pub inclusion: HashMap<String, String>,
+// }
+
 impl Parameters {
     fn parse_human_time(
         value: Option<&String>,
@@ -77,6 +100,28 @@ impl Parameters {
     fn parse_uuid(value: Option<&String>) -> Result<Option<Uuid>, UuidError> {
         Ok(match value {
             Some(value) => value.parse::<Uuid>().map(Some)?,
+            None => None,
+        })
+    }
+    fn parse_map(value: Option<&String>) -> Result<Option<HashMap<String, String>>, serde_json::Error> {
+        tracing::info!( " World cup  1  {:?}", value);
+        Ok(match value {
+            Some(json_str) => {
+                let value: Value = serde_json::from_str(json_str)?;
+                tracing::info!( " World cup  2 {:?}", value);
+                // Convert Value to HashMap
+                if let Value::Object(map) = value {
+                    let hashmap: HashMap<String, String> = map
+                        .into_iter()
+                        .map(|(k, v)| (k, v.as_str().unwrap().to_string()))
+                        .collect();
+    
+                    println!("{:?}", hashmap);
+                    Some(hashmap)
+                } else {
+                    None
+                }
+            }
             None => None,
         })
     }
@@ -116,6 +161,12 @@ impl Parameters {
     pub fn fs_id(value: Option<&String>) -> Result<Option<Uuid>, UuidError> {
         Self::parse_uuid(value)
     }
+
+    /// Parse the value for `Self::IoTimeout`.
+    pub fn pool_topology_inclusion(value: Option<&String>) -> Result<Option<HashMap<String, String>>, serde_json::Error> {
+        tracing::info!( " hai na bolo bolo {:?}", value);
+        Self::parse_map(value)
+    }
 }
 
 /// Volume publish parameters.
@@ -128,6 +179,7 @@ pub struct PublishParams {
     keep_alive_tmo: Option<u32>,
     fs_type: Option<FileSystem>,
     fs_id: Option<Uuid>,
+    pool_topology_inclusion: Option<HashMap<String, String>>,
 }
 impl PublishParams {
     /// Get the `Parameters::IoTimeout` value.
@@ -150,6 +202,11 @@ impl PublishParams {
     pub fn fs_id(&self) -> &Option<Uuid> {
         &self.fs_id
     }
+    /// Get the `Parameters::PoolTopologyInclusion` value.
+    pub fn pool_topology_inclusion(&self) -> &Option<HashMap<String, String>> {
+        &self.pool_topology_inclusion
+    }
+
     /// Convert `Self` into a publish context.
     pub fn into_context(self) -> HashMap<String, String> {
         let mut publish_context = HashMap::new();
@@ -172,14 +229,32 @@ impl PublishParams {
         if let Some(fs_id) = self.fs_id() {
             publish_context.insert(Parameters::FsId.to_string(), fs_id.to_string());
         }
+        // if let Some(pool_topology_inclusion) = self.pool_topology_inclusion() {
+        //     if hashmap_to_json_string(pool_topology_inclusion).is_ok() {
+
+        //     }
+
+        //     publish_context.insert(Parameters::PoolTopologyInclusion.to_string(), pool_topology_inclusion.to_string());
+        // }
+        publish_context.insert("ashish".to_string(), "sinha".to_string());
 
         publish_context
     }
 }
+
+// fn hashmap_to_json_string(hashmap: &HashMap<String, String>) -> Result<String, serde_json::Error> {
+//     let json_value: Value = hashmap.iter().map(|(k, v)| (k, v)).collect();
+//     serde_json::to_string(&json_value)
+// }
+
 impl TryFrom<&HashMap<String, String>> for PublishParams {
     type Error = tonic::Status;
 
     fn try_from(args: &HashMap<String, String>) -> Result<Self, Self::Error> {
+
+        tracing::info!(" Inside try_from {:?}", args);
+        tracing::info!(" Value  is the {:?}", args.get(Parameters::PoolTopologyInclusion.as_ref()));
+        
         let fs_type = match args.get(Parameters::FileSystem.as_ref()) {
             Some(fs) => FileSystem::from_str(fs.as_str())
                 .map(Some)
@@ -201,6 +276,9 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
         let fs_id = Parameters::fs_id(args.get(Parameters::FsId.as_ref()))
             .map_err(|_| tonic::Status::invalid_argument("Invalid fs_id"))?;
 
+        let pool_topology_inclusion = Parameters::pool_topology_inclusion(args.get(Parameters::PoolTopologyInclusion.as_ref()))
+            .map_err(|_| tonic::Status::invalid_argument("Invalid pool_topology_inclusion timeout"))?;
+
         Ok(Self {
             io_timeout,
             nvme_io_timeout,
@@ -208,12 +286,14 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
             keep_alive_tmo,
             fs_type,
             fs_id,
+            pool_topology_inclusion,
         })
     }
 }
 
 /// Volume Creation parameters.
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct CreateParams {
     publish_params: PublishParams,
     share_protocol: VolumeShareProtocol,
@@ -222,6 +302,11 @@ pub struct CreateParams {
     clone_fs_id_as_volume_id: Option<bool>,
 }
 impl CreateParams {
+
+    /// Get the `Parameters::PublishParams` value.
+    pub fn publish_params(&self) -> &PublishParams {
+        &self.publish_params
+    }
     /// Get the `Parameters::ShareProtocol` value.
     pub fn share_protocol(&self) -> VolumeShareProtocol {
         self.share_protocol
@@ -245,6 +330,7 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
 
     fn try_from(args: &HashMap<String, String>) -> Result<Self, Self::Error> {
         let publish_params = PublishParams::try_from(args)?;
+        tracing::info!(" The publish_params are {:#?}", publish_params);
 
         // Check storage protocol.
         let share_protocol = parse_protocol(args.get(Parameters::ShareProtocol.as_ref()))?;

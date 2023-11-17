@@ -262,7 +262,17 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         let mut inclusive_label_topology: HashMap<String, String> = HashMap::new();
 
+        tracing::info!("Aashivi  one {:#?}", context);
+
         inclusive_label_topology.insert(String::from(CREATED_BY_KEY), String::from(DSP_OPERATOR));
+
+        if let Some(pool_topology_inclusion) = context.publish_params().pool_topology_inclusion() {
+            for (key, value) in pool_topology_inclusion.iter() {
+                println!("{} {}", key, value);
+                inclusive_label_topology.insert(key.to_string(), value.to_string());
+             }
+        }
+        tracing::info!("inclusive_label_topology one two three {:#?}", inclusive_label_topology);
 
         let parsed_vol_uuid = Uuid::parse_str(&volume_uuid).map_err(|_e| {
             Status::invalid_argument(format!("Malformed volume UUID: {volume_uuid}"))
