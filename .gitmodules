@@ -1,4 +1,4 @@
 [submodule "utils/dependencies"]
 	path = utils/dependencies
-	url = https://github.com/openebs/mayastor-dependencies.git
+	url = ../mayastor-dependencies.git
 	branch = develop
