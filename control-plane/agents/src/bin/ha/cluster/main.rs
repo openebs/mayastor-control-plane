@@ -44,6 +44,10 @@ struct Cli {
     /// If set, configures the fast requeue period to this duration.
     #[clap(long)]
     fast_requeue: Option<humantime::Duration>,
+
+    /// Events message-bus endpoint url.
+    #[clap(long, short)]
+    events_url: Option<url::Url>,
 }
 
 impl Cli {
@@ -63,10 +67,11 @@ pub(crate) fn core_grpc<'a>() -> &'a CoreClient {
 }
 
 fn initialize_tracing(args: &Cli) {
-    utils::tracing_telemetry::init_tracing(
+    utils::tracing_telemetry::init_tracing_with_eventing(
         "agent-ha-cluster",
         args.tracing_tags.clone(),
         args.jaeger.clone(),
+        args.events_url.clone(),
     )
 }
 

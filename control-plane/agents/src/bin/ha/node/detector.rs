@@ -3,6 +3,8 @@ use crate::{
     reporter::PathReporter,
     Cli,
 };
+use agents::Event;
+use events_api::event::{EventAction, EventCategory, EventMessage, EventMeta, EventSource};
 use nvmeadm::nvmf_subsystem::Subsystem;
 use std::{collections::HashMap, convert::From, rc::Rc, sync::Arc};
 use tokio::{
@@ -116,6 +118,7 @@ impl PathRecord {
                     path=self.path,
                     "Target state transition"
                 );
+                self.event(EventAction::NvmePathSuspect).generate();
             }
             PathState::Suspected => {
                 self.state = PathState::Failed;
@@ -126,6 +129,7 @@ impl PathRecord {
                     "Target state transition",
                 );
                 self.reporter.report_failed_path(self.nqn.clone());
+                self.event(EventAction::NvmePathFail).generate();
             }
             PathState::Failed => {} // Multiple failures don't cause any state transitions.
         }
@@ -373,6 +377,19 @@ impl NvmePathCache {
             _ => Err(anyhow::Error::msg(format!(
                 "Can't find Nvme controller for NQN: {nqn}"
             ))),
+        }
+    }
+}
+
+impl Event for PathRecord {
+    fn event(&self, action: EventAction) -> EventMessage {
+        let event_source =
+            EventSource::new("".to_string()).with_nvme_path_data(&self.nqn, &self.path);
+        EventMessage {
+            category: EventCategory::NvmePath as i32,
+            action: action as i32,
+            target: "".to_string(),
+            metadata: Some(EventMeta::from_source(event_source)),
         }
     }
 }
