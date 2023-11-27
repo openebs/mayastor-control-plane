@@ -59,6 +59,7 @@ async fn events() {
 
     volume_creation_event_test(&mut events_mbus_subscription).await;
 
+    // publish volume
     let volume = volume_api
         .put_volume_target(
             &volume.spec.uuid,
@@ -74,6 +75,7 @@ async fn events() {
         .await
         .expect("Failed to publish volume");
 
+    // nexus is created
     nexus_creation_event_test(&mut events_mbus_subscription).await;
 
     let volume_state = volume.state.clone();
@@ -94,7 +96,19 @@ async fn events() {
         .await
         .expect("container stop failure");
 
+    // nexus child removal event
+    nexus_child_removal_event_test(&mut events_mbus_subscription).await;
+
+    // replica is created and rebuild starts
     rebuild_begin_event_test(&mut events_mbus_subscription).await;
+
+    // nexus child transitions to online state
+    nexus_child_online_event_test(&mut events_mbus_subscription).await;
+
+    // nexus child addition event
+    nexus_child_addition_event_test(&mut events_mbus_subscription).await;
+
+    // rebuild complete event
     rebuild_end_event_test(&mut events_mbus_subscription).await;
 
     let vol_client = cluster.grpc_client().volume();
@@ -211,6 +225,33 @@ async fn nexus_deletion_event_test(sub: &mut BusSubscription<EventMessage>) {
         .unwrap();
     assert_eq!(nexus_deletion_message.category(), EventCategory::Nexus);
     assert_eq!(nexus_deletion_message.action(), EventAction::Delete);
+}
+
+async fn nexus_child_addition_event_test(sub: &mut BusSubscription<EventMessage>) {
+    let nexus_add_child_event = timeout(Duration::from_millis(10), sub.next())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(nexus_add_child_event.category(), EventCategory::Nexus);
+    assert_eq!(nexus_add_child_event.action(), EventAction::AddChild);
+}
+
+async fn nexus_child_removal_event_test(sub: &mut BusSubscription<EventMessage>) {
+    let nexus_remove_child_event = timeout(Duration::from_millis(10), sub.next())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(nexus_remove_child_event.category(), EventCategory::Nexus);
+    assert_eq!(nexus_remove_child_event.action(), EventAction::RemoveChild);
+}
+
+async fn nexus_child_online_event_test(sub: &mut BusSubscription<EventMessage>) {
+    let nexus_online_child_event = timeout(Duration::from_millis(10), sub.next())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(nexus_online_child_event.category(), EventCategory::Nexus);
+    assert_eq!(nexus_online_child_event.action(), EventAction::OnlineChild);
 }
 
 async fn rebuild_begin_event_test(sub: &mut BusSubscription<EventMessage>) {
