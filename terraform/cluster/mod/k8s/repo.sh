@@ -1,6 +1,13 @@
 #!/bin/bash
 set -xeuo pipefail
 
+function addKernelModules() {
+    for module in $@; do
+        lsmod | grep $module || sudo modprobe $module
+        echo $module | sudo tee -a /etc/modules-load.d/k8s.conf
+    done
+}
+
 RUNTIME="${kube_runtime}"
 DISTRO=$(cat /etc/os-release | awk '/^NAME="/ {print $1}' | awk -F\" '{print $2}')
 if [ ! "$DISTRO" = "Ubuntu" ]; then
@@ -10,7 +17,11 @@ fi
 if [ -n "${kube_version}" ]; then
   KUBE_VERSION="=${kube_version}"
 fi
-KVM_HOST_IP=$(ip -f inet addr show ens3 | awk '/inet / {print $2}' | awk -F. '{print $1"."$2"."$3".1"}')
+ETH="ens3"
+if ! ip -f inet addr show "$ETH"; then
+  ETH="eth0"
+fi
+KVM_HOST_IP=$(ip -f inet addr show "$ETH" | awk '/inet / {print $2}' | awk -F. '{print $1"."$2"."$3".1"}')
 echo "$KVM_HOST_IP kvmhost" | sudo tee -a /etc/hosts
 
 if [ "$RUNTIME" = "crio" ]; then
@@ -46,14 +57,7 @@ sudo apt-get install -y -o Options::=--force-confdef \
   -o Dpkg::Options::=--force-confnew kubelet$KUBE_VERSION kubeadm$KUBE_VERSION kubectl$KUBE_VERSION
 sudo apt-mark hold kubelet kubeadm kubectl
 
-# Configure persistent loading of modules
-sudo tee /etc/modules-load.d/k8s.conf <<EOF
-overlay
-br_netfilter
-EOF
-# Ensure you load modules
-sudo modprobe overlay
-sudo modprobe br_netfilter
+addKernelModules overlay br_netfilter
 
 # Set up required sysctl params
 sudo tee /etc/sysctl.d/kubernetes.conf<<EOF
