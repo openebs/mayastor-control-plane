@@ -2521,6 +2521,7 @@ components:
         thin: false
         topology: null
         affinity_group: null
+        max_snapshots: 10
       description: Create Volume Body
       type: object
       properties:
@@ -2551,6 +2552,11 @@ components:
           description: Affinity Group related information.
           allOf:
             - $ref: '#/components/schemas/AffinityGroup'
+        max_snapshots:
+          description: Max Snapshots limit per volume.
+          type: integer
+          format: int32
+          minimum: 0
       required:
         - policy
         - replicas
@@ -3356,6 +3362,7 @@ components:
         target_node: io-engine-1
         uuid: 514ed1c8-7174-49ac-b9cd-ad44ef670a67
         thin: false
+        max_snapshots: 10
       description: User specification of a volume.
       type: object
       properties:
@@ -3427,6 +3434,11 @@ components:
           $ref: '#/components/schemas/VolumeContentSource'
         num_snapshots:
           description: Number of snapshots taken on this volume.
+          type: integer
+          format: int32
+          minimum: 0
+        max_snapshots:
+          description: Max snapshots to limit per volume.
           type: integer
           format: int32
           minimum: 0
@@ -3754,6 +3766,11 @@ components:
           type: integer
           format: int32
           minimum: 0
+        num_snapshot_replicas:
+          description: Number of snapshot replicas for a volumesnapshot.
+          type: integer
+          format: int32
+          minimum: 0
       required:
         - status
         - size
@@ -3762,6 +3779,7 @@ components:
         - txn_id
         - transactions
         - num_restores
+        - num_snapshot_replicas
     VolumeSnapshotSpec:
       description: |-
         Volume Snapshot Spec information.

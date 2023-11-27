@@ -61,6 +61,8 @@ message VolumeSpec {
   optional VolumeContentSource content_source  = 11;
   // Number of snapshots taken on this volume.
   uint32 num_snapshots = 12;
+  // Max snapshots limit per volume.
+  optional uint32 max_snapshots = 13;
 
   // Volume Content Source i.e the snapshot or a volume.
   message VolumeContentSource {
@@ -265,6 +267,8 @@ message CreateVolumeRequest {
   optional AffinityGroup affinity_group = 9;
   // maximum total volume size
   optional uint64 cluster_capacity_limit = 10;
+  // Max snapshots limit per volume.
+  optional uint32 max_snapshots = 11;
 }
 
 // Publish a volume on a node

@@ -339,10 +339,9 @@ pub enum SvcError {
     ReplicaSnapSkipped { replica: String },
     #[snafu(display("Replica's {} snapshot was unexpectedly not taken", replica))]
     ReplicaSnapMiss { replica: String },
-    #[snafu(display("Replica's {} snapshot failed with error {}", replica, error))]
+    #[snafu(display("Failed to snapshot replicas {:?}", failed_replicas))]
     ReplicaSnapError {
-        replica: String,
-        error: nix::errno::Errno,
+        failed_replicas: Vec<(String, nix::errno::Errno)>,
     },
     #[snafu(display("The service is busy, cannot process request"))]
     ServiceBusy {},
@@ -376,6 +375,18 @@ pub enum SvcError {
         cluster_capacity_limit: u64,
         excess: u64,
     },
+    #[snafu(display(
+        "The number of healthy replicas does not match the expected replica count of volume '{id}'"
+    ))]
+    InsufficientHealthyReplicas { id: String },
+    #[snafu(display(
+        "Reached maximum snapshots limit {max_snapshots} for volume {volume_id}, delete unused snapshots to continue"))]
+    SnapshotMaxLimit {
+        max_snapshots: u32,
+        volume_id: String,
+    },
+    #[snafu(display("Invalid property name '{property_name}' for the volume '{id}'"))]
+    InvalidSetProperty { property_name: String, id: String },
 }
 
 impl SvcError {
@@ -1014,6 +1025,24 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::CapacityLimitExceeded { .. } => ReplyError {
                 kind: ReplyErrorKind::CapacityLimitExceeded,
+                resource: ResourceKind::Volume,
+                source,
+                extra,
+            },
+            SvcError::InsufficientHealthyReplicas { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::VolumeSnapshot,
+                source,
+                extra,
+            },
+            SvcError::SnapshotMaxLimit { .. } => ReplyError {
+                kind: ReplyErrorKind::OutOfRange,
+                resource: ResourceKind::Volume,
+                source,
+                extra,
+            },
+            SvcError::InvalidSetProperty { .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::Volume,
                 source,
                 extra,

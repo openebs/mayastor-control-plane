@@ -1059,7 +1059,6 @@ impl SpecOperationsHelper for VolumeSpec {
                     }
                 }
             }
-
             VolumeOperation::RemoveUnusedReplica(uuid) => {
                 let last_replica = !registry
                     .specs()
@@ -1111,10 +1110,6 @@ impl SpecOperationsHelper for VolumeSpec {
             }
             VolumeOperation::Create => unreachable!(),
             VolumeOperation::Destroy => unreachable!(),
-
-            VolumeOperation::CreateSnapshot(_) if self.num_replicas != 1 => {
-                Err(SvcError::NReplSnapshotNotAllowed {})
-            }
             VolumeOperation::CreateSnapshot(_) => Ok(()),
             VolumeOperation::DestroySnapshot(_) => Ok(()),
             VolumeOperation::Resize(_) => Ok(()),

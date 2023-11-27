@@ -93,14 +93,18 @@ impl PoolItemLister {
         pools
     }
     /// Get a list of pool items to create a snapshot on.
-    /// todo: support multi-replica snapshot.
-    pub(crate) async fn list_for_snaps(registry: &Registry, item: &ChildItem) -> Vec<PoolItem> {
+    pub(crate) async fn list_for_snaps(registry: &Registry, items: &[ChildItem]) -> Vec<PoolItem> {
         let nodes = Self::nodes(registry).await;
-
-        match nodes.iter().find(|n| n.id() == item.node()) {
-            Some(node) => vec![PoolItem::new(node.clone(), item.pool().clone(), None)],
-            None => vec![],
-        }
+        let pool_items = items
+            .iter()
+            .filter_map(|item| {
+                nodes
+                    .iter()
+                    .find(|node| node.id() == item.node())
+                    .map(|node| PoolItem::new(node.clone(), item.pool().clone(), None))
+            })
+            .collect();
+        pool_items
     }
     /// Get a list of replicas wrapped as ChildItem, for resize.
     pub(crate) async fn list_for_resize(registry: &Registry, spec: &VolumeSpec) -> Vec<ChildItem> {

@@ -248,8 +248,7 @@ pub type VolumeSnapshotCompleter = Arc<std::sync::Mutex<Option<VolumeSnapshotCre
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct VolumeSnapshotCreateInfo {
     txn_id: SnapshotTxId,
-    // todo: support multi-replica snapshot
-    replica: ReplicaSnapshot,
+    replicas: Vec<ReplicaSnapshot>,
     #[serde(skip, default)]
     complete: VolumeSnapshotCompleter,
 }
@@ -257,12 +256,12 @@ impl VolumeSnapshotCreateInfo {
     /// Get a new `Self` from the given parameters.
     pub fn new(
         txn_id: impl Into<SnapshotTxId>,
-        replica: ReplicaSnapshot,
+        replicas: Vec<ReplicaSnapshot>,
         complete: &VolumeSnapshotCompleter,
     ) -> Self {
         Self {
             txn_id: txn_id.into(),
-            replica,
+            replicas: replicas.to_vec(),
             complete: complete.clone(),
         }
     }
@@ -272,7 +271,7 @@ impl PartialEq for VolumeSnapshotCreateInfo {
     fn eq(&self, other: &Self) -> bool {
         self.txn_id
             .eq(&other.txn_id)
-            .then(|| self.replica.eq(&other.replica))
+            .then(|| self.replicas.eq(&other.replicas))
             .unwrap_or_default()
     }
 }
@@ -324,16 +323,15 @@ impl DestroyRestoreInfo {
 #[derive(Debug, Clone, PartialEq)]
 pub struct VolumeSnapshotCreateResult {
     /// The resulting replicas including their success status.
-    /// todo: add support for multiple replica snapshots.
     replicas: Vec<ReplicaSnapshot>,
     /// The actual timestamp returned by the dataplane.
     timestamp: DateTime<Utc>,
 }
 impl VolumeSnapshotCreateResult {
     /// Create a new `Self` based on the given parameters.
-    pub fn new_ok(replica: ReplicaSnapshot, timestamp: DateTime<Utc>) -> Self {
+    pub fn new_ok(replica: Vec<ReplicaSnapshot>, timestamp: DateTime<Utc>) -> Self {
         Self {
-            replicas: vec![replica],
+            replicas: replica,
             timestamp,
         }
     }
@@ -426,10 +424,12 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
                             .insert(info.txn_id, result.replicas.clone());
                     }
                 } else {
-                    info.replica.set_status_deleting();
+                    info.replicas
+                        .iter_mut()
+                        .for_each(|r| r.set_status_deleting());
                     self.metadata
                         .transactions
-                        .insert(info.txn_id, vec![info.replica]);
+                        .insert(info.txn_id, info.replicas);
                 }
             }
             VolumeSnapshotOperation::Destroy => {}
@@ -444,7 +444,7 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
             self.metadata.txn_id = info.txn_id.clone();
             self.metadata
                 .transactions
-                .insert(info.txn_id.clone(), vec![info.replica.clone()]);
+                .insert(info.txn_id.clone(), info.replicas.clone());
         }
         self.metadata.operation = Some(VolumeSnapshotOperationState {
             operation,

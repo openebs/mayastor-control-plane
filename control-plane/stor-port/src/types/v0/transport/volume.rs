@@ -457,6 +457,8 @@ pub struct CreateVolume {
     pub affinity_group: Option<AffinityGroup>,
     /// Maximum total system volume size.
     pub cluster_capacity_limit: Option<u64>,
+    /// Max Snapshots to limit per volume.
+    pub max_snapshots: Option<u32>,
 }
 
 /// Resize volume request.

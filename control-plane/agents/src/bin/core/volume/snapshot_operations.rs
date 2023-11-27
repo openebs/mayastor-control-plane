@@ -38,7 +38,10 @@ use stor_port::{
 };
 
 use chrono::{DateTime, Utc};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::SystemTime,
+};
 
 #[async_trait::async_trait]
 impl ResourceSnapshotting for OperationGuardArc<VolumeSpec> {
@@ -66,7 +69,6 @@ impl ResourceSnapshotting for OperationGuardArc<VolumeSpec> {
             },
         )
         .await;
-
         self.complete_update(registry, snap_result, spec_clone)
             .await
     }
@@ -155,13 +157,13 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
         let volume = &request.volume;
         let request = &request.request;
 
-        let replica = snapshoteable_replica(volume.as_ref(), registry).await?;
+        let replicas = snapshoteable_replica(volume.as_ref(), registry).await?;
         let target_node = if let Some(target) = volume.as_ref().target() {
-            registry.node_wrapper(target.node()).await
+            let node = registry.node_wrapper(target.node()).await?;
+            Some(node)
         } else {
-            registry.node_wrapper(&replica.state().node).await
-        }?;
-
+            None
+        };
         let specs = registry.specs();
         let mut snapshot = specs
             .get_or_create_snapshot(request)
@@ -179,13 +181,17 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
         // Try to prune 1 stale transaction, if present..
         snapshot.prune(registry, Some(1)).await.ok();
 
-        let prepare_snapshot = snapshot.snapshot_params(&replica)?;
+        let prepare_snapshot = snapshot.snapshot_params(&replicas)?;
         snapshot
             .start_create_update(
                 registry,
                 &VolumeSnapshotCreateInfo::new(
                     prepare_snapshot.parameters.txn_id(),
-                    prepare_snapshot.replica_snapshot.1.clone(),
+                    prepare_snapshot
+                        .replica_snapshot
+                        .iter()
+                        .map(|(_, snapshot)| snapshot.clone())
+                        .collect(),
                     &prepare_snapshot.completer,
                 ),
             )
@@ -285,31 +291,39 @@ impl ResourcePruning for OperationGuardArc<VolumeSnapshot> {
 }
 
 impl OperationGuardArc<VolumeSnapshot> {
-    fn snapshot_params(&self, replica: &ChildItem) -> Result<PrepareVolumeSnapshot, SvcError> {
+    fn snapshot_params(
+        &self,
+        replicas: &Vec<ChildItem>,
+    ) -> Result<PrepareVolumeSnapshot, SvcError> {
         let Some(parameters) = self.as_ref().prepare() else {
             return Err(SvcError::AlreadyExists {
                 id: self.uuid().to_string(),
                 kind: ResourceKind::VolumeSnapshot,
             });
         };
+        let mut replica_snapshots = Vec::with_capacity(replicas.len());
         let volume = self.as_ref().spec().source_id();
         let generic_params = parameters.params().clone();
-        let snapshot_source = ReplicaSnapshotSource::new(
-            replica.spec().uid().clone(),
-            replica.state().pool_id.clone(),
-            replica.state().pool_uuid.clone().unwrap_or_default(),
-        );
-        let replica_snapshot = ReplicaSnapshot::new_vol(
-            ReplicaSnapshotSpec::new(&snapshot_source, SnapshotId::new()),
-            SnapshotParameters::new(volume, generic_params),
-            replica.state().size,
-            0,
-            replica.spec().size,
-        );
-        let replica = replica.state().clone();
+        for replica in replicas {
+            let snapshot_source = ReplicaSnapshotSource::new(
+                replica.spec().uid().clone(),
+                replica.state().pool_id.clone(),
+                replica.state().pool_uuid.clone().unwrap_or_default(),
+            );
+            let replica_snapshot = ReplicaSnapshot::new_vol(
+                ReplicaSnapshotSpec::new(&snapshot_source, SnapshotId::new()),
+                SnapshotParameters::new(volume, generic_params.clone()),
+                replica.state().size,
+                0,
+                replica.spec().size,
+            );
+            let replica = replica.state().clone();
+            replica_snapshots.push((replica, replica_snapshot));
+        }
+
         Ok(PrepareVolumeSnapshot {
             parameters,
-            replica_snapshot: (replica, replica_snapshot),
+            replica_snapshot: replica_snapshots,
             completer: VolumeSnapshotCompleter::default(),
         })
     }
@@ -318,13 +332,14 @@ impl OperationGuardArc<VolumeSnapshot> {
         volume: &OperationGuardArc<VolumeSpec>,
         prep_params: &PrepareVolumeSnapshot,
         registry: &Registry,
-        target_node: N,
+        target_node: Option<N>,
     ) -> Result<VolumeSnapshotCreateResult, SvcError> {
-        if let Some(target) = volume.as_ref().target() {
-            self.snapshot_nexus(prep_params, target, registry, target_node)
+        let target = volume.as_ref().target();
+        if target.is_some() && target_node.is_some() {
+            self.snapshot_nexus::<N>(prep_params, target.unwrap(), registry, target_node.unwrap())
                 .await
         } else {
-            self.snapshot_replica(prep_params, target_node).await
+            self.snapshot_replica::<N>(prep_params, registry).await
         }
     }
 
@@ -335,88 +350,106 @@ impl OperationGuardArc<VolumeSnapshot> {
         registry: &Registry,
         target_node: N,
     ) -> Result<VolumeSnapshotCreateResult, SvcError> {
-        let mut replica_snap = prep_params.replica_snapshot.1.clone();
-        let replica = &prep_params.replica_snapshot.0;
         let generic_params = prep_params.parameters.params();
-
-        let replica_id = replica_snap.spec().source_id().replica_id();
+        let nexus_snap_desc = prep_params
+            .replica_snapshot
+            .iter()
+            .map(|(_, snapshot)| {
+                CreateNexusSnapReplDescr::new(
+                    snapshot.spec().source_id().replica_id(),
+                    snapshot.spec().uuid().clone(),
+                )
+            })
+            .collect::<Vec<_>>();
         let response = target_node
             .create_nexus_snapshot(&CreateNexusSnapshot::new(
                 SnapshotParameters::new(target.nexus(), generic_params.clone()),
-                vec![CreateNexusSnapReplDescr::new(
-                    replica_id,
-                    replica_snap.spec().uuid().clone(),
-                )],
+                nexus_snap_desc,
             ))
             .await?;
 
-        if response.skipped.contains(replica_id) || !response.skipped.is_empty() {
+        if !response.skipped.is_empty() {
             return Err(SvcError::ReplicaSnapSkipped {
-                replica: replica_snap.spec().uuid().to_string(),
+                replica: response
+                    .skipped
+                    .iter()
+                    .map(|r| r.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", "),
             });
         }
-
-        let snapped = match response.replicas_status.as_slice() {
-            [snapped] if &snapped.replica_uuid == replica_snap.spec().source_id().replica_id() => {
-                Ok(snapped)
-            }
-            _ => Err(SvcError::ReplicaSnapMiss {
-                replica: replica_snap.spec().uuid().to_string(),
-            }),
-        }?;
-
-        if let Some(error) = snapped.error {
+        let failed_replicas = response
+            .replicas_status
+            .iter()
+            .filter(|&snap| snap.error.is_some())
+            .collect::<Vec<_>>();
+        if !failed_replicas.is_empty() {
             return Err(SvcError::ReplicaSnapError {
-                replica: replica_snap.spec().uuid().to_string(),
-                error,
+                failed_replicas: failed_replicas
+                    .iter()
+                    .map(|&snap| (snap.replica_uuid.to_string(), snap.error.unwrap()))
+                    .collect::<Vec<_>>(),
             });
         }
-
         let timestamp = DateTime::<Utc>::from(response.snap_time);
         // What if snapshot succeeds but we can't fetch the replica snapshot, should we carry
         // on as following, or should we bail out?
-        let node = registry.node_wrapper(&replica.node).await?;
+        let mut replica_snapshots = prep_params.replica_snapshot.clone();
+        for (replica, replica_snap) in replica_snapshots.iter_mut() {
+            let node = registry.node_wrapper(&replica.node).await?;
+            let snapshot = NodeWrapper::fetch_update_snapshot_state(
+                &node,
+                ReplicaSnapshotInfo::new(
+                    replica_snap.spec().source_id().replica_id(),
+                    replica_snap.spec().uuid().clone(),
+                ),
+            )
+            .await?;
 
-        let snapshot = NodeWrapper::fetch_update_snapshot_state(
-            &node,
-            ReplicaSnapshotInfo::new(
-                replica_snap.spec().source_id().replica_id(),
-                replica_snap.spec().uuid().clone(),
-            ),
-        )
-        .await?;
-
-        replica_snap.complete_vol(
-            snapshot.timestamp().into(),
-            snapshot.replica_size(),
-            snapshot.allocated_size() + snapshot.predecessor_alloc_size(),
-        );
-        Ok(VolumeSnapshotCreateResult::new_ok(replica_snap, timestamp))
+            replica_snap.complete_vol(
+                snapshot.timestamp().into(),
+                snapshot.replica_size(),
+                snapshot.allocated_size() + snapshot.predecessor_alloc_size(),
+            );
+        }
+        let snapshots = replica_snapshots
+            .iter()
+            .map(|(_, replica_snapshot)| replica_snapshot.clone())
+            .collect::<Vec<_>>();
+        Ok(VolumeSnapshotCreateResult::new_ok(snapshots, timestamp))
     }
+
     async fn snapshot_replica<N: ReplicaSnapshotApi>(
         &self,
         prep_params: &PrepareVolumeSnapshot,
-        target_node: N,
+        registry: &Registry,
     ) -> Result<VolumeSnapshotCreateResult, SvcError> {
-        let mut replica_snap = prep_params.replica_snapshot.clone();
         let volume_params = prep_params.parameters.params().clone();
+        let mut timestamp = SystemTime::now();
 
-        let replica_params = volume_params.with_uuid(replica_snap.1.spec().uuid());
-        let response = target_node
-            .create_repl_snapshot(&CreateReplicaSnapshot::new(SnapshotParameters::new(
-                replica_snap.1.spec().source_id().replica_id(),
-                replica_params,
-            )))
-            .await?;
-        let timestamp = response.timestamp();
-        replica_snap.1.complete_vol(
-            timestamp.into(),
-            response.replica_size(),
-            response.allocated_size() + response.predecessor_alloc_size(),
-        );
+        let mut replica_snapshots = prep_params.replica_snapshot.clone();
+        for (replica, replica_snap) in replica_snapshots.iter_mut() {
+            let replica_params = volume_params.clone().with_uuid(replica_snap.spec().uuid());
+            let target_node = registry.node_wrapper(&replica.node).await?;
+            let response = target_node
+                .create_repl_snapshot(&CreateReplicaSnapshot::new(SnapshotParameters::new(
+                    replica_snap.spec().source_id().replica_id(),
+                    replica_params,
+                )))
+                .await?;
+            timestamp = response.timestamp();
+            replica_snap.complete_vol(
+                timestamp.into(),
+                response.replica_size(),
+                response.allocated_size() + response.predecessor_alloc_size(),
+            );
+        }
 
         Ok(VolumeSnapshotCreateResult::new_ok(
-            replica_snap.1,
+            replica_snapshots
+                .iter()
+                .map(|(_, replica_snapshot)| replica_snapshot.clone())
+                .collect::<Vec<_>>(),
             timestamp.into(),
         ))
     }

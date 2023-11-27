@@ -25,11 +25,13 @@ use stor_port::{
     },
 };
 
+use std::collections::HashSet;
+
 /// A request type for creating snapshot of a volume, which essentially
 /// means a snapshot of all(or selected) healthy replicas associated with that volume.
 pub(super) struct PrepareVolumeSnapshot {
     pub(super) parameters: SnapshotParameters<VolumeId>,
-    pub(super) replica_snapshot: (Replica, ReplicaSnapshot),
+    pub(super) replica_snapshot: Vec<(Replica, ReplicaSnapshot)>,
     pub(super) completer: VolumeSnapshotCompleter,
 }
 
@@ -95,34 +97,42 @@ impl SpecOperationsHelper for VolumeSnapshot {
 pub(crate) async fn snapshoteable_replica(
     volume: &VolumeSpec,
     registry: &Registry,
-) -> Result<ChildItem, SvcError> {
-    if volume.num_replicas != 1 {
+) -> Result<Vec<ChildItem>, SvcError> {
+    let children = super::scheduling::snapshoteable_replica(volume, registry).await?;
+
+    if children.candidates().len() != volume.num_replicas as usize {
+        return Err(SvcError::InsufficientHealthyReplicas {
+            id: volume.uuid_str(),
+        });
+    }
+
+    //todo: Remove this check once we support snapshotting with n-replicas.
+    if volume.num_replicas != 1 || children.candidates().len() != 1 {
         return Err(SvcError::NReplSnapshotNotAllowed {});
     }
 
-    let children = super::scheduling::snapshoteable_replica(volume, registry).await?;
-
     volume.trace(&format!("Snapshoteable replicas for volume: {children:?}"));
 
-    let item = match children.candidates().as_slice() {
-        [item] => Ok(item),
-        [] => Err(SvcError::NoHealthyReplicas {
+    if children.candidates().is_empty() {
+        return Err(SvcError::NoHealthyReplicas {
             id: volume.uuid_str(),
-        }),
-        _ => Err(SvcError::NReplSnapshotNotAllowed {}),
-    }?;
-
-    let pools = SnapshotVolumeReplica::builder_with_defaults(registry, volume, item)
-        .await
-        .collect();
-
-    match pools
-        .iter()
-        .any(|pool_item| pool_item.pool.id == item.pool().id)
-    {
-        true => Ok(item.clone()),
-        false => Err(SvcError::NotEnoughResources {
-            source: NotEnough::PoolFree {},
-        }),
+        });
     }
+
+    //todo: check for snapshot chain for all the replicas.
+
+    let pools =
+        SnapshotVolumeReplica::builder_with_defaults(registry, volume, children.candidates())
+            .await
+            .collect();
+    let pools: HashSet<_> = pools.iter().map(|item| item.pool.id.clone()).collect();
+
+    for item in children.candidates() {
+        if !pools.contains(&item.pool().id) {
+            return Err(SvcError::NotEnoughResources {
+                source: NotEnough::PoolFree {},
+            });
+        }
+    }
+    Ok(children.candidates().clone())
 }
