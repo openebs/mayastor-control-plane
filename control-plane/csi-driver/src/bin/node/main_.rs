@@ -12,6 +12,12 @@ use clap::Arg;
 use csi_driver::csi::{identity_server::IdentityServer, node_server::NodeServer};
 use futures::TryFutureExt;
 use grpc::csi_node_nvme::nvme_operations_server::NvmeOperationsServer;
+use k8s_openapi::api::core::v1::Node as K8sNode;
+use kube::{
+    api::{Patch, PatchParams},
+    Api, Client,
+};
+use serde_json::json;
 use std::{
     env, fs,
     future::Future,
@@ -20,12 +26,29 @@ use std::{
     sync::Arc,
     task::{Context, Poll},
 };
+use stor_port::platform;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::UnixListener,
 };
 use tonic::transport::{server::Connected, Server};
 use tracing::{debug, error, info};
+
+const NVME_CORE_MULTIPATH: &str = "/sys/module/nvme_core/parameters/multipath";
+fn is_ana_enabled() -> Result<String, std::io::Error> {
+    match fs::read_to_string(NVME_CORE_MULTIPATH)?
+        .trim()
+        .to_uppercase()
+        .as_str()
+    {
+        "Y" => Ok("true".to_string()),
+        "N" => Ok("false".to_string()),
+        _ => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Invalid value in NVMe multipath file",
+        )),
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct UdsConnectInfo {
@@ -184,6 +207,37 @@ pub(super) async fn main() -> anyhow::Result<()> {
             if err.kind() != ErrorKind::NotFound {
                 anyhow::bail!("Error removing stale CSI socket {}: {}", csi_socket, err);
             }
+        }
+    }
+
+    if platform::current_plaform_type() == platform::PlatformType::K8s {
+        let node_name = matches.get_one::<String>("node-name").expect("required");
+        let client = Client::try_default().await?;
+
+        let patch_value = is_ana_enabled().unwrap_or("false".to_string());
+
+        // Patch the node with the label
+        let nodes: Api<K8sNode> = Api::all(client);
+        let node_patch = json!({
+            "apiVersion": "v1",
+            "kind": "Node",
+            "metadata": {
+                "labels": {
+                    "openebs.io/csi-node.nvme-ana": patch_value,
+                },
+            },
+        });
+
+        match nodes
+            .patch(
+                node_name.as_str(),
+                &PatchParams::apply("mypatch").force(),
+                &Patch::Apply(&node_patch),
+            )
+            .await
+        {
+            Ok(_) => println!("Node labeled successfully."),
+            Err(e) => eprintln!("Error labeling node: {:?}", e),
         }
     }
 
