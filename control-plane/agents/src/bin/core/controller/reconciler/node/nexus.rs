@@ -163,6 +163,11 @@ async fn check_and_drain_node(
     context: &PollContext,
     node_spec: &mut OperationGuardArc<NodeSpec>,
 ) -> PollResult {
+    // Drain should not be allowed if HA is not enabled.
+    if context.registry().ha_disabled() {
+        return PollResult::Err(SvcError::DrainNotAllowedWhenHAisDisabled {});
+    }
+
     if !node_spec.as_ref().is_draining() {
         return PollResult::Ok(PollerState::Idle);
     }

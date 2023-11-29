@@ -361,6 +361,11 @@ impl Service {
 
     /// Apply a drain label to the specified node. The reconciler will perform the drain.
     async fn drain(&self, id: NodeId, label: String) -> Result<Node, SvcError> {
+        // Don't allow draining if HA_ENABLED is false. If it is undefined we treat it as true.
+        if self.registry.ha_disabled() {
+            return Err(SvcError::DrainNotAllowedWhenHAisDisabled {});
+        }
+
         let mut guarded_node = self.specs().guarded_node(&id).await?;
 
         let spec = guarded_node.drain(&self.registry, label.clone()).await?;
