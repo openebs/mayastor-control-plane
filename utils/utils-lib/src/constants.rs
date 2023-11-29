@@ -128,3 +128,6 @@ pub const SNAPSHOT_TRANSACTION_PRUNE_LIMIT: usize = 10;
 
 /// Maximum number of snapshot transactions allowed.
 pub const SNAPSHOT_MAX_TRANSACTION_LIMIT: usize = 5;
+
+/// Label for the csi-node nvme ana multi-path.
+pub const CSI_NODE_NVME_ANA: &str = "openebs.io/csi-node.nvme-ana";

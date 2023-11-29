@@ -136,6 +136,15 @@ impl PathRecord {
     }
 
     fn report_live(&mut self) {
+        if self.state != PathState::Good {
+            tracing::info!(
+                from=%self.state,
+                to=%PathState::Good,
+                target=self.nqn,
+                path=self.path,
+                "Target path has been fixed",
+            );
+        }
         self.state = PathState::Good;
     }
 }
@@ -216,11 +225,12 @@ pub struct PathFailureDetector {
 
 impl PathFailureDetector {
     /// Return a new `Self`.
-    pub(crate) fn new(args: &Cli) -> Self {
+    pub(crate) fn new(args: &Cli, ana_enabled: bool) -> Self {
         let reporter = PathReporter::new(
             args.node_name.clone(),
             *args.retransmission_period,
             *args.aggregation_period,
+            ana_enabled,
         );
 
         let (tx, rx) = channel(64);

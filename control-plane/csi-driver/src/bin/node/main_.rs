@@ -8,10 +8,13 @@ use crate::{
     nodeplugin_grpc::NodePluginGrpcServer, nodeplugin_nvme::NvmeOperationsSvc,
     shutdown_event::Shutdown,
 };
+use grpc::csi_node_nvme::nvme_operations_server::NvmeOperationsServer;
+use stor_port::platform;
+use tracing::{debug, error, info, trace};
+
 use clap::Arg;
 use csi_driver::csi::{identity_server::IdentityServer, node_server::NodeServer};
 use futures::TryFutureExt;
-use grpc::csi_node_nvme::nvme_operations_server::NvmeOperationsServer;
 use k8s_openapi::api::core::v1::Node as K8sNode;
 use kube::{
     api::{Patch, PatchParams},
@@ -26,29 +29,11 @@ use std::{
     sync::Arc,
     task::{Context, Poll},
 };
-use stor_port::platform;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::UnixListener,
 };
 use tonic::transport::{server::Connected, Server};
-use tracing::{debug, error, info};
-
-const NVME_CORE_MULTIPATH: &str = "/sys/module/nvme_core/parameters/multipath";
-fn is_ana_enabled() -> Result<String, std::io::Error> {
-    match fs::read_to_string(NVME_CORE_MULTIPATH)?
-        .trim()
-        .to_uppercase()
-        .as_str()
-    {
-        "Y" => Ok("true".to_string()),
-        "N" => Ok("false".to_string()),
-        _ => Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "Invalid value in NVMe multipath file",
-        )),
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct UdsConnectInfo {
@@ -190,6 +175,14 @@ pub(super) async fn main() -> anyhow::Result<()> {
     );
     utils::tracing_telemetry::init_tracing("csi-node", tags, None);
 
+    if let Err(error) = crate::dev::nvmf::check_nvme_tcp_module() {
+        anyhow::bail!("Failed to detect nvme_tcp kernel module. Run `modprobe nvme_tcp` to load the kernel module. {}", error);
+    }
+
+    if platform::current_plaform_type() == platform::PlatformType::K8s {
+        check_ana_and_label_node(matches.get_one::<String>("node-name").expect("required")).await?;
+    }
+
     if let Some(nvme_io_timeout_secs) = matches.get_one::<String>("nvme-core-io-timeout") {
         let io_timeout_secs: u32 = nvme_io_timeout_secs.parse().expect(
             "nvme_core io_timeout should be an integer number, representing the timeout in seconds",
@@ -207,37 +200,6 @@ pub(super) async fn main() -> anyhow::Result<()> {
             if err.kind() != ErrorKind::NotFound {
                 anyhow::bail!("Error removing stale CSI socket {}: {}", csi_socket, err);
             }
-        }
-    }
-
-    if platform::current_plaform_type() == platform::PlatformType::K8s {
-        let node_name = matches.get_one::<String>("node-name").expect("required");
-        let client = Client::try_default().await?;
-
-        let patch_value = is_ana_enabled().unwrap_or("false".to_string());
-
-        // Patch the node with the label
-        let nodes: Api<K8sNode> = Api::all(client);
-        let node_patch = json!({
-            "apiVersion": "v1",
-            "kind": "Node",
-            "metadata": {
-                "labels": {
-                    "openebs.io/csi-node.nvme-ana": patch_value,
-                },
-            },
-        });
-
-        match nodes
-            .patch(
-                node_name.as_str(),
-                &PatchParams::apply("mypatch").force(),
-                &Patch::Apply(&node_patch),
-            )
-            .await
-        {
-            Ok(_) => println!("Node labeled successfully."),
-            Err(e) => eprintln!("Error labeling node: {:?}", e),
         }
     }
 
@@ -312,4 +274,40 @@ impl CsiServer {
                 })
         })
     }
+}
+
+/// Gets the nvme ana multipath parameter and sets on the node as a label.
+async fn check_ana_and_label_node(node_name: &str) -> anyhow::Result<()> {
+    let patch_value = utils::check_nvme_core_ana().unwrap_or_default().to_string();
+    if let Ok(client) = Client::try_default().await {
+        let nodes: Api<K8sNode> = Api::all(client);
+        let node_patch = json!({
+            "apiVersion": "v1",
+            "kind": "Node",
+            "metadata": {
+                "labels": {
+                    utils::CSI_NODE_NVME_ANA: patch_value,
+                },
+            },
+        });
+        match nodes
+            .patch(
+                node_name,
+                &PatchParams::apply("node_label_patch").force(),
+                &Patch::Apply(&node_patch),
+            )
+            .await
+        {
+            Ok(_) => trace!("Patched node: {} with patch: {}", node_name, node_patch),
+            Err(error) => anyhow::bail!(
+                "Failed to patch node: {} with patch: {}. {}",
+                node_name,
+                node_patch,
+                error
+            ),
+        }
+    } else {
+        anyhow::bail!("Failed to get an instance of k8s client")
+    }
+    Ok(())
 }

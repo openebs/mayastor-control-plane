@@ -139,8 +139,10 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    // Check whether ana is enabled or not.
+    let ana_enabled: bool = utils::check_nvme_core_ana().unwrap_or_default();
     // Instantiate path failure detector along with Nvme cache object.
-    let detector = PathFailureDetector::new(&cli_args);
+    let detector = PathFailureDetector::new(&cli_args, ana_enabled);
 
     let cache = detector.get_cache();
 

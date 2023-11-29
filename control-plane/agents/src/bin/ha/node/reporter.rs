@@ -20,6 +20,7 @@ pub struct PathReporter {
     channel: UnboundedSender<String>,
     retransmission_period: Duration,
     aggregation_period: Duration,
+    ana_enabled: bool,
 }
 
 impl PathReporter {
@@ -28,6 +29,7 @@ impl PathReporter {
         node_name: String,
         retransmission_period: Duration,
         aggregation_period: Duration,
+        ha_enabled: bool,
     ) -> Self {
         let (tx, rx) = unbounded_channel();
 
@@ -36,6 +38,7 @@ impl PathReporter {
             node_name,
             retransmission_period,
             aggregation_period,
+            ana_enabled: ha_enabled,
         };
 
         reporter.start(rx);
@@ -112,7 +115,14 @@ impl PathReporter {
 
     /// Reports the given NVMe NQN as a failed path.
     pub fn report_failed_path(&self, nqn: String) {
-        self.channel.send(nqn).ok();
+        if !self.ana_enabled {
+            tracing::warn!(
+                path.nqn = nqn,
+                "NVMe ANA multipathing is not supported, not reporting the failed path"
+            );
+        } else {
+            self.channel.send(nqn).ok();
+        }
     }
 }
 
