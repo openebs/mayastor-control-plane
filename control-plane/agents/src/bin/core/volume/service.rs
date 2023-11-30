@@ -362,6 +362,10 @@ impl Service {
         &self,
         request: &RepublishVolume,
     ) -> Result<Volume, SvcError> {
+        // If HA is disabled there is no point in switchover.
+        if self.registry.ha_disabled() {
+            return Err(SvcError::SwitchoverNotAllowedWhenHAisDisabled {});
+        }
         let mut volume = self.specs().volume(&request.uuid).await?;
         volume.republish(&self.registry, request).await
     }

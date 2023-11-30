@@ -98,6 +98,8 @@ pub(crate) struct RegistryInner<S: Store> {
     legacy_prefix_present: bool,
     /// Thin provisioning parameters.
     thin_args: ThinArgs,
+    /// Check if the HA feature is enabled.
+    ha_disabled: bool,
 }
 
 impl Registry {
@@ -118,6 +120,7 @@ impl Registry {
         create_volume_limit: usize,
         host_acl: Vec<HostAccessControl>,
         thin_args: ThinArgs,
+        ha_enabled: bool,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -167,6 +170,7 @@ impl Registry {
                 host_acl,
                 legacy_prefix_present,
                 thin_args,
+                ha_disabled: ha_enabled,
             }),
         };
         registry.init().await?;
@@ -191,6 +195,11 @@ impl Registry {
         }
 
         Ok(registry)
+    }
+
+    /// Check if the HA feature is enabled.
+    pub(crate) fn ha_disabled(&self) -> bool {
+        self.ha_disabled
     }
 
     /// Formats the store endpoint with a default port if one isn't supplied.

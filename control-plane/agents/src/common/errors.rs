@@ -330,6 +330,10 @@ pub enum SvcError {
     ClonedSnapshotVolumeRepl {},
     #[snafu(display("The source snapshot is not created"))]
     SnapshotNotCreated {},
+    #[snafu(display("Draining is not allowed without HA"))]
+    DrainNotAllowedWhenHAisDisabled {},
+    #[snafu(display("Target switchover is not allowed without HA"))]
+    SwitchoverNotAllowedWhenHAisDisabled {},
 }
 
 impl SvcError {
@@ -915,6 +919,18 @@ impl From<SvcError> for ReplyError {
             SvcError::SnapshotNotCreated {} => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::VolumeSnapshot,
+                source,
+                extra,
+            },
+            SvcError::DrainNotAllowedWhenHAisDisabled {} => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Node,
+                source,
+                extra,
+            },
+            SvcError::SwitchoverNotAllowedWhenHAisDisabled {} => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Nexus,
                 source,
                 extra,
             },

@@ -103,6 +103,11 @@ pub(crate) struct CliArgs {
     /// Events message-bus endpoint url.
     #[clap(long, short)]
     events_url: Option<url::Url>,
+
+    /// Disable the HA/Failover feature.
+    /// This is useful when the frontend nodes do not support the NVMe ANA feature.
+    #[clap(long, env = "HA_DISABLED")]
+    pub(crate) disable_ha: bool,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -172,6 +177,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
             cli_args.hosts_acl.clone()
         },
         cli_args.thin_args,
+        cli_args.disable_ha,
     )
     .await?;
 

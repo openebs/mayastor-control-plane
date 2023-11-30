@@ -379,6 +379,10 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         registry: &Registry,
         request: &Self::Republish,
     ) -> Result<Self::PublishOutput, SvcError> {
+        // If HA is disabled there is no point in switchover.
+        if registry.ha_disabled() {
+            return Err(SvcError::SwitchoverNotAllowedWhenHAisDisabled {});
+        }
         let specs = registry.specs();
         let spec = self.as_ref().clone();
         let state = registry.volume_state(&request.uuid).await?;
