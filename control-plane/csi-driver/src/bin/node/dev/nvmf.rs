@@ -273,6 +273,13 @@ impl Detach for NvmfDetach {
     }
 }
 
+/// Check for the presence of nvme tcp kernel module.
+pub(crate) fn check_nvme_tcp_module() -> Result<(), std::io::Error> {
+    let path = "/sys/module/nvme_tcp";
+    std::fs::metadata(path)?;
+    Ok(())
+}
+
 /// Set the nvme_core module IO timeout
 /// (note, this is a system-wide parameter)
 pub(crate) fn set_nvmecore_iotimeout(io_timeout_secs: u32) -> Result<(), std::io::Error> {
