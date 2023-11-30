@@ -148,6 +148,7 @@ impl Drop for ComposeTestNt {
                     h.join().ok();
                 });
         }
+        self.composer.clear_logs_on_panic();
     }
 }
 

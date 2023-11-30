@@ -13,21 +13,23 @@ module "k8s" {
 }
 
 module "provider" {
+  # Please note current mayastor helm chart will not function on LXD containers correctly as the daemonset will
+  # try to bind to the same cpu on all "nodes" (same physical node)..
   #source = "./mod/lxd"
   source = "./mod/libvirt"
 
   # lxd and libvirt
-  ssh_user      = local.ssh_user
-  ssh_key       = local.ssh_key_pub
-  num_nodes     = var.num_nodes
-  worker_memory = var.worker_memory
-  worker_vcpu   = var.worker_vcpu
-  master_memory = var.master_memory
-  master_vcpu   = var.master_vcpu
+  ssh_user           = local.ssh_user
+  ssh_key            = local.ssh_key_pub
+  num_nodes          = var.num_nodes
+  worker_memory      = var.worker_memory
+  worker_vcpu        = var.worker_vcpu
+  master_memory      = var.master_memory
+  master_vcpu        = var.master_vcpu
+  hostname_formatter = var.hostname_formatter
 
   # libvirt
   image_path         = var.image_path
-  hostname_formatter = var.hostname_formatter
   private_key_path   = local.ssh_key_priv
   disk_size          = var.disk_size
   pooldisk_size      = var.pooldisk_size

@@ -81,11 +81,22 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
 
         self.start_destroy(registry).await?;
 
+        // We may want to prevent this in some situations, example: if a disk URI has changed, we
+        // may want to ensure it really is deleted.
+        // For now, if there's nothing provisioned on the pool anyway, just allow it..
+        // TODO: pass this via REST
+        let allow_not_found = self.validate_destroy(registry).is_ok();
         let result = match node.destroy_pool(request).await {
             Ok(_) => Ok(()),
             Err(SvcError::PoolNotFound { .. }) => {
                 match node.import_pool(&self.as_ref().into()).await {
                     Ok(_) => node.destroy_pool(request).await,
+                    Err(error)
+                        if allow_not_found
+                            && error.tonic_code() == tonic::Code::InvalidArgument =>
+                    {
+                        Ok(())
+                    }
                     Err(error) if error.tonic_code() == tonic::Code::InvalidArgument => Ok(()),
                     Err(error) => Err(error),
                 }

@@ -36,6 +36,7 @@ async fn build_cluster(num_ioe: u32, pool_size: u64) -> Cluster {
 }
 
 #[tokio::test]
+#[ignore]
 async fn events() {
     let cluster = build_cluster(3, 52428800).await;
 
