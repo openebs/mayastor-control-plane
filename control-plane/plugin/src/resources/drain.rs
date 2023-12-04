@@ -5,8 +5,9 @@ use async_trait::async_trait;
 use openapi::models::CordonDrainState;
 
 use crate::{
-    operations::{Get, List},
+    operations::{Get, List, PluginResult},
     resources::{
+        error::Error,
         node::{node_display_print, node_display_print_one, NodeDisplayFormat},
         utils::OutputFormat,
         NodeId,
@@ -17,19 +18,23 @@ use crate::{
 #[async_trait(?Send)]
 impl Get for NodeDrain {
     type ID = NodeId;
-    async fn get(id: &Self::ID, output: &OutputFormat) {
+    async fn get(id: &Self::ID, output: &OutputFormat) -> PluginResult {
         match RestClient::client().nodes_api().get_node(id).await {
             Ok(node) => node_display_print_one(node.into_body(), output, NodeDisplayFormat::Drain),
             Err(e) => {
-                println!("Failed to get node {id}. Error {e}")
+                return Err(Error::GetNodeError {
+                    id: id.to_string(),
+                    source: e,
+                });
             }
         }
+        Ok(())
     }
 }
 
 #[async_trait(?Send)]
 impl List for NodeDrains {
-    async fn list(output: &OutputFormat) {
+    async fn list(output: &OutputFormat) -> PluginResult {
         match RestClient::client().nodes_api().get_nodes(None).await {
             Ok(nodes) => {
                 // iterate through the nodes and filter for only those that have drain labels
@@ -51,8 +56,9 @@ impl List for NodeDrains {
                 node_display_print(filteredlist, output, NodeDisplayFormat::Drain);
             }
             Err(e) => {
-                println!("Failed to list nodes. Error {e}")
+                return Err(Error::ListNodesError { source: e });
             }
         }
+        Ok(())
     }
 }

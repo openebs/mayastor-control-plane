@@ -1,6 +1,6 @@
 use crate::{
-    operations::GetSnapshots,
-    resources::{utils, utils::optional_cell, SnapshotId, VolumeId},
+    operations::{GetSnapshots, PluginResult},
+    resources::{error::Error, utils, utils::optional_cell, SnapshotId, VolumeId},
     rest_wrapper::RestClient,
 };
 use async_trait::async_trait;
@@ -70,11 +70,15 @@ impl GetSnapshots for VolumeSnapshots {
         volid: &Self::SourceID,
         snapid: &Self::ResourceID,
         output: &utils::OutputFormat,
-    ) {
-        if let Some(snapshots) = get_snapshots(volid, snapid).await {
-            // Print table, json or yaml based on output format.
-            utils::print_table(output, snapshots);
+    ) -> PluginResult {
+        match get_snapshots(volid, snapid).await {
+            Ok(snapshots) => {
+                // Print table, json or yaml based on output format.
+                utils::print_table(output, snapshots);
+            }
+            Err(e) => return Err(e),
         }
+        Ok(())
     }
 }
 
@@ -87,7 +91,7 @@ impl GetHeaderRow for openapi::models::VolumeSnapshot {
 async fn get_snapshots(
     volid: &Option<VolumeId>,
     snapid: &Option<SnapshotId>,
-) -> Option<Vec<openapi::models::VolumeSnapshot>> {
+) -> Result<Vec<openapi::models::VolumeSnapshot>, Error> {
     let max_entries = 100;
     let mut starting_token = Some(0);
     let mut snapshots = Vec::with_capacity(max_entries as usize);
@@ -105,11 +109,10 @@ async fn get_snapshots(
                 starting_token = s.next_token;
             }
             Err(e) => {
-                println!("Failed to list volume snapshots. Error {e}");
-                return None;
+                return Err(Error::ListSnapshotsError { source: e });
             }
         }
     }
 
-    Some(snapshots)
+    Ok(snapshots)
 }

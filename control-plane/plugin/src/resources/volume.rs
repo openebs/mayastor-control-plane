@@ -1,6 +1,7 @@
 use crate::{
-    operations::{Get, ListExt, RebuildHistory, ReplicaTopology, Scale},
+    operations::{Get, ListExt, PluginResult, RebuildHistory, ReplicaTopology, Scale},
     resources::{
+        error::Error,
         utils,
         utils::{optional_cell, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
         VolumeId,
@@ -81,11 +82,12 @@ impl GetHeaderRow for openapi::models::Volume {
 #[async_trait(?Send)]
 impl ListExt for Volumes {
     type Context = VolumesArgs;
-    async fn list(output: &OutputFormat, context: &Self::Context) {
+    async fn list(output: &OutputFormat, context: &Self::Context) -> PluginResult {
         if let Some(volumes) = get_paginated_volumes(context).await {
             // Print table, json or yaml based on output format.
             utils::print_table(output, volumes);
-        }
+        };
+        Ok(())
     }
 }
 
@@ -143,23 +145,27 @@ pub struct Volume {}
 #[async_trait(?Send)]
 impl Get for Volume {
     type ID = VolumeId;
-    async fn get(id: &Self::ID, output: &utils::OutputFormat) {
+    async fn get(id: &Self::ID, output: &utils::OutputFormat) -> PluginResult {
         match RestClient::client().volumes_api().get_volume(id).await {
             Ok(volume) => {
                 // Print table, json or yaml based on output format.
                 utils::print_table(output, volume.into_body());
             }
             Err(e) => {
-                println!("Failed to get volume {id}. Error {e}")
+                return Err(Error::GetVolumeError {
+                    id: id.to_string(),
+                    source: e,
+                });
             }
         }
+        Ok(())
     }
 }
 
 #[async_trait(?Send)]
 impl Scale for Volume {
     type ID = VolumeId;
-    async fn scale(id: &Self::ID, replica_count: u8, output: &utils::OutputFormat) {
+    async fn scale(id: &Self::ID, replica_count: u8, output: &utils::OutputFormat) -> PluginResult {
         match RestClient::client()
             .volumes_api()
             .put_volume_replica_count(id, replica_count)
@@ -176,9 +182,13 @@ impl Scale for Volume {
                 }
             },
             Err(e) => {
-                println!("Failed to scale volume {id}. Error {e}")
+                return Err(Error::ScaleVolumeError {
+                    id: id.to_string(),
+                    source: e,
+                });
             }
         }
+        Ok(())
     }
 }
 
@@ -186,27 +196,32 @@ impl Scale for Volume {
 impl ReplicaTopology for Volume {
     type ID = VolumeId;
     type Context = VolumesArgs;
-    async fn topologies(output: &OutputFormat, context: &Self::Context) {
+    async fn topologies(output: &OutputFormat, context: &Self::Context) -> PluginResult {
         let volumes = VolumeTopologies(get_paginated_volumes(context).await.unwrap_or_default());
         utils::print_table(output, volumes);
+        Ok(())
     }
-    async fn topology(id: &Self::ID, output: &OutputFormat) {
+    async fn topology(id: &Self::ID, output: &OutputFormat) -> PluginResult {
         match RestClient::client().volumes_api().get_volume(id).await {
             Ok(volume) => {
                 // Print table, json or yaml based on output format.
                 utils::print_table(output, volume.into_body().state.replica_topology);
             }
             Err(e) => {
-                println!("Failed to get volume {id}. Error {e}")
+                return Err(Error::GetVolumeError {
+                    id: id.to_string(),
+                    source: e,
+                });
             }
         }
+        Ok(())
     }
 }
 
 #[async_trait(?Send)]
 impl RebuildHistory for Volume {
     type ID = VolumeId;
-    async fn rebuild_history(id: &Self::ID, output: &OutputFormat) {
+    async fn rebuild_history(id: &Self::ID, output: &OutputFormat) -> PluginResult {
         match RestClient::client()
             .volumes_api()
             .get_rebuild_history(id)
@@ -216,9 +231,13 @@ impl RebuildHistory for Volume {
                 utils::print_table(output, history.into_body());
             }
             Err(e) => {
-                println!("Failed to get rebuild history for volume {id}. Error {e}")
+                return Err(Error::GetRebuildHistory {
+                    id: id.to_string(),
+                    source: e,
+                });
             }
         }
+        Ok(())
     }
 }
 

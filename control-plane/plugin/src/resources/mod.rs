@@ -8,6 +8,7 @@ use crate::resources::{
 pub mod blockdevice;
 pub mod cordon;
 pub mod drain;
+pub mod error;
 pub mod node;
 pub mod pool;
 pub mod snapshot;
