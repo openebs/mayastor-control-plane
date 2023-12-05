@@ -6,7 +6,7 @@ use stor_port::{
     types::v0::transport::{
         CreateReplica, CreateReplicaSnapshot, DestroyReplica, DestroyReplicaSnapshot,
         IoEngCreateSnapshotClone, ListReplicaSnapshots, ListSnapshotClones, Replica, ReplicaId,
-        ReplicaSnapshot, ShareReplica, UnshareReplica,
+        ReplicaSnapshot, ResizeReplica, ShareReplica, UnshareReplica,
     },
 };
 
@@ -74,6 +74,14 @@ impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
                 request: "destroy_replica",
             })?;
         Ok(())
+    }
+
+    async fn resize_replica(&self, _request: &ResizeReplica) -> Result<Replica, SvcError> {
+        Err(SvcError::GrpcRequestError {
+            resource: ResourceKind::Replica,
+            request: "resize_replica".to_string(),
+            source: tonic::Status::unimplemented(""),
+        })
     }
 
     async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError> {

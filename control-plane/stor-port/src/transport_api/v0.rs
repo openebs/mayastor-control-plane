@@ -37,6 +37,7 @@ impl_vector_request!(Replicas, Replica);
 impl_message!(GetReplicas);
 impl_message!(CreateReplica);
 impl_message!(DestroyReplica);
+impl_message!(ResizeReplica);
 impl_message!(ShareReplica);
 impl_message!(UnshareReplica);
 impl_message!(CreateReplicaSnapshot);

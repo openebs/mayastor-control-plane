@@ -28,8 +28,8 @@ use stor_port::{
             ListRebuildRecord, ListReplicaSnapshots, ListSnapshotClones, MessageIdVs, Nexus,
             NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, NodeId,
             NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register, RemoveNexusChild,
-            Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ShareNexus, ShareReplica,
-            ShutdownNexus, SnapshotId, UnshareNexus, UnshareReplica, VolumeId,
+            Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ResizeReplica, ShareNexus,
+            ShareReplica, ShutdownNexus, SnapshotId, UnshareNexus, UnshareReplica, VolumeId,
         },
     },
 };
@@ -1336,6 +1336,15 @@ impl ReplicaApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
             }
             Err(error) => Err(error),
         }
+    }
+
+    /// Resize an existing replica to the requested size, via gRPC.
+    async fn resize_replica(&self, request: &ResizeReplica) -> Result<Replica, SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        let replica = dataplane.resize_replica(request).await?;
+        self.update_replica_state(Either::Insert(replica.clone()))
+            .await;
+        Ok(replica)
     }
 
     /// Share a replica on the pool via gRPC.

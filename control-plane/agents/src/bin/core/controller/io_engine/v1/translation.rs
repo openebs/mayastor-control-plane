@@ -307,6 +307,16 @@ impl AgentToIoEngine for transport::DestroyReplica {
     }
 }
 
+impl AgentToIoEngine for transport::ResizeReplica {
+    type IoEngineMessage = v1::replica::ResizeReplicaRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        v1::replica::ResizeReplicaRequest {
+            uuid: self.uuid.to_string(),
+            requested_size: self.requested_size,
+        }
+    }
+}
+
 /// Convert rpc replica to an agent replica.
 pub(super) fn rpc_replica_to_agent(
     rpc_replica: &v1::replica::Replica,
