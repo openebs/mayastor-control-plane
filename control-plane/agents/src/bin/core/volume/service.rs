@@ -21,8 +21,9 @@ use grpc::{
             CreateSnapshotVolumeInfo, CreateVolumeInfo, CreateVolumeSnapshot,
             CreateVolumeSnapshotInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo,
             DestroyVolumeSnapshot, DestroyVolumeSnapshotInfo, PublishVolumeInfo,
-            RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo, UnpublishVolumeInfo,
-            UnshareVolumeInfo, VolumeOperations, VolumeSnapshot, VolumeSnapshots,
+            RepublishVolumeInfo, ResizeVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo,
+            UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations, VolumeSnapshot,
+            VolumeSnapshots,
         },
         Pagination,
     },
@@ -222,6 +223,14 @@ impl VolumeOperations for Service {
         let volume =
             Context::spawn(async move { service.create_snapshot_volume(&request).await }).await??;
         Ok(volume)
+    }
+
+    async fn resize(
+        &self,
+        _req: &dyn ResizeVolumeInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        unimplemented!()
     }
 }
 

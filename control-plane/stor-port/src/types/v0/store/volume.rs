@@ -502,6 +502,7 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                 VolumeOperation::DestroySnapshot(snapshot) => {
                     self.metadata.runtime.snapshots.remove(&snapshot);
                 }
+                VolumeOperation::Resize(_) => todo!(),
             }
         }
         self.clear_op();
@@ -565,6 +566,7 @@ pub enum VolumeOperation {
     RemoveUnusedReplica(ReplicaId),
     CreateSnapshot(SnapshotId),
     DestroySnapshot(SnapshotId),
+    Resize(u64),
 }
 
 #[test]
@@ -663,6 +665,7 @@ impl From<VolumeOperation> for models::volume_spec_operation::Operation {
             VolumeOperation::DestroySnapshot(_) => {
                 models::volume_spec_operation::Operation::DestroySnapshot
             }
+            VolumeOperation::Resize(_) => todo!(),
         }
     }
 }

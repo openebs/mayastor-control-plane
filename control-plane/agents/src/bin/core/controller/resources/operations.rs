@@ -283,3 +283,19 @@ pub(crate) trait ResourceCloning {
         volume: OperationGuardArc<VolumeSpec>,
     ) -> Result<(), SvcError>;
 }
+
+/// Resource Resize Operations.
+/// This is used to resize the capacity of this resource.
+/// Using associated types to accomodate for potential composite datatypes.
+#[async_trait::async_trait]
+pub(crate) trait ResourceResize {
+    type Resize: Sync + Send;
+    type ResizeOutput: Sync + Send + Sized;
+
+    /// Resize this resource to a requested capacity.
+    async fn resize(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Resize,
+    ) -> Result<Self::ResizeOutput, SvcError>;
+}

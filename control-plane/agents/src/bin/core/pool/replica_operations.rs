@@ -4,7 +4,7 @@ use crate::controller::{
     resources::{
         operations::{
             ResourceLifecycle, ResourceLifecycleExt, ResourceOffspring, ResourceOwnerUpdate,
-            ResourceSharing,
+            ResourceResize, ResourceSharing,
         },
         operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
         OperationGuardArc, UpdateInnerValue,
@@ -18,7 +18,7 @@ use stor_port::types::v0::{
     },
     transport::{
         CreateReplica, DestroyReplica, NodeId, RemoveNexusChild, Replica, ReplicaOwners,
-        ShareReplica, SnapshotCloneSpecParams, UnshareReplica,
+        ResizeReplica, ShareReplica, SnapshotCloneSpecParams, UnshareReplica,
     },
 };
 
@@ -97,6 +97,20 @@ impl ResourceLifecycle for Option<&mut OperationGuardArc<ReplicaSpec>> {
         } else {
             node.destroy_replica(request).await
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceResize for OperationGuardArc<ReplicaSpec> {
+    type Resize = ResizeReplica;
+    type ResizeOutput = Replica;
+
+    async fn resize(
+        &mut self,
+        _registry: &Registry,
+        _request: &Self::Resize,
+    ) -> Result<Self::ResizeOutput, SvcError> {
+        unimplemented!()
     }
 }
 

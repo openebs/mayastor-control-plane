@@ -25,9 +25,10 @@ use stor_port::{
             AffinityGroup, CreateSnapshotVolume, CreateVolume, DestroyShutdownTargets,
             DestroyVolume, ExplicitNodeTopology, Filter, LabelledTopology, Nexus, NexusId,
             NexusNvmfConfig, NodeId, NodeTopology, NvmeNqn, PoolTopology, PublishVolume, ReplicaId,
-            ReplicaStatus, ReplicaTopology, ReplicaUsage, RepublishVolume, SetVolumeReplica,
-            ShareVolume, SnapshotId, Topology, UnpublishVolume, UnshareVolume, Volume, VolumeId,
-            VolumeLabels, VolumePolicy, VolumeShareProtocol, VolumeState, VolumeUsage,
+            ReplicaStatus, ReplicaTopology, ReplicaUsage, RepublishVolume, ResizeVolume,
+            SetVolumeReplica, ShareVolume, SnapshotId, Topology, UnpublishVolume, UnshareVolume,
+            Volume, VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol, VolumeState,
+            VolumeUsage,
         },
     },
     IntoOption, IntoVec, TryIntoOption,
@@ -126,6 +127,12 @@ pub trait VolumeOperations: Send + Sync {
     async fn create_snapshot_volume(
         &self,
         req: &dyn CreateSnapshotVolumeInfo,
+        ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError>;
+    /// Resize a volume
+    async fn resize(
+        &self,
+        req: &dyn ResizeVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError>;
 }
@@ -1086,6 +1093,63 @@ impl From<&dyn DestroyVolumeInfo> for DestroyVolumeRequest {
         Self {
             uuid: Some(data.uuid().to_string()),
         }
+    }
+}
+
+/// Trait to be implemented for ResizeVolume operation.
+pub trait ResizeVolumeInfo: Send + Sync + std::fmt::Debug {
+    /// Uuid of the volume to be resized
+    fn uuid(&self) -> VolumeId;
+    /// Requested new size of the volume, in bytes
+    fn req_size(&self) -> u64;
+}
+
+impl ResizeVolumeInfo for ResizeVolume {
+    fn uuid(&self) -> VolumeId {
+        self.uuid.clone()
+    }
+
+    fn req_size(&self) -> u64 {
+        self.requested_size
+    }
+
+    fn capacity_limit(&self) -> Option<u64> {
+        self.capacity_limit
+    }
+}
+
+impl ValidateRequestTypes for ResizeVolumeRequest {
+    type Validated = ValidatedResizeVolumeRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedResizeVolumeRequest {
+            uuid: VolumeId::try_from(StringValue(Some(self.uuid)))?,
+            requested_size: self.requested_size,
+            capacity_limit: self.capacity_limit,
+        })
+    }
+}
+
+impl From<&dyn ResizeVolumeInfo> for ResizeVolume {
+    fn from(data: &dyn ResizeVolumeInfo) -> Self {
+        Self {
+            uuid: data.uuid(),
+            requested_size: data.req_size(),
+            capacity_limit: data.capacity_limit(),
+        }
+    }
+}
+
+impl ResizeVolumeInfo for ValidatedResizeVolumeRequest {
+    fn uuid(&self) -> VolumeId {
+        self.uuid.clone()
+    }
+
+    fn req_size(&self) -> u64 {
+        self.requested_size
+    }
+
+    fn capacity_limit(&self) -> Option<u64> {
+        self.capacity_limit
     }
 }
 

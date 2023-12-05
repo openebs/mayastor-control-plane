@@ -457,6 +457,25 @@ pub struct CreateVolume {
     pub affinity_group: Option<AffinityGroup>,
 }
 
+/// Create volume request.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResizeVolume {
+    /// The uuid of the volume.
+    pub uuid: VolumeId,
+    /// The requested new size of the volume in bytes.
+    pub requested_size: u64,
+}
+impl ResizeVolume {
+    /// Create a new `ResizeVolume` request.
+    pub fn new(uuid: VolumeId, requested_size: u64) -> Self {
+        Self {
+            uuid,
+            requested_size,
+        }
+    }
+}
+
 /// Affinity Group related information.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]

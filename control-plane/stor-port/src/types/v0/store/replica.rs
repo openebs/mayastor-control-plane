@@ -272,6 +272,7 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
                 ReplicaOperation::OwnerUpdate(owners) => {
                     self.owners = owners;
                 }
+                ReplicaOperation::Resize(_) => todo!(),
             }
         }
         self.clear_op();
@@ -305,6 +306,7 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
             ReplicaOperation::Share(_, _) => (true, true),
             ReplicaOperation::Unshare => (true, true),
             ReplicaOperation::OwnerUpdate(_) => (false, true),
+            ReplicaOperation::Resize(_) => todo!(),
         }
     }
 
@@ -321,6 +323,7 @@ pub enum ReplicaOperation {
     Share(ReplicaShareProtocol, Vec<HostNqn>),
     Unshare,
     OwnerUpdate(ReplicaOwners),
+    Resize(u64),
 }
 
 /// Key used by the store to uniquely identify a ReplicaSpec structure.
