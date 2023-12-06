@@ -9,8 +9,8 @@ use crate::{
     volume::{
         get_volumes_request, CreateSnapshotVolumeRequest, CreateVolumeRequest,
         DestroyShutdownTargetRequest, DestroyVolumeRequest, PublishVolumeRequest,
-        RegisteredTargets, RepublishVolumeRequest, SetVolumeReplicaRequest, ShareVolumeRequest,
-        UnpublishVolumeRequest, UnshareVolumeRequest,
+        RegisteredTargets, RepublishVolumeRequest, ResizeVolumeRequest, SetVolumeReplicaRequest,
+        ShareVolumeRequest, UnpublishVolumeRequest, UnshareVolumeRequest,
     },
 };
 use events_api::event::{EventAction, EventCategory, EventMessage, EventMeta, EventSource};
@@ -1096,12 +1096,21 @@ impl From<&dyn DestroyVolumeInfo> for DestroyVolumeRequest {
     }
 }
 
+/// Intermediate structure that validates the conversion to ResizeVolumeRequest type.
+#[derive(Debug)]
+pub struct ValidatedResizeVolumeRequest {
+    uuid: VolumeId,
+    requested_size: u64,
+    capacity_limit: Option<u64>,
+}
 /// Trait to be implemented for ResizeVolume operation.
 pub trait ResizeVolumeInfo: Send + Sync + std::fmt::Debug {
     /// Uuid of the volume to be resized
     fn uuid(&self) -> VolumeId;
     /// Requested new size of the volume, in bytes
     fn req_size(&self) -> u64;
+    /// Total capacity limit for all volumes, in bytes
+    fn capacity_limit(&self) -> Option<u64>;
 }
 
 impl ResizeVolumeInfo for ResizeVolume {

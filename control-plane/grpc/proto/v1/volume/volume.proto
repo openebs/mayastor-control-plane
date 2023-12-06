@@ -297,6 +297,17 @@ message RepublishVolumeRequest {
   bool reuse_existing_fallback = 6;
 }
 
+// Resize a volume to the requested size
+message ResizeVolumeRequest {
+  // uuid of the volume
+  string                      uuid = 1;
+  // requested new size of the volume
+  uint64            requested_size = 2;
+  // total aggregated capacity limit for the volume provisioning on the system i.e. the
+  // total provisioned size of all volumes can not be greater than this limit
+  optional uint64   capacity_limit = 3;
+}
+
 // Unpublish a volume from any node where it may be published
 // Unshares the children nexuses from the volume and destroys them.
 message UnpublishVolumeRequest {
@@ -382,6 +393,14 @@ message PublishVolumeReply {
 
 // Reply type for a RepublishVolume request
 message RepublishVolumeReply {
+  oneof reply {
+    Volume volume = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Reply type for a ResizeVolume request
+message ResizeVolumeReply {
   oneof reply {
     Volume volume = 1;
     common.ReplyError error = 2;
@@ -567,6 +586,7 @@ service VolumeGrpc {
   rpc GetVolumes (GetVolumesRequest) returns (GetVolumesReply) {}
   rpc PublishVolume (PublishVolumeRequest) returns (PublishVolumeReply) {}
   rpc RepublishVolume (RepublishVolumeRequest) returns (RepublishVolumeReply) {}
+  rpc ResizeVolume (ResizeVolumeRequest) returns (ResizeVolumeReply) {}
   rpc UnpublishVolume (UnpublishVolumeRequest) returns (UnpublishVolumeReply) {}
   rpc ShareVolume (ShareVolumeRequest) returns (ShareVolumeReply) {}
   rpc UnshareVolume (UnshareVolumeRequest) returns (UnshareVolumeReply) {}
