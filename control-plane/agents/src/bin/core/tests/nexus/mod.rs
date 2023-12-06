@@ -410,6 +410,7 @@ async fn nexus_child_transaction() {
         .with_agents(vec!["core"])
         .with_req_timeouts(grpc_timeout, grpc_timeout)
         .with_grpc_timeouts(grpc_timeout_opts())
+        .with_reconcile_period(Duration::from_secs(100), Duration::from_secs(100))
         .build()
         .await
         .unwrap();
@@ -489,12 +490,12 @@ async fn nexus_child_transaction() {
     // unpause io_engine
     cluster.composer().thaw(io_engine.as_str()).await.unwrap();
 
-    // now it should be shared successfully
-    let uri = nexus_client
+    // now it should be added successfully
+    let child = nexus_client
         .add_nexus_child(&add_child, None)
         .await
         .unwrap();
-    println!("Share uri: {uri:?}");
+    println!("Child: {child:?}");
 
     cluster.composer().pause(io_engine.as_str()).await.unwrap();
 
@@ -520,13 +521,23 @@ async fn nexus_child_transaction() {
             .len(),
         1
     );
+
+    let mut io_engine = cluster.grpc_handle(&cluster.node(0)).await.unwrap();
+    io_engine
+        .add_child(add_child.nexus.as_str(), add_child.uri.as_str(), true)
+        .await
+        .unwrap();
+
+    // now it should be added successfully
+    let child = nexus_client
+        .add_nexus_child(&add_child, None)
+        .await
+        .unwrap();
+    println!("Child: {child:?}");
 }
 
-/// Tests child add and remove operations when the store is temporarily down
-/// TODO: these tests don't work anymore because the io_engine also writes child healthy states
-/// to etcd so we can't simply pause etcd anymore..
+/// Tests child add and remove operations when the store is temporarily down.
 #[tokio::test]
-#[ignore]
 async fn nexus_child_transaction_store() {
     let store_timeout = Duration::from_millis(250);
     let reconcile_period = Duration::from_millis(250);
@@ -539,6 +550,7 @@ async fn nexus_child_transaction_store() {
         .with_reconcile_period(reconcile_period, reconcile_period)
         .with_store_timeout(store_timeout)
         .with_grpc_timeouts(grpc_timeout_opts())
+        .with_options(|b| b.with_io_engine_no_pstor(true))
         .build()
         .await
         .unwrap();

@@ -183,6 +183,10 @@ pub struct StartOptions {
     )]
     io_engine_api_versions: Vec<IoEngineApiVersion>,
 
+    /// Don't configure the persistent store with the io-engine.
+    #[clap(long)]
+    io_engine_no_pstor: bool,
+
     /// Set the developer delayed env flag of the io_engine reactor.
     #[clap(short, long)]
     pub developer_delayed: bool,
@@ -435,6 +439,11 @@ impl StartOptions {
     #[must_use]
     pub fn with_isolated_io_engine(mut self, isolate: bool) -> Self {
         self.io_engine_isolate = isolate;
+        self
+    }
+    #[must_use]
+    pub fn with_io_engine_no_pstor(mut self, no_pstor: bool) -> Self {
+        self.io_engine_no_pstor = no_pstor;
         self
     }
     #[must_use]

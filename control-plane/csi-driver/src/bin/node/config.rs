@@ -18,6 +18,10 @@ pub fn nvme_keep_alive_tmo() -> String {
 pub fn nvme_ctrl_loss_tmo() -> String {
     Parameters::NvmeCtrlLossTmo.as_ref().to_kebab_case()
 }
+/// Command line arg name for `Parameters::NvmeIoTimeout`.
+pub fn nvme_io_tmo() -> String {
+    Parameters::NvmeIoTimeout.as_ref().to_kebab_case()
+}
 
 /// Global configuration parameters.
 #[derive(Debug, Default)]
@@ -42,17 +46,21 @@ pub(crate) struct NvmeConfig {
     /// Default value for `ctrl_loss_tmo` when not specified via the volume parameters (sc).
     ctrl_loss_tmo: Option<u32>,
     keep_alive_tmo: Option<u32>,
+    /// Default value for `io_tmo` when not specified via the volume parameters (sc).
+    io_tmo: Option<humantime::Duration>,
 }
 impl NvmeConfig {
     fn new(
         nr_io_queues: Option<u32>,
         ctrl_loss_tmo: Option<u32>,
         keep_alive_tmo: Option<u32>,
+        io_tmo: Option<humantime::Duration>,
     ) -> Self {
         Self {
             nr_io_queues,
             ctrl_loss_tmo,
             keep_alive_tmo,
+            io_tmo,
         }
     }
     /// Number of IO Queues.
@@ -67,6 +75,10 @@ impl NvmeConfig {
     /// The keep-alive timeout.
     pub(crate) fn keep_alive_tmo(&self) -> Option<u32> {
         self.keep_alive_tmo
+    }
+    /// The io timeout.
+    pub(crate) fn io_tmo(&self) -> Option<humantime::Duration> {
+        self.io_tmo
     }
 }
 
@@ -112,7 +124,22 @@ impl TryFrom<NvmeArgValues> for NvmeConfig {
                 error
             )
         })?;
-        Ok(Self::new(nvme_nr_ioq, ctrl_loss_tmo, keep_alive_tmo))
+        let nvme_io_tmo = Parameters::nvme_io_timeout(
+            src.0.get(Parameters::NvmeIoTimeout.as_ref()),
+        )
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "Invalid value for {}, error = {}",
+                Parameters::NvmeIoTimeout.as_ref(),
+                error
+            )
+        })?;
+        Ok(Self::new(
+            nvme_nr_ioq,
+            ctrl_loss_tmo,
+            keep_alive_tmo,
+            nvme_io_tmo,
+        ))
     }
 }
 /// Nvme Arguments taken from the CSI volume calls (storage class parameters).
@@ -154,6 +181,11 @@ impl TryFrom<&ArgMatches> for NvmeArgValues {
         if let Some(value) = matches.get_one::<String>(&nvme_keep_alive_tmo()) {
             map.0
                 .insert(Parameters::NvmeKeepAliveTmo.to_string(), value.to_string());
+        }
+
+        if let Some(value) = matches.get_one::<String>(&nvme_io_tmo()) {
+            map.0
+                .insert(Parameters::NvmeIoTimeout.to_string(), value.to_string());
         }
         Ok(map)
     }

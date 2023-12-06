@@ -26,6 +26,7 @@ use std::{
     future::Future,
     io::ErrorKind,
     pin::Pin,
+    str::FromStr,
     sync::Arc,
     task::{Context, Poll},
 };
@@ -124,7 +125,13 @@ pub(super) async fn main() -> anyhow::Result<()> {
                 .long("nvme-core-io-timeout")
                 .value_name("TIMEOUT")
                 .required(false)
-                .help("Sets the global nvme_core module io_timeout, in seconds")
+                .help("Sets the global nvme_core module io_timeout, in seconds or humantime")
+        )
+        .arg(
+            Arg::new("nvme-io-timeout")
+                .long("nvme-io-timeout")
+                .required(false)
+                .help("Sets io_timeout for nvme block devices")
         )
         .arg(
             Arg::new(crate::config::nvme_nr_io_queues())
@@ -162,6 +169,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
         .get_matches();
 
     utils::print_package_info!();
+    println!("{:?}", env::args().collect::<Vec<String>>());
 
     let endpoint = matches.get_one::<String>("grpc-endpoint").unwrap();
     let csi_socket = matches
@@ -183,10 +191,21 @@ pub(super) async fn main() -> anyhow::Result<()> {
         check_ana_and_label_node(matches.get_one::<String>("node-name").expect("required")).await?;
     }
 
-    if let Some(nvme_io_timeout_secs) = matches.get_one::<String>("nvme-core-io-timeout") {
-        let io_timeout_secs: u32 = nvme_io_timeout_secs.parse().expect(
-            "nvme_core io_timeout should be an integer number, representing the timeout in seconds",
-        );
+    if let Some(nvme_io_timeout) = matches.get_one::<String>("nvme-io-timeout") {
+        let _ = humantime::Duration::from_str(nvme_io_timeout)
+            .map_err(|error| anyhow::format_err!("Failed to parse 'nvme-io-timeout': {error}"))?;
+    };
+    if let Some(nvme_io_timeout) = matches.get_one::<String>("nvme-core-io-timeout") {
+        let io_timeout_secs = match humantime::Duration::from_str(nvme_io_timeout) {
+            Ok(human_time) => {
+                human_time.as_secs() as u32
+            }
+            Err(_) => {
+                nvme_io_timeout.parse().expect(
+                    "nvme_core io_timeout should be in humantime or an integer number, representing the timeout in seconds",
+                )
+            }
+        };
 
         if let Err(error) = crate::dev::nvmf::set_nvmecore_iotimeout(io_timeout_secs) {
             anyhow::bail!("Failed to set nvme_core io_timeout: {}", error);

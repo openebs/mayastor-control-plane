@@ -63,6 +63,10 @@ def the_nvme_device_should_report_total_queues(total):
     # max io queues is cpu_count
     # admin q is 1
     assert queue_count == min(total, os.cpu_count() + 1)
+    file = f"/sys/block/nvme2c2n1/queue/io_timeout"
+    io_timoout = int(subprocess.run(["sudo", "cat", file], capture_output=True).stdout)
+    print(f"io_timeout: {io_timoout}")
+    assert io_timoout == 33000
 
 
 @pytest.fixture
@@ -137,6 +141,7 @@ def start_csi_plugin(setup, io_queues, staging_target_path):
             "--csi-socket=/var/tmp/csi-node.sock",
             "--grpc-endpoint=0.0.0.0:50050",
             "--node-name=msn-test",
+            "--nvme-io-timeout=33s",
             f"--nvme-nr-io-queues={io_queues}",
             "-v",
         ],

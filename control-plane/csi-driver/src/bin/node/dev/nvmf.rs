@@ -13,7 +13,6 @@ use csi_driver::PublishParams;
 use glob::glob;
 use nvmeadm::nvmf_subsystem::Subsystem;
 use regex::Regex;
-use tracing::debug;
 use udev::{Device, Enumerator};
 use url::Url;
 use uuid::Uuid;
@@ -35,7 +34,7 @@ pub(super) struct NvmfAttach {
     port: u16,
     uuid: Uuid,
     nqn: String,
-    io_timeout: Option<u32>,
+    io_tmo: Option<u32>,
     nr_io_queues: Option<u32>,
     ctrl_loss_tmo: Option<u32>,
     keep_alive_tmo: Option<u32>,
@@ -50,6 +49,7 @@ impl NvmfAttach {
         uuid: Uuid,
         nqn: String,
         nr_io_queues: Option<u32>,
+        io_tmo: Option<humantime::Duration>,
         ctrl_loss_tmo: Option<u32>,
         keep_alive_tmo: Option<u32>,
         hostnqn: Option<String>,
@@ -59,7 +59,7 @@ impl NvmfAttach {
             port,
             uuid,
             nqn,
-            io_timeout: None,
+            io_tmo: io_tmo.map(|io_tmo| io_tmo.as_secs().try_into().unwrap_or(u32::MAX)),
             nr_io_queues,
             ctrl_loss_tmo,
             keep_alive_tmo,
@@ -104,6 +104,7 @@ impl TryFrom<&Url> for NvmfAttach {
         let nr_io_queues = config().nvme().nr_io_queues();
         let ctrl_loss_tmo = config().nvme().ctrl_loss_tmo();
         let keep_alive_tmo = config().nvme().keep_alive_tmo();
+        let io_tmo = config().nvme().io_tmo();
 
         let hash_query: HashMap<_, _> = url.query_pairs().collect();
         let hostnqn = hash_query.get("hostnqn").map(ToString::to_string);
@@ -114,6 +115,7 @@ impl TryFrom<&Url> for NvmfAttach {
             uuid,
             segments[0].to_string(),
             nr_io_queues,
+            io_tmo,
             ctrl_loss_tmo,
             keep_alive_tmo,
             hostnqn,
@@ -130,9 +132,6 @@ impl Attach for NvmfAttach {
         let publish_context = PublishParams::try_from(context)
             .map_err(|error| DeviceError::new(&error.to_string()))?;
 
-        if let Some(val) = publish_context.io_timeout() {
-            self.io_timeout = Some(*val);
-        }
         if let Some(val) = publish_context.ctrl_loss_tmo() {
             self.ctrl_loss_tmo = Some(*val);
         }
@@ -159,7 +158,7 @@ impl Attach for NvmfAttach {
             Err(NvmeError::SubsystemNotFound { .. }) => {
                 // The default reconnect delay in linux kernel is set to 10s. Use the
                 // same default value unless the timeout is less or equal to 10.
-                let reconnect_delay = match self.io_timeout {
+                let reconnect_delay = match self.io_tmo {
                     Some(io_timeout) => {
                         if io_timeout <= 10 {
                             Some(1)
@@ -200,47 +199,59 @@ impl Attach for NvmfAttach {
     }
 
     async fn fixup(&self) -> Result<(), DeviceError> {
-        if let Some(io_timeout) = self.io_timeout {
-            let device = self
-                .get_device()?
-                .ok_or_else(|| DeviceError::new("NVMe device not found"))?;
-            let dev_name = device.sysname().to_str().unwrap();
-            let major = DEVICE_REGEX
-                .captures(dev_name)
-                .ok_or_else(|| {
-                    DeviceError::new(&format!(
-                        "NVMe device \"{}\" does not match \"{}\"",
-                        dev_name, *DEVICE_REGEX,
-                    ))
-                })?
-                .get(1)
-                .unwrap()
-                .as_str();
-            let pattern = format!("/sys/class/nvme/nvme{major}/nvme*n1/queue");
-            let path = glob(&pattern)
-                .unwrap()
-                .next()
-                .ok_or_else(|| {
-                    DeviceError::new(&format!(
-                        "failed to look up sysfs device directory \"{pattern}\"",
-                    ))
-                })?
-                .map_err(|_| {
-                    DeviceError::new(&format!(
-                        "IO error when reading device directory \"{pattern}\""
-                    ))
-                })?;
-            // If the timeout was higher than nexus's timeout then IOs could
-            // error out earlier than they should. Therefore we should make sure
-            // that timeouts in the nexus are set to a very high value.
-            debug!(
-                "Setting IO timeout on \"{}\" to {}s",
-                path.to_string_lossy(),
-                io_timeout
-            );
-            sysfs::write_value(&path, "io_timeout", 1000 * io_timeout)?;
+        let Some(io_timeout) = self.io_tmo else {
+            return Ok(());
+        };
+
+        let device = self
+            .get_device()?
+            .ok_or_else(|| DeviceError::new("NVMe device not found"))?;
+        let dev_name = device.sysname().to_str().unwrap();
+        let major = DEVICE_REGEX
+            .captures(dev_name)
+            .ok_or_else(|| {
+                DeviceError::new(&format!(
+                    "NVMe device \"{}\" does not match \"{}\"",
+                    dev_name, *DEVICE_REGEX,
+                ))
+            })?
+            .get(1)
+            .unwrap()
+            .as_str();
+        let pattern = format!("/sys/class/block/nvme{major}c*n1/queue");
+        let glob = glob(&pattern).unwrap();
+        let result = glob
+            .into_iter()
+            .map(|glob_result| {
+                match glob_result {
+                    Ok(path) => {
+                        let path_str = path.display();
+                        // If the timeout was higher than nexus's timeout then IOs could
+                        // error out earlier than they should. Therefore we should make sure
+                        // that timeouts in the nexus are set to a very high value.
+                        tracing::debug!("Setting IO timeout on \"{path_str}\" to {io_timeout}s",);
+                        sysfs::write_value(&path, "io_timeout", 1000 * io_timeout).map_err(
+                            |error| {
+                                tracing::error!(%error, path=%path_str, "Failed to set io_timeout to {io_timeout}s");
+                                error.into()
+                            },
+                        )
+                    }
+                    Err(error) => {
+                        // This should never happen as we should always have permissions to list.
+                        tracing::error!(%error, "Unable to collect sysfs for /dev/nvme{major}");
+                        Err(DeviceError::new(error.to_string().as_str()))
+                    }
+                }
+            })
+            .collect::<Result<Vec<()>, DeviceError>>();
+        match result {
+            Ok(r) if r.is_empty() => Err(DeviceError::new(&format!(
+                "look up of sysfs device directory \"{pattern}\" found 0 entries",
+            ))),
+            Ok(_) => Ok(()),
+            Err(error) => Err(error),
         }
-        Ok(())
     }
 }
 
@@ -284,10 +295,9 @@ pub(crate) fn check_nvme_tcp_module() -> Result<(), std::io::Error> {
 /// (note, this is a system-wide parameter)
 pub(crate) fn set_nvmecore_iotimeout(io_timeout_secs: u32) -> Result<(), std::io::Error> {
     let path = Path::new("/sys/module/nvme_core/parameters");
-    debug!(
-        "Setting nvme_core IO timeout on \"{}\" to {}s",
-        path.to_string_lossy(),
-        io_timeout_secs
+    tracing::debug!(
+        "Setting nvme_core IO timeout on \"{path}\" to {io_timeout_secs}s",
+        path = path.to_string_lossy(),
     );
     sysfs::write_value(path, "io_timeout", io_timeout_secs)?;
     Ok(())
