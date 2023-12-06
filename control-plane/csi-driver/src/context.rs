@@ -27,7 +27,11 @@ pub fn parse_protocol(proto: Option<&String>) -> Result<VolumeShareProtocol, ton
 #[derive(AsRefStr, EnumString, Display)]
 #[strum(serialize_all = "camelCase")]
 pub enum Parameters {
+    /// This value is now considered deprecated.
     IoTimeout,
+    /// This value is used globally and not on a per volume context.
+    /// todo: split Parameters into 2 separate enums?
+    NvmeIoTimeout,
     NvmeNrIoQueues,
     NvmeCtrlLossTmo,
     NvmeKeepAliveTmo,
@@ -50,6 +54,14 @@ pub enum Parameters {
     FsId,
 }
 impl Parameters {
+    fn parse_human_time(
+        value: Option<&String>,
+    ) -> Result<Option<humantime::Duration>, humantime::DurationError> {
+        Ok(match value {
+            Some(value) => humantime::Duration::from_str(value).map(Some)?,
+            None => None,
+        })
+    }
     fn parse_u32(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
         Ok(match value {
             Some(value) => value.parse::<u32>().map(Some)?,
@@ -84,6 +96,12 @@ impl Parameters {
     pub fn io_timeout(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
         Self::parse_u32(value)
     }
+    /// Parse the value for `Self::IoTimeout`.
+    pub fn nvme_io_timeout(
+        value: Option<&String>,
+    ) -> Result<Option<humantime::Duration>, humantime::DurationError> {
+        Self::parse_human_time(value)
+    }
     /// Parse the value for `Self::StsAffinityGroup`
     pub fn sts_affinity_group(value: Option<&String>) -> Result<Option<bool>, ParseBoolError> {
         Self::parse_bool(value)
@@ -105,6 +123,7 @@ impl Parameters {
 #[derive(Debug)]
 pub struct PublishParams {
     io_timeout: Option<u32>,
+    nvme_io_timeout: Option<humantime::Duration>,
     ctrl_loss_tmo: Option<u32>,
     keep_alive_tmo: Option<u32>,
     fs_type: Option<FileSystem>,
@@ -114,6 +133,10 @@ impl PublishParams {
     /// Get the `Parameters::IoTimeout` value.
     pub fn io_timeout(&self) -> &Option<u32> {
         &self.io_timeout
+    }
+    /// Get the `Parameters::NvmeIoTimeout` value.
+    pub fn nvme_io_timeout(&self) -> &Option<humantime::Duration> {
+        &self.nvme_io_timeout
     }
     /// Get the `Parameters::NvmeCtrlLossTmo` value.
     pub fn ctrl_loss_tmo(&self) -> &Option<u32> {
@@ -166,6 +189,9 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
 
         let io_timeout = Parameters::io_timeout(args.get(Parameters::IoTimeout.as_ref()))
             .map_err(|_| tonic::Status::invalid_argument("Invalid I/O timeout"))?;
+        let nvme_io_timeout =
+            Parameters::nvme_io_timeout(args.get(Parameters::NvmeIoTimeout.as_ref()))
+                .map_err(|_| tonic::Status::invalid_argument("Invalid I/O timeout"))?;
         let ctrl_loss_tmo =
             Parameters::ctrl_loss_tmo(args.get(Parameters::NvmeCtrlLossTmo.as_ref()))
                 .map_err(|_| tonic::Status::invalid_argument("Invalid ctrl_loss_tmo"))?;
@@ -177,6 +203,7 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
 
         Ok(Self {
             io_timeout,
+            nvme_io_timeout,
             ctrl_loss_tmo,
             keep_alive_tmo,
             fs_type,

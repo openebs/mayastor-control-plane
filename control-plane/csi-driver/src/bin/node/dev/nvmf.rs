@@ -34,7 +34,7 @@ pub(super) struct NvmfAttach {
     port: u16,
     uuid: Uuid,
     nqn: String,
-    io_timeout: Option<u32>,
+    io_tmo: Option<u32>,
     nr_io_queues: Option<u32>,
     ctrl_loss_tmo: Option<u32>,
     keep_alive_tmo: Option<u32>,
@@ -49,6 +49,7 @@ impl NvmfAttach {
         uuid: Uuid,
         nqn: String,
         nr_io_queues: Option<u32>,
+        io_tmo: Option<humantime::Duration>,
         ctrl_loss_tmo: Option<u32>,
         keep_alive_tmo: Option<u32>,
         hostnqn: Option<String>,
@@ -58,7 +59,7 @@ impl NvmfAttach {
             port,
             uuid,
             nqn,
-            io_timeout: None,
+            io_tmo: io_tmo.map(|io_tmo| io_tmo.as_secs().try_into().unwrap_or(u32::MAX)),
             nr_io_queues,
             ctrl_loss_tmo,
             keep_alive_tmo,
@@ -103,6 +104,7 @@ impl TryFrom<&Url> for NvmfAttach {
         let nr_io_queues = config().nvme().nr_io_queues();
         let ctrl_loss_tmo = config().nvme().ctrl_loss_tmo();
         let keep_alive_tmo = config().nvme().keep_alive_tmo();
+        let io_tmo = config().nvme().io_tmo();
 
         let hash_query: HashMap<_, _> = url.query_pairs().collect();
         let hostnqn = hash_query.get("hostnqn").map(ToString::to_string);
@@ -113,6 +115,7 @@ impl TryFrom<&Url> for NvmfAttach {
             uuid,
             segments[0].to_string(),
             nr_io_queues,
+            io_tmo,
             ctrl_loss_tmo,
             keep_alive_tmo,
             hostnqn,
@@ -129,9 +132,6 @@ impl Attach for NvmfAttach {
         let publish_context = PublishParams::try_from(context)
             .map_err(|error| DeviceError::new(&error.to_string()))?;
 
-        if let Some(val) = publish_context.io_timeout() {
-            self.io_timeout = Some(*val);
-        }
         if let Some(val) = publish_context.ctrl_loss_tmo() {
             self.ctrl_loss_tmo = Some(*val);
         }
@@ -158,7 +158,7 @@ impl Attach for NvmfAttach {
             Err(NvmeError::SubsystemNotFound { .. }) => {
                 // The default reconnect delay in linux kernel is set to 10s. Use the
                 // same default value unless the timeout is less or equal to 10.
-                let reconnect_delay = match self.io_timeout {
+                let reconnect_delay = match self.io_tmo {
                     Some(io_timeout) => {
                         if io_timeout <= 10 {
                             Some(1)
@@ -199,7 +199,7 @@ impl Attach for NvmfAttach {
     }
 
     async fn fixup(&self) -> Result<(), DeviceError> {
-        let Some(io_timeout) = self.io_timeout else {
+        let Some(io_timeout) = self.io_tmo else {
             return Ok(());
         };
 
