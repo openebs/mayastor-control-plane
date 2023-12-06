@@ -78,7 +78,7 @@ impl ComponentAction for IoEngine {
                 spec = spec.with_env("DEVELOPER_DELAYED", "1");
             }
 
-            if !options.no_etcd {
+            if !options.no_etcd && !options.io_engine_no_pstor {
                 let etcd = format!("etcd.{}:2379", options.cluster_label.name());
                 spec = spec.with_args(vec!["-p", &etcd]);
             }

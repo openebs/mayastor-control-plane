@@ -288,7 +288,7 @@ impl Cluster {
         Ok(CsiNodeClient { csi, internal })
     }
 
-    /// restart the core agent
+    /// Restart the core agent.
     pub async fn restart_core(&self) {
         self.remove_store_lock(ControlPlaneService::CoreAgent).await;
         self.composer.restart("core").await.unwrap();

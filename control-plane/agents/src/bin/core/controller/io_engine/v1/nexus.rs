@@ -204,22 +204,39 @@ impl crate::controller::io_engine::NexusChildApi<Nexus, Nexus, ()> for super::Rp
         err
     )]
     async fn add_child(&self, request: &AddNexusChild) -> Result<Nexus, SvcError> {
-        let rpc_nexus = self
+        let result = self
             .nexus()
             .add_child_nexus(request.to_rpc())
             .await
             .context(GrpcRequestError {
                 resource: ResourceKind::Child,
                 request: "add_child_nexus",
-            })?;
-        match rpc_nexus.into_inner().nexus {
-            None => Err(SvcError::Internal {
-                details: format!(
-                    "resource: {}, request: {}, err: {}",
-                    "Nexus", "add_child", "no nexus returned"
-                ),
-            }),
-            Some(nexus) => Ok(rpc_nexus_to_agent(&nexus, &request.node)?),
+            });
+        match result {
+            Ok(rpc_nexus) => match rpc_nexus.into_inner().nexus {
+                None => Err(SvcError::Internal {
+                    details: format!(
+                        "resource: {}, request: {}, err: {}",
+                        "Nexus", "add_child", "no nexus returned"
+                    ),
+                }),
+                Some(nexus) => Ok(rpc_nexus_to_agent(&nexus, &request.node)?),
+            },
+            Err(error) if error.tonic_code() == tonic::Code::AlreadyExists => {
+                let nexus = self.fetch_nexus(&request.nexus).await?;
+                if let Some(child) = nexus.child(request.uri.as_str()) {
+                    // todo: Should we do anything here depending on the state?
+                    tracing::warn!(
+                        ?child,
+                        nexus=%request.nexus,
+                        "Child is already part of the nexus"
+                    );
+                    Ok(nexus)
+                } else {
+                    Err(error)
+                }
+            }
+            Err(error) => Err(error),
         }
     }
 
