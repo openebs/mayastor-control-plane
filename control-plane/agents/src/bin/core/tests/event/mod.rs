@@ -18,6 +18,22 @@ use stor_port::types::v0::{
 use tokio::time::timeout;
 
 const CHILD_WAIT: Duration = Duration::from_millis(1);
+const EVENT_CATEGORIES: &[EventCategory] = &[
+    EventCategory::Volume,
+    EventCategory::Pool,
+    EventCategory::Nexus,
+    EventCategory::Replica,
+];
+const EVENT_ACTIONS: &[EventAction] = &[
+    EventAction::Create,
+    EventAction::Delete,
+    EventAction::RebuildBegin,
+    EventAction::RebuildEnd,
+    EventAction::SwitchOver,
+    EventAction::AddChild,
+    EventAction::RemoveChild,
+    EventAction::OnlineChild,
+];
 
 async fn build_cluster(num_ioe: u32, pool_size: u64) -> Cluster {
     let reconcile_period = Duration::from_millis(100);
@@ -36,7 +52,6 @@ async fn build_cluster(num_ioe: u32, pool_size: u64) -> Cluster {
 }
 
 #[tokio::test]
-#[ignore]
 async fn events() {
     let cluster = build_cluster(3, 52428800).await;
 
@@ -151,7 +166,7 @@ async fn events() {
     pool_deletion_event_test(&mut events_mbus_subscription).await;
 }
 async fn pool_creation_event_test(sub: &mut BusSubscription<EventMessage>) {
-    let pool_creation_message = timeout(Duration::from_millis(10), sub.next())
+    let pool_creation_message = timeout(Duration::from_millis(10), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
@@ -160,7 +175,7 @@ async fn pool_creation_event_test(sub: &mut BusSubscription<EventMessage>) {
 }
 
 async fn pool_deletion_event_test(sub: &mut BusSubscription<EventMessage>) {
-    let pool_deletion_message = timeout(Duration::from_millis(10), sub.next())
+    let pool_deletion_message = timeout(Duration::from_millis(10), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
@@ -169,19 +184,19 @@ async fn pool_deletion_event_test(sub: &mut BusSubscription<EventMessage>) {
 }
 
 async fn volume_creation_event_test(sub: &mut BusSubscription<EventMessage>) {
-    let replica_creation_message = timeout(Duration::from_millis(10), sub.next())
+    let replica_creation_message = timeout(Duration::from_millis(10), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
     assert_eq!(replica_creation_message.category(), EventCategory::Replica);
     assert_eq!(replica_creation_message.action(), EventAction::Create);
-    let replica_creation_message = timeout(Duration::from_millis(10), sub.next())
+    let replica_creation_message = timeout(Duration::from_millis(10), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
     assert_eq!(replica_creation_message.category(), EventCategory::Replica);
     assert_eq!(replica_creation_message.action(), EventAction::Create);
-    let vol_creation_message = timeout(Duration::from_millis(10), sub.next())
+    let vol_creation_message = timeout(Duration::from_millis(10), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
@@ -190,19 +205,19 @@ async fn volume_creation_event_test(sub: &mut BusSubscription<EventMessage>) {
 }
 
 async fn volume_deletion_event_test(sub: &mut BusSubscription<EventMessage>) {
-    let replica_deletion_message = timeout(Duration::from_millis(10), sub.next())
+    let replica_deletion_message = timeout(Duration::from_millis(10), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
     assert_eq!(replica_deletion_message.category(), EventCategory::Replica);
     assert_eq!(replica_deletion_message.action(), EventAction::Delete);
-    let replica_deletion_message = timeout(Duration::from_millis(10), sub.next())
+    let replica_deletion_message = timeout(Duration::from_millis(10), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
     assert_eq!(replica_deletion_message.category(), EventCategory::Replica);
     assert_eq!(replica_deletion_message.action(), EventAction::Delete);
-    let vol_deletion_message = timeout(Duration::from_millis(10), sub.next())
+    let vol_deletion_message = timeout(Duration::from_millis(10), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
@@ -211,7 +226,7 @@ async fn volume_deletion_event_test(sub: &mut BusSubscription<EventMessage>) {
 }
 
 async fn nexus_creation_event_test(sub: &mut BusSubscription<EventMessage>) {
-    let nexus_creation_message = timeout(Duration::from_millis(10), sub.next())
+    let nexus_creation_message = timeout(Duration::from_millis(10), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
@@ -220,7 +235,7 @@ async fn nexus_creation_event_test(sub: &mut BusSubscription<EventMessage>) {
 }
 
 async fn nexus_deletion_event_test(sub: &mut BusSubscription<EventMessage>) {
-    let nexus_deletion_message = timeout(Duration::from_millis(10), sub.next())
+    let nexus_deletion_message = timeout(Duration::from_millis(10), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
@@ -229,7 +244,7 @@ async fn nexus_deletion_event_test(sub: &mut BusSubscription<EventMessage>) {
 }
 
 async fn nexus_child_addition_event_test(sub: &mut BusSubscription<EventMessage>) {
-    let nexus_add_child_event = timeout(Duration::from_millis(10), sub.next())
+    let nexus_add_child_event = timeout(Duration::from_millis(10), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
@@ -238,7 +253,7 @@ async fn nexus_child_addition_event_test(sub: &mut BusSubscription<EventMessage>
 }
 
 async fn nexus_child_removal_event_test(sub: &mut BusSubscription<EventMessage>) {
-    let nexus_remove_child_event = timeout(Duration::from_millis(10), sub.next())
+    let nexus_remove_child_event = timeout(Duration::from_millis(10), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
@@ -247,7 +262,7 @@ async fn nexus_child_removal_event_test(sub: &mut BusSubscription<EventMessage>)
 }
 
 async fn nexus_child_online_event_test(sub: &mut BusSubscription<EventMessage>) {
-    let nexus_online_child_event = timeout(Duration::from_millis(10), sub.next())
+    let nexus_online_child_event = timeout(Duration::from_millis(10), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
@@ -256,13 +271,13 @@ async fn nexus_child_online_event_test(sub: &mut BusSubscription<EventMessage>) 
 }
 
 async fn rebuild_begin_event_test(sub: &mut BusSubscription<EventMessage>) {
-    let replica_creation_message = timeout(Duration::from_millis(300), sub.next())
+    let replica_creation_message = timeout(Duration::from_millis(300), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
     assert_eq!(replica_creation_message.category(), EventCategory::Replica);
     assert_eq!(replica_creation_message.action(), EventAction::Create);
-    let rebuid_start_event_message = timeout(Duration::from_millis(300), sub.next())
+    let rebuid_start_event_message = timeout(Duration::from_millis(300), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
@@ -274,7 +289,7 @@ async fn rebuild_begin_event_test(sub: &mut BusSubscription<EventMessage>) {
 }
 
 async fn rebuild_end_event_test(sub: &mut BusSubscription<EventMessage>) {
-    let rebuid_end_event_message = timeout(Duration::from_millis(50), sub.next())
+    let rebuid_end_event_message = timeout(Duration::from_millis(50), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
@@ -285,4 +300,14 @@ async fn rebuild_end_event_test(sub: &mut BusSubscription<EventMessage>) {
 async fn mbus_init(mbus_url: &str) -> BusSubscription<EventMessage> {
     let mut bus = message_bus_init(mbus_url, Some(1)).await;
     bus.subscribe::<EventMessage>().await.unwrap()
+}
+
+// Filter the events to obtain one with component test.
+async fn get_next_event(sub: &mut BusSubscription<EventMessage>) -> Option<EventMessage> {
+    while let Some(event) = sub.next().await {
+        if EVENT_CATEGORIES.contains(&event.category()) && EVENT_ACTIONS.contains(&event.action()) {
+            return Some(event);
+        }
+    }
+    None
 }
