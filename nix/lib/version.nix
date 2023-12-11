@@ -1,12 +1,14 @@
 { lib, stdenv, git, tag ? "" }:
 let
   whitelistSource = src: allowedPrefixes:
-    builtins.filterSource
-      (path: type:
+    builtins.path {
+      filter = (path: type:
         lib.any
           (allowedPrefix: lib.hasPrefix (toString (src + "/${allowedPrefix}")) path)
-          allowedPrefixes)
-      src;
+          allowedPrefixes);
+      path = src;
+      name = "controller-git";
+    };
 in
 stdenv.mkDerivation {
   name = "git-version";
