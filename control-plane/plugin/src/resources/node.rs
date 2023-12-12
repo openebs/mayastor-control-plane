@@ -1,6 +1,7 @@
 use crate::{
-    operations::{Cordoning, Drain, Get, List},
+    operations::{Cordoning, Drain, Get, List, PluginResult},
     resources::{
+        error::Error,
         utils,
         utils::{print_table, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
         NodeId,
@@ -89,16 +90,17 @@ impl GetHeaderRow for openapi::models::Node {
 
 #[async_trait(?Send)]
 impl List for Nodes {
-    async fn list(output: &utils::OutputFormat) {
+    async fn list(output: &utils::OutputFormat) -> PluginResult {
         match RestClient::client().nodes_api().get_nodes(None).await {
             Ok(nodes) => {
                 // Print table, json or yaml based on output format.
                 utils::print_table(output, nodes.into_body());
             }
             Err(e) => {
-                println!("Failed to list nodes. Error {e}")
+                return Err(Error::ListNodesError { source: e });
             }
         }
+        Ok(())
     }
 }
 
@@ -109,16 +111,20 @@ pub struct Node {}
 #[async_trait(?Send)]
 impl Get for Node {
     type ID = NodeId;
-    async fn get(id: &Self::ID, output: &utils::OutputFormat) {
+    async fn get(id: &Self::ID, output: &utils::OutputFormat) -> PluginResult {
         match RestClient::client().nodes_api().get_node(id).await {
             Ok(node) => {
                 // Print table, json or yaml based on output format.
                 utils::print_table(output, node.into_body());
             }
             Err(e) => {
-                println!("Failed to get node {id}. Error {e}")
+                return Err(Error::GetNodeError {
+                    id: id.to_string(),
+                    source: e,
+                });
             }
         }
+        Ok(())
     }
 }
 
@@ -142,7 +148,7 @@ fn drain_labels_from_state(ds: &CordonDrainState) -> Vec<String> {
 #[async_trait(?Send)]
 impl Cordoning for Node {
     type ID = NodeId;
-    async fn cordon(id: &Self::ID, label: &str, output: &OutputFormat) {
+    async fn cordon(id: &Self::ID, label: &str, output: &OutputFormat) -> PluginResult {
         // is node already cordoned with the label?
         let already_has_cordon_label: bool =
             match RestClient::client().nodes_api().get_node(id).await {
@@ -155,13 +161,15 @@ impl Cordoning for Node {
                         },
                         None => {
                             println!("Node {id} is not registered");
-                            return;
+                            return Ok(());
                         }
                     }
                 }
                 Err(e) => {
-                    println!("Failed to get node {id}. Error {e}");
-                    return;
+                    return Err(Error::GetNodeError {
+                        id: id.to_string(),
+                        source: e,
+                    });
                 }
             };
         let result = match already_has_cordon_label {
@@ -185,12 +193,16 @@ impl Cordoning for Node {
                 }
             },
             Err(e) => {
-                println!("Failed to cordon node {id}. Error {e}")
+                return Err(Error::NodeCordonError {
+                    id: id.to_string(),
+                    source: e,
+                });
             }
         }
+        Ok(())
     }
 
-    async fn uncordon(id: &Self::ID, label: &str, output: &OutputFormat) {
+    async fn uncordon(id: &Self::ID, label: &str, output: &OutputFormat) -> PluginResult {
         match RestClient::client()
             .nodes_api()
             .delete_node_cordon(id, label)
@@ -228,9 +240,13 @@ impl Cordoning for Node {
                 }
             },
             Err(e) => {
-                println!("Failed to uncordon node {id}. Error {e}")
+                return Err(Error::NodeUncordonError {
+                    id: id.to_string(),
+                    source: e,
+                });
             }
         }
+        Ok(())
     }
 }
 
@@ -427,7 +443,7 @@ impl Drain for Node {
         label: String,
         drain_timeout: Option<humantime::Duration>,
         output: &utils::OutputFormat,
-    ) {
+    ) -> PluginResult {
         let mut timeout_instant: Option<time::Instant> = None;
         if let Some(dt) = drain_timeout {
             timeout_instant = time::Instant::now().checked_add(dt.into());
@@ -443,13 +459,15 @@ impl Drain for Node {
                         },
                         None => {
                             println!("Node {id} is not registered");
-                            return;
+                            return Ok(());
                         }
                     }
                 }
                 Err(e) => {
-                    println!("Failed to get node {id}. Error {e}");
-                    return;
+                    return Err(Error::GetNodeError {
+                        id: id.to_string(),
+                        source: e,
+                    });
                 }
             };
         if !already_has_drain_label {
@@ -458,8 +476,10 @@ impl Drain for Node {
                 .put_node_drain(id, &label)
                 .await
             {
-                println!("Failed to put node drain {id}. Error {error}");
-                return;
+                return Err(Error::PutNodeDrainError {
+                    id: id.to_string(),
+                    source: error,
+                });
             }
         }
         // loop this call until no longer draining
@@ -518,8 +538,10 @@ impl Drain for Node {
                     }
                 }
                 Err(e) => {
-                    println!("Failed to get node {id}. Error {e}");
-                    break;
+                    return Err(Error::GetNodeError {
+                        id: id.to_string(),
+                        source: e,
+                    });
                 }
             }
             if timeout_instant.is_some() && time::Instant::now() > timeout_instant.unwrap() {
@@ -529,5 +551,6 @@ impl Drain for Node {
             let sleep = Duration::from_secs(2);
             tokio::time::sleep(sleep).await;
         }
+        Ok(())
     }
 }

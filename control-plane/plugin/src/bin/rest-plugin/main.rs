@@ -58,7 +58,7 @@ async fn execute(cli_args: CliArgs) {
     }
 
     // Perform the operations based on the subcommand, with proper output format.
-    match &cli_args.operations {
+    let result = match &cli_args.operations {
         Operations::Drain(resource) => match resource {
             DrainResources::Node(drain_node_args) => {
                 node::Node::drain(
@@ -132,5 +132,10 @@ async fn execute(cli_args: CliArgs) {
                 node::Node::uncordon(id, label, &cli_args.output).await
             }
         },
+    };
+
+    if let Err(error) = result {
+        eprintln!("{error}");
+        std::process::exit(1);
     };
 }

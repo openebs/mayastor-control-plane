@@ -1,6 +1,7 @@
 use crate::{
     operations::GetBlockDevices,
     resources::{
+        error::Error,
         utils::{
             optional_cell, print_table, CreateRow, GetHeaderRow, OutputFormat,
             BLOCKDEVICE_HEADERS_ALL, BLOCKDEVICE_HEADERS_USABLE,
@@ -124,7 +125,11 @@ impl GetHeaderRow for BlockDeviceUsable {
 #[async_trait(?Send)]
 impl GetBlockDevices for BlockDevice {
     type ID = NodeId;
-    async fn get_blockdevices(id: &Self::ID, all: &bool, output: &OutputFormat) {
+    async fn get_blockdevices(
+        id: &Self::ID,
+        all: &bool,
+        output: &OutputFormat,
+    ) -> Result<(), Error> {
         let mut used_disks: Vec<String> = vec![];
         match RestClient::client().pools_api().get_node_pools(id).await {
             Ok(pools) => {
@@ -140,8 +145,10 @@ impl GetBlockDevices for BlockDevice {
                 }
             }
             Err(e) => {
-                println!("Failed to list blockdevices for node {id} . Error {e}");
-                return;
+                return Err(Error::GetBlockDevicesError {
+                    id: id.to_string(),
+                    source: e,
+                });
             }
         }
 
@@ -169,9 +176,13 @@ impl GetBlockDevices for BlockDevice {
                 };
             }
             Err(e) => {
-                println!("Failed to list blockdevices for node {id} . Error {e}")
+                return Err(Error::GetBlockDevicesError {
+                    id: id.to_string(),
+                    source: e,
+                });
             }
         }
+        Ok(())
     }
 }
 

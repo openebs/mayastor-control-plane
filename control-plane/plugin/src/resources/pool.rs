@@ -1,6 +1,7 @@
 use crate::{
-    operations::{Get, List},
+    operations::{Get, List, PluginResult},
     resources::{
+        error::Error,
         utils,
         utils::{CreateRow, GetHeaderRow},
         PoolId,
@@ -61,16 +62,17 @@ impl GetHeaderRow for openapi::models::Pool {
 
 #[async_trait(?Send)]
 impl List for Pools {
-    async fn list(output: &utils::OutputFormat) {
+    async fn list(output: &utils::OutputFormat) -> PluginResult {
         match RestClient::client().pools_api().get_pools().await {
             Ok(pools) => {
                 // Print table, json or yaml based on output format.
                 utils::print_table(output, pools.into_body());
             }
             Err(e) => {
-                println!("Failed to list pools. Error {e}")
+                return Err(Error::ListPoolsError { source: e });
             }
         }
+        Ok(())
     }
 }
 
@@ -81,15 +83,19 @@ pub struct Pool {}
 #[async_trait(?Send)]
 impl Get for Pool {
     type ID = PoolId;
-    async fn get(id: &Self::ID, output: &utils::OutputFormat) {
+    async fn get(id: &Self::ID, output: &utils::OutputFormat) -> PluginResult {
         match RestClient::client().pools_api().get_pool(id).await {
             Ok(pool) => {
                 // Print table, json or yaml based on output format.
                 utils::print_table(output, pool.into_body());
             }
             Err(e) => {
-                println!("Failed to get pool {id}. Error {e}")
+                return Err(Error::GetPoolError {
+                    id: id.to_string(),
+                    source: e,
+                });
             }
         }
+        Ok(())
     }
 }
