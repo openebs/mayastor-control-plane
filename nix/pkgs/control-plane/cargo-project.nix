@@ -40,15 +40,17 @@ let
     cargo = stable_channel.cargo;
   };
   whitelistSource = src: allowedPrefixes:
-    builtins.filterSource
-      (path: type:
+    builtins.path {
+      filter = (path: type:
         lib.any
           (allowedPrefix:
             (lib.hasPrefix (toString (src + "/${allowedPrefix}")) path) ||
             (type == "directory" && lib.hasPrefix path (toString (src + "/${allowedPrefix}")))
           )
-          allowedPrefixes)
-      src;
+          allowedPrefixes);
+      path = src;
+      name = "controller";
+    };
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE = "${protobuf}/include";
