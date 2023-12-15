@@ -616,7 +616,8 @@ pub mod v1 {
         pub use super::pb::{
             destroy_replica_request, list_replica_options, replica_rpc_client,
             CreateReplicaRequest, DestroyReplicaRequest, ListReplicaOptions, ListReplicasResponse,
-            Replica, ReplicaSpaceUsage, ShareReplicaRequest, UnshareReplicaRequest,
+            Replica, ReplicaSpaceUsage, ResizeReplicaRequest, ShareReplicaRequest,
+            UnshareReplicaRequest,
         };
     }
 

@@ -4,7 +4,7 @@ use crate::{
     volume::{
         create_snapshot_reply, create_snapshot_volume_reply, create_volume_reply,
         get_snapshots_reply, get_volumes_reply, publish_volume_reply, republish_volume_reply,
-        set_volume_replica_reply, share_volume_reply, unpublish_volume_reply,
+        resize_volume_reply, set_volume_replica_reply, share_volume_reply, unpublish_volume_reply,
         volume_grpc_server::{VolumeGrpc, VolumeGrpcServer},
         CreateSnapshotReply, CreateSnapshotRequest, CreateSnapshotVolumeReply,
         CreateSnapshotVolumeRequest, CreateVolumeReply, CreateVolumeRequest,
@@ -12,8 +12,9 @@ use crate::{
         DestroySnapshotRequest, DestroyVolumeReply, DestroyVolumeRequest, GetSnapshotsReply,
         GetSnapshotsRequest, GetVolumesReply, GetVolumesRequest, ProbeRequest, ProbeResponse,
         PublishVolumeReply, PublishVolumeRequest, RepublishVolumeReply, RepublishVolumeRequest,
-        SetVolumeReplicaReply, SetVolumeReplicaRequest, ShareVolumeReply, ShareVolumeRequest,
-        UnpublishVolumeReply, UnpublishVolumeRequest, UnshareVolumeReply, UnshareVolumeRequest,
+        ResizeVolumeReply, ResizeVolumeRequest, SetVolumeReplicaReply, SetVolumeReplicaRequest,
+        ShareVolumeReply, ShareVolumeRequest, UnpublishVolumeReply, UnpublishVolumeRequest,
+        UnshareVolumeReply, UnshareVolumeRequest,
     },
 };
 use std::{convert::TryFrom, sync::Arc};
@@ -143,6 +144,20 @@ impl VolumeGrpc for VolumeServer {
             })),
             Err(err) => Ok(Response::new(RepublishVolumeReply {
                 reply: Some(republish_volume_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+    async fn resize_volume(
+        &self,
+        request: tonic::Request<ResizeVolumeRequest>,
+    ) -> Result<tonic::Response<ResizeVolumeReply>, tonic::Status> {
+        let req = request.into_inner().validated()?;
+        match self.service.resize(&req, None).await {
+            Ok(volume) => Ok(Response::new(ResizeVolumeReply {
+                reply: Some(resize_volume_reply::Reply::Volume(volume.into())),
+            })),
+            Err(err) => Ok(Response::new(ResizeVolumeReply {
+                reply: Some(resize_volume_reply::Reply::Error(err.into())),
             })),
         }
     }

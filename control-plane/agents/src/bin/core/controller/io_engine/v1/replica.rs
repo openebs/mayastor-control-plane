@@ -10,7 +10,7 @@ use stor_port::{
     types::v0::transport::{
         CreateReplica, CreateReplicaSnapshot, DestroyReplica, DestroyReplicaSnapshot,
         IoEngCreateSnapshotClone, ListReplicaSnapshots, ListSnapshotClones, Replica, ReplicaId,
-        ReplicaSnapshot, ShareReplica, UnshareReplica,
+        ReplicaSnapshot, ResizeReplica, ShareReplica, UnshareReplica,
     },
 };
 
@@ -111,6 +111,21 @@ impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
                 request: "destroy_replica",
             })?;
         Ok(())
+    }
+
+    #[tracing::instrument(name = "rpc::v1::replica::resize", level = "debug", skip(self), err)]
+    async fn resize_replica(&self, request: &ResizeReplica) -> Result<Replica, SvcError> {
+        let rpc_replica = self
+            .replica()
+            .resize_replica(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Replica,
+                request: "resize_replica",
+            })?;
+
+        let replica = rpc_replica_to_agent(&rpc_replica.into_inner(), &request.node)?;
+        Ok(replica)
     }
 
     async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError> {

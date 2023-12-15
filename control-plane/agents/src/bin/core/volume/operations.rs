@@ -5,8 +5,8 @@ use crate::{
         resources::{
             operations::{
                 ResourceLifecycle, ResourceLifecycleExt, ResourceLifecycleWithLifetime,
-                ResourceOwnerUpdate, ResourcePublishing, ResourceReplicas, ResourceSharing,
-                ResourceShutdownOperations,
+                ResourceOwnerUpdate, ResourcePublishing, ResourceReplicas, ResourceResize,
+                ResourceSharing, ResourceShutdownOperations,
             },
             operations_helper::{
                 GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, ResourceSpecsLocked,
@@ -37,8 +37,8 @@ use stor_port::{
         transport::{
             CreateVolume, DestroyNexus, DestroyReplica, DestroyShutdownTargets, DestroyVolume,
             Protocol, PublishVolume, Replica, ReplicaId, ReplicaOwners, RepublishVolume,
-            SetVolumeReplica, ShareNexus, ShareVolume, ShutdownNexus, UnpublishVolume,
-            UnshareNexus, UnshareVolume, Volume,
+            ResizeVolume, SetVolumeReplica, ShareNexus, ShareVolume, ShutdownNexus,
+            UnpublishVolume, UnshareNexus, UnshareVolume, Volume,
         },
     },
 };
@@ -175,6 +175,20 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
         }
 
         self.complete_destroy(Ok(()), registry).await
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceResize for OperationGuardArc<VolumeSpec> {
+    type Resize = ResizeVolume;
+    type ResizeOutput = Volume;
+
+    async fn resize(
+        &mut self,
+        _registry: &Registry,
+        _request: &Self::Resize,
+    ) -> Result<Self::ResizeOutput, SvcError> {
+        unimplemented!()
     }
 }
 

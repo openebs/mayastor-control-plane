@@ -6,8 +6,9 @@ use crate::{
             traits::{
                 CreateSnapshotVolumeInfo, CreateVolumeInfo, CreateVolumeSnapshotInfo,
                 DestroyShutdownTargetsInfo, DestroyVolumeInfo, PublishVolumeInfo,
-                RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo, UnpublishVolumeInfo,
-                UnshareVolumeInfo, VolumeOperations, VolumeSnapshot, VolumeSnapshots,
+                RepublishVolumeInfo, ResizeVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo,
+                UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations, VolumeSnapshot,
+                VolumeSnapshots,
             },
             traits_snapshots::DestroyVolumeSnapshotInfo,
         },
@@ -352,5 +353,13 @@ impl VolumeOperations for VolumeClient {
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Volume)),
         }
+    }
+
+    async fn resize(
+        &self,
+        _req: &dyn ResizeVolumeInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        unimplemented!()
     }
 }

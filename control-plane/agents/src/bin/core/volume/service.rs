@@ -4,8 +4,8 @@ use crate::{
         resources::{
             operations::{
                 ResourceCloning, ResourceLifecycle, ResourceLifecycleWithLifetime,
-                ResourcePublishing, ResourceReplicas, ResourceSharing, ResourceShutdownOperations,
-                ResourceSnapshotting,
+                ResourcePublishing, ResourceReplicas, ResourceResize, ResourceSharing,
+                ResourceShutdownOperations, ResourceSnapshotting,
             },
             operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
             OperationGuardArc,
@@ -21,8 +21,9 @@ use grpc::{
             CreateSnapshotVolumeInfo, CreateVolumeInfo, CreateVolumeSnapshot,
             CreateVolumeSnapshotInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo,
             DestroyVolumeSnapshot, DestroyVolumeSnapshotInfo, PublishVolumeInfo,
-            RepublishVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo, UnpublishVolumeInfo,
-            UnshareVolumeInfo, VolumeOperations, VolumeSnapshot, VolumeSnapshots,
+            RepublishVolumeInfo, ResizeVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo,
+            UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations, VolumeSnapshot,
+            VolumeSnapshots,
         },
         Pagination,
     },
@@ -36,8 +37,8 @@ use stor_port::{
         },
         transport::{
             CreateSnapshotVolume, CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter,
-            PublishVolume, RepublishVolume, SetVolumeReplica, ShareVolume, UnpublishVolume,
-            UnshareVolume, Volume,
+            PublishVolume, RepublishVolume, ResizeVolume, SetVolumeReplica, ShareVolume,
+            UnpublishVolume, UnshareVolume, Volume,
         },
     },
 };
@@ -221,6 +222,17 @@ impl VolumeOperations for Service {
         let service = self.clone();
         let volume =
             Context::spawn(async move { service.create_snapshot_volume(&request).await }).await??;
+        Ok(volume)
+    }
+
+    async fn resize(
+        &self,
+        req: &dyn ResizeVolumeInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let request = req.into();
+        let service = self.clone();
+        let volume = Context::spawn(async move { service.resize_volume(&request).await }).await??;
         Ok(volume)
     }
 }
@@ -552,5 +564,12 @@ impl Service {
         let mut snapshot = self.specs().volume_snapshot(snap_uuid).await?;
         snapshot.create_clone(&self.registry, request).await?;
         self.registry.volume(&request.params().uuid).await
+    }
+
+    /// Resize an existing volume to the requested new capacity.
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
+    pub(super) async fn resize_volume(&self, request: &ResizeVolume) -> Result<Volume, SvcError> {
+        let mut volume = self.specs().volume(&request.uuid).await?;
+        volume.resize(&self.registry, request).await
     }
 }

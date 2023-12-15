@@ -599,6 +599,40 @@ impl DestroyReplica {
     }
 }
 
+/// Resize Replica Request.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ResizeReplica {
+    /// Id of the io-engine instance.
+    pub node: NodeId,
+    /// Id of the pool.
+    pub pool_id: PoolId,
+    /// UUID of the replica.
+    pub uuid: ReplicaId,
+    /// Name of the replica.
+    pub name: Option<ReplicaName>,
+    /// Requested size of replica for resize.
+    pub requested_size: u64,
+}
+impl ResizeReplica {
+    /// Return a new `Self` from the provided arguments.
+    pub fn new(
+        node: &NodeId,
+        pool_id: &PoolId,
+        name: &ReplicaName,
+        uuid: &ReplicaId,
+        requested_size: u64,
+    ) -> Self {
+        Self {
+            node: node.clone(),
+            pool_id: pool_id.clone(),
+            uuid: uuid.clone(),
+            name: name.clone().into(),
+            requested_size,
+        }
+    }
+}
+
 /// Share Replica Request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
