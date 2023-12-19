@@ -7,8 +7,8 @@ use stor_port::types::v0::{
     openapi::apis::Uuid,
     transport::{
         DestroyShutdownTargets, DestroyVolume, Filter, GetRebuildRecord, PublishVolume,
-        RebuildHistory, RebuildJobState, RebuildRecord, RepublishVolume, SetVolumeReplica,
-        ShareVolume, UnpublishVolume, UnshareVolume, Volume,
+        RebuildHistory, RebuildJobState, RebuildRecord, RepublishVolume, ResizeVolume,
+        SetVolumeReplica, ShareVolume, UnpublishVolume, UnshareVolume, Volume,
     },
 };
 
@@ -194,6 +194,24 @@ impl apis::actix_server::Volumes for RestApi {
             )
             .await?;
         Ok(share_uri)
+    }
+
+    async fn put_volume_size(
+        Path(volume_id): Path<Uuid>,
+        Body(resize_volume_body): Body<models::ResizeVolumeBody>,
+    ) -> Result<models::Volume, RestError<RestJsonError>> {
+        let volume = client()
+            .resize(
+                &ResizeVolume {
+                    uuid: volume_id.into(),
+                    requested_size: resize_volume_body.size as u64,
+                    capacity_limit: None,
+                },
+                None,
+            )
+            .await?;
+
+        Ok(volume.into())
     }
 
     async fn put_volume_target(
