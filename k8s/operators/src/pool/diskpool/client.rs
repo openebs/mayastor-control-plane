@@ -1,31 +1,27 @@
-use super::{
-    v1alpha1::DiskPool as AlphaDiskPool,
-    v1beta1::{DiskPool, DiskPoolSpec},
-};
-use crate::error::Error;
+use super::v1beta2::{DiskPool, DiskPoolSpec};
+use crate::{error::Error, ApiVersion};
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::{
     api::{ListParams, Patch, PatchParams, PostParams},
-    core::crd::merge_crds,
     Api, Client, CustomResourceExt, ResourceExt,
 };
 use openapi::{apis::StatusCode, clients};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
-/// Get the DiskPool v1beta1 api.
-pub(crate) fn v1beta1_api(client: &Client, namespace: &str) -> Api<DiskPool> {
+/// Get the DiskPool v1beta2 api.
+pub(crate) fn v1beta2_api(client: &Client, namespace: &str) -> Api<DiskPool> {
     Api::namespaced(client.clone(), namespace)
 }
 
-/// Create a v1beta1 disk pool CR, with the given name and spec.
-pub(crate) async fn create_v1beta1_cr(
+/// Create a v1beta2 disk pool CR, with the given name and spec.
+pub(crate) async fn create_v1beta2_cr(
     client: &Client,
     namespace: &str,
     name: &str,
     spec: DiskPoolSpec,
 ) -> Result<(), Error> {
     let post_params = PostParams::default();
-    let api = v1beta1_api(client, namespace);
+    let api = v1beta2_api(client, namespace);
     let new_disk_pool: DiskPool = DiskPool::new(name, spec);
     match api.create(&post_params, &new_disk_pool).await {
         Ok(_) => Ok(()),
@@ -34,74 +30,16 @@ pub(crate) async fn create_v1beta1_cr(
     }
 }
 
-/// Replaces a given disk pool CR with v1beta1 schema CR.
-pub(crate) async fn replace_with_v1beta1(
-    client: &Client,
-    cr_name: &str,
-    namespace: &str,
-    res_ver: Option<String>,
-    spec: DiskPoolSpec,
-) -> Result<(), Error> {
-    let post_params = PostParams::default();
-    let api = v1beta1_api(client, namespace);
-    let mut new_disk_pool: DiskPool = DiskPool::new(cr_name, spec);
-    new_disk_pool.metadata.resource_version = res_ver;
-    info!(
-        pool.cr_name = cr_name,
-        "Patching existing pool with v1beta1 schema"
-    );
-    match api.replace(cr_name, &post_params, &new_disk_pool).await {
-        Ok(_) => Ok(()),
-        Err(error) => {
-            error!(
-                ?error,
-                pool.cr_name = cr_name,
-                "Failed to patch pool with v1beta 1schema"
-            );
-            Err(error.into())
-        }
-    }
-}
-
-/// Ensure the CRD is installed. This creates a chicken and egg problem. When the CRD is removed,
-/// the operator will fail to list the CRD going into a error loop.
-///
-/// To prevent that, we will simply panic, and hope we can make progress after restart. Keep
-/// running is not an option as the operator would be "running" and the only way to know something
-/// is wrong would be to consult the logs.
-pub(crate) async fn ensure_crd(k8s: &Client) -> Result<CustomResourceDefinition, Error> {
+/// Create the crd.
+pub(crate) async fn create_crd(k8s: Client) -> Result<CustomResourceDefinition, Error> {
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
-    // Check if there is an existing dsp diskpool. If yes, Replace it with new generated one.
-    // Create new if it doesnt exist.
-    let mut crd = AlphaDiskPool::crd();
-    let crd_name = crd.metadata.name.as_ref().ok_or(Error::InvalidCRField {
-        field: "diskpool.metadata.name".to_string(),
-    })?;
-    crd.spec.versions[0].served = false;
     let new_crd = DiskPool::crd();
-    let all_crds = vec![crd.clone(), new_crd.clone()];
-    let new_crd =
-        merge_crds(all_crds, "v1beta1").map_err(|source| Error::CrdMergeError { source })?;
-
-    // Ensure if diskpool crd exist to determine api verb.
-    let result = if crd_api.get(crd_name).await.is_ok() {
-        info!(
-            "Replacing CRD: {}",
-            serde_json::to_string_pretty(&new_crd).unwrap_or_default()
-        );
-        let param = PatchParams::apply("merge_v1alpha1_v1beta1").force();
-        crd_api
-            .patch("diskpools.openebs.io", &param, &Patch::Apply(&new_crd))
-            .await
-    } else {
-        info!(
-            "Creating CRD: {}",
-            serde_json::to_string_pretty(&new_crd).unwrap_or_default()
-        );
-
-        let pp = PostParams::default();
-        crd_api.create(&pp, &new_crd).await
-    };
+    info!(
+        "Creating CRD: {}",
+        serde_json::to_string_pretty(&new_crd).unwrap_or_default()
+    );
+    let pp = PostParams::default();
+    let result = crd_api.create(&pp, &new_crd).await;
     let crd = result.map_err(|e| Error::Kube { source: e })?;
     Ok(crd)
 }
@@ -128,53 +66,7 @@ pub(crate) async fn discard_older_schema(k8s: &Client, new_version: &str) -> Res
             let pp = PostParams::default();
             crd_api.replace(crd_name, &pp, &new_crd).await?;
         }
-    } else {
-        info!(
-            "Creating CRD: {}",
-            serde_json::to_string_pretty(&new_crd).unwrap()
-        );
-        let pp = PostParams::default();
-        if let Err(e) = crd_api.create(&pp, &new_crd).await {
-            error!("Failed to create v1beta1 CRD: {:?}", e);
-        }
     }
-    Ok(())
-}
-
-/// Lists existing v1alpha1 CR in cluster and replaces them with v1beta1 CR.
-/// This ensures that there is no v1alpha1 stored objects in cluster.
-pub(crate) async fn migrate_to_v1beta1(
-    k8s: Client,
-    ns: &str,
-    pagination_limit: u32,
-) -> Result<(), Error> {
-    if let Ok(mut v1_alpha1_pools) = list_existing_cr(&k8s, ns, pagination_limit).await {
-        for dsp in v1_alpha1_pools.iter_mut() {
-            if let Some(res_ver) = dsp.resource_version() {
-                let name = dsp.name_any();
-                let node = dsp.spec.node();
-                let disk = dsp.spec.disks();
-                replace_with_v1beta1(
-                    &k8s,
-                    &name,
-                    ns,
-                    Some(res_ver.clone()),
-                    DiskPoolSpec::new(node, disk),
-                )
-                .await?;
-                info!(crd = ?dsp.name_any(), "CR creation successful");
-            } else {
-                return Err(Error::CrdFieldMissing {
-                    name: dsp.name_any(),
-                    field: "resource_version".to_string(),
-                });
-            }
-        }
-    } else {
-        return Err(Error::Generic {
-            message: "Error in listing v1alpha1 CR".to_string(),
-        });
-    };
     Ok(())
 }
 
@@ -186,7 +78,7 @@ pub(crate) async fn create_missing_cr(
     namespace: &str,
 ) -> Result<(), Error> {
     if let Ok(pools) = control_client.pools_api().get_pools().await {
-        let pools_api: Api<DiskPool> = v1beta1_api(k8s, namespace);
+        let pools_api: Api<DiskPool> = v1beta2_api(k8s, namespace);
         let param = PostParams::default();
         for pool in pools.into_body().iter_mut() {
             match pools_api.get(&pool.id).await {
@@ -194,7 +86,7 @@ pub(crate) async fn create_missing_cr(
                     if let Some(spec) = &pool.spec {
                         warn!(pool.id, spec.node, "DiskPool CR is missing");
                         let cr_spec: DiskPoolSpec =
-                            DiskPoolSpec::new(spec.node.clone(), spec.disks.clone());
+                            DiskPoolSpec::new(spec.node.clone(), spec.disks.clone(), None);
                         let new_disk_pool: DiskPool = DiskPool::new(&pool.id, cr_spec);
                         if let Err(error) = pools_api.create(&param, &new_disk_pool).await {
                             info!(pool.id, spec.node, %error, "Failed to create CR for missing DiskPool");
@@ -235,7 +127,7 @@ async fn update_stored_version(
     Ok(())
 }
 
-/// Fetch list of all mayastor pools.
+/// List of all pools.
 pub(crate) async fn list_existing_cr(
     client: &Client,
     namespace: &str,
@@ -243,11 +135,11 @@ pub(crate) async fn list_existing_cr(
 ) -> Result<Vec<DiskPool>, Error> {
     // Create the list params with pagination limit.
     let mut list_params = ListParams::default().limit(pagination_limit);
-    // Since v1alpha1 is not served at this stage we cannot use v1alpha1 api client
-    // to list existing CRs. Existing CRs which were created and stored as v1alpha1 can
-    // be retrieved using v1beta1 client. Kube api server performs the required conversions and
+    // Since v1alpha1/v1beta1 is not served at this stage we cannot use v1alpha1/v1beta1 api client
+    // to list existing CRs. Existing CRs which were created and stored as v1alpha1/v1beta1 can
+    // be retrieved using v1beta2 client. Kube api server performs the required conversions and
     // returns us the resources.
-    let pools_api: Api<DiskPool> = v1beta1_api(client, namespace);
+    let pools_api: Api<DiskPool> = v1beta2_api(client, namespace);
     let mut pools: Vec<DiskPool> = vec![];
     loop {
         let mut result = pools_api.list(&list_params).await?;
@@ -260,6 +152,23 @@ pub(crate) async fn list_existing_cr(
             _ => break,
         }
     }
-
     Ok(pools)
+}
+
+/// Return the api_version of the present crd if any, otherwise retuen None.
+pub(crate) async fn get_api_version(k8s: Client) -> Option<ApiVersion> {
+    let crd_api: Api<CustomResourceDefinition> = Api::all(k8s);
+    if let Ok(crd) = crd_api.get_status("diskpools.openebs.io").await {
+        if let Some(status) = crd.status {
+            if status.stored_versions == Some(vec!["v1alpha1".to_string()]) {
+                return Some(ApiVersion::Alpha1);
+            } else if status.stored_versions == Some(vec!["v1beta1".to_string()]) {
+                return Some(ApiVersion::Beta1);
+            } else {
+                return Some(ApiVersion::Beta2);
+            }
+        }
+    }
+    // Return None if no crd present i.e. fresh installation
+    None
 }

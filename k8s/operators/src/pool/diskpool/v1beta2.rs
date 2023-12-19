@@ -2,13 +2,14 @@ use kube::CustomResource;
 use openapi::models::{pool_status::PoolStatus as RestPoolStatus, Pool};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(
     CustomResource, Serialize, Deserialize, Default, Debug, Eq, PartialEq, Clone, JsonSchema,
 )]
 #[kube(
 group = "openebs.io",
-version = "v1beta1",
+version = "v1beta2",
 kind = "DiskPool",
 plural = "diskpools",
 // The name of the struct that gets created that represents a resource
@@ -31,21 +32,32 @@ pub struct DiskPoolSpec {
     node: String,
     /// The disk device the pool is located on
     disks: Vec<String>,
+    /// The topology for data placement.
+    topology: Option<Topology>,
+}
+
+/// Placement pool topology used by volume operations.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, JsonSchema)]
+pub struct Topology {
+    /// Label for topology
+    #[serde(default)]
+    pub labelled: HashMap<String, String>,
 }
 
 impl DiskPoolSpec {
     /// Create a new DiskPoolSpec from the node and the disks.
-    #[allow(dead_code)]
-    pub fn new(node: String, disks: Vec<String>) -> Self {
-        Self { node, disks }
+    pub fn new(node: String, disks: Vec<String>, topology: Option<Topology>) -> Self {
+        Self {
+            node,
+            disks,
+            topology,
+        }
     }
     /// The node the pool is placed on.
-    #[allow(dead_code)]
     pub fn node(&self) -> String {
         self.node.clone()
     }
     /// The disk devices that compose the pool.
-    #[allow(dead_code)]
     pub fn disks(&self) -> Vec<String> {
         self.disks.clone()
     }
@@ -108,7 +120,6 @@ impl Default for DiskPoolStatus {
 
 impl DiskPoolStatus {
     /// Set when Pool is not found for some reason.
-    #[allow(dead_code)]
     pub fn not_found(status: &Option<Self>) -> Self {
         Self {
             cr_state: status.clone().unwrap_or_default().cr_state,
@@ -118,7 +129,6 @@ impl DiskPoolStatus {
     }
 
     /// Set when operator is attempting delete on pool.
-    #[allow(dead_code)]
     pub fn terminating(p: Pool) -> Self {
         let state = p.state.unwrap_or_default();
         let free = if state.capacity > state.used {
@@ -136,7 +146,6 @@ impl DiskPoolStatus {
     }
 
     /// Set when deleting a Pool which is not accessible.
-    #[allow(dead_code)]
     pub fn terminating_when_unknown() -> Self {
         Self {
             cr_state: CrPoolState::Terminating,
@@ -145,7 +154,6 @@ impl DiskPoolStatus {
         }
     }
 
-    #[allow(dead_code)]
     pub fn mark_unknown() -> Self {
         Self {
             cr_state: CrPoolState::Created,

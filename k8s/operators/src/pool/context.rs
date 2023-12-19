@@ -1,5 +1,5 @@
 use super::{
-    diskpool::v1beta1::{CrPoolState, DiskPool, DiskPoolStatus},
+    diskpool::v1beta2::{CrPoolState, DiskPool, DiskPoolStatus},
     error::Error,
 };
 use k8s_openapi::{api::core::v1::Event, apimachinery::pkg::apis::meta::v1::MicroTime};
@@ -14,7 +14,7 @@ use openapi::{
     models::{CreatePoolBody, Pool},
 };
 
-use super::{normalize_disk, v1beta1_api};
+use super::{normalize_disk, v1beta2_api};
 use chrono::Utc;
 use kube::api::{Patch, PostParams};
 use serde_json::json;
@@ -182,7 +182,7 @@ impl ResourceContext {
 
     /// Construct an API handle for the resource
     fn api(&self) -> Api<DiskPool> {
-        v1beta1_api(&self.ctx.k8s, &self.namespace().unwrap())
+        v1beta2_api(&self.ctx.k8s, &self.namespace().unwrap())
     }
 
     /// Control plane pool handler.
