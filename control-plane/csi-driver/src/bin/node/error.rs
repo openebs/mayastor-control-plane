@@ -1,6 +1,9 @@
 //! Definition of DeviceError used by the attach and detach code.
 use nvmeadm::{error::NvmeError, nvmf_discovery};
-use std::string::FromUtf8Error;
+
+use nix::errno::Errno;
+use snafu::Snafu;
+use std::{process::ExitCode, string::FromUtf8Error};
 
 /// A Device Attach/Detach error.
 /// todo: should this be an enum?
@@ -142,6 +145,46 @@ impl From<DeviceError> for tonic::Status {
                 _ => tonic::Status::internal(dev_error.message),
             },
             _ => tonic::Status::internal(dev_error.message),
+        }
+    }
+}
+
+/// Error for the fsfreeze operations.
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)), context(suffix(false)))]
+pub(crate) enum FsfreezeError {
+    #[snafu(display("Cannot find volume: volume ID: {volume_id}"))]
+    VolumeNotFound { volume_id: String },
+    #[snafu(display("Volume is not mounted: volume ID: {volume_id}"))]
+    VolumeNotMounted { volume_id: String },
+    #[snafu(display("Invalid volume ID: {volume_id}, {source}"))]
+    InvalidVolumeId {
+        source: uuid::Error,
+        volume_id: String,
+    },
+    #[snafu(display("fsfreeze failed: volume ID: {volume_id}, {errno}"))]
+    FsfreezeFailed { volume_id: String, errno: Errno },
+    #[snafu(display("Internal failure: volume ID: {volume_id}, {source}"))]
+    InternalFailure {
+        source: DeviceError,
+        volume_id: String,
+    },
+    #[snafu(display("Not a filesystem mount: volume ID: {volume_id}"))]
+    BlockDeviceMount { volume_id: String },
+    #[snafu(display("Not a valid fsfreeze command"))]
+    InvalidFreezeCommand,
+}
+
+impl From<FsfreezeError> for ExitCode {
+    fn from(value: FsfreezeError) -> Self {
+        match value {
+            FsfreezeError::VolumeNotFound { .. } => ExitCode::from(Errno::ENODEV as u8),
+            FsfreezeError::VolumeNotMounted { .. } => ExitCode::from(Errno::ENOENT as u8),
+            FsfreezeError::InvalidVolumeId { .. } => ExitCode::from(Errno::EINVAL as u8),
+            FsfreezeError::FsfreezeFailed { errno, .. } => ExitCode::from(errno as u8),
+            FsfreezeError::InternalFailure { .. } => ExitCode::from(Errno::ELIBACC as u8),
+            FsfreezeError::BlockDeviceMount { .. } => ExitCode::from(Errno::EMEDIUMTYPE as u8),
+            FsfreezeError::InvalidFreezeCommand => ExitCode::from(Errno::EINVAL as u8),
         }
     }
 }

@@ -62,6 +62,7 @@ pub(crate) trait Attach: Sync + Send {
 pub(crate) trait Detach: Sync + Send {
     async fn detach(&self) -> Result<(), DeviceError>;
     fn devname(&self) -> DeviceName;
+    fn devnqn(&self) -> &str;
 }
 
 pub(crate) struct Device;

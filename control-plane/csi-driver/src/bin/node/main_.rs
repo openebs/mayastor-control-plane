@@ -4,16 +4,21 @@
 //! of volumes using iscsi/nvmf protocols on the node.
 
 use crate::{
-    identity::Identity, mount::probe_filesystems, node::Node,
-    nodeplugin_grpc::NodePluginGrpcServer, nodeplugin_nvme::NvmeOperationsSvc,
+    error::FsfreezeError,
+    fsfreeze::{bin::fsfreeze, FsFreezeOpt},
+    identity::Identity,
+    mount::probe_filesystems,
+    node::Node,
+    nodeplugin_grpc::NodePluginGrpcServer,
+    nodeplugin_nvme::NvmeOperationsSvc,
     shutdown_event::Shutdown,
 };
+use csi_driver::csi::{identity_server::IdentityServer, node_server::NodeServer};
 use grpc::csi_node_nvme::nvme_operations_server::NvmeOperationsServer;
 use stor_port::platform;
-use tracing::{debug, error, info, trace};
+use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
 use clap::Arg;
-use csi_driver::csi::{identity_server::IdentityServer, node_server::NodeServer};
 use futures::TryFutureExt;
 use k8s_openapi::api::core::v1::Node as K8sNode;
 use kube::{
@@ -35,6 +40,7 @@ use tokio::{
     net::UnixListener,
 };
 use tonic::transport::{server::Connected, Server};
+use tracing::{debug, error, info, trace};
 
 #[derive(Clone, Debug)]
 pub struct UdsConnectInfo {
@@ -90,6 +96,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
     let matches = clap::Command::new(utils::package_description!())
         .about("k8s sidecar for IoEngine implementing CSI among others")
         .version(utils::version_info_str!())
+        .subcommand_negates_reqs(true)
         .arg(
             Arg::new("csi-socket")
                 .short('c')
@@ -166,7 +173,49 @@ pub(super) async fn main() -> anyhow::Result<()> {
                     Example:\n --node-selector key=value --node-selector key2=value2",
                 ),
         )
+        .subcommand(
+            clap::Command::new("fs-freeze")
+                .arg(
+                    Arg::new("volume-id")
+                        .short('v')
+                        .long("volume-id")
+                        .value_name("UUID")
+                        .required(true)
+                        .help("Uuid of the volume to freeze")
+                )
+        )
+        .subcommand(
+            clap::Command::new("fs-unfreeze")
+                .arg(
+                    Arg::new("volume-id")
+                        .short('v')
+                        .long("volume-id")
+                        .value_name("UUID")
+                        .required(true)
+                        .help("Uuid of the volume to unfreeze")
+                )
+        )
         .get_matches();
+
+    if let Some(cmd) = matches.subcommand() {
+        utils::tracing_telemetry::TracingTelemetry::builder()
+            .with_writer(FmtLayer::Stderr)
+            .with_style(FmtStyle::Compact)
+            .with_colours(false)
+            .init();
+        match cmd {
+            ("fs-freeze", arg_matches) => {
+                let volume_id = arg_matches.get_one::<String>("volume-id").unwrap();
+                fsfreeze(volume_id, FsFreezeOpt::Freeze).await
+            }
+            ("fs-unfreeze", arg_matches) => {
+                let volume_id = arg_matches.get_one::<String>("volume-id").unwrap();
+                fsfreeze(volume_id, FsFreezeOpt::Unfreeze).await
+            }
+            _ => Err(FsfreezeError::InvalidFreezeCommand),
+        }?;
+        return Ok(());
+    }
 
     utils::print_package_info!();
     println!("{:?}", env::args().collect::<Vec<String>>());
