@@ -1,3 +1,6 @@
+use crate::error::FsfreezeError;
+use std::process::ExitCode;
+
 /// todo: cleanup this module cfg repetition..
 #[cfg(target_os = "linux")]
 mod block_vol;
@@ -16,6 +19,7 @@ mod filesystem_vol;
 mod findmnt;
 #[cfg(target_os = "linux")]
 mod format;
+pub(crate) mod fsfreeze;
 #[cfg(target_os = "linux")]
 mod identity;
 #[cfg(target_os = "linux")]
@@ -39,11 +43,17 @@ pub(crate) mod shutdown_event;
 
 #[tokio::main]
 #[cfg(target_os = "linux")]
-async fn main() -> anyhow::Result<()> {
-    main_::main().await.map_err(|error| {
+async fn main() -> anyhow::Result<ExitCode> {
+    match main_::main().await.map_err(|error| {
         tracing::error!(%error, "Terminated with error");
         error
-    })
+    }) {
+        Ok(_) => Ok(ExitCode::SUCCESS),
+        Err(error) => match error.downcast::<FsfreezeError>() {
+            Ok(error) => Ok(error.into()),
+            Err(error) => Err(error),
+        },
+    }
 }
 
 #[tokio::main]
