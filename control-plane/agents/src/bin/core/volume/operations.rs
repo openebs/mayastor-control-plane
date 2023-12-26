@@ -185,10 +185,30 @@ impl ResourceResize for OperationGuardArc<VolumeSpec> {
 
     async fn resize(
         &mut self,
-        _registry: &Registry,
-        _request: &Self::Resize,
+        registry: &Registry,
+        request: &Self::Resize,
     ) -> Result<Self::ResizeOutput, SvcError> {
-        unimplemented!()
+        let specs = registry.specs();
+        let _spec = self.as_ref().clone();
+        let state = registry.volume_state(&request.uuid).await?;
+        let replicas = specs.volume_replicas(&request.uuid);
+
+        let spec_clone = self
+            .start_update(
+                registry,
+                &state,
+                VolumeOperation::Resize(request.requested_size),
+            )
+            .await?;
+        // For the volume being resized, resize each replica of the volume. For a failure to
+        // resize any of the replica, the volume resize operation is to be deemed failure.
+        let result = self
+            .resize_volume_replicas(registry, &replicas, request.requested_size, &spec_clone)
+            .await;
+
+        self.complete_update(registry, result, spec_clone).await?;
+
+        registry.volume(&request.uuid).await
     }
 }
 

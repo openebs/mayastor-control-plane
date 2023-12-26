@@ -272,7 +272,9 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
                 ReplicaOperation::OwnerUpdate(owners) => {
                     self.owners = owners;
                 }
-                ReplicaOperation::Resize(_) => todo!(),
+                ReplicaOperation::Resize(size) => {
+                    self.size = size;
+                }
             }
         }
         self.clear_op();
@@ -306,7 +308,7 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
             ReplicaOperation::Share(_, _) => (true, true),
             ReplicaOperation::Unshare => (true, true),
             ReplicaOperation::OwnerUpdate(_) => (false, true),
-            ReplicaOperation::Resize(_) => todo!(),
+            ReplicaOperation::Resize(_) => (false, true),
         }
     }
 

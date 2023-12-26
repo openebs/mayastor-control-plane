@@ -149,6 +149,8 @@ impl SpecOperationsHelper for ReplicaSpec {
             }
             ReplicaOperation::Unshare => Ok(()),
             ReplicaOperation::OwnerUpdate(_) => Ok(()),
+            // XXX: Shall we do something here with input size?
+            ReplicaOperation::Resize(_) => Ok(()),
             _ => unreachable!(),
         }?;
         self.start_op(op);

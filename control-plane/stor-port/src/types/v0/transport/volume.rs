@@ -457,7 +457,7 @@ pub struct CreateVolume {
     pub affinity_group: Option<AffinityGroup>,
 }
 
-/// Create volume request.
+/// Resize volume request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ResizeVolume {

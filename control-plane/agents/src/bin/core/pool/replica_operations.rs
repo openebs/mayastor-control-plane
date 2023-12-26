@@ -107,10 +107,22 @@ impl ResourceResize for OperationGuardArc<ReplicaSpec> {
 
     async fn resize(
         &mut self,
-        _registry: &Registry,
-        _request: &Self::Resize,
+        registry: &Registry,
+        request: &Self::Resize,
     ) -> Result<Self::ResizeOutput, SvcError> {
-        unimplemented!()
+        let node = registry.node_wrapper(&request.node).await?;
+
+        let repl = registry.replica(&request.uuid).await?;
+        let spec_clone = self
+            .start_update(
+                registry,
+                &repl,
+                ReplicaOperation::Resize(request.requested_size),
+            )
+            .await?;
+
+        let result = node.resize_replica(request).await;
+        self.complete_update(registry, result, spec_clone).await
     }
 }
 

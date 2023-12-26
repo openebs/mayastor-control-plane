@@ -1055,7 +1055,8 @@ impl SpecOperationsHelper for VolumeSpec {
             }
             VolumeOperation::CreateSnapshot(_) => Ok(()),
             VolumeOperation::DestroySnapshot(_) => Ok(()),
-            VolumeOperation::Resize(_) => todo!(),
+            // XXX: Shall we do something here with the input size?
+            VolumeOperation::Resize(_) => Ok(()),
         }?;
         self.start_op(operation);
         Ok(())

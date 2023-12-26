@@ -1148,6 +1148,16 @@ impl From<&dyn ResizeVolumeInfo> for ResizeVolume {
     }
 }
 
+impl From<&dyn ResizeVolumeInfo> for ResizeVolumeRequest {
+    fn from(data: &dyn ResizeVolumeInfo) -> Self {
+        Self {
+            uuid: data.uuid().to_string(),
+            requested_size: data.req_size(),
+            capacity_limit: data.capacity_limit(),
+        }
+    }
+}
+
 impl ResizeVolumeInfo for ValidatedResizeVolumeRequest {
     fn uuid(&self) -> VolumeId {
         self.uuid.clone()
