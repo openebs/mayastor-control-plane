@@ -1527,6 +1527,38 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
+  '/volumes/{volume_id}/size':
+    put:
+      tags:
+        - Volumes
+      operationId: put_volume_size
+      description: |-
+        Resize a volume to required size.
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResizeVolumeBody'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Volume'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
   '/volumes/{volume_id}/shutdown_targets':
     delete:
       tags:
@@ -2369,6 +2401,19 @@ components:
       required:
         - snapshot
         - volume
+    ResizeVolumeBody:
+      example:
+        size: 104857610
+      description: Resize Volume Body
+      type: object
+      properties:
+        size:
+          description: New required size of the volume in bytes
+          type: integer
+          format: uint64
+          minimum: 0
+      required:
+        - size
     PublishVolumeBody:
       example:
         node: "io-engine-1"
