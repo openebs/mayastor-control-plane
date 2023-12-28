@@ -1,5 +1,5 @@
 use super::{
-    diskpool::v1beta2::{CrPoolState, DiskPool, DiskPoolStatus},
+    diskpool::crd::v1beta2::{CrPoolState, DiskPool, DiskPoolStatus},
     error::Error,
 };
 use k8s_openapi::{api::core::v1::Event, apimachinery::pkg::apis::meta::v1::MicroTime};
@@ -257,6 +257,11 @@ impl ResourceContext {
             String::from(utils::CREATED_BY_KEY),
             String::from(utils::DSP_OPERATOR),
         );
+        if let Some(topology) = self.spec.topology() {
+            for (label_key, label_value) in topology.labelled.iter() {
+                labels.insert(label_key.to_string(), label_value.to_string());
+            }
+        }
 
         let body = CreatePoolBody::new_all(self.spec.disks(), labels);
         match self

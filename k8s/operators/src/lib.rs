@@ -2,6 +2,6 @@
 pub mod diskpool {
     /// The DiskPool custom resource definition.
     pub mod crd {
-        include!("pool/diskpool/v1beta1.rs");
+        include!("pool/diskpool/crd/v1beta2.rs");
     }
 }

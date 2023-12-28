@@ -1,4 +1,4 @@
-use super::v1beta2::{DiskPool, DiskPoolSpec};
+use super::crd::v1beta2::{DiskPool, DiskPoolSpec};
 use crate::{error::Error, ApiVersion};
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::{
@@ -161,11 +161,11 @@ pub(crate) async fn get_api_version(k8s: Client) -> Option<ApiVersion> {
     if let Ok(crd) = crd_api.get_status("diskpools.openebs.io").await {
         if let Some(status) = crd.status {
             if status.stored_versions == Some(vec!["v1alpha1".to_string()]) {
-                return Some(ApiVersion::Alpha1);
+                return Some(ApiVersion::V1Alpha1);
             } else if status.stored_versions == Some(vec!["v1beta1".to_string()]) {
-                return Some(ApiVersion::Beta1);
+                return Some(ApiVersion::V1Beta1);
             } else {
-                return Some(ApiVersion::Beta2);
+                return Some(ApiVersion::V1Beta2);
             }
         }
     }
