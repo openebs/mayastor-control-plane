@@ -260,9 +260,23 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let context = CreateParams::try_from(&args.parameters)?;
         let replica_count = context.replica_count();
 
-        let mut inclusive_label_topology: HashMap<String, String> = HashMap::new();
+        // labels for pool inclusion
+        let mut pool_inclusive_label_topology: HashMap<String, String> = HashMap::new();
+        pool_inclusive_label_topology
+            .insert(String::from(CREATED_BY_KEY), String::from(DSP_OPERATOR));
+        if let Some(pool_topology_affinity) = context.publish_params().pool_topology_affinity() {
+            for (key, value) in pool_topology_affinity.iter() {
+                pool_inclusive_label_topology.insert(key.to_string(), value.to_string());
+            }
+        }
 
-        inclusive_label_topology.insert(String::from(CREATED_BY_KEY), String::from(DSP_OPERATOR));
+        // labels for pool exclusion
+        let mut pool_exclusive_label_topology: HashMap<String, String> = HashMap::new();
+        if let Some(pool_topology_spread) = context.publish_params().pool_topology_spread() {
+            for (key, value) in pool_topology_spread.iter() {
+                pool_exclusive_label_topology.insert(key.to_string(), value.to_string());
+            }
+        }
 
         let parsed_vol_uuid = Uuid::parse_str(&volume_uuid).map_err(|_e| {
             Status::invalid_argument(format!("Malformed volume UUID: {volume_uuid}"))
@@ -295,8 +309,8 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 let volume_topology = CreateVolumeTopology::new(
                     None,
                     Some(PoolTopology::labelled(LabelledTopology {
-                        exclusion: Default::default(),
-                        inclusion: inclusive_label_topology,
+                        exclusion: pool_exclusive_label_topology,
+                        inclusion: pool_inclusive_label_topology,
                     })),
                 );
 

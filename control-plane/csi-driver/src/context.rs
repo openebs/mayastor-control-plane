@@ -1,16 +1,16 @@
 use crate::filesystem::FileSystem;
-use stor_port::types::v0::openapi::models::VolumeShareProtocol;
-use utils::K8S_STS_PVC_NAMING_REGEX;
-
 use regex::Regex;
+use serde_json::Value;
 use std::{
     collections::HashMap,
     convert::AsRef,
     num::ParseIntError,
     str::{FromStr, ParseBoolError},
 };
+use stor_port::types::v0::openapi::models::VolumeShareProtocol;
 use strum_macros::{AsRefStr, Display, EnumString};
-use tracing::log::warn;
+use tracing::warn;
+use utils::K8S_STS_PVC_NAMING_REGEX;
 use uuid::{Error as UuidError, Uuid};
 
 /// Parse string protocol into REST API protocol enum.
@@ -52,6 +52,10 @@ pub enum Parameters {
     CloneFsIdAsVolumeId,
     #[strum(serialize = "fsId")]
     FsId,
+    #[strum(serialize = "poolTopologyAffinity")]
+    PoolTopologyAffinity,
+    #[strum(serialize = "poolTopologySpread")]
+    PoolTopologySpread,
 }
 impl Parameters {
     fn parse_human_time(
@@ -59,6 +63,26 @@ impl Parameters {
     ) -> Result<Option<humantime::Duration>, humantime::DurationError> {
         Ok(match value {
             Some(value) => humantime::Duration::from_str(value).map(Some)?,
+            None => None,
+        })
+    }
+    fn parse_map(
+        value: Option<&String>,
+    ) -> Result<Option<HashMap<String, String>>, serde_json::Error> {
+        Ok(match value {
+            Some(json_str) => {
+                let value: Value = serde_json::from_str(json_str)?;
+                // Convert Value to Map
+                if let Value::Object(map) = value {
+                    let map: HashMap<String, String> = map
+                        .into_iter()
+                        .map(|(k, v)| (k, v.as_str().unwrap().to_string()))
+                        .collect();
+                    Some(map)
+                } else {
+                    None
+                }
+            }
             None => None,
         })
     }
@@ -116,6 +140,18 @@ impl Parameters {
     pub fn fs_id(value: Option<&String>) -> Result<Option<Uuid>, UuidError> {
         Self::parse_uuid(value)
     }
+    /// Parse the value for `Self::PoolTopologyAffinity`.
+    pub fn pool_topology_affinity(
+        value: Option<&String>,
+    ) -> Result<Option<HashMap<String, String>>, serde_json::Error> {
+        Self::parse_map(value)
+    }
+    /// Parse the value for `Self::PoolTopologySpread`.
+    pub fn pool_topology_spread(
+        value: Option<&String>,
+    ) -> Result<Option<HashMap<String, String>>, serde_json::Error> {
+        Self::parse_map(value)
+    }
 }
 
 /// Volume publish parameters.
@@ -128,6 +164,8 @@ pub struct PublishParams {
     keep_alive_tmo: Option<u32>,
     fs_type: Option<FileSystem>,
     fs_id: Option<Uuid>,
+    pool_topology_affinity: Option<HashMap<String, String>>,
+    pool_topology_spread: Option<HashMap<String, String>>,
 }
 impl PublishParams {
     /// Get the `Parameters::IoTimeout` value.
@@ -149,6 +187,14 @@ impl PublishParams {
     /// Get the `Parameters::FsId` value.
     pub fn fs_id(&self) -> &Option<Uuid> {
         &self.fs_id
+    }
+    /// Get the `Parameters::PoolTopologyAffinity` value.
+    pub fn pool_topology_affinity(&self) -> &Option<HashMap<String, String>> {
+        &self.pool_topology_affinity
+    }
+    /// Get the `Parameters::PoolTopologySpread` value.
+    pub fn pool_topology_spread(&self) -> &Option<HashMap<String, String>> {
+        &self.pool_topology_spread
     }
     /// Convert `Self` into a publish context.
     pub fn into_context(self) -> HashMap<String, String> {
@@ -200,7 +246,16 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
                 .map_err(|_| tonic::Status::invalid_argument("Invalid keep_alive_tmo"))?;
         let fs_id = Parameters::fs_id(args.get(Parameters::FsId.as_ref()))
             .map_err(|_| tonic::Status::invalid_argument("Invalid fs_id"))?;
-
+        let pool_topology_affinity =
+            Parameters::pool_topology_affinity(args.get(Parameters::PoolTopologyAffinity.as_ref()))
+                .map_err(|_| {
+                    tonic::Status::invalid_argument("Invalid pool_topology_affinity timeout")
+                })?;
+        let pool_topology_spread =
+            Parameters::pool_topology_spread(args.get(Parameters::PoolTopologySpread.as_ref()))
+                .map_err(|_| {
+                    tonic::Status::invalid_argument("Invalid pool_topology_spread timeout")
+                })?;
         Ok(Self {
             io_timeout,
             nvme_io_timeout,
@@ -208,12 +263,15 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
             keep_alive_tmo,
             fs_type,
             fs_id,
+            pool_topology_affinity,
+            pool_topology_spread,
         })
     }
 }
 
 /// Volume Creation parameters.
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct CreateParams {
     publish_params: PublishParams,
     share_protocol: VolumeShareProtocol,
@@ -222,6 +280,10 @@ pub struct CreateParams {
     clone_fs_id_as_volume_id: Option<bool>,
 }
 impl CreateParams {
+    /// Get the `Parameters::PublishParams` value.
+    pub fn publish_params(&self) -> &PublishParams {
+        &self.publish_params
+    }
     /// Get the `Parameters::ShareProtocol` value.
     pub fn share_protocol(&self) -> VolumeShareProtocol {
         self.share_protocol

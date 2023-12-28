@@ -73,19 +73,31 @@ impl PoolBaseFilters {
     pub(crate) fn usable(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         item.pool.status != PoolStatus::Faulted && item.pool.status != PoolStatus::Unknown
     }
+
     /// Should only attempt to use pools having specific creation label if topology has it.
     pub(crate) fn topology(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        let volume_pool_topology_labels: HashMap<String, String>;
+        let mut volume_pool_topology_inclusion_labels: HashMap<String, String>;
+        let volume_pool_topology_exclusion_labels: HashMap<String, String>;
         match request.topology.clone() {
             None => return true,
             Some(topology) => match topology.pool {
                 None => return true,
                 Some(pool_topology) => match pool_topology {
                     PoolTopology::Labelled(labelled_topology) => {
-                        // The labels in Volume Pool Topology should match the pool labels if
-                        // present, otherwise selection of any pool is allowed.
-                        if !labelled_topology.inclusion.is_empty() {
-                            volume_pool_topology_labels = labelled_topology.inclusion
+                        // Return false if the exclusion and incluson labels has any common key.
+                        if labelled_topology
+                            .inclusion
+                            .keys()
+                            .any(|key| labelled_topology.exclusion.contains_key(key))
+                        {
+                            return false;
+                        }
+
+                        if !labelled_topology.inclusion.is_empty()
+                            || !labelled_topology.exclusion.is_empty()
+                        {
+                            volume_pool_topology_inclusion_labels = labelled_topology.inclusion;
+                            volume_pool_topology_exclusion_labels = labelled_topology.exclusion;
                         } else {
                             return true;
                         }
@@ -93,20 +105,56 @@ impl PoolBaseFilters {
                 },
             },
         };
-        // We will reach this part of code only if the volume has pool topology labels.
+
+        // We will reach this part of code only if the volume has inclusion/exclusion labels.
         match request.registry().specs().pool(&item.pool.id) {
-            Ok(spec) => match spec.labels {
-                None => false,
-                Some(label) => volume_pool_topology_labels
-                    .iter()
-                    .all(|(vol_key, vol_val)| {
-                        // See `InclusiveLabel` doc comment.
-                        // todo: add exclusion
-                        label
-                            .get(vol_key)
-                            .is_some_and(|pool_value| vol_val.is_empty() || pool_value == vol_val)
-                    }),
-            },
+            Ok(spec) => {
+                match spec.labels {
+                    None => false,
+                    Some(label) => {
+                        // The inclusion labes of volume must match the labels in pool
+                        // for the specified pool to qualify for volume provisioning.
+                        // i.e both the maps volume_pool_topology_inclusion_labels and label must be
+                        // equal
+                        let inclusion_match = label.iter().all(|(key, value)| {
+                            volume_pool_topology_inclusion_labels.get(key) == Some(value)
+                        }) && volume_pool_topology_inclusion_labels
+                            .iter()
+                            .all(|(key, value)| label.get(key) == Some(value));
+
+                        // The exclusion labels value in volume should not match the pool
+                        // labels value
+                        let common_keys: Vec<_> = volume_pool_topology_exclusion_labels
+                            .keys()
+                            .filter(|&key| label.contains_key(key))
+                            .collect();
+                        let exclusion_match = common_keys.iter().any(|&key| {
+                            volume_pool_topology_exclusion_labels.get(key) != label.get(key)
+                        });
+                        // removing the auto added key so that match can be done on user provided
+                        // values
+                        volume_pool_topology_inclusion_labels.remove("openebs.io/created-by");
+
+                        match (
+                            volume_pool_topology_inclusion_labels.is_empty(),
+                            volume_pool_topology_exclusion_labels.is_empty(),
+                        ) {
+                            (false, false) => {
+                                return inclusion_match && exclusion_match;
+                            }
+                            (false, true) => {
+                                return inclusion_match;
+                            }
+                            (true, false) => {
+                                return exclusion_match;
+                            }
+                            _ => {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
             Err(_) => false,
         }
     }
