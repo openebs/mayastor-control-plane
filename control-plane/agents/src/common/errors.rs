@@ -31,6 +31,10 @@ pub enum SvcError {
     NoNodes {},
     #[snafu(display("Node {} is cordoned", node_id))]
     CordonedNode { node_id: String },
+    #[snafu(display("Node {} is already labelled with label '{}'", node_id, label))]
+    Label { node_id: String, label: String },
+    #[snafu(display("Node {} doesn't have the label '{}'", node_id, label))]
+    Unlabel { node_id: String, label: String },
     #[snafu(display("Node {} is already cordoned with label '{}'", node_id, label))]
     CordonLabel { node_id: String, label: String },
     #[snafu(display("Node {} does not have a cordon label '{}'", node_id, label))]
@@ -181,6 +185,11 @@ pub enum SvcError {
     Internal { details: String },
     #[snafu(display("Invalid Arguments"))]
     InvalidArguments {},
+    #[snafu(display("Invalid {}, labels: {} ", resource_kind, labels))]
+    InvalidLabel {
+        labels: String,
+        resource_kind: ResourceKind,
+    },
     #[snafu(display("Multiple nexuses not supported"))]
     MultipleNexuses {},
     #[snafu(display("Storage Error: {}", source))]
@@ -545,6 +554,20 @@ impl From<SvcError> for ReplyError {
                 extra,
             },
 
+            SvcError::Label { .. } => ReplyError {
+                kind: ReplyErrorKind::AlreadyExists,
+                resource: ResourceKind::Node,
+                source,
+                extra,
+            },
+
+            SvcError::Unlabel { .. } => ReplyError {
+                kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::Node,
+                source,
+                extra,
+            },
+
             SvcError::UncordonLabel { .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::Node,
@@ -714,6 +737,12 @@ impl From<SvcError> for ReplyError {
             SvcError::Internal { .. } => ReplyError {
                 kind: ReplyErrorKind::Internal,
                 resource: ResourceKind::Unknown,
+                source,
+                extra,
+            },
+            SvcError::InvalidLabel { resource_kind, .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: resource_kind,
                 source,
                 extra,
             },

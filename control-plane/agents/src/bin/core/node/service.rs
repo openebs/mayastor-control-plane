@@ -3,7 +3,7 @@ use crate::controller::{
     reconciler::PollTriggerEvent,
     registry::Registry,
     resources::{
-        operations::{ResourceCordon, ResourceDrain},
+        operations::{ResourceCordon, ResourceDrain, ResourceLabel},
         operations_helper::ResourceSpecsLocked,
     },
     wrapper::NodeWrapper,
@@ -117,6 +117,29 @@ impl NodeOperations for Service {
     /// Apply a drain label to the specified node. The reconciler will perform the drain.
     async fn drain(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
         let node = self.drain(id, label).await?;
+        Ok(node)
+    }
+
+    /// Apply the label to node.
+    async fn label(
+        &self,
+        id: NodeId,
+        label: HashMap<String, String>,
+        overwrite: bool,
+    ) -> Result<Node, ReplyError> {
+        let node = self.label(id, label, overwrite).await?;
+        Ok(node)
+    }
+    /// Remove the specified label from the node.
+    async fn unlabel(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
+        if label.is_empty() {
+            return Err(SvcError::InvalidLabel {
+                labels: label,
+                resource_kind: ResourceKind::Node,
+            }
+            .into());
+        }
+        let node = self.unlabel(id, label).await?;
         Ok(node)
     }
 }
@@ -373,6 +396,27 @@ impl Service {
 
         self.registry.notify(PollTriggerEvent::NodeDrain).await;
 
+        Ok(Node::new(id, Some(spec), state))
+    }
+
+    /// Label the specified node.
+    async fn label(
+        &self,
+        id: NodeId,
+        label: HashMap<String, String>,
+        overwrite: bool,
+    ) -> Result<Node, SvcError> {
+        let mut guarded_node = self.specs().guarded_node(&id).await?;
+        let spec = guarded_node.label(&self.registry, label, overwrite).await?;
+        let state = self.registry.node_state(&id).await.ok();
+        Ok(Node::new(id, Some(spec), state))
+    }
+
+    /// Remove the specified label from  the specified node.
+    async fn unlabel(&self, id: NodeId, label: String) -> Result<Node, SvcError> {
+        let mut guarded_node = self.specs().guarded_node(&id).await?;
+        let spec = guarded_node.unlabel(&self.registry, label).await?;
+        let state = self.registry.node_state(&id).await.ok();
         Ok(Node::new(id, Some(spec), state))
     }
 }

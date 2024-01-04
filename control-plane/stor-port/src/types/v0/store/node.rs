@@ -267,6 +267,16 @@ impl NodeSpec {
         self.resolve();
     }
 
+    /// Label node by applying the label.
+    pub fn label(&mut self, label: HashMap<String, String>) {
+        self.labels.extend(label);
+    }
+
+    /// Remove label from node.
+    pub fn unlabel(&mut self, label: String) {
+        self.labels.remove(&label);
+    }
+
     /// Drain node by applying the drain label.
     pub fn set_drain(&mut self, label: String) {
         // the the node has the label, return with an error
@@ -336,6 +346,17 @@ impl NodeSpec {
     /// Returns true if it has the label in either of the lists.
     pub fn has_cordon_label(&self, label: &str) -> bool {
         self.has_cordon_only_label(label) || self.has_drain_label(label)
+    }
+
+    pub fn has_labels_key(&self, key: Vec<String>) -> bool {
+        let mut found = false;
+        for k in key {
+            if self.labels.contains_key(&k) {
+                found = true;
+                break;
+            }
+        }
+        found
     }
 
     /// Returns true if it has the label in the cordon list.
@@ -417,9 +438,15 @@ impl NodeSpec {
 
 impl From<NodeSpec> for models::NodeSpec {
     fn from(src: NodeSpec) -> Self {
+        let labels = if src.labels.is_empty() {
+            None
+        } else {
+            Some(src.labels)
+        };
         Self::new_all(
             src.endpoint.to_string(),
-            src.id,
+            src.id.clone(),
+            labels,
             src.cordon_drain_state.into_opt(),
             src.node_nqn.into_opt(),
         )
@@ -518,6 +545,8 @@ pub enum NodeOperation {
     RemoveDrainingVolumes(DrainingVolumes),
     RemoveAllDrainingVolumes(),
     SetDrained(),
+    Label(HashMap<String, String>, bool),
+    Unlabel(String),
 }
 
 /// Operation State for a Node spec resource.
@@ -558,6 +587,12 @@ impl SpecTransaction<NodeOperation> for NodeSpec {
                 NodeOperation::SetDrained() => {
                     self.set_drained();
                 }
+                NodeOperation::Label(label, _) => {
+                    self.label(label);
+                }
+                NodeOperation::Unlabel(label) => {
+                    self.unlabel(label);
+                }
             }
         }
         self.clear_op();
@@ -589,6 +624,8 @@ impl SpecTransaction<NodeOperation> for NodeSpec {
             NodeOperation::RemoveDrainingVolumes(_) => (false, true),
             NodeOperation::RemoveAllDrainingVolumes() => (false, true),
             NodeOperation::SetDrained() => (false, true),
+            NodeOperation::Label(_, _) => (false, true),
+            NodeOperation::Unlabel(_) => (false, true),
         }
     }
 

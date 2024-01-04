@@ -319,6 +319,79 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
+  '/nodes/{id}/label/{label}':
+    put:
+      tags:
+        - Nodes
+      operationId: put_node_label
+      description: |-
+        Add labels to node.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          example: io-engine-1
+        - in: path
+          name: label
+          required: true
+          schema:
+            type: string
+          description: |-
+            The label to the node.
+        - in: query
+          name: overwrite
+          description: |-
+            Overwrite existing label if the label key exists.
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
+    delete:
+      tags:
+        - Nodes
+      operationId: delete_node_label
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          example: io-engine-1
+        - in: path
+          name: label
+          required: true
+          schema:
+            type: string
+          description: |-
+            The key of the label to the node.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
   '/nodes/{id}/nexuses':
     get:
       tags:
@@ -2636,6 +2709,11 @@ components:
         id:
           description: node ID
           $ref: '#/components/schemas/NodeId'
+        labels:
+          description: labels to be set on the node
+          type: object
+          additionalProperties:
+            type: string
         cordondrainstate:
           description: the drain state
           allOf:

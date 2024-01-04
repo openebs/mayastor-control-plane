@@ -2,15 +2,16 @@ use crate::{
     blockdevice::{get_block_devices_reply, GetBlockDevicesReply, GetBlockDevicesRequest},
     node,
     node::{
-        cordon_node_reply, drain_node_reply, get_nodes_reply,
+        cordon_node_reply, drain_node_reply, get_nodes_reply, label_node_reply,
         node_grpc_server::{NodeGrpc, NodeGrpcServer},
-        uncordon_node_reply, CordonNodeReply, CordonNodeRequest, DrainNodeReply, DrainNodeRequest,
-        GetNodesReply, GetNodesRequest, ProbeRequest, ProbeResponse, UncordonNodeReply,
-        UncordonNodeRequest,
+        uncordon_node_reply, unlabel_node_reply, CordonNodeReply, CordonNodeRequest,
+        DrainNodeReply, DrainNodeRequest, GetNodesReply, GetNodesRequest, LabelNodeReply,
+        LabelNodeRequest, ProbeRequest, ProbeResponse, UncordonNodeReply, UncordonNodeRequest,
+        UnlabelNodeReply, UnlabelNodeRequest,
     },
     operations::node::traits::NodeOperations,
 };
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tonic::{Request, Response};
 
 /// gRPC Node Server
@@ -114,6 +115,45 @@ impl NodeGrpc for NodeServer {
             })),
             Err(err) => Ok(Response::new(DrainNodeReply {
                 reply: Some(drain_node_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn label_node(
+        &self,
+        request: tonic::Request<LabelNodeRequest>,
+    ) -> Result<tonic::Response<LabelNodeReply>, tonic::Status> {
+        let req: LabelNodeRequest = request.into_inner();
+
+        let label_map = match req.label {
+            Some(labels) => labels.value,
+            None => HashMap::new(),
+        };
+        match self
+            .service
+            .label(req.node_id.into(), label_map, req.overwrite)
+            .await
+        {
+            Ok(node) => Ok(Response::new(LabelNodeReply {
+                reply: Some(label_node_reply::Reply::Node(node.into())),
+            })),
+            Err(err) => Ok(Response::new(LabelNodeReply {
+                reply: Some(label_node_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn unlabel_node(
+        &self,
+        request: tonic::Request<UnlabelNodeRequest>,
+    ) -> Result<tonic::Response<UnlabelNodeReply>, tonic::Status> {
+        let req: UnlabelNodeRequest = request.into_inner();
+        match self.service.unlabel(req.node_id.into(), req.label).await {
+            Ok(node) => Ok(Response::new(UnlabelNodeReply {
+                reply: Some(unlabel_node_reply::Reply::Node(node.into())),
+            })),
+            Err(err) => Ok(Response::new(UnlabelNodeReply {
+                reply: Some(unlabel_node_reply::Reply::Error(err.into())),
             })),
         }
     }
