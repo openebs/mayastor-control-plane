@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package pstor_proxy.v1;
+
+// StringMapValue is the type having a hashmap
+message StringMapValue {
+  map<string, string> value = 1;
+}
+
+// ReplyError to be used for all error propagation to and from grpc calls
+message ReplyError {
+  ReplyErrorKind kind = 1;
+  ResourceKind resource = 2;
+  string source = 3;
+  string extra = 4;
+}
+
+// ReplyErrorKind for the kind of the occurred error
+enum ReplyErrorKind {
+  WithMessage = 0;
+  DeserializeReq = 1;
+  Internal = 2;
+  Timeout = 3;
+  InvalidArgument = 4;
+  DeadlineExceeded = 5;
+  NotFound = 6;
+  AlreadyExists = 7;
+  PermissionDenied = 8;
+  ResourceExhausted = 9;
+  FailedPrecondition = 10;
+  Aborted = 11;
+  OutOfRange = 12;
+  Unimplemented = 13;
+  Unavailable = 14;
+  Unauthenticated = 15;
+  Unauthorized = 16;
+  Conflict = 17;
+  FailedPersist = 18;
+  NotShared = 19;
+  AlreadyShared = 20;
+  NotPublished = 21;
+  AlreadyPublished = 22;
+  IsDeleting = 23;
+  ReplicaCountAchieved = 24;
+  ReplicaChangeCount = 25;
+  ReplicaIncrease = 26;
+  ReplicaCreateNumber = 27;
+  VolumeNoReplicas = 28;
+  InUse = 29;
+}
+
+// Filter by Frontend node id
+message FrontendNodeFilter {
+  string frontend_node_id = 1;
+}
+
+// ResourceKind for the resource which has undergone this error
+enum ResourceKind {
+  // Unknown or unspecified resource
+  Unknown = 0;
+  // FrontendNode resource
+  FrontendNodeKind = 1;
+}
+
+// Pagination related parameters.
+// This allows a large response to be split over multiple requests to prevent timeouts.
+message Pagination {
+  // If specified (non-zero value), this is the maximum number of entries to return.
+  uint64 max_entries = 1;
+  // A token to specify where to start paginating. Set this field to `next_token` returned by a
+  // previous `GetResources` call to get the next page of entries.
+  uint64 starting_token = 2;
+}

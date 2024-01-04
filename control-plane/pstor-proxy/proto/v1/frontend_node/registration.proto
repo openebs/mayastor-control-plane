@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+import "v1/misc/common.proto";
+
+package pstor_proxy.v1;
+
+// Register the frontend node with control-plane
+message RegisterRequest {
+  // Id of the frontend node instance
+  string id = 1;
+  // Grpc endpoint of the frontend node instance
+  string grpc_endpoint = 2;
+  // Frontend node labels
+  optional StringMapValue labels = 3;
+}
+
+// Deregister a frontend node from the control-plane
+message DeregisterRequest {
+  // Id of the frontend node instance
+  string id = 1;
+}
+
+service Registration {
+  rpc Register (RegisterRequest) returns (google.protobuf.Empty) {}
+  rpc Deregister (DeregisterRequest) returns (google.protobuf.Empty) {}
+}

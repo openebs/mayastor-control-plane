@@ -11,6 +11,7 @@ members = [
     "control-plane/csi-driver",
     "control-plane/grpc",
     "control-plane/stor-port",
+    "control-plane/pstor-proxy",
     "control-plane/plugin",
     "k8s/operators",
     "k8s/forward",
