@@ -9,8 +9,9 @@ use std::{
 };
 use stor_port::types::v0::openapi::models::VolumeShareProtocol;
 use strum_macros::{AsRefStr, Display, EnumString};
-use tracing::warn;
+use tracing::log::warn;
 use utils::K8S_STS_PVC_NAMING_REGEX;
+
 use uuid::{Error as UuidError, Uuid};
 
 /// Parse string protocol into REST API protocol enum.
@@ -66,21 +67,29 @@ impl Parameters {
             None => None,
         })
     }
+
+    // This function parses the input string into a HashMap<String, String>
+    // Input {"key1": "value1", "key2": "value2"} :output {"key1": "value1", "key2": "value2"}
+    // Input : "singleKey" output {"singleKey": ""}
     fn parse_map(
         value: Option<&String>,
     ) -> Result<Option<HashMap<String, String>>, serde_json::Error> {
         Ok(match value {
             Some(json_str) => {
-                let value: Value = serde_json::from_str(json_str)?;
-                // Convert Value to Map
-                if let Value::Object(map) = value {
-                    let map: HashMap<String, String> = map
-                        .into_iter()
-                        .map(|(k, v)| (k, v.as_str().unwrap().to_string()))
-                        .collect();
+                if !json_str.contains(':') {
+                    let mut map = HashMap::new();
+                    map.insert(json_str.to_string(), "".to_string());
                     Some(map)
                 } else {
-                    None
+                    let value: Value = serde_json::from_str(json_str)?;
+                    // Convert Value to Map
+                    value.as_object().map(|map| {
+                        map.into_iter()
+                            .map(|(k, v)| {
+                                (k.to_string(), v.as_str().unwrap_or_default().to_string())
+                            })
+                            .collect()
+                    })
                 }
             }
             None => None,
@@ -248,14 +257,10 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
             .map_err(|_| tonic::Status::invalid_argument("Invalid fs_id"))?;
         let pool_topology_affinity =
             Parameters::pool_topology_affinity(args.get(Parameters::PoolTopologyAffinity.as_ref()))
-                .map_err(|_| {
-                    tonic::Status::invalid_argument("Invalid pool_topology_affinity timeout")
-                })?;
+                .map_err(|_| tonic::Status::invalid_argument("Invalid pool_topology_affinity"))?;
         let pool_topology_spread =
             Parameters::pool_topology_spread(args.get(Parameters::PoolTopologySpread.as_ref()))
-                .map_err(|_| {
-                    tonic::Status::invalid_argument("Invalid pool_topology_spread timeout")
-                })?;
+                .map_err(|_| tonic::Status::invalid_argument("Invalid pool_topology_spread"))?;
         Ok(Self {
             io_timeout,
             nvme_io_timeout,
