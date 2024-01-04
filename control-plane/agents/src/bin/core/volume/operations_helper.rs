@@ -6,7 +6,7 @@ use crate::{
             operations_helper::{
                 GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecsLocked,
             },
-            OperationGuardArc, ResourceMutex, ResourceUid, TraceSpan, TraceStrLog,
+            OperationGuardArc, ResourceUid, TraceSpan, TraceStrLog,
         },
         scheduling::resources::{HealthyChildItems, ReplicaItem},
     },
@@ -527,48 +527,33 @@ impl OperationGuardArc<VolumeSpec> {
         Ok(created_replicas)
     }
 
+    /// Resize the replicas of the volume.
     pub(super) async fn resize_volume_replicas(
         &self,
         registry: &Registry,
-        replicas: &Vec<ResourceMutex<ReplicaSpec>>,
+        replicas: &Vec<Replica>,
         requested_size: u64,
-        spec_clone: &VolumeSpec,
     ) -> Result<(), SvcError> {
         for replica in replicas {
-            let mut replica = match replica.operation_guard_wait().await {
-                Ok(r) => r,
-                Err(e) => {
-                    return self
-                        .validate_update_step(registry, Err(e), spec_clone)
-                        .await
-                }
-            };
+            let mut replica_grd = registry.specs().replica(&replica.uuid).await?;
 
-            if let Some(node) = ResourceSpecsLocked::replica_node(registry, replica.as_ref()).await
-            {
-                let ret = replica
-                    .resize(
-                        registry,
-                        &ResizeReplica::new(
-                            &node,
-                            replica.as_ref().pool_name(),
-                            None,
-                            replica.uuid(),
-                            requested_size,
-                        ),
-                    )
-                    .await;
-                self.validate_update_step(registry, ret, spec_clone).await?;
-            } else {
-                let ecode = Err(SvcError::Internal {
-                    details: "Replica node not found".to_string(),
-                });
-                return self.validate_update_step(registry, ecode, spec_clone).await;
-            }
+            replica_grd
+                .resize(
+                    registry,
+                    &ResizeReplica::new(
+                        &replica.node,
+                        replica_grd.as_ref().pool_name(),
+                        None,
+                        replica_grd.uuid(),
+                        requested_size,
+                    ),
+                )
+                .await?;
         }
 
         Ok(())
     }
+
     /// Add the given replica to the target nexus of the volume.
     async fn attach_to_target(
         &self,

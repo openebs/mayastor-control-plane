@@ -139,6 +139,17 @@ pub enum SvcError {
         node: String,
         protocol: String,
     },
+    #[snafu(display(
+        "Volume '{}' - resize args invalid. Current size: '{}', requested size: '{}'",
+        vol_id,
+        current_size,
+        requested_size
+    ))]
+    VolumeResizeArgsInvalid {
+        vol_id: String,
+        requested_size: u64,
+        current_size: u64,
+    },
     #[snafu(display("Replica '{}' not found", replica_id))]
     ReplicaNotFound { replica_id: ReplicaId },
     #[snafu(display("{} '{}' is already shared over {}", kind.to_string(), id, share))]
@@ -283,6 +294,15 @@ pub enum SvcError {
         pool_id: String,
         child: String,
         free_space: u64,
+        required: u64,
+    },
+    #[snafu(display(
+        "Replicas {:?}, can't be resized due to required capacity ({}) or state(Online) not met.",
+        replica_ids,
+        required
+    ))]
+    ResizeReplError {
+        replica_ids: Vec<String>,
         required: u64,
     },
     #[snafu(display(
@@ -811,6 +831,18 @@ impl From<SvcError> for ReplyError {
             SvcError::NoCapacityToOnline { .. } => ReplyError {
                 kind: ReplyErrorKind::ResourceExhausted,
                 resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::ResizeReplError { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Replica,
+                source,
+                extra,
+            },
+            SvcError::VolumeResizeArgsInvalid { .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::Volume,
                 source,
                 extra,
             },

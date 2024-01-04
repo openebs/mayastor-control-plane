@@ -2,10 +2,10 @@ use crate::{
     controller::{
         registry::Registry,
         scheduling::{
-            resources::PoolItem,
+            resources::{ChildItem, PoolItem},
             volume::{
                 AddVolumeReplica, CloneVolumeSnapshot, GetSuitablePoolsContext,
-                SnapshotVolumeReplica,
+                ReplicaResizePoolsContext, ResizeVolumeReplicas, SnapshotVolumeReplica,
             },
             volume_policy::{affinity_group, pool::PoolBaseFilters, DefaultBasePolicy},
             ResourceFilter, ResourcePolicy, SortBuilder, SortCriteria,
@@ -66,6 +66,15 @@ impl ResourcePolicy<CloneVolumeSnapshot> for SimplePolicy {
             .filter(affinity_group::SingleReplicaPolicy::replica_anti_affinity)
             .filter_param(&self, SimplePolicy::min_free_space)
             .filter_param(&self, SimplePolicy::pool_overcommit)
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl ResourcePolicy<ResizeVolumeReplicas> for SimplePolicy {
+    fn apply(self, to: ResizeVolumeReplicas) -> ResizeVolumeReplicas {
+        DefaultBasePolicy::filter_resize(to)
+            .filter_param(&self, SimplePolicy::min_free_space_repl_resize)
+            .filter_param(&self, SimplePolicy::pool_overcommit_repl_resize)
     }
 }
 
@@ -149,6 +158,26 @@ impl SimplePolicy {
         }
     }
 
+    /// Helper to figure out space availability based on pool free, pool available and
+    /// volume's allocated space.
+    fn min_free_space_util(&self, free: u64, allocated: &Option<u64>, required: u64) -> bool {
+        free > match allocated {
+            Some(bytes) => {
+                let size = if bytes == &0 {
+                    self.cli_args.volume_commitment_initial * required
+                } else {
+                    self.cli_args.volume_commitment * required
+                } / 100;
+                (bytes + size).min(required)
+            }
+            None => {
+                // We really have no clue for some reason.. should not happen but just in case
+                // let's be conservative?
+                (self.no_state_min_free_space_percent * required) / 100
+            }
+        }
+    }
+
     /// Minimum free space is the currently allocated usage plus some percentage of volume size
     /// slack.
     fn min_free_space(&self, request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
@@ -160,25 +189,44 @@ impl SimplePolicy {
                 (self.cli_args.snapshot_commitment * request.size) / 100
             };
         }
-        item.pool.free_space()
-            > match request.allocated_bytes() {
-                Some(bytes) => {
-                    let size = if bytes == &0 {
-                        self.cli_args.volume_commitment_initial * request.size
-                    } else {
-                        self.cli_args.volume_commitment * request.size
-                    } / 100;
-                    (bytes + size).min(request.size)
-                }
-                None => {
-                    // We really have no clue for some reason.. should not happen but just in case
-                    // let's be conservative?
-                    (self.no_state_min_free_space_percent * request.size) / 100
-                }
-            }
+
+        self.min_free_space_util(
+            item.pool.free_space(),
+            request.allocated_bytes(),
+            request.size,
+        )
     }
+
+    /// Checks during replica resize. Minimum free space is the currently allocated usage plus some
+    /// percentage of volume size slack.
+    /// TODO: Combine min_free_space_repl_resize and min_free_space for code reuse using generic
+    /// types.
+    fn min_free_space_repl_resize(
+        &self,
+        request: &ReplicaResizePoolsContext,
+        item: &ChildItem,
+    ) -> bool {
+        if !request.spec().as_thin() {
+            return item.pool().free_space() > request.required_capacity();
+        }
+
+        self.min_free_space_util(
+            item.pool().free_space(),
+            request.allocated_bytes(),
+            request.required_capacity(),
+        )
+    }
+
     fn pool_overcommit(&self, request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         PoolBaseFilters::overcommit(request, item, self.cli_args.pool_commitment)
+    }
+
+    fn pool_overcommit_repl_resize(
+        &self,
+        request: &ReplicaResizePoolsContext,
+        item: &ChildItem,
+    ) -> bool {
+        PoolBaseFilters::overcommit_repl_resize(request, item, self.cli_args.pool_commitment)
     }
 }
 

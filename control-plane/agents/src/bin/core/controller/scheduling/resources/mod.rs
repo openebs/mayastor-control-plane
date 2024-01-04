@@ -9,6 +9,7 @@ use stor_port::types::v0::{
         nexus_persistence::{ChildInfo, NexusInfo},
         replica::ReplicaSpec,
         snapshots::replica::ReplicaSnapshot,
+        volume::VolumeSpec,
     },
     transport::{Child, ChildUri, NodeId, PoolId, Replica},
 };
@@ -101,6 +102,38 @@ impl PoolItemLister {
             None => vec![],
         }
     }
+    /// Get a list of replicas wrapped as ChildItem, for resize.
+    pub(crate) async fn list_for_resize(registry: &Registry, spec: &VolumeSpec) -> Vec<ChildItem> {
+        let replicas = registry.specs().volume_replicas(&spec.uuid);
+        let mut state_replicas = Vec::with_capacity(replicas.len());
+        for replica in &replicas {
+            if let Ok(replica) = registry.replica(replica.uuid()).await {
+                state_replicas.push(replica);
+            }
+        }
+        let pool_wrappers = registry.pool_wrappers().await;
+
+        replicas
+            .iter()
+            .filter_map(|replica_spec| {
+                let replica_spec = replica_spec.lock().clone();
+                let replica_state = state_replicas
+                    .iter()
+                    .find(|state| state.uuid == replica_spec.uuid);
+
+                let pool_id = replica_spec.pool.pool_name();
+                pool_wrappers
+                    .iter()
+                    .find(|p| &p.id == pool_id)
+                    .and_then(|pool| {
+                        replica_state.map(|replica_state| {
+                            ChildItem::new(&replica_spec, replica_state, None, pool, None)
+                        })
+                    })
+            })
+            .collect()
+    }
+
     /// Get a list of pool items to create a snapshot clone on.
     /// todo: support multi-replica snapshot and clone.
     pub(crate) async fn list_for_clones(

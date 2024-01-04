@@ -8,7 +8,7 @@ mod volume_policy;
 use crate::controller::scheduling::{
     nexus::{GetPersistedNexusChildrenCtx, GetSuitableNodesContext},
     resources::{ChildItem, NodeItem, PoolItem, ReplicaItem},
-    volume::{GetSuitablePoolsContext, VolumeReplicasForNexusCtx},
+    volume::{GetSuitablePoolsContext, ReplicaResizePoolsContext, VolumeReplicasForNexusCtx},
 };
 use std::{cmp::Ordering, collections::HashMap, future::Future};
 use weighted_scoring::{Criteria, Value, ValueGrading, WeightedScore};
@@ -316,6 +316,14 @@ pub(crate) struct ReplicaFilters {}
 impl ReplicaFilters {
     /// Should only allow children with corresponding online replicas
     pub(crate) fn online(_request: &GetPersistedNexusChildrenCtx, item: &ChildItem) -> bool {
+        item.state().online()
+    }
+
+    /// Should only try to resize online replicas
+    pub(crate) fn online_for_resize(
+        _request: &ReplicaResizePoolsContext,
+        item: &ChildItem,
+    ) -> bool {
         item.state().online()
     }
 

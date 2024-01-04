@@ -308,7 +308,7 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
             ReplicaOperation::Share(_, _) => (true, true),
             ReplicaOperation::Unshare => (true, true),
             ReplicaOperation::OwnerUpdate(_) => (false, true),
-            ReplicaOperation::Resize(_) => (false, true),
+            ReplicaOperation::Resize(_) => (true, true),
         }
     }
 

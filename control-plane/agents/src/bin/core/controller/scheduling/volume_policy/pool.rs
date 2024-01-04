@@ -1,4 +1,7 @@
-use crate::controller::scheduling::{resources::PoolItem, volume::GetSuitablePoolsContext};
+use crate::controller::scheduling::{
+    resources::{ChildItem, PoolItem},
+    volume::{GetSuitablePoolsContext, ReplicaResizePoolsContext},
+};
 use std::collections::HashMap;
 use stor_port::types::v0::transport::{PoolStatus, PoolTopology};
 
@@ -20,10 +23,19 @@ impl PoolBaseFilters {
         allowed_commit_percent: u64,
     ) -> bool {
         match request.as_thin() {
-            true => {
-                let max_cap_allowed = allowed_commit_percent * item.pool().capacity;
-                (request.size + item.pool().commitment()) * 100 < max_cap_allowed
-            }
+            true => request.overcommit(allowed_commit_percent, item.pool()),
+            false => true,
+        }
+    }
+    /// Should only attempt to use pools with capacity bigger than the requested size
+    /// for replica expand.
+    pub(crate) fn overcommit_repl_resize(
+        request: &ReplicaResizePoolsContext,
+        item: &ChildItem,
+        allowed_commit_percent: u64,
+    ) -> bool {
+        match request.spec().as_thin() {
+            true => request.overcommit(allowed_commit_percent, item.pool()),
             false => true,
         }
     }
@@ -32,6 +44,17 @@ impl PoolBaseFilters {
         match request.as_thin() {
             true => item.pool.free_space() > Self::free_space_watermark(),
             false => item.pool.free_space() > request.size,
+        }
+    }
+    /// Return true if the pool has enough capacity to resize the replica by the requested
+    /// value.
+    pub(crate) fn min_free_space_repl_resize(
+        request: &ReplicaResizePoolsContext,
+        item: &ChildItem,
+    ) -> bool {
+        match request.spec().as_thin() {
+            true => item.pool().free_space() > Self::free_space_watermark(),
+            false => item.pool().free_space() > request.required_capacity(),
         }
     }
     /// Should only attempt to use pools with sufficient free space for a full rebuild.

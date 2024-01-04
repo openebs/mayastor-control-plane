@@ -431,11 +431,6 @@ impl VolumeSpec {
     pub fn set_content_source(&mut self, content_source: Option<VolumeContentSource>) {
         self.content_source = content_source;
     }
-    /// Check if the volume state is ok for resize operation.
-    pub fn vol_status_ok_for_resize(&self) -> bool {
-        // The volume should be unpublished/offline.
-        self.active_config().is_none() || self.config().as_ref().is_some_and(|c| !c.active)
-    }
 }
 
 /// Operation State for a Volume resource.

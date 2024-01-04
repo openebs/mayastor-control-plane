@@ -20,8 +20,8 @@ use crate::{
         clone_operations::SnapshotCloneOp,
         snapshot_operations::DestroyVolumeSnapshotRequest,
         specs::{
-            create_volume_replicas, healthy_volume_replicas, volume_move_replica_candidates,
-            CreateReplicaCandidate,
+            create_volume_replicas, healthy_volume_replicas, resizeable_replicas,
+            vol_status_ok_for_resize, volume_move_replica_candidates, CreateReplicaCandidate,
         },
     },
 };
@@ -188,10 +188,15 @@ impl ResourceResize for OperationGuardArc<VolumeSpec> {
         registry: &Registry,
         request: &Self::Resize,
     ) -> Result<Self::ResizeOutput, SvcError> {
-        let specs = registry.specs();
-        let _spec = self.as_ref().clone();
+        let spec = self.as_ref().clone();
         let state = registry.volume_state(&request.uuid).await?;
-        let replicas = specs.volume_replicas(&request.uuid);
+
+        // Pre-checks - volume state eligible for resize.
+        vol_status_ok_for_resize(&spec)?;
+        // Pre-check - Ensure pools that host replicas have enough space to resize the replicas,
+        // and also ensure that the replicas are Online.
+        let resizeable_replicas =
+            resizeable_replicas(&spec, registry, request.requested_size).await?;
 
         let spec_clone = self
             .start_update(
@@ -200,10 +205,10 @@ impl ResourceResize for OperationGuardArc<VolumeSpec> {
                 VolumeOperation::Resize(request.requested_size),
             )
             .await?;
-        // For the volume being resized, resize each replica of the volume. For a failure to
-        // resize any of the replica, the volume resize operation is to be deemed failure.
+        // Resize each replica of the volume. If any replica fails to be resized then the
+        // volume resize operation is deemed as a failure.
         let result = self
-            .resize_volume_replicas(registry, &replicas, request.requested_size, &spec_clone)
+            .resize_volume_replicas(registry, &resizeable_replicas, request.requested_size)
             .await;
 
         self.complete_update(registry, result, spec_clone).await?;
