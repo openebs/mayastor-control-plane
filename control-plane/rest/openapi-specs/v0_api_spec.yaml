@@ -3199,6 +3199,7 @@ components:
                 - Unpublish
                 - CreateSnapshot
                 - DestroySnapshot
+                - Resize
             result:
               description: Result of the operation
               type: boolean
