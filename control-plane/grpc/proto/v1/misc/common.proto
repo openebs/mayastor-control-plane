@@ -67,6 +67,7 @@ enum ReplyErrorKind {
   ReplicaCreateNumber = 27;
   VolumeNoReplicas = 28;
   InUse = 29;
+  CapacityLimitExceeded = 30;
 }
 
 // ResourceKind for the resource which has undergone this error

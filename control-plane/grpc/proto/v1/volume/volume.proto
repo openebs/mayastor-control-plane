@@ -263,6 +263,8 @@ message CreateVolumeRequest {
   bool thin = 8;
   // Affinity Group related information.
   optional AffinityGroup affinity_group = 9;
+  // maximum total volume size
+  optional uint64 cluster_capacity_limit = 10;
 }
 
 // Publish a volume on a node

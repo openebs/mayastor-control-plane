@@ -890,6 +890,8 @@ pub trait CreateVolumeInfo: Send + Sync + std::fmt::Debug {
     fn thin(&self) -> bool;
     /// Affinity Group related information.
     fn affinity_group(&self) -> Option<AffinityGroup>;
+    /// Capacity Limit.
+    fn cluster_capacity_limit(&self) -> Option<u64>;
 }
 
 impl CreateVolumeInfo for CreateVolume {
@@ -923,6 +925,10 @@ impl CreateVolumeInfo for CreateVolume {
 
     fn affinity_group(&self) -> Option<AffinityGroup> {
         self.affinity_group.clone()
+    }
+
+    fn cluster_capacity_limit(&self) -> Option<u64> {
+        self.cluster_capacity_limit
     }
 }
 
@@ -972,6 +978,10 @@ impl CreateVolumeInfo for ValidatedCreateVolumeRequest {
     fn affinity_group(&self) -> Option<AffinityGroup> {
         self.inner.affinity_group.clone().map(|ag| ag.into())
     }
+
+    fn cluster_capacity_limit(&self) -> Option<u64> {
+        self.inner.cluster_capacity_limit
+    }
 }
 
 impl ValidateRequestTypes for CreateVolumeRequest {
@@ -1008,6 +1018,7 @@ impl From<&dyn CreateVolumeInfo> for CreateVolume {
             labels: data.labels(),
             thin: data.thin(),
             affinity_group: data.affinity_group(),
+            cluster_capacity_limit: data.cluster_capacity_limit(),
         }
     }
 }
@@ -1025,6 +1036,7 @@ impl From<&dyn CreateVolumeInfo> for CreateVolumeRequest {
                 .map(|labels| crate::common::StringMapValue { value: labels }),
             thin: data.thin(),
             affinity_group: data.affinity_group().map(|ag| ag.into()),
+            cluster_capacity_limit: data.cluster_capacity_limit(),
         }
     }
 }

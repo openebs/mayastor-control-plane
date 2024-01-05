@@ -721,7 +721,7 @@ impl ResourceLifecycleExt<CreateVolume> for OperationGuardArc<VolumeSpec> {
     ) -> Result<Self::CreateOutput, SvcError> {
         let specs = registry.specs();
         let mut volume = specs
-            .get_or_create_volume(&CreateVolumeSource::None(request))
+            .get_or_create_volume(&CreateVolumeSource::None(request))?
             .operation_guard_wait()
             .await?;
         let volume_clone = volume.start_create(registry, request).await?;
@@ -815,7 +815,7 @@ impl ResourceLifecycleExt<CreateVolumeSource<'_>> for OperationGuardArc<VolumeSp
 
         let specs = registry.specs();
         let mut volume = specs
-            .get_or_create_volume(request_src)
+            .get_or_create_volume(request_src)?
             .operation_guard_wait()
             .await?;
         let volume_clone = volume.start_create_update(registry, request).await?;
