@@ -393,8 +393,8 @@ impl NvmePathCache {
 
 impl Event for PathRecord {
     fn event(&self, action: EventAction) -> EventMessage {
-        let event_source =
-            EventSource::new("".to_string()).with_nvme_path_data(&self.nqn, &self.path);
+        let event_source = EventSource::new(self.reporter.node_name().to_string())
+            .with_nvme_path_data(&self.nqn, &self.path);
         EventMessage {
             category: EventCategory::NvmePath as i32,
             action: action as i32,

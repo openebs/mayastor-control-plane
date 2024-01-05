@@ -124,6 +124,11 @@ impl PathReporter {
             self.channel.send(nqn).ok();
         }
     }
+
+    /// Get node name.
+    pub fn node_name(&self) -> &str {
+        &self.node_name
+    }
 }
 
 #[derive(Debug)]
