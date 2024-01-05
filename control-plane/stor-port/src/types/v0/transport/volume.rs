@@ -455,6 +455,8 @@ pub struct CreateVolume {
     pub thin: bool,
     /// Affinity Group related information.
     pub affinity_group: Option<AffinityGroup>,
+    /// Maximum total system volume size.
+    pub capacity_limit: Option<u64>,
 }
 
 /// Create volume request.

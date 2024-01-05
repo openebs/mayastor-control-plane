@@ -334,6 +334,8 @@ pub enum SvcError {
     DrainNotAllowedWhenHAisDisabled {},
     #[snafu(display("Target switchover is not allowed without HA"))]
     SwitchoverNotAllowedWhenHAisDisabled {},
+    #[snafu(display("The volume would exceed the capacity"))]
+    VolWouldExceedCapacity {},
 }
 
 impl SvcError {
@@ -931,6 +933,12 @@ impl From<SvcError> for ReplyError {
             SvcError::SwitchoverNotAllowedWhenHAisDisabled {} => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::Nexus,
+                source,
+                extra,
+            },
+            SvcError::VolWouldExceedCapacity {} => ReplyError {
+                kind: ReplyErrorKind::OutOfRange,
+                resource: ResourceKind::Volume,
                 source,
                 extra,
             },
