@@ -36,6 +36,10 @@ impl ComponentAction for HaNodeAgent {
             let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
             spec = spec.with_args(vec!["--jaeger", &jaeger_config])
         };
+        if options.eventing {
+            let nats_server_url = "nats://nats:4222";
+            spec = spec.with_args(vec!["--events-url", nats_server_url]);
+        };
 
         Ok(cfg.add_container_spec(spec))
     }
