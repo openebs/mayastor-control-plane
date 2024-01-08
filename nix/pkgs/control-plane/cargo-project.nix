@@ -14,6 +14,7 @@
 , which
 , systemdMinimal
 , utillinux
+, sourcer
   # with allInOne set to true all components are built as part of the same "cargo build" derivation
   # this allows for a quicker build of all components but slower single components
   # with allInOne set to false each component gets its own "cargo build" derivation allowing for faster
@@ -39,18 +40,6 @@ let
     rustc = stable_channel.rustc;
     cargo = stable_channel.cargo;
   };
-  whitelistSource = src: allowedPrefixes:
-    builtins.path {
-      filter = (path: type:
-        lib.any
-          (allowedPrefix:
-            (lib.hasPrefix (toString (src + "/${allowedPrefix}")) path) ||
-            (type == "directory" && lib.hasPrefix path (toString (src + "/${allowedPrefix}")))
-          )
-          allowedPrefixes);
-      path = src;
-      name = "controller";
-    };
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE = "${protobuf}/include";
@@ -71,7 +60,7 @@ let
     "tests/io-engine"
     "utils"
   ];
-  src = whitelistSource ../../../. src_list;
+  src = sourcer.whitelistSource ../../../. src_list;
   buildProps = rec {
     name = "control-plane-${version}";
     inherit version src;
