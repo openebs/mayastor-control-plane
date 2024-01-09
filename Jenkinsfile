@@ -13,33 +13,16 @@ def getLastNonAbortedBuild(build) {
   }
 }
 
-// Send out a slack message if branch got broken or has recovered
-def notifySlackUponStateChange(build) {
-  def cur = build.getResult()
-  def prev = getLastNonAbortedBuild(build.getPreviousBuild())?.getResult()
-  if (cur != prev) {
-    if (cur == 'SUCCESS') {
-      slackSend(
-        channel: '#mayastor-control-plane',
-        color: 'normal',
-        message: "Branch ${env.BRANCH_NAME} has been fixed :beers: (<${env.BUILD_URL}|Open>)"
-      )
-    } else if (prev == 'SUCCESS') {
-      slackSend(
-        channel: '#mayastor-control-plane',
-        color: 'danger',
-        message: "Branch ${env.BRANCH_NAME} is broken :face_with_raised_eyebrow: (<${env.BUILD_URL}|Open>)"
-      )
-    }
-  }
-}
-
 def mainBranches() {
     return BRANCH_NAME == "develop" || BRANCH_NAME.startsWith("release/");
 }
 
 def cronSchedule() {
     node {
+        if ( env.CRON_SCHEDULE_URL == null ) {
+            println "ERROR: No cron schedule url in the environment"
+            return ""
+        }
         println "DEBUG: Fetching Cron Schedule from ${env.CRON_SCHEDULE_URL}"
         def YAML = sh (script: "curl ${env.CRON_SCHEDULE_URL}", returnStdout: true).trim()
         def schedules = readYaml text: YAML
@@ -65,6 +48,13 @@ def cronSchedule() {
         println "INFO: Cron Schedule for ${project_name}/${BRANCH_NAME}: ${project_cfg}"
         return project_cfg
     }
+}
+def dockerId() {
+  script {
+    dockerId = sh (script: "./utils/dependencies/scripts/git-org-name.sh --case upper", returnStdout: true).trim() + "_DOCKERHUB"
+    println "Using docker id: ${dockerId}"
+    return dockerId
+  }
 }
 
 // TODO: Use multiple choices
@@ -94,7 +84,7 @@ pipeline {
     cron(cronSchedule())
   }
   environment {
-    CARGO_INCREMENTAL = "1"
+    CARGO_INCREMENTAL = "0"
   }
 
   stages {
@@ -143,7 +133,7 @@ pipeline {
           }
           agent { label 'nixos-mayastor' }
           steps {
-            withCredentials([usernamePassword(credentialsId: 'OPENEBS_DOCKERHUB', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+            withCredentials([usernamePassword(credentialsId: dockerId(), usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
               sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
             }
             sh 'printenv'
@@ -164,7 +154,7 @@ pipeline {
           }
           agent { label 'nixos-mayastor' }
           steps {
-            withCredentials([usernamePassword(credentialsId: 'OPENEBS_DOCKERHUB', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+            withCredentials([usernamePassword(credentialsId: dockerId(), usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
               sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
             }
             sh 'printenv'
@@ -203,7 +193,7 @@ pipeline {
         }
       }
       steps {
-        withCredentials([usernamePassword(credentialsId: 'OPENEBS_DOCKERHUB', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+        withCredentials([usernamePassword(credentialsId: dockerId(), usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
             sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
         }
         sh 'printenv'
@@ -243,9 +233,6 @@ pipeline {
                 ]
               ]
             ])
-            if (mainBranches()) {
-              notifySlackUponStateChange(currentBuild)
-            }
           }
         }
       }

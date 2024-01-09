@@ -2,8 +2,16 @@
 # avoid dependency on docker tool chain. Though the maturity of OCI
 # builder in nixpkgs is questionable which is why we postpone this step.
 
-{ xfsprogs_5_16, busybox, dockerTools, lib, e2fsprogs, btrfs-progs, utillinux, fetchurl, control-plane, tini, img_tag ? "" }:
+{ pkgs, xfsprogs_5_16, busybox, dockerTools, lib, e2fsprogs, btrfs-progs, utillinux, fetchurl, control-plane, tini, sourcer, img_tag ? "", img_org ? "" }:
 let
+  repo-org = if img_org != "" then img_org else "${builtins.readFile (pkgs.runCommand "repo_org" {
+    buildInputs = with pkgs; [ git ];
+   } ''
+    export GIT_DIR="${sourcer.git-src}/.git"
+    cp ${sourcer.repo-org}/git-org-name.sh .
+    patchShebangs ./git-org-name.sh
+    ./git-org-name.sh ${sourcer.git-src} --case lower --remote origin > $out
+  '')}";
   xfsprogs = xfsprogs_5_16;
   e2fsprogs_1_46_2 = (e2fsprogs.overrideAttrs (oldAttrs: rec {
     version = "1.46.2";
@@ -18,7 +26,7 @@ let
     dockerTools.buildImage {
       inherit tag;
       created = "now";
-      name = "openebs/mayastor-${name}${image_suffix.${buildType}}";
+      name = "${repo-org}/mayastor-${name}${image_suffix.${buildType}}";
       copyToRoot = [ tini busybox package ];
       config = {
         Entrypoint = [ "tini" "--" package.binary ];
