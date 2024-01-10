@@ -4,6 +4,7 @@
 //! the CSI framework. This service must be deployed on all nodes the
 //! IoEngine CSI node plugin is deployed.
 use crate::{
+    fsfreeze::{fsfreeze, FsFreezeOpt},
     nodeplugin_svc,
     nodeplugin_svc::{find_mount, lookup_device},
     shutdown_event::Shutdown,
@@ -13,30 +14,12 @@ use csi_driver::node::internal::{
     FindVolumeReply, FindVolumeRequest, FreezeFsReply, FreezeFsRequest, UnfreezeFsReply,
     UnfreezeFsRequest, VolumeType,
 };
-use nodeplugin_svc::{freeze_volume, unfreeze_volume, ServiceError, TypeOfMount};
-use tonic::{transport::Server, Code, Request, Response, Status};
+use nodeplugin_svc::TypeOfMount;
+use tonic::{transport::Server, Request, Response, Status};
 use tracing::{debug, error, info};
 
 #[derive(Debug, Default)]
 pub(crate) struct NodePluginSvc {}
-
-impl From<ServiceError> for Status {
-    fn from(err: ServiceError) -> Self {
-        match err {
-            ServiceError::VolumeNotFound { .. } => Status::new(Code::NotFound, err.to_string()),
-            ServiceError::FsfreezeFailed { .. } => Status::new(Code::Internal, err.to_string()),
-            ServiceError::InvalidVolumeId { .. } => {
-                Status::new(Code::InvalidArgument, err.to_string())
-            }
-            ServiceError::InternalFailure { .. } => Status::new(Code::Internal, err.to_string()),
-            ServiceError::IoError { .. } => Status::new(Code::Unknown, err.to_string()),
-            ServiceError::InconsistentMountFs { .. } => Status::new(Code::Unknown, err.to_string()),
-            ServiceError::BlockDeviceMount { .. } => {
-                Status::new(Code::FailedPrecondition, err.to_string())
-            }
-        }
-    }
-}
 
 #[tonic::async_trait]
 impl NodePlugin for NodePluginSvc {
@@ -45,8 +28,7 @@ impl NodePlugin for NodePluginSvc {
         request: Request<FreezeFsRequest>,
     ) -> Result<Response<FreezeFsReply>, Status> {
         let volume_id = request.into_inner().volume_id;
-        debug!("freeze_fs({})", volume_id);
-        freeze_volume(&volume_id).await?;
+        fsfreeze(&volume_id, FsFreezeOpt::Freeze).await?;
         Ok(Response::new(FreezeFsReply {}))
     }
 
@@ -55,8 +37,7 @@ impl NodePlugin for NodePluginSvc {
         request: Request<UnfreezeFsRequest>,
     ) -> Result<Response<UnfreezeFsReply>, Status> {
         let volume_id = request.into_inner().volume_id;
-        debug!("unfreeze_fs({})", volume_id);
-        unfreeze_volume(&volume_id).await?;
+        fsfreeze(&volume_id, FsFreezeOpt::Unfreeze).await?;
         Ok(Response::new(UnfreezeFsReply {}))
     }
 

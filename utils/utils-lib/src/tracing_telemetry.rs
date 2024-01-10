@@ -155,7 +155,93 @@ pub fn init_tracing_ext<T: std::net::ToSocketAddrs>(
     };
 }
 
-/// Flush the traces from the tracer provider.
+/// Tracing telemetry style.
+pub enum FmtStyle {
+    /// Compact style.
+    Compact,
+    /// Pretty Style
+    Pretty,
+}
+
+/// Tracing telemetry builder.
+pub struct TracingTelemetry {
+    writer: FmtLayer,
+    style: FmtStyle,
+    colours: bool,
+}
+
+impl TracingTelemetry {
+    /// Tracing telemetry default builder.
+    pub fn builder() -> Self {
+        Self {
+            writer: FmtLayer::Stdout,
+            style: FmtStyle::Pretty,
+            colours: true,
+        }
+    }
+    /// Specify writer stream.
+    pub fn with_writer(self, writer: FmtLayer) -> TracingTelemetry {
+        TracingTelemetry { writer, ..self }
+    }
+    /// Specify style.
+    pub fn with_style(self, style: FmtStyle) -> TracingTelemetry {
+        TracingTelemetry { style, ..self }
+    }
+    /// Specify whether colour is needed or not.
+    pub fn with_colours(self, colours: bool) -> TracingTelemetry {
+        TracingTelemetry { colours, ..self }
+    }
+    /// Initialize the telemetry instance.
+    pub fn init(self) {
+        match (self.writer, self.style) {
+            (FmtLayer::Stderr, FmtStyle::Compact) => {
+                let stderr = tracing_subscriber::fmt::layer()
+                    .with_writer(std::io::stderr)
+                    .compact()
+                    .with_ansi(self.colours);
+                let subscriber = Registry::default()
+                    .with(tracing_filter::rust_log_filter())
+                    .with(stderr);
+                subscriber.init();
+            }
+            (FmtLayer::Stdout, FmtStyle::Compact) => {
+                let stdout = tracing_subscriber::fmt::layer()
+                    .with_writer(std::io::stdout)
+                    .compact()
+                    .with_ansi(self.colours);
+                let subscriber = Registry::default()
+                    .with(tracing_filter::rust_log_filter())
+                    .with(stdout);
+                subscriber.init();
+            }
+            (FmtLayer::Stderr, FmtStyle::Pretty) => {
+                let stderr = tracing_subscriber::fmt::layer()
+                    .with_writer(std::io::stderr)
+                    .pretty()
+                    .with_ansi(self.colours);
+                let subscriber = Registry::default()
+                    .with(tracing_filter::rust_log_filter())
+                    .with(stderr);
+                subscriber.init();
+            }
+            (FmtLayer::Stdout, FmtStyle::Pretty) => {
+                let stdout = tracing_subscriber::fmt::layer()
+                    .with_writer(std::io::stdout)
+                    .pretty()
+                    .with_ansi(self.colours);
+                let subscriber = Registry::default()
+                    .with(tracing_filter::rust_log_filter())
+                    .with(stdout);
+                subscriber.init();
+            }
+            (FmtLayer::None, _) => {
+                let subscriber = Registry::default().with(tracing_filter::rust_log_filter());
+                subscriber.init()
+            }
+        };
+    }
+}
+
 /// todo: force flush the traces.
 pub fn flush_traces() {
     opentelemetry::global::shutdown_tracer_provider();

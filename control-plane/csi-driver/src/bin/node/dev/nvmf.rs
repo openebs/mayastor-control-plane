@@ -282,6 +282,10 @@ impl Detach for NvmfDetach {
     fn devname(&self) -> DeviceName {
         self.name.clone()
     }
+
+    fn devnqn(&self) -> &str {
+        &self.nqn
+    }
 }
 
 /// Check for the presence of nvme tcp kernel module.

@@ -209,4 +209,8 @@ impl Detach for IscsiDetach {
 
         Ok(())
     }
+
+    fn devnqn(&self) -> &str {
+        unimplemented!()
+    }
 }
