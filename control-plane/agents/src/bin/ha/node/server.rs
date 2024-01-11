@@ -6,7 +6,7 @@ use crate::{
 };
 use agents::{
     errors::{SvcError, SvcError::SubsystemNotFound},
-    EventWithMeta,
+    eventing::EventWithMeta,
 };
 use events_api::event::{EventAction, EventCategory, EventMessage, EventMeta, EventSource};
 use grpc::{

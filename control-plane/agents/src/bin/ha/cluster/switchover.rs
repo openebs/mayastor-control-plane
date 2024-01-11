@@ -1,5 +1,5 @@
 use crate::{core_grpc, etcd::EtcdStore, nodes::NodeList};
-use agents::Event;
+use agents::eventing::Event;
 use anyhow::anyhow;
 use chrono::Utc;
 use events_api::event::{
