@@ -281,6 +281,7 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
                     self.children.retain(|c| c.uri() != uri.uri());
                 }
                 NexusOperation::OwnerUpdate(owners) => self.disowned_by_owners(&owners),
+                NexusOperation::Resize(size) => self.size = size,
             }
         }
         self.clear_op();
@@ -326,6 +327,7 @@ pub enum NexusOperation {
     AddChild(NexusChild),
     RemoveChild(NexusChild),
     OwnerUpdate(NexusOwners),
+    Resize(u64),
 }
 
 /// Key used by the store to uniquely identify a NexusSpec structure.

@@ -320,18 +320,6 @@ pub(crate) async fn healthy_volume_replicas(
     }
 }
 
-/// Check if the volume state is ok for resize operation.
-pub fn vol_status_ok_for_resize(spec: &VolumeSpec) -> Result<(), SvcError> {
-    // The volume should be unpublished/offline.
-    if spec.target().is_some() {
-        return Err(SvcError::InUse {
-            kind: ResourceKind::Volume,
-            id: spec.uuid_str(),
-        });
-    }
-
-    Ok(())
-}
 /// Check if any replica is on a pool that doesn't have sufficient space for
 /// resize operation. If no such replica present, it means the volume is good
 /// to be resized and the returned vector will be of zero length.

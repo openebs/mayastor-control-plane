@@ -13,7 +13,7 @@ use stor_port::{
     types::v0::transport::{
         AddNexusChild, CreateNexus, DestroyNexus, FaultNexusChild, GetRebuildRecord,
         ListRebuildRecord, Nexus, NexusChildAction, NexusChildActionContext, NexusId, NodeId,
-        RebuildHistory, RemoveNexusChild, ShareNexus, ShutdownNexus, UnshareNexus,
+        RebuildHistory, RemoveNexusChild, ResizeNexus, ShareNexus, ShutdownNexus, UnshareNexus,
     },
 };
 
@@ -114,6 +114,46 @@ impl crate::controller::io_engine::NexusApi<()> for super::RpcClient {
             error => error.map(|_| ()).context(GrpcRequestError {
                 resource: ResourceKind::Nexus,
                 request: "destroy_nexus",
+            }),
+        }
+    }
+
+    #[tracing::instrument(name = "rpc::v1::nexus::resize", level = "debug", skip(self), err)]
+    async fn resize_nexus(&self, request: &ResizeNexus) -> Result<Nexus, SvcError> {
+        let result = self
+            .nexus()
+            .resize_nexus(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Nexus,
+                request: "resize_nexus",
+            });
+
+        // We map certain tonic gRPC error codes to NexusResizeStatusUnknown, assuming that
+        // we don't know where the nexus resize request went wrong.
+        let rpc_nexus = match result {
+            Err(status)
+                if matches!(
+                    status.tonic_code(),
+                    tonic::Code::Unknown
+                        | tonic::Code::DeadlineExceeded
+                        | tonic::Code::Internal
+                        | tonic::Code::Unavailable
+                ) =>
+            {
+                tracing::warn!(nexus.uuid=%request.uuid, status=%status, "Resize status unclear");
+                Err(SvcError::NexusResizeStatusUnknown {
+                    nexus_id: request.uuid.to_string(),
+                    requested_size: request.requested_size,
+                })
+            }
+            _else => _else,
+        }?;
+
+        match rpc_nexus.into_inner().nexus {
+            Some(nexus) => Ok(rpc_nexus_to_agent(&nexus, &request.node)?),
+            None => Err(SvcError::Internal {
+                details: "resource: Nexus, request: resize_nexus, error: no nexus returned".into(),
             }),
         }
     }

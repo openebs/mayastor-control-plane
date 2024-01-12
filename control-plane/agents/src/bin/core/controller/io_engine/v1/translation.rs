@@ -463,6 +463,16 @@ impl AgentToIoEngine for transport::DestroyNexus {
     }
 }
 
+impl AgentToIoEngine for transport::ResizeNexus {
+    type IoEngineMessage = v1::nexus::ResizeNexusRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        v1::nexus::ResizeNexusRequest {
+            uuid: self.uuid.to_string(),
+            requested_size: self.requested_size,
+        }
+    }
+}
+
 impl AgentToIoEngine for transport::ShareNexus {
     type IoEngineMessage = v1::nexus::PublishNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {

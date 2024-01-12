@@ -54,6 +54,7 @@ impl_vector_request!(Nexuses, Nexus);
 impl_message!(GetNexuses);
 impl_message!(CreateNexus);
 impl_message!(DestroyNexus);
+impl_message!(ResizeNexus);
 impl_message!(ShareNexus);
 impl_message!(UnshareNexus);
 impl_message!(RemoveNexusChild);

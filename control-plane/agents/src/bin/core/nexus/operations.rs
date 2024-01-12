@@ -4,8 +4,8 @@ use crate::{
         registry::Registry,
         resources::{
             operations::{
-                ResourceLifecycle, ResourceOffspring, ResourceOwnerUpdate, ResourceSharing,
-                ResourceShutdownOperations,
+                ResourceLifecycle, ResourceOffspring, ResourceOwnerUpdate, ResourceResize,
+                ResourceSharing, ResourceShutdownOperations,
             },
             operations_helper::{
                 GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, SpecOperationsHelper,
@@ -25,7 +25,7 @@ use stor_port::types::v0::{
     },
     transport::{
         child::Child,
-        nexus::{CreateNexus, DestroyNexus, Nexus, ShareNexus, UnshareNexus},
+        nexus::{CreateNexus, DestroyNexus, Nexus, ResizeNexus, ShareNexus, UnshareNexus},
         AddNexusChild, FaultNexusChild, NexusOwners, NodeStatus, RemoveNexusChild, ShutdownNexus,
     },
 };
@@ -116,6 +116,37 @@ impl ResourceLifecycle for Option<&mut OperationGuardArc<NexusSpec>> {
         } else {
             node?.destroy_nexus(request).await
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceResize for OperationGuardArc<NexusSpec> {
+    type Resize = ResizeNexus;
+    type ResizeOutput = Nexus;
+
+    async fn resize(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Resize,
+    ) -> Result<Self::ResizeOutput, SvcError> {
+        let node = registry.node_wrapper(&request.node).await?;
+        let nexus_state = registry.nexus(&request.uuid).await?;
+
+        let spec_clone = self
+            .start_update(
+                registry,
+                &nexus_state,
+                NexusOperation::Resize(request.requested_size),
+            )
+            .await?;
+
+        let result = node.resize_nexus(request).await;
+        // NOTE: In case of SvcError::NexusResizeStatusUnknown, the NexusSpec
+        // will not get updated to new size by the complete_update call below.
+        // However, upstream from here, the VolumeSpec will be updated with new
+        // size with an assumption that nexus has resized(even if it may haven't
+        // actually). Reconciler will pick such nexus and attempt a resize again.
+        self.complete_update(registry, result, spec_clone).await
     }
 }
 

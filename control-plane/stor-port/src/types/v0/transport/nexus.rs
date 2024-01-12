@@ -242,6 +242,29 @@ pub struct CreateNexus {
     pub config: Option<NexusNvmfConfig>,
 }
 
+/// A request to resize a Nexus.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResizeNexus {
+    /// Id of the io-engine instance.
+    pub node: NodeId,
+    /// Uuid of the nexus to be resized.
+    pub uuid: NexusId,
+    /// Requested size for the nexus.
+    pub requested_size: u64,
+}
+
+impl ResizeNexus {
+    /// Return new `Self` from the given parameters.
+    pub fn new(node_id: &NodeId, uuid: &NexusId, requested_size: u64) -> Self {
+        Self {
+            node: node_id.clone(),
+            uuid: uuid.clone(),
+            requested_size,
+        }
+    }
+}
+
 /// NVMe reservation types.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
 pub enum NvmeReservation {

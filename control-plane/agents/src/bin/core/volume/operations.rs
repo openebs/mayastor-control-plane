@@ -21,7 +21,7 @@ use crate::{
         snapshot_operations::DestroyVolumeSnapshotRequest,
         specs::{
             create_volume_replicas, healthy_volume_replicas, resizeable_replicas,
-            vol_status_ok_for_resize, volume_move_replica_candidates, CreateReplicaCandidate,
+            volume_move_replica_candidates, CreateReplicaCandidate,
         },
     },
 };
@@ -198,8 +198,15 @@ impl ResourceResize for OperationGuardArc<VolumeSpec> {
                 details: "Volume can't be resized while it has snapshots".into(),
             });
         }
-        // Pre-checks - volume state eligible for resize.
-        vol_status_ok_for_resize(&spec)?;
+        // If the volume is published, then we need to resize nexus also along with replicas.
+        let target_cfg = spec.target();
+        let nexus = if let Some(tcfg) = target_cfg {
+            Some(registry.specs().nexus(tcfg.nexus()).await?)
+        } else {
+            // Unpublished volume
+            None
+        };
+
         // Pre-check - Ensure pools that host replicas have enough space to resize the replicas,
         // and also ensure that the replicas are Online.
         let resizeable_replicas =
@@ -214,11 +221,35 @@ impl ResourceResize for OperationGuardArc<VolumeSpec> {
             .await?;
         // Resize each replica of the volume. If any replica fails to be resized then the
         // volume resize operation is deemed as a failure.
-        let result = self
+        let result_repl = self
             .resize_volume_replicas(registry, &resizeable_replicas, request.requested_size)
             .await;
 
-        self.complete_update(registry, result, spec_clone).await?;
+        // If we had found a nexus, i.e. the volume is published, we need to go ahead with
+        // nexus resize now, but only if replicas have also resized successfully.
+        let result_nx = match (result_repl, nexus) {
+            (Ok(_), Some(mut nexus_grd)) => {
+                self.resize_target(registry, &mut nexus_grd, request.requested_size)
+                    .await
+            }
+            (Err(e), Some(_)) | (Err(e), None) => Err(e),
+            (Ok(_), None) => Ok(()),
+        };
+
+        // An error code NexusResizeStatusUnknown is an indication at this point that we
+        // are uncertain whether nexus bdev underneath got resized or not. However, we'll
+        // assume that it has, and hence report volume resize operation as success even
+        // though the nexus spec isn't updated with new size yet. The reconciler will
+        // find this mismatch between nexus and volume specs, and re-attempt to send
+        // nexus resize gRPC to dataplane.
+        let final_result = match result_nx {
+            Ok(_) => Ok(()),
+            Err(SvcError::NexusResizeStatusUnknown { .. }) => Ok(()),
+            Err(error) => Err(error),
+        };
+
+        self.complete_update(registry, final_result, spec_clone)
+            .await?;
 
         registry.volume(&request.uuid).await
     }

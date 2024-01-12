@@ -109,6 +109,8 @@ pub enum MessageIdVs {
     CreateNexus,
     /// Destroy Nexus.
     DestroyNexus,
+    /// Resize Nexus.
+    ResizeNexus,
     /// Share Nexus.
     ShareNexus,
     /// Unshare Nexus.

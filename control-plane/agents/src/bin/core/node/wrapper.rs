@@ -29,8 +29,9 @@ use stor_port::{
             ListRebuildRecord, ListReplicaSnapshots, ListSnapshotClones, MessageIdVs, Nexus,
             NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, NodeId,
             NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register, RemoveNexusChild,
-            Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ResizeReplica, ShareNexus,
-            ShareReplica, ShutdownNexus, SnapshotId, UnshareNexus, UnshareReplica, VolumeId,
+            Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ResizeNexus, ResizeReplica,
+            ShareNexus, ShareReplica, ShutdownNexus, SnapshotId, UnshareNexus, UnshareReplica,
+            VolumeId,
         },
     },
 };
@@ -1476,6 +1477,14 @@ impl NexusApi<()> for Arc<tokio::sync::RwLock<NodeWrapper>> {
             }
             Err(error) => Err(error),
         }
+    }
+
+    /// Resize a nexus/target bdev on the node via gRPC.
+    async fn resize_nexus(&self, request: &ResizeNexus) -> Result<Nexus, SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        let nexus = dataplane.resize_nexus(request).await?;
+        self.update_nexus_state(Either::Insert(nexus.clone())).await;
+        Ok(nexus)
     }
 }
 

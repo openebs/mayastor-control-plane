@@ -34,7 +34,7 @@ use stor_port::{
         transport::{
             CreateNexus, CreateReplica, Nexus, NexusId, NexusNvmePreemption, NexusNvmfConfig,
             NodeId, NvmeReservation, NvmfControllerIdRange, Protocol, Replica, ReplicaId,
-            ReplicaOwners, ResizeReplica, Volume, VolumeShareProtocol, VolumeState,
+            ReplicaOwners, ResizeNexus, ResizeReplica, Volume, VolumeShareProtocol, VolumeState,
         },
     },
     HostAccessControl,
@@ -551,6 +551,26 @@ impl OperationGuardArc<VolumeSpec> {
                 .await?;
         }
 
+        Ok(())
+    }
+
+    /// Resize the volume target(nexus).
+    pub(super) async fn resize_target(
+        &self,
+        registry: &Registry,
+        nexus_grd: &mut OperationGuardArc<NexusSpec>,
+        requested_size: u64,
+    ) -> Result<(), SvcError> {
+        nexus_grd
+            .resize(
+                registry,
+                &ResizeNexus::new(
+                    &nexus_grd.as_ref().node.clone(),
+                    &nexus_grd.uuid().clone(),
+                    requested_size,
+                ),
+            )
+            .await?;
         Ok(())
     }
 
