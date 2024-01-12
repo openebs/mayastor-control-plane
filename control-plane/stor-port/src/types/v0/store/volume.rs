@@ -502,7 +502,9 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                 VolumeOperation::DestroySnapshot(snapshot) => {
                     self.metadata.runtime.snapshots.remove(&snapshot);
                 }
-                VolumeOperation::Resize(_) => todo!(),
+                VolumeOperation::Resize(size) => {
+                    self.size = size;
+                }
             }
         }
         self.clear_op();

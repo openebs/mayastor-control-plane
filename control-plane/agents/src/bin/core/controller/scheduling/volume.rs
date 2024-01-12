@@ -8,6 +8,7 @@ use crate::controller::{
         volume_policy::{SimplePolicy, ThickPolicy},
         AddReplicaFilters, AddReplicaSorters, ChildSorters, ResourceData, ResourceFilter,
     },
+    wrapper::PoolWrapper,
 };
 use agents::errors::SvcError;
 use std::{collections::HashMap, ops::Deref};
@@ -94,6 +95,11 @@ impl GetSuitablePoolsContext {
     }
     pub fn as_thin(&self) -> bool {
         self.spec.as_thin() || self.snap_repl()
+    }
+    /// Helper util for overcommit checks.
+    pub(crate) fn overcommit(&self, allowed_commit_percent: u64, pool: &PoolWrapper) -> bool {
+        let max_cap_allowed = allowed_commit_percent * pool.capacity;
+        (self.size + pool.commitment()) * 100 < max_cap_allowed
     }
 }
 
@@ -729,6 +735,101 @@ impl CloneVolumeSnapshot {
 impl ResourceFilter for CloneVolumeSnapshot {
     type Request = GetSuitablePoolsContext;
     type Item = PoolItem;
+
+    fn data(&mut self) -> &mut ResourceData<Self::Request, Self::Item> {
+        &mut self.data
+    }
+
+    fn collect(self) -> Vec<Self::Item> {
+        self.data.list
+    }
+}
+
+/// The context to check pool capacity for volume replica resize feasibility.
+#[derive(Clone)]
+pub(crate) struct ReplicaResizePoolsContext {
+    registry: Registry,
+    spec: VolumeSpec,
+    allocated_bytes: Option<u64>,
+    required_capacity: u64,
+}
+
+impl ReplicaResizePoolsContext {
+    /// The additional capacity that we need.
+    pub(crate) fn required_capacity(&self) -> u64 {
+        self.required_capacity
+    }
+
+    /// Spec for the volume undergoing resize.
+    pub(crate) fn spec(&self) -> &VolumeSpec {
+        &self.spec
+    }
+
+    /// Get the currently allocated bytes (per replica).
+    pub(crate) fn allocated_bytes(&self) -> &Option<u64> {
+        &self.allocated_bytes
+    }
+
+    /// Helper util for overcommit checks.
+    pub(crate) fn overcommit(&self, allowed_commit_percent: u64, pool: &PoolWrapper) -> bool {
+        let max_cap_allowed = allowed_commit_percent * pool.capacity;
+        (self.required_capacity + pool.commitment()) * 100 < max_cap_allowed
+    }
+}
+
+/// Resize the replicas of a volume.
+pub(crate) struct ResizeVolumeReplicas {
+    data: ResourceData<ReplicaResizePoolsContext, ChildItem>,
+}
+
+impl ResizeVolumeReplicas {
+    async fn builder(registry: &Registry, spec: &VolumeSpec, required_capacity: u64) -> Self {
+        // Reuse the method from AddVolumeReplica even though name doesn't indicate the exact
+        // purpose.
+        let allocated_bytes = AddVolumeReplica::allocated_bytes(registry, spec).await;
+        Self {
+            data: ResourceData::new(
+                ReplicaResizePoolsContext {
+                    registry: registry.clone(),
+                    spec: spec.clone(),
+                    allocated_bytes,
+                    required_capacity,
+                },
+                PoolItemLister::list_for_resize(registry, spec).await,
+            ),
+        }
+    }
+
+    fn with_default_policy(self) -> Self {
+        match self.data.context.spec.as_thin() {
+            true => self.with_simple_policy(),
+            false => self.with_thick_policy(),
+        }
+    }
+    fn with_thick_policy(self) -> Self {
+        self.policy(ThickPolicy::new())
+    }
+    fn with_simple_policy(self) -> Self {
+        let simple = SimplePolicy::new(&self.data.context().registry);
+        self.policy(simple)
+    }
+
+    /// Default rules for replica filtering when resizing replicas for a volume.
+    pub(crate) async fn builder_with_defaults(
+        registry: &Registry,
+        spec: &VolumeSpec,
+        req_capacity: u64,
+    ) -> Self {
+        Self::builder(registry, spec, req_capacity)
+            .await
+            .with_default_policy()
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl ResourceFilter for ResizeVolumeReplicas {
+    type Request = ReplicaResizePoolsContext;
+    type Item = ChildItem;
 
     fn data(&mut self) -> &mut ResourceData<Self::Request, Self::Item> {
         &mut self.data

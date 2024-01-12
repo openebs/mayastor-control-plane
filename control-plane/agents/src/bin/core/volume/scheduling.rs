@@ -17,7 +17,7 @@ use crate::{
 use agents::errors::{NotEnough, SvcError};
 use stor_port::types::v0::{
     store::{nexus::NexusSpec, volume::VolumeSpec},
-    transport::{NodeId, VolumeState},
+    transport::{NodeId, Replica, VolumeState},
 };
 
 /// Return a list of pre sorted pools to be used by a volume.
@@ -125,4 +125,21 @@ pub(crate) async fn target_node_candidate(
         }),
         Some(node) => Ok(node.clone()),
     }
+}
+
+/// List, filter and collect replicas for which are Online and the pools have
+/// the required capacity for resizing the replica.
+pub(crate) async fn resizeable_replicas(
+    volume: &VolumeSpec,
+    registry: &Registry,
+    req_capacity: u64,
+) -> Vec<Replica> {
+    let builder =
+        volume::ResizeVolumeReplicas::builder_with_defaults(registry, volume, req_capacity).await;
+
+    builder
+        .collect()
+        .into_iter()
+        .map(|item| item.state().clone())
+        .collect()
 }

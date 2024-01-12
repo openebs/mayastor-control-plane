@@ -6,7 +6,7 @@ use crate::{
                 GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, ResourceSpecs,
                 ResourceSpecsLocked, SpecOperationsHelper,
             },
-            OperationGuardArc, ResourceMutex, TraceSpan, TraceStrLog,
+            OperationGuardArc, ResourceMutex, ResourceUid, TraceSpan, TraceStrLog,
         },
         scheduling::{
             nexus::GetPersistedNexusChildren,
@@ -41,7 +41,7 @@ use stor_port::{
             SpecStatus, SpecTransaction,
         },
         transport::{
-            CreateReplica, CreateVolume, NodeId, PoolId, Protocol, ReplicaId, ReplicaName,
+            CreateReplica, CreateVolume, NodeId, PoolId, Protocol, Replica, ReplicaId, ReplicaName,
             ReplicaOwners, SnapshotId, VolumeId, VolumeShareProtocol, VolumeState, VolumeStatus,
         },
     },
@@ -318,6 +318,53 @@ pub(crate) async fn healthy_volume_replicas(
     } else {
         Ok(children)
     }
+}
+
+/// Check if the volume state is ok for resize operation.
+pub fn vol_status_ok_for_resize(spec: &VolumeSpec) -> Result<(), SvcError> {
+    // The volume should be unpublished/offline.
+    if spec.target().is_some() {
+        return Err(SvcError::InUse {
+            kind: ResourceKind::Volume,
+            id: spec.uuid_str(),
+        });
+    }
+
+    Ok(())
+}
+/// Check if any replica is on a pool that doesn't have sufficient space for
+/// resize operation. If no such replica present, it means the volume is good
+/// to be resized and the returned vector will be of zero length.
+pub(crate) async fn resizeable_replicas(
+    spec: &VolumeSpec,
+    registry: &Registry,
+    requested_size: u64,
+) -> Result<Vec<Replica>, SvcError> {
+    if spec.size >= requested_size {
+        return Err(SvcError::VolumeResizeArgsInvalid {
+            vol_id: spec.uuid_str(),
+            requested_size,
+            current_size: spec.size,
+        });
+    }
+    let spec_replicas = registry.specs().volume_replicas(spec.uid());
+    let resizable_replicas =
+        scheduling::resizeable_replicas(spec, registry, requested_size - spec.size).await;
+
+    // All the replicas of the volume should be resizable, else we don't proceed with
+    // the volume resize.
+    if resizable_replicas.len() != spec.num_replicas as usize {
+        return Err(SvcError::ResizeReplError {
+            replica_ids: spec_replicas
+                .into_iter()
+                .filter(|sr| resizable_replicas.iter().all(|r| &r.uuid != sr.uuid()))
+                .map(|excl_repl| excl_repl.uuid().to_string())
+                .collect(),
+            required: requested_size - spec.size,
+        });
+    }
+
+    Ok(resizable_replicas)
 }
 
 /// Implementation of the ResourceSpecs which is retrieved from the ResourceSpecsLocked.
@@ -1055,7 +1102,7 @@ impl SpecOperationsHelper for VolumeSpec {
             }
             VolumeOperation::CreateSnapshot(_) => Ok(()),
             VolumeOperation::DestroySnapshot(_) => Ok(()),
-            VolumeOperation::Resize(_) => todo!(),
+            VolumeOperation::Resize(_) => Ok(()),
         }?;
         self.start_op(operation);
         Ok(())

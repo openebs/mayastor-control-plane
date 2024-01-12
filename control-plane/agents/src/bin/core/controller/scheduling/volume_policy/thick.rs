@@ -1,6 +1,8 @@
 use crate::controller::scheduling::{
     resources::PoolItem,
-    volume::{AddVolumeReplica, GetSuitablePoolsContext, SnapshotVolumeReplica},
+    volume::{
+        AddVolumeReplica, GetSuitablePoolsContext, ResizeVolumeReplicas, SnapshotVolumeReplica,
+    },
     volume_policy::{affinity_group, pool::PoolBaseFilters, DefaultBasePolicy},
     ResourceFilter, ResourcePolicy, SortBuilder, SortCriteria,
 };
@@ -31,6 +33,13 @@ impl ResourcePolicy<AddVolumeReplica> for ThickPolicy {
 impl ResourcePolicy<SnapshotVolumeReplica> for ThickPolicy {
     fn apply(self, to: SnapshotVolumeReplica) -> SnapshotVolumeReplica {
         DefaultBasePolicy::filter_snapshot(to)
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl ResourcePolicy<ResizeVolumeReplicas> for ThickPolicy {
+    fn apply(self, to: ResizeVolumeReplicas) -> ResizeVolumeReplicas {
+        DefaultBasePolicy::filter_resize(to)
     }
 }
 

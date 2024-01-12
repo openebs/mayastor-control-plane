@@ -1,4 +1,4 @@
-use super::ResourceFilter;
+use super::{volume::ResizeVolumeReplicas, ReplicaFilters, ResourceFilter};
 use crate::controller::scheduling::{
     volume::{AddVolumeReplica, CloneVolumeSnapshot, SnapshotVolumeReplica},
     NodeFilters,
@@ -58,5 +58,10 @@ impl DefaultBasePolicy {
             .filter(pool::PoolBaseFilters::usable)
             .filter(pool::PoolBaseFilters::capacity)
             .filter(pool::PoolBaseFilters::min_free_space)
+    }
+    fn filter_resize(request: ResizeVolumeReplicas) -> ResizeVolumeReplicas {
+        request
+            .filter(ReplicaFilters::online_for_resize)
+            .filter(pool::PoolBaseFilters::min_free_space_repl_resize)
     }
 }

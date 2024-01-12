@@ -5,6 +5,7 @@ mod capacity;
 mod garbage_collection;
 mod helpers;
 mod hotspare;
+mod resize;
 mod snapshot;
 mod snapshot_clone;
 mod switchover;

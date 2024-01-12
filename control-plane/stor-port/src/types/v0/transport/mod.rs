@@ -123,6 +123,8 @@ pub enum MessageIdVs {
     CreateVolume,
     /// Delete Volume.
     DestroyVolume,
+    /// Resize Volume.
+    ResizeVolume,
     /// Publish Volume.
     PublishVolume,
     /// Republish Volume.

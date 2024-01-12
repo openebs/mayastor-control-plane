@@ -619,7 +619,7 @@ impl ResizeReplica {
     pub fn new(
         node: &NodeId,
         pool_id: &PoolId,
-        name: &ReplicaName,
+        name: Option<&ReplicaName>,
         uuid: &ReplicaId,
         requested_size: u64,
     ) -> Self {
@@ -627,7 +627,7 @@ impl ResizeReplica {
             node: node.clone(),
             pool_id: pool_id.clone(),
             uuid: uuid.clone(),
-            name: name.clone().into(),
+            name: name.cloned(),
             requested_size,
         }
     }

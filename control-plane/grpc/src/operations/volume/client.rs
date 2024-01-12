@@ -17,9 +17,9 @@ use crate::{
     volume::{
         create_snapshot_reply, create_snapshot_volume_reply, create_volume_reply,
         get_snapshots_reply, get_snapshots_request, get_volumes_reply, get_volumes_request,
-        publish_volume_reply, republish_volume_reply, set_volume_replica_reply, share_volume_reply,
-        unpublish_volume_reply, volume_grpc_client::VolumeGrpcClient, GetSnapshotsRequest,
-        GetVolumesRequest, ProbeRequest,
+        publish_volume_reply, republish_volume_reply, resize_volume_reply,
+        set_volume_replica_reply, share_volume_reply, unpublish_volume_reply,
+        volume_grpc_client::VolumeGrpcClient, GetSnapshotsRequest, GetVolumesRequest, ProbeRequest,
     },
 };
 
@@ -117,6 +117,22 @@ impl VolumeOperations for VolumeClient {
         match response.error {
             None => Ok(()),
             Some(err) => Err(err.into()),
+        }
+    }
+
+    async fn resize(
+        &self,
+        request: &dyn ResizeVolumeInfo,
+        ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let req = self.request(request, ctx, MessageIdVs::ResizeVolume);
+        let response = self.client().resize_volume(req).await?.into_inner();
+        match response.reply {
+            Some(resize_volume_reply) => match resize_volume_reply {
+                resize_volume_reply::Reply::Volume(vol) => Ok(Volume::try_from(vol)?),
+                resize_volume_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Volume)),
         }
     }
 
@@ -353,13 +369,5 @@ impl VolumeOperations for VolumeClient {
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Volume)),
         }
-    }
-
-    async fn resize(
-        &self,
-        _req: &dyn ResizeVolumeInfo,
-        _ctx: Option<Context>,
-    ) -> Result<Volume, ReplyError> {
-        unimplemented!()
     }
 }

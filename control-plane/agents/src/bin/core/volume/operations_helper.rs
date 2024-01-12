@@ -2,7 +2,7 @@ use crate::{
     controller::{
         registry::Registry,
         resources::{
-            operations::{ResourceLifecycle, ResourceOwnerUpdate},
+            operations::{ResourceLifecycle, ResourceOwnerUpdate, ResourceResize},
             operations_helper::{
                 GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecsLocked,
             },
@@ -34,7 +34,7 @@ use stor_port::{
         transport::{
             CreateNexus, CreateReplica, Nexus, NexusId, NexusNvmePreemption, NexusNvmfConfig,
             NodeId, NvmeReservation, NvmfControllerIdRange, Protocol, Replica, ReplicaId,
-            ReplicaOwners, Volume, VolumeShareProtocol, VolumeState,
+            ReplicaOwners, ResizeReplica, Volume, VolumeShareProtocol, VolumeState,
         },
     },
     HostAccessControl,
@@ -525,6 +525,33 @@ impl OperationGuardArc<VolumeSpec> {
             }
         }
         Ok(created_replicas)
+    }
+
+    /// Resize the replicas of the volume.
+    pub(super) async fn resize_volume_replicas(
+        &self,
+        registry: &Registry,
+        replicas: &Vec<Replica>,
+        requested_size: u64,
+    ) -> Result<(), SvcError> {
+        for replica in replicas {
+            let mut replica_grd = registry.specs().replica(&replica.uuid).await?;
+
+            replica_grd
+                .resize(
+                    registry,
+                    &ResizeReplica::new(
+                        &replica.node,
+                        replica_grd.as_ref().pool_name(),
+                        None,
+                        replica_grd.uuid(),
+                        requested_size,
+                    ),
+                )
+                .await?;
+        }
+
+        Ok(())
     }
 
     /// Add the given replica to the target nexus of the volume.
