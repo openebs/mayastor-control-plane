@@ -134,6 +134,10 @@ impl From<ReplyError> for RestError<RestJsonError> {
                 let error = RestJsonError::new(details, message, Kind::FailedPrecondition);
                 (StatusCode::PRECONDITION_FAILED, error)
             }
+            ReplyErrorKind::CapacityLimitExceeded => {
+                let error = RestJsonError::new(details, message, Kind::CapacityLimitExceeded);
+                (StatusCode::INSUFFICIENT_STORAGE, error)
+            }
         };
 
         RestError::new(status, error)

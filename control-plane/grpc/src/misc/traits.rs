@@ -98,6 +98,7 @@ impl From<ReplyErrorKind> for common::ReplyErrorKind {
             ReplyErrorKind::ReplicaCreateNumber => Self::ReplicaCreateNumber,
             ReplyErrorKind::VolumeNoReplicas => Self::VolumeNoReplicas,
             ReplyErrorKind::InUse => Self::InUse,
+            ReplyErrorKind::CapacityLimitExceeded => Self::CapacityLimitExceeded,
         }
     }
 }
@@ -135,6 +136,7 @@ impl From<common::ReplyErrorKind> for ReplyErrorKind {
             common::ReplyErrorKind::ReplicaCreateNumber => Self::ReplicaCreateNumber,
             common::ReplyErrorKind::VolumeNoReplicas => Self::VolumeNoReplicas,
             common::ReplyErrorKind::InUse => Self::InUse,
+            common::ReplyErrorKind::CapacityLimitExceeded => Self::CapacityLimitExceeded,
         }
     }
 }

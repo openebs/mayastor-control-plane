@@ -2911,6 +2911,7 @@ components:
             - FailedPersist
             - Deleting
             - InUse
+            - CapacityLimitExceeded
       required:
         - details
         - kind

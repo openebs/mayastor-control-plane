@@ -354,6 +354,15 @@ pub enum SvcError {
     DrainNotAllowedWhenHAisDisabled {},
     #[snafu(display("Target switchover is not allowed without HA"))]
     SwitchoverNotAllowedWhenHAisDisabled {},
+    #[snafu(display(
+        "The volume would exceed the cluster capacity limit of {}B by {}B",
+        cluster_capacity_limit,
+        excess
+    ))]
+    CapacityLimitExceeded {
+        cluster_capacity_limit: u64,
+        excess: u64,
+    },
 }
 
 impl SvcError {
@@ -963,6 +972,12 @@ impl From<SvcError> for ReplyError {
             SvcError::SwitchoverNotAllowedWhenHAisDisabled {} => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::Nexus,
+                source,
+                extra,
+            },
+            SvcError::CapacityLimitExceeded { .. } => ReplyError {
+                kind: ReplyErrorKind::CapacityLimitExceeded,
+                resource: ResourceKind::Volume,
                 source,
                 extra,
             },

@@ -231,6 +231,7 @@ impl CreateVolumeBody {
             labels: self.labels.clone(),
             thin: self.thin,
             affinity_group: self.affinity_group.clone(),
+            cluster_capacity_limit: None,
         }
     }
     /// Convert into rpc request type.

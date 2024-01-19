@@ -795,12 +795,27 @@ impl ResourceSpecsLocked {
     pub(crate) fn get_or_create_volume(
         &self,
         request: &CreateVolumeSource,
-    ) -> ResourceMutex<VolumeSpec> {
+    ) -> Result<ResourceMutex<VolumeSpec>, SvcError> {
         let mut specs = self.write();
         if let Some(volume) = specs.volumes.get(&request.source().uuid) {
-            volume.clone()
+            Ok(volume.clone())
         } else {
-            match request {
+            // if request has a capacity limit, add up the volumes and reject
+            // if the capacity limit would be exceeded
+            match request.source().cluster_capacity_limit {
+                None => {} // no limit, no check needed
+                Some(limit) => {
+                    let mut total: u64 = specs.volumes.values().map(|v| v.lock().size).sum();
+                    total += request.source().size;
+                    if total > limit {
+                        return Err(SvcError::CapacityLimitExceeded {
+                            cluster_capacity_limit: limit,
+                            excess: total - limit,
+                        });
+                    }
+                }
+            }
+            Ok(match request {
                 CreateVolumeSource::None(_) => {
                     specs.volumes.insert(VolumeSpec::from(request.source()))
                 }
@@ -809,7 +824,7 @@ impl ResourceSpecsLocked {
                     spec.set_content_source(Some(create_from_snap.to_snapshot_source()));
                     specs.volumes.insert(spec)
                 }
-            }
+            })
         }
     }
 
