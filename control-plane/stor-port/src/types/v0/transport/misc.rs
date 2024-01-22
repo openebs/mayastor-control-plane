@@ -20,6 +20,8 @@ pub enum Filter {
     None,
     /// Filter by Node id.
     Node(NodeId),
+    /// Filter by FrontendNode id.
+    FrontendNode(FrontendNodeId),
     /// Pool filters.
     ///
     /// Filter by Pool id.

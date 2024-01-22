@@ -1,6 +1,7 @@
 pub mod blockdevice;
 pub mod child;
 pub mod cluster_agent;
+pub mod frontend_node;
 pub mod jsongrpc;
 pub mod misc;
 pub mod nexus;
@@ -17,6 +18,7 @@ pub mod watch;
 pub use blockdevice::*;
 pub use child::*;
 pub use cluster_agent::*;
+pub use frontend_node::*;
 pub use jsongrpc::*;
 pub use misc::*;
 pub use nexus::*;
@@ -58,6 +60,10 @@ pub enum MessageIdVs {
     Register,
     /// Deregister the io-engine.
     Deregister,
+    /// Register the frontend node.
+    RegisterFrontendNode,
+    /// Deregister the frontend node.
+    DeregisterFrontendNode,
     /// Node Service
     /// Get all node information.
     GetNodes,
@@ -177,6 +183,8 @@ pub enum MessageIdVs {
     GetRebuildRecord,
     /// List rebuild records.
     ListRebuildRecord,
+    /// Get frontend nodes.
+    GetFrontendNodes,
 }
 
 impl From<MessageIdVs> for MessageId {

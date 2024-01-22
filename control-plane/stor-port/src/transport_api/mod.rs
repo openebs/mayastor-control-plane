@@ -161,6 +161,8 @@ pub enum ResourceKind {
     NvmePath,
     /// Affinity Group.
     AffinityGroup,
+    /// Frontend Node.
+    FrontendNode,
 }
 
 /// Error type which is returned over the transport for any operation.

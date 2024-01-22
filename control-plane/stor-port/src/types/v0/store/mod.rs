@@ -1,5 +1,6 @@
 pub mod child;
 pub mod definitions;
+pub mod frontend_node;
 pub mod nexus;
 pub mod nexus_child;
 pub mod nexus_persistence;
