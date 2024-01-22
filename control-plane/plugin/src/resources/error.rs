@@ -1,12 +1,12 @@
 use snafu::Snafu;
 
-/// All errors returned when plugin command fails
+/// All errors returned when resources command fails.
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 #[allow(clippy::enum_variant_names)]
 pub enum Error {
     /// Error when listing block devices fails.
-    #[snafu(display("Failed to list blockdevices for node {id} . Error {source}"))]
+    #[snafu(display("Failed to list blockdevices for node {id}. Error {source}"))]
     GetBlockDevicesError {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,

@@ -15,6 +15,7 @@ pub mod snapshot;
 pub mod utils;
 pub mod volume;
 
+pub use error::Error;
 pub type VolumeId = openapi::apis::Uuid;
 pub type SnapshotId = openapi::apis::Uuid;
 pub type ReplicaCount = u8;
@@ -101,6 +102,6 @@ pub enum GetDrainArgs {
     Nodes,
 }
 
-/// Tabular Output Tests
+/// Tabular Output Tests.
 #[cfg(test)]
 mod tests;
