@@ -13,9 +13,16 @@ fn main() -> BuildResult {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let git_path = std::path::Path::new("../../.git");
-    if git_path.exists() {
-        println!("cargo:rerun-if-changed=../../.git/HEAD");
+    fn add_git_head(root: &str) {
+        let git_path = std::path::Path::new(root).join(".git/HEAD");
+        if git_path.exists() {
+            println!("cargo:rerun-if-changed={}", git_path.display());
+        }
+    }
+
+    add_git_head("../..");
+    if let Ok(ext) = std::env::var("EXTENSIONS_SRC") {
+        add_git_head(&ext);
     }
 
     Ok(())

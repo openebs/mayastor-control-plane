@@ -180,6 +180,9 @@ function findBranchesSharingFirstCommonCommit() {
     local BASE_BRANCH
     if [[ -z "${1+x}" || "$1" == '.' ]]; then
         BASE_BRANCH="$CURRENT_BRANCH"
+        if [ "$CURRENT_BRANCH" = "" ]; then
+          return
+        fi
     else
         BASE_BRANCH="$1"
     fi
