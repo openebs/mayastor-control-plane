@@ -2,6 +2,8 @@
 //! todo: document.
 /// The controller logic for all resources.
 pub(crate) mod controller;
+/// The frontend node related operations.
+pub(crate) mod frontend_node;
 /// The nexus related operations.
 pub(crate) mod nexus;
 /// The node related operations.
@@ -198,7 +200,8 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         .configure(nexus::configure)
         .configure(volume::configure)
         .configure(watch::configure)
-        .configure(registry::configure);
+        .configure(registry::configure)
+        .configure(frontend_node::configure);
 
     registry.start().await;
     let result = service.run_err(cli_args.grpc_server_addr).await;

@@ -8,6 +8,7 @@ use stor_port::types::v0::store::{
     AsOperationSequencer, OperationMode, OperationSequenceState, OperationSequencer,
 };
 
+mod frontend_node;
 mod migration;
 mod nexus;
 mod node;

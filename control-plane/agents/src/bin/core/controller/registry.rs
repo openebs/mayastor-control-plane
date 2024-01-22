@@ -40,7 +40,7 @@ use stor_port::{
             registry::{ControlPlaneService, CoreRegistryConfig, NodeRegistration},
             volume::InitiatorAC,
         },
-        transport::{HostNqn, NodeId},
+        transport::{DeregisterFrontendNode, HostNqn, NodeId, RegisterFrontendNode},
     },
     HostAccessControl,
 };
@@ -500,5 +500,27 @@ impl Registry {
                 .collect(),
             false => vec![],
         }
+    }
+
+    /// Register a frontend node(ex:- csi node) to control plane.
+    pub(crate) async fn register_frontend_node_spec(
+        &self,
+        frontend_node_spec: &RegisterFrontendNode,
+    ) -> Result<(), SvcError> {
+        self.specs()
+            .register_frontend_node_spec(self, frontend_node_spec)
+            .await?;
+        Ok(())
+    }
+
+    /// Deregister Register a frontend node(ex:- csi node) from control plane.
+    pub(crate) async fn deregister_frontend_node_spec(
+        &self,
+        frontend_node: &DeregisterFrontendNode,
+    ) -> Result<(), SvcError> {
+        self.specs()
+            .deregister_frontend_node_spec(self, frontend_node)
+            .await?;
+        Ok(())
     }
 }
