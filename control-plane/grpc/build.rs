@@ -16,6 +16,8 @@ fn main() {
                 "proto/v1/ha/node_agent.proto",
                 "proto/v1/ha/csi_node_nvme.proto",
                 "proto/v1/snapshot/snapshot.proto",
+                "proto/v1/frontend_node/frontend_node.proto",
+                "proto/v1/frontend_node/registration.proto",
             ],
             &["proto/"],
         )

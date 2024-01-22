@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+import "v1/misc/common.proto";
+
+package v1.frontend_node;
+
+// Frontend Node information.
+message FrontendNode {
+  // Frontend Node identification.
+  string id = 1;
+  // Specification of the frontend node.
+  FrontendNodeSpec spec = 2;
+  // Runtime state of the frontend node.
+  FrontendNodeState state = 3;
+}
+
+// Frontend Node specification.
+message FrontendNodeSpec {
+  // Id of the frontend node instance.
+  string id = 1;
+  // Grpc endpoint of the frontend node instance.
+  string grpc_endpoint = 2;
+  // Frontend node labels.
+  optional common.StringMapValue labels = 3;
+}
+
+// Frontend Node state.
+message FrontendNodeState {
+  // Id of the frontend node instance.
+  string id = 1;
+  // Grpc endpoint of the frontend node instance.
+  string grpc_endpoint = 2;
+  // Frontend node status.
+  FrontendNodeStatus status = 3;
+}
+
+// Status of the FrontendNode
+enum FrontendNodeStatus {
+  // FrontendNode is deemed online if it has not missed the
+  // registration.
+  Online = 0;
+  // FrontendNode is deemed offline if has missed the
+  // registration.
+  Offline = 1;
+}
+
+// Multiple frontend nodes.
+message FrontendNodes {
+  repeated FrontendNode entries = 1;
+  // This token allows you to get the next page of entries for
+  // `ListFrontendNodes` request. If the number of entries is larger than
+  // `max_entries`, use the `next_token` as a value for the
+  // `starting_token` field in the next `ListFrontendNodes` request.
+  optional uint64 next_token = 3;
+}
+
+// Request type for a GetFrontendNodes request.
+message GetFrontendNodeRequest {
+  // Get the frontend node with the specified id.
+  oneof filter {
+    common.FrontendNodeFilter frontend_node = 1;
+  }
+}
+
+// Request type for a ListFrontendNodes request.
+message ListFrontendNodesRequest {
+  oneof filter {
+    common.FrontendNodeFilter frontend_node = 1;
+  }
+  // Pagination to allow for multiple requests to get all frontend nodes.
+  common.Pagination pagination = 2;
+}
+
+// Reply type for a GetFrontendNodes request
+message GetFrontendNodeReply {
+  // Frontend node with the specified id.
+  FrontendNode frontend_node = 1;
+}
+
+// Reply type for a ListFrontendNodes request
+message ListFrontendNodesReply {
+  // List of frontend nodes.
+  FrontendNodes frontend_nodes = 1;
+}
+
+service FrontendNodeGrpc {
+  rpc GetFrontendNode (GetFrontendNodeRequest) returns (GetFrontendNodeReply) {}
+  rpc ListFrontendNodes (ListFrontendNodesRequest) returns (ListFrontendNodesReply) {}
+}
