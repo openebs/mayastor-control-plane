@@ -1,10 +1,13 @@
 use super::{
-    client::{discard_older_schema, list_existing_cr, v1beta2_api},
     v1alpha1::DiskPool as AlphaDiskPool,
     v1beta1::DiskPool as Beta1DiskPool,
     v1beta2::{DiskPool, DiskPoolSpec},
 };
-use crate::{error::Error, ApiVersion};
+use crate::{
+    diskpool::client::{discard_older_schema, list_existing_cr, v1beta2_api},
+    error::Error,
+    ApiVersion,
+};
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::{
     api::{Patch, PatchParams, PostParams},
@@ -49,7 +52,7 @@ pub(crate) async fn ensure_crd(
     api_version: &ApiVersion,
 ) -> Result<CustomResourceDefinition, Error> {
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
-    let mut crd = if api_version == &ApiVersion::Alpha1 {
+    let mut crd = if api_version == &ApiVersion::V1Alpha1 {
         AlphaDiskPool::crd()
     } else {
         Beta1DiskPool::crd()
@@ -71,7 +74,7 @@ pub(crate) async fn ensure_crd(
                 "Replacing CRD: {}",
                 serde_json::to_string_pretty(&new_crd).unwrap_or_default()
             );
-            let param = if api_version == &ApiVersion::Alpha1 {
+            let param = if api_version == &ApiVersion::V1Alpha1 {
                 PatchParams::apply("merge_v1alpha1_v1beta2").force()
             } else {
                 PatchParams::apply("merge_v1beta1_v1beta2").force()
@@ -95,11 +98,11 @@ async fn run_crd_migration(
     target_schema: &str,
 ) -> Result<(), Error> {
     match api_version {
-        ApiVersion::Alpha1 | ApiVersion::Beta1 => {
+        ApiVersion::V1Alpha1 | ApiVersion::V1Beta1 => {
             migrate_to_v1beta2(k8s.clone(), namespace, PAGINATION_LIMIT).await?;
             _ = discard_older_schema(&k8s, target_schema).await;
         }
-        ApiVersion::Beta2 => {
+        ApiVersion::V1Beta2 => {
             info!("CRD has the latest schema. Skipping CRD Operations");
         }
     }

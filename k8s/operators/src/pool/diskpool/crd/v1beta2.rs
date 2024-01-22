@@ -61,6 +61,11 @@ impl DiskPoolSpec {
     pub fn disks(&self) -> Vec<String> {
         self.disks.clone()
     }
+
+    /// The topology that decides replica placement.
+    pub fn topology(&self) -> Option<Topology> {
+        self.topology.clone()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, JsonSchema, Default)]

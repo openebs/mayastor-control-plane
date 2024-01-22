@@ -957,6 +957,7 @@ dependencies = [
  "prost-types",
  "regex",
  "rpc",
+ "serde",
  "serde_json",
  "shutdown",
  "snafu",

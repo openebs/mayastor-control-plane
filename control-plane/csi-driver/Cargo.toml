@@ -54,6 +54,7 @@ sysfs = { path = "../../utils/dependencies/sysfs" }
 stor-port = { path = "../stor-port" }
 utils = { path = "../../utils/utils-lib" }
 shutdown = { path = "../../utils/shutdown" }
+serde = { version = "1.0.188", features = ["derive"] }
 
 [target.'cfg(target_os="linux")'.dependencies]
 udev = "0.8.0"

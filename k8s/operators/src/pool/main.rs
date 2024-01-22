@@ -14,7 +14,7 @@ use crate::diskpool::client::{
 use chrono::Utc;
 use clap::{Arg, ArgMatches};
 use context::OperatorContext;
-use diskpool::{
+use diskpool::crd::{
     migration::ensure_and_migrate_crd,
     v1beta2::{CrPoolState, DiskPool, DiskPoolSpec, DiskPoolStatus},
 };
@@ -93,11 +93,11 @@ async fn reconcile(dsp: Arc<DiskPool>, ctx: Arc<OperatorContext>) -> Result<Acti
 #[derive(Debug, Clone, PartialEq)]
 pub enum ApiVersion {
     /// Represents v1alpha1
-    Alpha1,
+    V1Alpha1,
     /// Represents v1beta1
-    Beta1,
+    V1Beta1,
     /// Represents v1beta2
-    Beta2,
+    V1Beta2,
 }
 
 async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
@@ -107,11 +107,11 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
 
     match api_version {
         Some(version) => match version {
-            ApiVersion::Alpha1 | ApiVersion::Beta1 => {
+            ApiVersion::V1Alpha1 | ApiVersion::V1Beta1 => {
                 ensure_and_migrate_crd(k8s.clone(), namespace, &version, LATEST_API_VERSION)
                     .await?;
             }
-            ApiVersion::Beta2 => {
+            ApiVersion::V1Beta2 => {
                 info!("CRD has the latest schema. Skipping CRD Operations");
             }
         },
