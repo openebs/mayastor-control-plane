@@ -15,8 +15,9 @@ module.exports = {
         'code-review-rule': ({subject}) => {
           const REVIEW_COMMENTS = `Please don't merge code-review commits, instead squash them in the parent commit`;
           if (subject.includes('code-review')) return [ false, REVIEW_COMMENTS ];
-          if (subject.includes('review comments')) return [ false, REVIEW_COMMENTS ];
-          if (subject.includes('address comments')) return [ false, REVIEW_COMMENTS ];
+          if (subject.includes('review comment')) return [ false, REVIEW_COMMENTS ];
+          if (subject.includes('address comment')) return [ false, REVIEW_COMMENTS ];
+          if (subject.includes('addressed comment')) return [ false, REVIEW_COMMENTS ];
           return [ true ];
         },
       },
