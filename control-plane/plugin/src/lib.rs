@@ -26,10 +26,12 @@ impl Drop for TracingFlusher {
     }
 }
 
-/// Every rest plugin operation must implement this trait to become composable.
+/// Every plugin operation must implement this trait to become composable.
 #[async_trait::async_trait(?Send)]
 pub trait ExecuteOperation {
-    async fn execute(&self, cli_args: &CliArgs) -> PluginResult;
+    type Args;
+    type Error;
+    async fn execute(&self, cli_args: &Self::Args) -> Result<(), Self::Error>;
 }
 
 #[derive(clap::Parser, Debug)]
@@ -73,6 +75,8 @@ impl CliArgs {
 
 #[async_trait::async_trait(?Send)]
 impl ExecuteOperation for Operations {
+    type Args = CliArgs;
+    type Error = crate::resources::Error;
     async fn execute(&self, cli_args: &CliArgs) -> PluginResult {
         match self {
             Operations::Drain(resource) => resource.execute(cli_args).await,
@@ -86,6 +90,8 @@ impl ExecuteOperation for Operations {
 
 #[async_trait::async_trait(?Send)]
 impl ExecuteOperation for DrainResources {
+    type Args = CliArgs;
+    type Error = crate::resources::Error;
     async fn execute(&self, cli_args: &CliArgs) -> PluginResult {
         match self {
             DrainResources::Node(drain_node_args) => {
@@ -103,6 +109,8 @@ impl ExecuteOperation for DrainResources {
 
 #[async_trait::async_trait(?Send)]
 impl ExecuteOperation for GetResources {
+    type Args = CliArgs;
+    type Error = crate::resources::Error;
     async fn execute(&self, cli_args: &CliArgs) -> PluginResult {
         match self {
             GetResources::Cordon(get_cordon_resource) => match get_cordon_resource {
@@ -156,6 +164,8 @@ impl ExecuteOperation for GetResources {
 
 #[async_trait::async_trait(?Send)]
 impl ExecuteOperation for ScaleResources {
+    type Args = CliArgs;
+    type Error = crate::resources::Error;
     async fn execute(&self, cli_args: &CliArgs) -> PluginResult {
         match self {
             ScaleResources::Volume { id, replica_count } => {
@@ -167,6 +177,8 @@ impl ExecuteOperation for ScaleResources {
 
 #[async_trait::async_trait(?Send)]
 impl ExecuteOperation for CordonResources {
+    type Args = CliArgs;
+    type Error = crate::resources::Error;
     async fn execute(&self, cli_args: &CliArgs) -> PluginResult {
         match self {
             CordonResources::Node { id, label } => {
@@ -178,6 +190,8 @@ impl ExecuteOperation for CordonResources {
 
 #[async_trait::async_trait(?Send)]
 impl ExecuteOperation for UnCordonResources {
+    type Args = CliArgs;
+    type Error = crate::resources::Error;
     async fn execute(&self, cli_args: &CliArgs) -> PluginResult {
         match self {
             UnCordonResources::Node { id, label } => {
