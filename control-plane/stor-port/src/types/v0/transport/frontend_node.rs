@@ -5,6 +5,7 @@ use crate::{
         transport::Filter,
     },
 };
+use openapi::models;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
@@ -123,5 +124,25 @@ impl GetFrontendNodes {
     /// Get the inner `Filter`.
     pub fn filter(&self) -> &Filter {
         &self.filter
+    }
+}
+
+impl From<FrontendNodeStatus> for models::frontend_node_state::Status {
+    fn from(value: FrontendNodeStatus) -> Self {
+        match value {
+            FrontendNodeStatus::Online => Self::Online,
+            FrontendNodeStatus::Offline => Self::Offline,
+        }
+    }
+}
+impl From<FrontendNodeState> for models::FrontendNodeState {
+    fn from(src: FrontendNodeState) -> Self {
+        Self::new_all(src.id, src.endpoint.to_string(), src.status)
+    }
+}
+
+impl From<FrontendNode> for models::FrontendNode {
+    fn from(src: FrontendNode) -> Self {
+        Self::new_all(src.id, src.spec, src.state.map(|state| state.into()))
     }
 }

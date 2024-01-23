@@ -1952,6 +1952,108 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
+  /frontend-nodes:
+    get:
+      tags:
+        - FrontendNodes
+      operationId: get_frontend_nodes
+      parameters:
+        - in: query
+          name: max_entries
+          description: the maximum number of results to return
+          schema:
+            type: integer
+            default: 0
+          required: true
+        - in: query
+          name: starting_token
+          description: the offset to start pagination from
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrontendNodes'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+          '5XX':
+            $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
+  '/frontend-nodes/{frontend_node_id}':
+    put:
+      tags:
+        - FrontendNodes
+      operationId: register_frontend_node
+      parameters:
+        - in: path
+          name: frontend_node_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/FrontendNodeId'
+      requestBody:
+        description: Frontend Node to be registered
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterFrontendNode'
+        required: true
+      responses:
+        '204':
+          description: OK
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
+    delete:
+      tags:
+        - FrontendNodes
+      operationId: deregister_frontend_node
+      parameters:
+        - name: frontend_node_id
+          in: path
+          description: ID of the Frontend Node to be deregistered
+          required: true
+          schema:
+            $ref: '#/components/schemas/FrontendNodeId'
+      responses:
+        '200':
+          description: Frontend Node deregistered successfully
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
+    get:
+      tags:
+        - FrontendNodes
+      operationId: get_frontend_node
+      parameters:
+        - name: frontend_node_id
+          in: path
+          description: ID of the Frontend Node
+          required: true
+          schema:
+            $ref: '#/components/schemas/FrontendNodeId'
+      responses:
+        '200':
+          description: Frontend Node details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrontendNode'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+          '5XX':
+            $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
 components:
   securitySchemes:
     JWT:
@@ -1974,6 +2076,10 @@ components:
     NodeId:
       description: storage node identifier
       example: io-engine-1
+      type: string
+    FrontendNodeId:
+      description: Frontend or application node identifier.
+      example: csi-node-1
       type: string
     PoolId:
       description: storage pool identifier
@@ -3816,6 +3922,76 @@ components:
       required:
         - cordonlabels
         - drainlabels
+    RegisterFrontendNode:
+      type: object
+      properties:
+        endpoint:
+          type: string
+          format: hostname
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - id
+        - endpoint
+    FrontendNode:
+      type: object
+      properties:
+        id:
+          type: string
+        spec:
+          $ref: '#/components/schemas/FrontendNodeSpec'
+        state:
+          $ref: '#/components/schemas/FrontendNodeState'
+      required:
+        - id
+        - spec
+    FrontendNodeSpec:
+      type: object
+      properties:
+        id:
+          type: string
+        endpoint:
+          type: string
+          format: hostname
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - id
+        - endpoint
+    FrontendNodeState:
+      type: object
+      properties:
+        id:
+          type: string
+        endpoint:
+          type: string
+          format: hostname
+        status:
+          type: string
+          enum:
+            - Online
+            - Offline
+      required:
+        - id
+        - endpoint
+        - status
+    FrontendNodes:
+      description: |-
+        Array of frontend nodes plus the next token for subsequent get requests when using pagination.
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/FrontendNode'
+        next_token:
+          type: integer
+      required:
+        - entries
   responses:
     ClientError:
       description: Client side error

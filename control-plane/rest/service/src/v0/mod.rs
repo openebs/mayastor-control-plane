@@ -4,6 +4,7 @@
 
 pub mod block_devices;
 pub mod children;
+mod frontend_nodes;
 pub mod jsongrpc;
 pub mod nexuses;
 pub mod nodes;

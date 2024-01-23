@@ -1,4 +1,5 @@
 use crate::types::v0::transport::FrontendNodeId;
+use openapi::models;
 use pstor::{ApiVersion, ObjectKey, StorableObject, StorableObjectType};
 use serde::{Deserialize, Serialize};
 
@@ -60,5 +61,11 @@ impl FrontendNodeSpec {
             endpoint,
             labels,
         }
+    }
+}
+
+impl From<FrontendNodeSpec> for models::FrontendNodeSpec {
+    fn from(src: FrontendNodeSpec) -> Self {
+        Self::new_all(src.id, src.endpoint.to_string(), src.labels)
     }
 }
