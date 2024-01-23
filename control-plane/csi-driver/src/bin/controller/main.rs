@@ -19,7 +19,7 @@ const REST_TIMEOUT: &str = "30s";
 fn initialize_controller(args: &ArgMatches) -> anyhow::Result<()> {
     CsiControllerConfig::initialize(args)?;
     IoEngineApiClient::initialize()
-        .map_err(|e| anyhow::anyhow!("Failed to initialize API client, error = {}", e))?;
+        .map_err(|error| anyhow::anyhow!("Failed to initialize API client, error = {error}"))?;
     Ok(())
 }
 
@@ -32,9 +32,8 @@ async fn ping_rest_api() {
         Ok(nodes) => {
             let names: Vec<String> = nodes.into_iter().map(|n| n.id).collect();
             info!(
-                "REST API endpoints available, {} IoEngine node(s) reported: {:?}",
-                names.len(),
-                names,
+                "REST API endpoint available, {len} IoEngine node(s) reported: {names:?}",
+                len = names.len(),
             );
         }
     }
@@ -136,7 +135,7 @@ async fn main() -> anyhow::Result<()> {
     ping_rest_api().await;
 
     // Starts PV Garbage Collector if platform type is k8s
-    if stor_port::platform::current_plaform_type() == stor_port::platform::PlatformType::K8s {
+    if stor_port::platform::current_platform_type() == stor_port::platform::PlatformType::K8s {
         let gc_instance = pvwatcher::PvGarbageCollector::new(orphan_period).await?;
         tokio::spawn(async move { gc_instance.run_watcher().await });
     }

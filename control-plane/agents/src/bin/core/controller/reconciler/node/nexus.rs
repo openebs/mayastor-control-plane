@@ -140,7 +140,7 @@ async fn find_shutdown_volumes(
         // else the drain operation is timed out
 
         // todo: this should be handled better..
-        if platform::current_plaform_type() == platform::PlatformType::Deployer {
+        if platform::current_platform_type() == platform::PlatformType::Deployer {
             for vi in node_spec.node_draining_volumes().await {
                 let mut volume = context.specs().volume(&vi).await?;
                 let request = DestroyShutdownTargets::new(vi, None);

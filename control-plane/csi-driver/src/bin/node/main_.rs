@@ -236,7 +236,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
         anyhow::bail!("Failed to detect nvme_tcp kernel module. Run `modprobe nvme_tcp` to load the kernel module. {}", error);
     }
 
-    if platform::current_plaform_type() == platform::PlatformType::K8s {
+    if platform::current_platform_type() == platform::PlatformType::K8s {
         check_ana_and_label_node(matches.get_one::<String>("node-name").expect("required")).await?;
     }
 
