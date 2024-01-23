@@ -46,7 +46,7 @@ impl Service {
     async fn get_frontend_node(&self, filter: Filter) -> Result<FrontendNode, SvcError> {
         match filter {
             Filter::FrontendNode(id) => {
-                let frontend_node = self.registry.get_frontend_node(&id)?;
+                let frontend_node = self.registry.frontend_node(&id)?;
                 Ok(frontend_node)
             }
             _ => Err(SvcError::InvalidFilter { filter }),

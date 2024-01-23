@@ -32,7 +32,7 @@ impl Registry {
         PaginatedResult::new(frontend_nodes, last)
     }
     /// Gets the frontend node from the registry with the given id.
-    pub(crate) fn get_frontend_node(&self, id: &FrontendNodeId) -> Result<FrontendNode, SvcError> {
+    pub(crate) fn frontend_node(&self, id: &FrontendNodeId) -> Result<FrontendNode, SvcError> {
         let Some(spec) = self.specs().get_frontend_node_spec(id) else {
             return Err(SvcError::NotFound {
                 kind: ResourceKind::FrontendNode,

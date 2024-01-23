@@ -6,7 +6,7 @@ import "v1/misc/common.proto";
 
 package v1.frontend_node.registration;
 
-// Register the frontend node with control-plane.
+// Register the frontend node with the control-plane.
 message RegisterRequest {
   // Id of the frontend node instance.
   string id = 1;

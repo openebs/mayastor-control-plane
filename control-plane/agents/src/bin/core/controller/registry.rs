@@ -502,7 +502,7 @@ impl Registry {
         }
     }
 
-    /// Register a frontend node(ex:- csi node) to control plane.
+    /// Register a frontend node (ex: a csi node) with the control-plane.
     pub(crate) async fn register_frontend_node_spec(
         &self,
         frontend_node_spec: &RegisterFrontendNode,
@@ -513,7 +513,7 @@ impl Registry {
         Ok(())
     }
 
-    /// Deregister Register a frontend node(ex:- csi node) from control plane.
+    /// Deregister a frontend node (ex: a csi node) with the control-plane.
     pub(crate) async fn deregister_frontend_node_spec(
         &self,
         frontend_node: &DeregisterFrontendNode,

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 mod registry;
 mod service;
-mod spec;
+mod specs;
 
 pub(crate) fn configure(builder: Service) -> Service {
     let registry = builder.shared_state::<Registry>().clone();

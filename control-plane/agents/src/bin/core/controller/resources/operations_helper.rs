@@ -6,7 +6,6 @@ use crate::controller::{
     resources::migration::migrate_product_v1_to_v2, task_poller::PollTriggerEvent,
 };
 use agents::errors::SvcError;
-use grpc::operations::frontend_node::traits::FrontendNodeRegisterInfo;
 use stor_port::{
     pstor::{product_v1_key_prefix, API_VERSION},
     transport_api::{ErrorChain, ResourceKind},
@@ -16,7 +15,7 @@ use stor_port::{
             definitions::{
                 key_prefix_obj, ObjectKey, StorableObject, StorableObjectType, Store, StoreError,
             },
-            frontend_node::{FrontendNodeSpec, FrontendNodeSpecKey},
+            frontend_node::FrontendNodeSpec,
             nexus::NexusSpec,
             node::NodeSpec,
             pool::PoolSpec,
@@ -25,10 +24,7 @@ use stor_port::{
             volume::{AffinityGroupSpec, VolumeContentSource, VolumeSpec},
             AsOperationSequencer, OperationMode, OperationSequence, SpecStatus, SpecTransaction,
         },
-        transport::{
-            DeregisterFrontendNode, FrontendNodeId, NexusId, NodeId, PoolId, RegisterFrontendNode,
-            ReplicaId, SnapshotId, VolumeId,
-        },
+        transport::{FrontendNodeId, NexusId, NodeId, PoolId, ReplicaId, SnapshotId, VolumeId},
     },
 };
 
@@ -1077,67 +1073,6 @@ impl ResourceSpecsLocked {
                 unimplemented!("{} not persisted in store", spec_type);
             }
         };
-        Ok(())
-    }
-
-    /// Get a frontend node spec using id.
-    pub(crate) fn get_frontend_node_spec(&self, id: &FrontendNodeId) -> Option<FrontendNodeSpec> {
-        let specs = self.read();
-        specs.frontend_nodes.get(id).map(|spec| spec.lock().clone())
-    }
-
-    /// Remove the frontend node spec from registry.
-    fn remove_frontend_node_spec(&self, id: &FrontendNodeId) {
-        let mut specs = self.write();
-        specs.frontend_nodes.remove(id);
-    }
-
-    /// Create a frontend node spec for the incoming request from csi instance.
-    pub(crate) async fn register_frontend_node_spec(
-        &self,
-        registry: &Registry,
-        req: &RegisterFrontendNode,
-    ) -> Result<(), SvcError> {
-        let (changed, spec_to_persist) = {
-            let mut specs = self.write();
-            match specs.frontend_nodes.get(&req.frontend_node_id()) {
-                Some(frontend_node_rsc) => {
-                    let mut frontend_node_spec = frontend_node_rsc.lock();
-                    let changed = frontend_node_spec.endpoint != req.grpc_endpoint()
-                        || frontend_node_spec.labels != req.labels();
-
-                    frontend_node_spec.endpoint = req.grpc_endpoint();
-                    (changed, frontend_node_spec.clone())
-                }
-                None => {
-                    let frontend_node = FrontendNodeSpec::new(
-                        req.frontend_node_id().clone(),
-                        req.grpc_endpoint(),
-                        req.labels.clone(),
-                    );
-                    specs.frontend_nodes.insert(frontend_node.clone());
-                    (true, frontend_node)
-                }
-            }
-        };
-        if changed {
-            registry.store_obj(&spec_to_persist).await?;
-        }
-        Ok(())
-    }
-
-    /// Delete a frontend node spec from the registry for the incoming request from csi instance.
-    pub(crate) async fn deregister_frontend_node_spec(
-        &self,
-        registry: &Registry,
-        req: &DeregisterFrontendNode,
-    ) -> Result<(), SvcError> {
-        registry
-            .delete_kv(
-                &<DeregisterFrontendNode as Into<FrontendNodeSpecKey>>::into(req.clone()).key(),
-            )
-            .await?;
-        self.remove_frontend_node_spec(&req.id);
         Ok(())
     }
 }
