@@ -16,24 +16,24 @@ use crate::IoEngineApiClient;
 #[derive(Clone)]
 pub(crate) struct PvGarbageCollector {
     pub(crate) pv_handle: Api<PersistentVolume>,
+    orphan_period: Option<humantime::Duration>,
 }
 
 /// Methods implemented by PV Garbage Collector
 impl PvGarbageCollector {
     /// Returns an instance of PV Garbage collector
-    pub(crate) async fn new() -> anyhow::Result<Self> {
+    pub(crate) async fn new(orphan_period: Option<humantime::Duration>) -> anyhow::Result<Self> {
         let client = Client::try_default().await?;
         Ok(Self {
             pv_handle: Api::<PersistentVolume>::all(client),
+            orphan_period,
         })
     }
     /// Starts watching PV events
     pub(crate) async fn run_watcher(&self) {
         info!("Starting PV Garbage Collector");
         let cloned_self = self.clone();
-        tokio::spawn(async move {
-            cloned_self.handle_missed_events().await;
-        });
+        tokio::spawn(cloned_self.orphan_volumes_watcher());
         watcher(self.pv_handle.clone(), watcher::Config::default())
             .touched_objects()
             .try_for_each(|pvol| async {
@@ -80,29 +80,41 @@ impl PvGarbageCollector {
         }
     }
 
+    async fn orphan_volumes_watcher(self) {
+        let Some(period) = self.orphan_period else {
+            return self.handle_missed_events().await;
+        };
+        let mut ticker = tokio::time::interval(period.into());
+        loop {
+            ticker.tick().await;
+            self.handle_missed_events().await;
+        }
+    }
+
     /// Handle if there is any missed events at startup.
     async fn handle_missed_events(&self) {
-        debug!("Handling if any missed events");
         match IoEngineApiClient::get_client()
             .list_volumes(0, "".to_string())
             .await
         {
             Ok(volume_list) => {
                 for vol in volume_list.entries {
-                    let pv = "pvc-".to_string() + &vol.spec.uuid.to_string();
-                    if let Ok(pvol) = self.pv_handle.get_opt(&pv).await {
-                        match pvol {
-                            Some(_) => {}
-                            None => {
-                                debug!(pv.name = pv, "PV is a deletion candidate");
-                                let vol_handle = &vol.spec.uuid.to_string();
-                                delete_volume(vol_handle).await;
-                            }
-                        }
+                    if self.is_vol_orphaned(&vol.spec.uuid).await {
+                        delete_volume(&vol.spec.uuid.to_string()).await;
                     }
                 }
             }
             Err(error) => error!(?error, "Unable to list volumes"),
+        }
+    }
+
+    async fn is_vol_orphaned(&self, volume_uuid: &uuid::Uuid) -> bool {
+        let pv_name = format!("pvc-{volume_uuid}");
+        if let Ok(None) = self.pv_handle.get_opt(&pv_name).await {
+            debug!(pv.name = pv_name, "PV is a deletion candidate");
+            true
+        } else {
+            false
         }
     }
 }
@@ -110,6 +122,10 @@ impl PvGarbageCollector {
 /// Accepts volume id and calls Control plane api to delete the Volume
 async fn delete_volume(vol_handle: &str) {
     let volume_uuid = Uuid::parse_str(vol_handle).unwrap();
+    // this shouldn't happy but to be safe, ensure we don't bump heads with the provisioning
+    let Ok(_guard) = csi_driver::limiter::VolumeOpGuard::new(volume_uuid) else {
+        return;
+    };
     match IoEngineApiClient::get_client()
         .delete_volume(&volume_uuid)
         .await

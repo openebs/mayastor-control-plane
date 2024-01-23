@@ -78,6 +78,15 @@ async fn main() -> anyhow::Result<()> {
                     "The number of worker threads that process requests"
                 ),
         )
+        .arg(
+            Arg::new("orphan-vol-gc-period")
+                .long("orphan-vol-gc-period")
+                .default_value("10m")
+                .help(
+                    "How often to check and delete orphaned volumes. \n\
+                        An orphan volume is a volume with no corresponding PV",
+                )
+        )
         .get_matches();
 
     utils::print_package_info!();
@@ -99,9 +108,14 @@ async fn main() -> anyhow::Result<()> {
         CsiControllerConfig::get_config().rest_endpoint()
     );
 
+    let orphan_period = args
+        .get_one::<String>("orphan-vol-gc-period")
+        .map(|p| p.parse::<humantime::Duration>())
+        .transpose()?;
+
     // Starts PV Garbage Collector if platform type is k8s
     if stor_port::platform::current_plaform_type() == stor_port::platform::PlatformType::K8s {
-        let gc_instance = pvwatcher::PvGarbageCollector::new().await?;
+        let gc_instance = pvwatcher::PvGarbageCollector::new(orphan_period).await?;
         tokio::spawn(async move { gc_instance.run_watcher().await });
     }
 
