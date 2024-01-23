@@ -6,17 +6,13 @@ use kube::{
     Client, ResourceExt,
 };
 use tracing::{debug, error, info};
-use uuid::Uuid;
-
-use csi_driver::CSI_PLUGIN_NAME;
-
-use crate::IoEngineApiClient;
 
 /// Struct for PV Garbage collector
 #[derive(Clone)]
 pub(crate) struct PvGarbageCollector {
     pub(crate) pv_handle: Api<PersistentVolume>,
     orphan_period: Option<humantime::Duration>,
+    rest_client: &'static crate::IoEngineApiClient,
 }
 
 /// Methods implemented by PV Garbage Collector
@@ -27,13 +23,13 @@ impl PvGarbageCollector {
         Ok(Self {
             pv_handle: Api::<PersistentVolume>::all(client),
             orphan_period,
+            rest_client: crate::IoEngineApiClient::get_client(),
         })
     }
-    /// Starts watching PV events
+    /// Starts watching PV events.
     pub(crate) async fn run_watcher(&self) {
+        tokio::spawn(self.clone().orphan_volumes_watcher());
         info!("Starting PV Garbage Collector");
-        let cloned_self = self.clone();
-        tokio::spawn(cloned_self.orphan_volumes_watcher());
         watcher(self.pv_handle.clone(), watcher::Config::default())
             .touched_objects()
             .try_for_each(|pvol| async {
@@ -44,63 +40,71 @@ impl PvGarbageCollector {
             .expect("Watcher unexpectedly terminated");
     }
 
-    async fn process_object(&self, pv: PersistentVolume) {
-        if pv.metadata.clone().deletion_timestamp.is_none() {
-            return;
+    async fn process_object(&self, pv: PersistentVolume) -> Option<()> {
+        let pv_name = pv.name_any();
+
+        pv.metadata.deletion_timestamp?;
+
+        let pv_spec = pv.spec?;
+        let volume = pv_spec.csi?;
+        if volume.driver != csi_driver::CSI_PLUGIN_NAME {
+            return None;
         }
-        if let Some(provisioner) = &pv.spec.as_ref().unwrap().csi {
-            if provisioner.driver != CSI_PLUGIN_NAME {
-                return;
+        let volume_uuid = uuid::Uuid::parse_str(&volume.volume_handle).ok()?;
+        let reclaim_policy = pv_spec.persistent_volume_reclaim_policy?;
+        let phase = pv.status?.phase?;
+
+        if reclaim_policy == "Retain" && phase == "Released" {
+            info!(
+                pv.name = pv_name,
+                pv.reclaim_policy = reclaim_policy,
+                pv.phase = phase,
+                "PV is a deletion candidate"
+            );
+            self.delete_volume(volume_uuid).await;
+        } else if phase == "Bound" {
+            match self.pv_handle.get_opt(&pv_name).await {
+                Ok(pvol) => match pvol {
+                    Some(_) => debug!(pv.name = pv_name, "PV present on API server"),
+                    None => {
+                        info!(
+                            pv.name = pv_name,
+                            pv.reclaim_policy = reclaim_policy,
+                            pv.phase = phase,
+                            "PV is a deletion candidate"
+                        );
+                        self.delete_volume(volume_uuid).await;
+                    }
+                },
+                Err(error) => error!(%error, "Error while verifying if PV is present"),
             }
         }
 
-        if let Some(reclaim_policy) = &pv.spec.as_ref().unwrap().persistent_volume_reclaim_policy {
-            if let Some(phase) = &pv.status.as_ref().unwrap().phase {
-                if reclaim_policy == "Retain" && phase == "Released" {
-                    debug!(pv.name = pv.name_any(), "PV is a deletion candidate");
-                    if let Some(provisioner) = &pv.spec.as_ref().unwrap().csi {
-                        delete_volume(&provisioner.volume_handle.to_string()).await;
-                    }
-                }
-                if phase == "Bound" {
-                    match self.pv_handle.get_opt(&pv.name_any()).await {
-                        Ok(pvol) => match pvol {
-                            Some(_) => debug!(pv.name = pv.name_any(), "PV present on API server"),
-                            None => {
-                                debug!(pv.name = pv.name_any(), "PV is a deletion candidate");
-                                if let Some(provisioner) = &pv.spec.as_ref().unwrap().csi {
-                                    delete_volume(&provisioner.volume_handle.to_string()).await;
-                                }
-                            }
-                        },
-                        Err(error) => error!(%error, "Error while verifying if PV is present"),
-                    }
-                }
-            }
-        }
+        Some(())
     }
 
     async fn orphan_volumes_watcher(self) {
+        info!("Starting Orphaned Volumes Garbage Collector");
         let Some(period) = self.orphan_period else {
-            return self.handle_missed_events().await;
+            return self.delete_orphan_volumes().await;
         };
         let mut ticker = tokio::time::interval(period.into());
         loop {
             ticker.tick().await;
-            self.handle_missed_events().await;
+            self.delete_orphan_volumes().await;
         }
     }
 
-    /// Handle if there is any missed events at startup.
-    async fn handle_missed_events(&self) {
-        match IoEngineApiClient::get_client()
-            .list_volumes(0, "".to_string())
-            .await
-        {
+    /// Deletes orphaned volumes (ie volumes with no corresponding PV) which can be useful:
+    /// 1. if there is any missed events at startup
+    /// 2. to tackle k8s bug where volumes are leaked when PV deletion is attempted before
+    /// PVC deletion.
+    async fn delete_orphan_volumes(&self) {
+        match self.rest_client.list_volumes(0, "".to_string()).await {
             Ok(volume_list) => {
                 for vol in volume_list.entries {
                     if self.is_vol_orphaned(&vol.spec.uuid).await {
-                        delete_volume(&vol.spec.uuid.to_string()).await;
+                        self.delete_volume(vol.spec.uuid).await;
                     }
                 }
             }
@@ -117,20 +121,18 @@ impl PvGarbageCollector {
             false
         }
     }
-}
 
-/// Accepts volume id and calls Control plane api to delete the Volume
-async fn delete_volume(vol_handle: &str) {
-    let volume_uuid = Uuid::parse_str(vol_handle).unwrap();
-    // this shouldn't happy but to be safe, ensure we don't bump heads with the provisioning
-    let Ok(_guard) = csi_driver::limiter::VolumeOpGuard::new(volume_uuid) else {
-        return;
-    };
-    match IoEngineApiClient::get_client()
-        .delete_volume(&volume_uuid)
-        .await
-    {
-        Ok(_) => info!(volume.uuid = %volume_uuid, "Successfully deleted volume"),
-        Err(error) => error!(?error, volume.uuid = %volume_uuid, "Failed to delete volume"),
+    /// Accepts volume id and calls Control plane api to delete the Volume.
+    #[tracing::instrument(level = "info", skip(self, volume_uuid), fields(volume.uuid = %volume_uuid))]
+    async fn delete_volume(&self, volume_uuid: uuid::Uuid) {
+        // this shouldn't happy but to be safe, ensure we don't bump heads with the provisioning
+        let Ok(_guard) = csi_driver::limiter::VolumeOpGuard::new(volume_uuid) else {
+            error!("Volume cannot be deleted as it's in use within the csi-controller plugin");
+            return;
+        };
+        match self.rest_client.delete_volume(&volume_uuid).await {
+            Ok(_) => info!("Successfully deleted the volume"),
+            Err(error) => error!(?error, "Failed to delete the volume"),
+        }
     }
 }
