@@ -1,5 +1,6 @@
 use crate::resources::{
     error::Error, utils, CordonResources, DrainResources, GetResources, ScaleResources,
+    UnCordonResources,
 };
 use async_trait::async_trait;
 
@@ -23,7 +24,7 @@ pub enum Operations {
     Cordon(CordonResources),
     /// 'Uncordon' resources.
     #[clap(subcommand)]
-    Uncordon(CordonResources),
+    Uncordon(UnCordonResources),
 }
 
 /// Drain trait.
