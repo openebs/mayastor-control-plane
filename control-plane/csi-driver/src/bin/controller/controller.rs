@@ -1,6 +1,9 @@
-use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, IoEngineApiClient};
+use crate::CsiControllerConfig;
 
-use csi_driver::context::{CreateParams, PublishParams};
+use csi_driver::{
+    client::{CreateVolumeTopology, IoEngineApiClient},
+    context::{CreateParams, PublishParams},
+};
 use rpc::csi::{volume_content_source::Type, Topology as CsiTopology, *};
 use stor_port::types::v0::openapi::{
     models,
@@ -11,6 +14,7 @@ use stor_port::types::v0::openapi::{
 };
 use utils::{CREATED_BY_KEY, DSP_OPERATOR};
 
+use csi_driver::client::ApiClientError;
 use regex::Regex;
 use std::{collections::HashMap, str::FromStr};
 use tonic::{Response, Status};
@@ -96,24 +100,6 @@ fn frontend_nodes_allowed<'a>(
             } else {
                 Err(nodes.iter().map(|n| n.name.as_str()).collect::<Vec<_>>())
             }
-        }
-    }
-}
-
-impl From<ApiClientError> for Status {
-    fn from(error: ApiClientError) -> Self {
-        match error {
-            ApiClientError::ResourceNotExists(reason) => Status::not_found(reason),
-            ApiClientError::NotImplemented(reason) => Status::unimplemented(reason),
-            ApiClientError::RequestTimeout(reason) => Status::deadline_exceeded(reason),
-            ApiClientError::Conflict(reason) => Status::aborted(reason),
-            ApiClientError::Aborted(reason) => Status::aborted(reason),
-            ApiClientError::Unavailable(reason) => Status::unavailable(reason),
-            ApiClientError::InvalidArgument(reason) => Status::invalid_argument(reason),
-            // TODO: Revisit the error mapping. Currently handled specifically for snapshot create.
-            // ApiClientError::PreconditionFailed(reason) => Status::resource_exhausted(reason),
-            // ApiClientError::ResourceExhausted(reason) => Status::resource_exhausted(reason),
-            error => Status::internal(format!("Operation failed: {error:?}")),
         }
     }
 }

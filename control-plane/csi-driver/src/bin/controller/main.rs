@@ -1,24 +1,61 @@
+use anyhow::anyhow;
 use tracing::info;
 
 use clap::{Arg, ArgMatches};
-mod client;
 mod config;
 mod controller;
 mod identity;
 mod pvwatcher;
 mod server;
 
-use client::{ApiClientError, CreateVolumeTopology, IoEngineApiClient};
 use config::CsiControllerConfig;
+use csi_driver::client::{IoEngineApiClient, REST_CLIENT};
+use stor_port::types::v0::openapi::clients;
 
 const CSI_SOCKET: &str = "/var/tmp/csi.sock";
 const CONCURRENCY_LIMIT: usize = 10;
 const REST_TIMEOUT: &str = "30s";
 
+/// Initialize API client instance. Must be called prior to
+/// obtaining the client instance.
+pub(crate) fn initialize_rest_api() -> anyhow::Result<()> {
+    if REST_CLIENT.get().is_some() {
+        return Err(anyhow!("API client already initialized"));
+    }
+
+    let cfg = CsiControllerConfig::get_config();
+    let endpoint = cfg.rest_endpoint();
+
+    let url = clients::tower::Url::parse(endpoint)
+        .map_err(|error| anyhow!("Invalid API endpoint URL {}: {:?}", endpoint, error))?;
+    let concurrency_limit = cfg.create_volume_limit() * 2;
+    let tower = clients::tower::Configuration::builder()
+        .with_timeout(cfg.io_timeout())
+        .with_concurrency_limit(Some(concurrency_limit))
+        .build_url(url)
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "Failed to create openapi configuration, Error: '{:?}'",
+                error
+            )
+        })?;
+
+    REST_CLIENT.get_or_init(|| IoEngineApiClient {
+        rest_client: clients::tower::ApiClient::new(tower.clone()),
+    });
+
+    info!(
+        "API client is initialized with endpoint {}, I/O timeout = {:?}",
+        endpoint,
+        cfg.io_timeout(),
+    );
+    Ok(())
+}
+
 /// Initialize all components before starting the CSI controller.
 fn initialize_controller(args: &ArgMatches) -> anyhow::Result<()> {
     CsiControllerConfig::initialize(args)?;
-    IoEngineApiClient::initialize()
+    initialize_rest_api()
         .map_err(|e| anyhow::anyhow!("Failed to initialize API client, error = {}", e))?;
     Ok(())
 }

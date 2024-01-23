@@ -2022,8 +2022,8 @@ paths:
           schema:
             $ref: '#/components/schemas/FrontendNodeId'
       responses:
-        '200':
-          description: Frontend Node deregistered successfully
+        '204':
+          description: OK
         '4XX':
           $ref: '#/components/responses/ClientError'
         '5XX':
@@ -3936,6 +3936,8 @@ components:
         - id
         - endpoint
     FrontendNode:
+      description: |-
+        Respresent a frontend node i.e a csi-node.
       type: object
       properties:
         id:
@@ -3948,6 +3950,8 @@ components:
         - id
         - spec
     FrontendNodeSpec:
+      description: |-
+        Frontend node specification.
       type: object
       properties:
         id:
@@ -3963,6 +3967,8 @@ components:
         - id
         - endpoint
     FrontendNodeState:
+      description: |-
+        Deemed state of the frontend node.
       type: object
       properties:
         id:

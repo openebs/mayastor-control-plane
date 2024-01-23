@@ -36,6 +36,7 @@ mod nodeplugin_grpc;
 mod nodeplugin_nvme;
 #[cfg(target_os = "linux")]
 mod nodeplugin_svc;
+mod registration;
 /// Shutdown event which lets the plugin know it needs to stop processing new events and
 /// complete any existing ones before shutting down.
 #[cfg(target_os = "linux")]

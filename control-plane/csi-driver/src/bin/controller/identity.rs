@@ -1,5 +1,7 @@
-use crate::{ApiClientError, IoEngineApiClient};
-use csi_driver::CSI_PLUGIN_NAME;
+use csi_driver::{
+    client::{ApiClientError, IoEngineApiClient},
+    CSI_PLUGIN_NAME,
+};
 use rpc::csi::*;
 use std::collections::HashMap;
 use tonic::{Request, Response, Status};
