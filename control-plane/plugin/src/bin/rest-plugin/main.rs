@@ -1,36 +1,29 @@
 use clap::Parser;
 use openapi::tower::client::Url;
-use plugin::rest_wrapper::RestClient;
+use plugin::{operations::Operations, rest_wrapper::RestClient, ExecuteOperation};
 use snafu::ResultExt;
-use std::{env, ops::Deref};
+use std::env;
 
 #[derive(clap::Parser, Debug)]
 #[clap(name = utils::package_description!(), version = utils::version_info_str!())]
+#[group(skip)]
 struct CliArgs {
     /// The rest endpoint to connect to.
     #[clap(global = true, long, short, default_value = "http://localhost:8081")]
     rest: Url,
 
-    #[clap(flatten)]
-    args: plugin::RestCliArgs,
-}
-impl CliArgs {
-    fn args() -> Self {
-        CliArgs::parse()
-    }
-}
-impl Deref for CliArgs {
-    type Target = plugin::RestCliArgs;
+    /// The operation to be performed.
+    #[clap(subcommand)]
+    operation: Operations,
 
-    fn deref(&self) -> &Self::Target {
-        &self.args
-    }
+    #[clap(flatten)]
+    args: plugin::CliArgs,
 }
 
 #[tokio::main]
 async fn main() {
     let cli_args = CliArgs::args();
-    let _trace_flush = cli_args.init_tracing();
+    let _trace_flush = cli_args.args.init_tracing();
 
     if let Err(error) = cli_args.execute().await {
         eprintln!("{error}");
@@ -47,10 +40,16 @@ enum Error {
 }
 
 impl CliArgs {
+    fn args() -> Self {
+        CliArgs::parse()
+    }
     async fn execute(&self) -> Result<(), Error> {
         // todo: client connection is lazy, we should do sanity connection test here.
         //  Example, we can use use rest liveness probe.
-        RestClient::init(self.rest.clone(), *self.timeout).context(RestClientSnafu)?;
-        self.args.execute().await.context(ResourcesSnafu)
+        RestClient::init(self.rest.clone(), *self.args.timeout).context(RestClientSnafu)?;
+        self.operation
+            .execute(&self.args)
+            .await
+            .context(ResourcesSnafu)
     }
 }

@@ -76,6 +76,14 @@ pub enum CordonResources {
     Node { id: NodeId, label: String },
 }
 
+/// The types of resources that support uncordoning.
+#[derive(clap::Subcommand, Debug)]
+pub enum UnCordonResources {
+    /// Removes the cordon label from the node.
+    /// When the node has no more cordon labels, it is effectively uncordoned.
+    Node { id: NodeId, label: String },
+}
+
 /// The types of resources that support the 'get cordon' operation.
 #[derive(clap::Subcommand, Debug)]
 pub enum GetCordonArgs {
