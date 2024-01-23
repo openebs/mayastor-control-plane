@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+import "v1/misc/common.proto";
+
+package pstor_proxy.v1;
+
+// Frontend Node information
+message FrontendNode {
+  // Frontend Node identification
+  string id = 1;
+  // Specification of the frontend node.
+  FrontendNodeSpec spec = 2;
+  // Runtime state of the frontend node.
+  FrontendNodeState state = 3;
+}
+
+// Frontend Node spec
+message FrontendNodeSpec {
+  // Id of the frontend node instance
+  string id = 1;
+  // Grpc endpoint of the frontend node instance
+  string grpc_endpoint = 2;
+  // Frontend node labels
+  optional StringMapValue labels = 3;
+}
+
+// Frontend Node state
+message FrontendNodeState {
+}
+
+// Multiple frontend nodes
+message FrontendNodes {
+  repeated FrontendNode entries = 1;
+  // This token allows you to get the next page of entries for
+  // `GetFrontendNodes` request. If the number of entries is larger than
+  // `max_entries`, use the `next_token` as a value for the
+  // `starting_token` field in the next `GetFrontendNodes` request.
+  optional uint64 next_token = 3;
+}
+
+// Request type for a GetFrontendNodes request
+message GetFrontendNodesRequest {
+  // Filter frontend nodes
+  oneof filter {
+    FrontendNodeFilter frontend_node = 1;
+  }
+  // Pagination to allow for multiple requests to get all frontend nodes
+  Pagination pagination = 2;
+  // Ignore 404 not found errors
+  bool ignore_notfound = 3;
+}
+
+// Reply type for a GetFrontendNodes request
+message GetFrontendNodesReply {
+  oneof reply {
+    FrontendNodes frontend_nodes = 1;
+    ReplyError error = 2;
+  }
+}
+
+service FrontendNodeGrpc {
+  rpc GetFrontendNodes (GetFrontendNodesRequest) returns (GetFrontendNodesReply) {}
+}

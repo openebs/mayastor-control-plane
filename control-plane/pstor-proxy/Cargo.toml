@@ -1,0 +1,31 @@
+[package]
+name = "pstor-proxy"
+description = "Grpc Proxy layer for the pstor"
+version = "1.0.0"
+edition = "2021"
+
+[build-dependencies]
+prost-build = "0.12.1"
+tonic-build = "0.10.2"
+
+[dependencies]
+anyhow = "1.0.75"
+clap = { version = "4.4.13", features = ["derive"] }
+humantime = { version = "2.1.0", features = [] }
+indexmap = "2.0.2"
+parking_lot = "0.12.1"
+prost = "0.12.1"
+prost-types = "0.12.1"
+pstor = { path = "../../utils/pstor" }
+serde = { version = "1.0.189", features = ["derive"] }
+serde_json = { version = "1.0.107", features = [] }
+shutdown = { path = "../../utils/shutdown" }
+snafu = "0.7.5"
+structopt = "0.3.26"
+strum_macros = "0.25.2"
+tokio = { version = "1.32.0", features = ["full"] }
+tonic = "0.10.2"
+tracing = { version = "0.1.40", features = [] }
+url = "2.4.1"
+utils = { path = "../../utils/utils-lib" }
+uuid = { version = "1.4.1", features = ["serde", "v4"] }

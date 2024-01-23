@@ -27,6 +27,7 @@ pub enum StorableObjectType {
     StoreLeaseLock,
     StoreLeaseOwner,
     SwitchOver,
+    FrontendNodeSpec,
 }
 
 /// Control plane api versions.
