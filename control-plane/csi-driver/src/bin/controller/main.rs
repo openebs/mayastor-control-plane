@@ -19,8 +19,24 @@ const REST_TIMEOUT: &str = "30s";
 fn initialize_controller(args: &ArgMatches) -> anyhow::Result<()> {
     CsiControllerConfig::initialize(args)?;
     IoEngineApiClient::initialize()
-        .map_err(|e| anyhow::anyhow!("Failed to initialize API client, error = {}", e))?;
+        .map_err(|error| anyhow::anyhow!("Failed to initialize API client, error = {error}"))?;
     Ok(())
+}
+
+#[tracing::instrument]
+async fn ping_rest_api() {
+    info!("Checking REST API endpoint accessibility ...");
+
+    match IoEngineApiClient::get_client().list_nodes().await {
+        Err(error) => tracing::error!(?error, "REST API endpoint is not accessible"),
+        Ok(nodes) => {
+            let names: Vec<String> = nodes.into_iter().map(|n| n.id).collect();
+            info!(
+                "REST API endpoint available, {len} IoEngine node(s) reported: {names:?}",
+                len = names.len(),
+            );
+        }
+    }
 }
 
 #[tokio::main(worker_threads = 2)]
@@ -33,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
                 .short('r')
                 .env("ENDPOINT")
                 .default_value("http://ksnode-1:30011")
-                .help("a URL endpoint to the control plane's rest endpoint"),
+                .help("A URL endpoint to the control plane's rest endpoint"),
         )
         .arg(
             Arg::new("socket")
@@ -41,14 +57,14 @@ async fn main() -> anyhow::Result<()> {
                 .short('c')
                 .env("CSI_SOCKET")
                 .default_value(CSI_SOCKET)
-                .help("CSI socket path"),
+                .help("The CSI socket path"),
         )
         .arg(
             Arg::new("jaeger")
                 .short('j')
                 .long("jaeger")
                 .env("JAEGER_ENDPOINT")
-                .help("enable open telemetry and forward to jaeger"),
+                .help("Enable open telemetry and forward to jaeger"),
         )
         .arg(
             Arg::new("timeout")
@@ -78,6 +94,15 @@ async fn main() -> anyhow::Result<()> {
                     "The number of worker threads that process requests"
                 ),
         )
+        .arg(
+            Arg::new("orphan-vol-gc-period")
+                .long("orphan-vol-gc-period")
+                .default_value("10m")
+                .help(
+                    "How often to check and delete orphaned volumes. \n\
+                        An orphan volume is a volume with no corresponding PV",
+                )
+        )
         .get_matches();
 
     utils::print_package_info!();
@@ -91,6 +116,13 @@ async fn main() -> anyhow::Result<()> {
         tags,
         args.get_one::<String>("jaeger").cloned(),
     );
+    let orphan_period = args
+        .get_one::<String>("orphan-vol-gc-period")
+        .map(|p| p.parse::<humantime::Duration>())
+        .transpose()?;
+    let csi_socket = args
+        .get_one::<String>("socket")
+        .expect("CSI socket must be specified");
 
     initialize_controller(&args)?;
 
@@ -99,18 +131,16 @@ async fn main() -> anyhow::Result<()> {
         CsiControllerConfig::get_config().rest_endpoint()
     );
 
+    // Try to detect REST API endpoint to debug the accessibility status.
+    ping_rest_api().await;
+
     // Starts PV Garbage Collector if platform type is k8s
-    if stor_port::platform::current_plaform_type() == stor_port::platform::PlatformType::K8s {
-        let gc_instance = pvwatcher::PvGarbageCollector::new().await?;
+    if stor_port::platform::current_platform_type() == stor_port::platform::PlatformType::K8s {
+        let gc_instance = pvwatcher::PvGarbageCollector::new(orphan_period).await?;
         tokio::spawn(async move { gc_instance.run_watcher().await });
     }
 
-    let result = server::CsiServer::run(
-        args.get_one::<String>("socket")
-            .expect("CSI socket must be specified")
-            .clone(),
-    )
-    .await;
+    let result = server::CsiServer::run(csi_socket).await;
     utils::tracing_telemetry::flush_traces();
     result
 }

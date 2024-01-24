@@ -1,4 +1,3 @@
-use crate::IoEngineApiClient;
 use futures::TryFutureExt;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
@@ -34,10 +33,12 @@ impl Connected for UnixStream {
     }
 }
 
+// Not sure why we need the inner fields, probably worth checking if we can remove them.
 #[derive(Clone, Debug)]
-pub struct UdsConnectInfo {
-    pub peer_addr: Option<Arc<tokio::net::unix::SocketAddr>>,
-    pub peer_cred: Option<tokio::net::unix::UCred>,
+#[allow(unused)]
+struct UdsConnectInfo {
+    peer_addr: Option<Arc<tokio::net::unix::SocketAddr>>,
+    peer_cred: Option<tokio::net::unix::UCred>,
 }
 
 impl AsyncRead for UnixStream {
@@ -68,33 +69,16 @@ impl AsyncWrite for UnixStream {
     }
 }
 
-pub struct CsiServer {}
-
-#[tracing::instrument]
-async fn ping_rest_api() {
-    info!("Checking REST API endpoint accessibility ...");
-
-    match IoEngineApiClient::get_client().list_nodes().await {
-        Err(e) => error!(?e, "REST API endpoint is not accessible"),
-        Ok(nodes) => {
-            let names: Vec<String> = nodes.into_iter().map(|n| n.id).collect();
-            info!(
-                "REST API endpoints available, {} IoEngine node(s) reported: {:?}",
-                names.len(),
-                names,
-            );
-        }
-    }
-}
-
+pub(super) struct CsiServer {}
 impl CsiServer {
-    pub async fn run(csi_socket: String) -> anyhow::Result<()> {
+    /// Runs the CSI Server identity and controller services.
+    pub async fn run(csi_socket: &str) -> anyhow::Result<()> {
         // It seems we're not ensuring only 1 csi server is running at a time because here
         // we don't bind to a port for example but to a unix socket.
         // todo: Can we do something about this?
 
         // Remove existing CSI socket from previous runs.
-        match fs::remove_file(&csi_socket) {
+        match fs::remove_file(csi_socket) {
             Ok(_) => info!("Removed stale CSI socket {}", csi_socket),
             Err(err) => {
                 if err.kind() != ErrorKind::NotFound {
@@ -108,12 +92,12 @@ impl CsiServer {
         debug!("CSI RPC server is listening on {}", csi_socket);
 
         let incoming = {
-            let uds = UnixListener::bind(&csi_socket)?;
+            let uds = UnixListener::bind(csi_socket)?;
 
             // Change permissions on CSI socket to allow non-privileged clients to access it
             // to simplify testing.
             if let Err(e) = fs::set_permissions(
-                &csi_socket,
+                csi_socket,
                 std::os::unix::fs::PermissionsExt::from_mode(0o777),
             ) {
                 error!("Failed to change permissions for CSI socket: {:?}", e);
@@ -128,9 +112,6 @@ impl CsiServer {
                 }
             }
         };
-
-        // Try to detect REST API endpoint to debug the accessibility status.
-        ping_rest_api().await;
 
         let cfg = crate::CsiControllerConfig::get_config();
 

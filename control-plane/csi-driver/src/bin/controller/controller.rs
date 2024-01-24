@@ -1,4 +1,6 @@
-use crate::{ApiClientError, CreateVolumeTopology, CsiControllerConfig, IoEngineApiClient};
+use crate::{
+    client::ListToken, ApiClientError, CreateVolumeTopology, CsiControllerConfig, IoEngineApiClient,
+};
 
 use csi_driver::context::{CreateParams, PublishParams};
 use rpc::csi::{volume_content_source::Type, Topology as CsiTopology, *};
@@ -652,7 +654,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let vt_mapper = VolumeTopologyMapper::init().await?;
 
         let volumes = IoEngineApiClient::get_client()
-            .list_volumes(max_entries, args.starting_token)
+            .list_volumes(max_entries, ListToken::String(args.starting_token))
             .await
             .map_err(|e| Status::internal(format!("Failed to list volumes, error = {e:?}")))?;
 

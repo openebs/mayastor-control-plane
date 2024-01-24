@@ -33,7 +33,7 @@ pub enum PlatformType {
 }
 
 /// Get the current `PlatformType`.
-pub fn current_plaform_type() -> PlatformType {
+pub fn current_platform_type() -> PlatformType {
     if std::env::var("KUBERNETES_SERVICE_HOST").is_ok() {
         PlatformType::K8s
     } else {
@@ -51,7 +51,7 @@ static PLATFORM: OnceCell<Box<dyn PlatformInfo>> = OnceCell::const_new();
 pub async fn init_cluster_info() -> Result<&'static dyn PlatformInfo, PlatformError> {
     PLATFORM
         .get_or_try_init(|| async move {
-            Ok(match current_plaform_type() {
+            Ok(match current_platform_type() {
                 PlatformType::K8s => Box::new(k8s::K8s::new().await?) as Box<dyn PlatformInfo>,
                 PlatformType::Deployer => {
                     Box::new(deployer::Deployer::new()) as Box<dyn PlatformInfo>

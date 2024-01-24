@@ -148,6 +148,12 @@ impl IoEngineApiClient {
     }
 }
 
+/// Token used to list volumes with pagination.
+pub(crate) enum ListToken {
+    String(String),
+    Number(isize),
+}
+
 impl IoEngineApiClient {
     /// List all nodes available in IoEngine cluster.
     pub(crate) async fn list_nodes(&self) -> Result<Vec<Node>, ApiClientError> {
@@ -178,17 +184,17 @@ impl IoEngineApiClient {
     pub(crate) async fn list_volumes(
         &self,
         max_entries: i32,
-        starting_token: String,
+        starting_token: ListToken,
     ) -> Result<Volumes, ApiClientError> {
         let max_entries = max_entries as isize;
-        let starting_token = if starting_token.is_empty() {
-            0
-        } else {
-            starting_token.parse::<isize>().map_err(|_| {
+        let starting_token = match starting_token {
+            ListToken::String(starting_token) if starting_token.is_empty() => 0,
+            ListToken::String(starting_token) => starting_token.parse::<isize>().map_err(|_| {
                 ApiClientError::InvalidArgument(
                     "Failed to parse starting token as an isize".to_string(),
                 )
-            })?
+            })?,
+            ListToken::Number(starting_token) => starting_token,
         };
 
         let response = self

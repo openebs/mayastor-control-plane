@@ -1,5 +1,5 @@
 use nvmeadm::nvmf_subsystem::{NvmeSubsystems, Subsystem};
-use stor_port::platform::{current_plaform_type, PlatformType};
+use stor_port::platform::{current_platform_type, PlatformType};
 use utils::NVME_TARGET_NQN_PREFIX;
 
 #[cfg(target_os = "linux")]
@@ -121,7 +121,7 @@ impl CachedNvmePathProvider {
     }
     #[cfg(target_os = "linux")]
     fn udev_supported() -> bool {
-        match current_plaform_type() {
+        match current_platform_type() {
             PlatformType::K8s => true,
             PlatformType::None => true,
             PlatformType::Deployer => false,
