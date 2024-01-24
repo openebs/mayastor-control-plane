@@ -33,6 +33,7 @@ impl Connected for UnixStream {
     }
 }
 
+// Not sure why we need the inner fields, probably worth checking if we can remove them.
 #[derive(Clone, Debug)]
 #[allow(unused)]
 struct UdsConnectInfo {

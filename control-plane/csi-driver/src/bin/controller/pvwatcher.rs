@@ -1,3 +1,4 @@
+use crate::client::ListToken;
 use futures::TryStreamExt;
 use k8s_openapi::api::core::v1::PersistentVolume;
 use kube::{
@@ -100,15 +101,27 @@ impl PvGarbageCollector {
     /// 2. to tackle k8s bug where volumes are leaked when PV deletion is attempted before
     /// PVC deletion.
     async fn delete_orphan_volumes(&self) {
-        match self.rest_client.list_volumes(0, "".to_string()).await {
-            Ok(volume_list) => {
-                for vol in volume_list.entries {
-                    if self.is_vol_orphaned(&vol.spec.uuid).await {
-                        self.delete_volume(vol.spec.uuid).await;
+        let max_entries = 200;
+        let mut starting_token = Some(0);
+        while let Some(token) = starting_token {
+            match self
+                .rest_client
+                .list_volumes(max_entries, ListToken::Number(token))
+                .await
+            {
+                Ok(volumes) => {
+                    starting_token = volumes.next_token;
+                    for vol in volumes.entries {
+                        if self.is_vol_orphaned(&vol.spec.uuid).await {
+                            self.delete_volume(vol.spec.uuid).await;
+                        }
                     }
                 }
+                Err(error) => {
+                    error!(?error, "Unable to list volumes");
+                    return;
+                }
             }
-            Err(error) => error!(?error, "Unable to list volumes"),
         }
     }
 
