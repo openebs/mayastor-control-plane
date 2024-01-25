@@ -2033,6 +2033,108 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
+  /app-nodes:
+    get:
+      tags:
+        - AppNodes
+      operationId: get_app_nodes
+      parameters:
+        - in: query
+          name: max_entries
+          description: The maximum number of results to return.
+          schema:
+            type: integer
+            default: 0
+          required: true
+        - in: query
+          name: starting_token
+          description: The offset to start pagination from.
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppNodes'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+          '5XX':
+            $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
+  '/app-nodes/{app_node_id}':
+    put:
+      tags:
+        - AppNodes
+      operationId: register_app_node
+      parameters:
+        - in: path
+          name: app_node_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/AppNodeId'
+      requestBody:
+        description: Contents of the app node to be registered.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterAppNode'
+        required: true
+      responses:
+        '204':
+          description: OK
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
+    delete:
+      tags:
+        - AppNodes
+      operationId: deregister_app_node
+      parameters:
+        - name: app_node_id
+          in: path
+          description: ID of the app node to be deregistered.
+          required: true
+          schema:
+            $ref: '#/components/schemas/AppNodeId'
+      responses:
+        '204':
+          description: OK
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
+    get:
+      tags:
+        - AppNodes
+      operationId: get_app_node
+      parameters:
+        - name: app_node_id
+          in: path
+          description: Id of the app node.
+          required: true
+          schema:
+            $ref: '#/components/schemas/AppNodeId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppNode'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+          '5XX':
+            $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
 components:
   securitySchemes:
     JWT:
@@ -2055,6 +2157,10 @@ components:
     NodeId:
       description: storage node identifier
       example: io-engine-1
+      type: string
+    AppNodeId:
+      description: App node identifier.
+      example: csi-node-1
       type: string
     PoolId:
       description: storage pool identifier
@@ -3902,6 +4008,99 @@ components:
       required:
         - cordonlabels
         - drainlabels
+    RegisterAppNode:
+      example:
+        endpoint: '10.1.0.5:50055'
+        labels:
+          openebs.io/csi-node.nvme-ana: true,
+          openebs.io/zone: us-east-1a
+      type: object
+      properties:
+        endpoint:
+          description: |-
+            gRPC server endpoint of the app node.
+          type: string
+          format: url
+        labels:
+          description: |-
+              Labels to be set on the app node.
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - id
+        - endpoint
+    AppNode:
+      description: |-
+        Represents an application node, which connects to the target node via a share protocol (eg: nvmf).
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/AppNodeId'
+        spec:
+          $ref: '#/components/schemas/AppNodeSpec'
+        state:
+          $ref: '#/components/schemas/AppNodeState'
+      required:
+        - id
+        - spec
+    AppNodeSpec:
+      description: |-
+        App node attributes.
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/AppNodeId'
+        endpoint:
+          description: |-
+            gRPC server endpoint of the app node.
+          type: string
+          format: url
+        labels:
+          description: |-
+              Labels to be set on the app node.
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - id
+        - endpoint
+    AppNodeState:
+      description: |-
+        Deemed state of the app node.
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/AppNodeId'
+        endpoint:
+          description: |-
+            gRPC server endpoint of the app node.
+          type: string
+          format: url
+        status:
+          description: |-
+            Deemed Status of the app node.
+          type: string
+          enum:
+            - Online
+            - Offline
+      required:
+        - id
+        - endpoint
+        - status
+    AppNodes:
+      description: |-
+        Array of app nodes plus the next token for subsequent get requests when using pagination.
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppNode'
+        next_token:
+          type: integer
+      required:
+        - entries
   responses:
     ClientError:
       description: Client side error

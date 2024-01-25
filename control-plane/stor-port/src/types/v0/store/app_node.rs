@@ -1,4 +1,5 @@
 use crate::types::v0::transport::AppNodeId;
+use openapi::models;
 use pstor::{ApiVersion, ObjectKey, StorableObject, StorableObjectType};
 use serde::{Deserialize, Serialize};
 
@@ -60,5 +61,11 @@ impl AppNodeSpec {
             endpoint,
             labels,
         }
+    }
+}
+
+impl From<AppNodeSpec> for models::AppNodeSpec {
+    fn from(src: AppNodeSpec) -> Self {
+        Self::new_all(src.id, src.endpoint.to_string(), src.labels)
     }
 }

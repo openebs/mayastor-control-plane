@@ -2,6 +2,7 @@
 //! Version 0 of the URI's
 //! Ex: /v0/nodes
 
+pub mod app_node;
 pub mod block_devices;
 pub mod children;
 pub mod jsongrpc;
