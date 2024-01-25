@@ -40,7 +40,7 @@ use stor_port::{
             registry::{ControlPlaneService, CoreRegistryConfig, NodeRegistration},
             volume::InitiatorAC,
         },
-        transport::{HostNqn, NodeId},
+        transport::{DeregisterAppNode, HostNqn, NodeId, RegisterAppNode},
     },
     HostAccessControl,
 };
@@ -500,5 +500,23 @@ impl Registry {
                 .collect(),
             false => vec![],
         }
+    }
+
+    /// Register a app node (ex: a csi node) with the control-plane.
+    pub(crate) async fn register_app_node(
+        &self,
+        app_node_spec: &RegisterAppNode,
+    ) -> Result<(), SvcError> {
+        self.specs().register_app_node(self, app_node_spec).await?;
+        Ok(())
+    }
+
+    /// Deregister a app node (ex: a csi node) with the control-plane.
+    pub(crate) async fn deregister_app_node(
+        &self,
+        app_node: &DeregisterAppNode,
+    ) -> Result<(), SvcError> {
+        self.specs().deregister_app_node(self, app_node).await?;
+        Ok(())
     }
 }

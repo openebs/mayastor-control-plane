@@ -1,5 +1,7 @@
 //! The Core Agent.
 //! todo: document.
+/// The app node related operations.
+pub(crate) mod app_node;
 /// The controller logic for all resources.
 pub(crate) mod controller;
 /// The nexus related operations.
@@ -198,7 +200,8 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         .configure(nexus::configure)
         .configure(volume::configure)
         .configure(watch::configure)
-        .configure(registry::configure);
+        .configure(registry::configure)
+        .configure(app_node::configure);
 
     registry.start().await;
     let result = service.run_err(cli_args.grpc_server_addr).await;

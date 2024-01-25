@@ -7,10 +7,12 @@ use crate::controller::{
 };
 use agents::errors::SvcError;
 use stor_port::{
-    transport_api::ResourceKind,
+    pstor::{product_v1_key_prefix, API_VERSION},
+    transport_api::{ErrorChain, ResourceKind},
     types::v0::{
         openapi::apis::Uuid,
         store::{
+            app_node::AppNodeSpec,
             definitions::{
                 key_prefix_obj, ObjectKey, StorableObject, StorableObjectType, Store, StoreError,
             },
@@ -18,10 +20,11 @@ use stor_port::{
             node::NodeSpec,
             pool::PoolSpec,
             replica::ReplicaSpec,
-            volume::{AffinityGroupSpec, VolumeSpec},
+            snapshots::volume::VolumeSnapshot,
+            volume::{AffinityGroupSpec, VolumeContentSource, VolumeSpec},
             AsOperationSequencer, OperationMode, OperationSequence, SpecStatus, SpecTransaction,
         },
-        transport::{NexusId, NodeId, PoolId, ReplicaId, VolumeId},
+        transport::{AppNodeId, NexusId, NodeId, PoolId, ReplicaId, SnapshotId, VolumeId},
     },
 };
 
@@ -30,14 +33,6 @@ use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
 use std::{fmt::Debug, ops::Deref, sync::Arc};
-use stor_port::{
-    pstor::{product_v1_key_prefix, API_VERSION},
-    transport_api::ErrorChain,
-    types::v0::{
-        store::{snapshots::volume::VolumeSnapshot, volume::VolumeContentSource},
-        transport::SnapshotId,
-    },
-};
 
 #[derive(Debug, Snafu)]
 #[snafu(context(suffix(false)))]
@@ -897,6 +892,7 @@ pub(crate) struct ResourceSpecs {
     pub(crate) affinity_groups: ResourceMutexMap<String, AffinityGroupSpec>,
     /// Top-level volume snapshots.
     pub(crate) volume_snapshots: ResourceMutexMap<SnapshotId, VolumeSnapshot>,
+    pub(crate) app_nodes: ResourceMutexMap<AppNodeId, AppNodeSpec>,
 }
 
 impl ResourceSpecsLocked {
@@ -917,6 +913,7 @@ impl ResourceSpecsLocked {
             StorableObjectType::PoolSpec,
             StorableObjectType::ReplicaSpec,
             StorableObjectType::VolumeSnapshot,
+            StorableObjectType::AppNodeSpec,
         ];
         for spec in &spec_types {
             self.populate_specs(store, *spec, legacy_prefix_present)
@@ -1062,6 +1059,13 @@ impl ResourceSpecsLocked {
                     },
                 )?;
                 resource_specs.volume_snapshots.populate(specs);
+            }
+            StorableObjectType::AppNodeSpec => {
+                let specs =
+                    Self::deserialise_specs::<AppNodeSpec>(store_values).context(Deserialise {
+                        obj_type: StorableObjectType::AppNodeSpec,
+                    })?;
+                resource_specs.app_nodes.populate(specs);
             }
             _ => {
                 // Not all spec types are persisted in the store.
