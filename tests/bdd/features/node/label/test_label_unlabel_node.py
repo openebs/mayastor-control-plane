@@ -189,7 +189,6 @@ def attempt_delete_label(node_name, label, context):
         return node
     except ApiException as exception:
         context["attempt_result"] = exception
-        print(context)
         return exception
 
 def labelling_succeeds(result, context):

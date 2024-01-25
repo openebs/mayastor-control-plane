@@ -170,12 +170,12 @@ impl SpecOperationsHelper for NodeSpec {
             }
             NodeOperation::Label(label, overwrite) => {
                 // Check that the label is present.
-                if !overwrite && self.has_labels_key(label.keys().cloned().collect()) {
-                    Err(SvcError::Label {
+                if !overwrite && self.has_labels_key(label.keys().collect()) {
+                    Err(SvcError::LabelExists {
                         node_id: self.id().to_string(),
                         label: label
-                            .iter()
-                            .map(|(key, value)| format!("{}: {}", key, value))
+                            .into_iter()
+                            .map(|(key, value)| format!("{key}: {value}"))
                             .collect::<Vec<String>>()
                             .join(", "),
                     })
@@ -186,8 +186,8 @@ impl SpecOperationsHelper for NodeSpec {
             }
             NodeOperation::Unlabel(label) => {
                 // Check that the label is present.
-                if !self.has_labels_key(vec![label.clone()]) {
-                    Err(SvcError::Unlabel {
+                if !self.has_labels_key(vec![&label]) {
+                    Err(SvcError::LabelNotFound {
                         node_id: self.id().to_string(),
                         label,
                     })

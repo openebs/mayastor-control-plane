@@ -348,10 +348,10 @@ impl NodeSpec {
         self.has_cordon_only_label(label) || self.has_drain_label(label)
     }
 
-    pub fn has_labels_key(&self, key: Vec<String>) -> bool {
+    pub fn has_labels_key(&self, key: Vec<&String>) -> bool {
         let mut found = false;
         for k in key {
-            if self.labels.contains_key(&k) {
+            if self.labels.contains_key(k) {
                 found = true;
                 break;
             }

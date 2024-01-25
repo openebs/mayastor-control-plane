@@ -3,6 +3,9 @@ extern crate prettytable;
 #[macro_use]
 extern crate lazy_static;
 
+use operations::Label;
+use resources::LabelResources;
+
 use crate::{
     operations::{
         Cordoning, Drain, Get, GetBlockDevices, GetSnapshots, List, ListExt, Operations,
@@ -84,6 +87,7 @@ impl ExecuteOperation for Operations {
             Operations::Scale(resource) => resource.execute(cli_args).await,
             Operations::Cordon(resource) => resource.execute(cli_args).await,
             Operations::Uncordon(resource) => resource.execute(cli_args).await,
+            Operations::Label(resource) => resource.execute(cli_args).await,
         }
     }
 }
@@ -197,6 +201,21 @@ impl ExecuteOperation for UnCordonResources {
             UnCordonResources::Node { id, label } => {
                 node::Node::uncordon(id, label, &cli_args.output).await
             }
+        }
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl ExecuteOperation for LabelResources {
+    type Args = CliArgs;
+    type Error = crate::resources::Error;
+    async fn execute(&self, cli_args: &CliArgs) -> PluginResult {
+        match self {
+            LabelResources::Node {
+                id,
+                label,
+                overwrite,
+            } => node::Node::label(id, label.to_string(), *overwrite, &cli_args.output).await,
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    operations::{Cordoning, Drain, Get, List, PluginResult},
+    operations::{Cordoning, Drain, Get, Label, List, PluginResult},
     resources::{
         error::Error,
         utils,
@@ -550,6 +550,58 @@ impl Drain for Node {
             }
             let sleep = Duration::from_secs(2);
             tokio::time::sleep(sleep).await;
+        }
+        Ok(())
+    }
+}
+
+#[async_trait(?Send)]
+impl Label for Node {
+    type ID = NodeId;
+    async fn label(
+        id: &Self::ID,
+        label: String,
+        overwrite: bool,
+        output: &utils::OutputFormat,
+    ) -> PluginResult {
+        let result = match label.chars().last() {
+            Some(last_char) => {
+                // If the last character is a hyphen the it signifies that the lable needs to be
+                // removed.
+                if last_char == '-' {
+                    RestClient::client()
+                        .nodes_api()
+                        .delete_node_label(id, &label[.. label.len() - 1])
+                        .await
+                } else {
+                    RestClient::client()
+                        .nodes_api()
+                        .put_node_label(id, &label, Some(overwrite))
+                        .await
+                }
+            }
+            None => {
+                return Err(Error::EmptyNodeLabelError { id: id.to_string() });
+            }
+        };
+
+        match result {
+            Ok(node) => match output {
+                OutputFormat::Yaml | OutputFormat::Json => {
+                    // Print json or yaml based on output format.
+                    utils::print_table(output, node.into_body());
+                }
+                OutputFormat::None => {
+                    // In case the output format is not specified, show a success message.
+                    println!("Node {id} labelled successfully")
+                }
+            },
+            Err(e) => {
+                return Err(Error::NodeLabelError {
+                    id: id.to_string(),
+                    source: e,
+                });
+            }
         }
         Ok(())
     }

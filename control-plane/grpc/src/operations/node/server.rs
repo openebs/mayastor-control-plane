@@ -11,7 +11,7 @@ use crate::{
     },
     operations::node::traits::NodeOperations,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use tonic::{Request, Response};
 
 /// gRPC Node Server
@@ -127,7 +127,7 @@ impl NodeGrpc for NodeServer {
 
         let label_map = match req.label {
             Some(labels) => labels.value,
-            None => HashMap::new(),
+            None => return Err(tonic::Status::invalid_argument("Label is required")),
         };
         match self
             .service

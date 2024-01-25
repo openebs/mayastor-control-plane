@@ -32,9 +32,9 @@ pub enum SvcError {
     #[snafu(display("Node {} is cordoned", node_id))]
     CordonedNode { node_id: String },
     #[snafu(display("Node {} is already labelled with label '{}'", node_id, label))]
-    Label { node_id: String, label: String },
+    LabelExists { node_id: String, label: String },
     #[snafu(display("Node {} doesn't have the label '{}'", node_id, label))]
-    Unlabel { node_id: String, label: String },
+    LabelNotFound { node_id: String, label: String },
     #[snafu(display("Node {} is already cordoned with label '{}'", node_id, label))]
     CordonLabel { node_id: String, label: String },
     #[snafu(display("Node {} does not have a cordon label '{}'", node_id, label))]
@@ -554,14 +554,14 @@ impl From<SvcError> for ReplyError {
                 extra,
             },
 
-            SvcError::Label { .. } => ReplyError {
+            SvcError::LabelExists { .. } => ReplyError {
                 kind: ReplyErrorKind::AlreadyExists,
                 resource: ResourceKind::Node,
                 source,
                 extra,
             },
 
-            SvcError::Unlabel { .. } => ReplyError {
+            SvcError::LabelNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
                 resource: ResourceKind::Node,
                 source,
