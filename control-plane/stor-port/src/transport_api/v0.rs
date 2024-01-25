@@ -25,6 +25,9 @@ impl_message!(Deregister);
 impl_vector_request!(Nodes, Node);
 impl_message!(GetNodes);
 
+impl_vector_request_token!(AppNodes, AppNode);
+impl_message!(GetAppNode);
+
 impl_message!(CreatePool);
 impl_message!(DestroyPool);
 impl_message!(ImportPool);

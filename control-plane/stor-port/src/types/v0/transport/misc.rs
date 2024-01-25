@@ -20,6 +20,8 @@ pub enum Filter {
     None,
     /// Filter by Node id.
     Node(NodeId),
+    /// Filter by AppNode id.
+    AppNode(AppNodeId),
     /// Pool filters.
     ///
     /// Filter by Pool id.
