@@ -1,4 +1,4 @@
-use crate::IoEngineApiClient;
+use crate::RestApiClient;
 use futures::TryFutureExt;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
@@ -74,7 +74,7 @@ pub struct CsiServer {}
 async fn ping_rest_api() {
     info!("Checking REST API endpoint accessibility ...");
 
-    match IoEngineApiClient::get_client().list_nodes().await {
+    match RestApiClient::get_client().list_nodes().await {
         Err(e) => error!(?e, "REST API endpoint is not accessible"),
         Ok(nodes) => {
             let names: Vec<String> = nodes.into_iter().map(|n| n.id).collect();

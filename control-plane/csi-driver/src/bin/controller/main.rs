@@ -9,7 +9,7 @@ mod pvwatcher;
 mod server;
 
 use config::CsiControllerConfig;
-use csi_driver::client::{IoEngineApiClient, REST_CLIENT};
+use csi_driver::client::{RestApiClient, REST_CLIENT};
 use stor_port::types::v0::openapi::clients;
 
 const CSI_SOCKET: &str = "/var/tmp/csi.sock";
@@ -40,7 +40,7 @@ pub(crate) fn initialize_rest_api() -> anyhow::Result<()> {
             )
         })?;
 
-    REST_CLIENT.get_or_init(|| IoEngineApiClient {
+    REST_CLIENT.get_or_init(|| RestApiClient {
         rest_client: clients::tower::ApiClient::new(tower.clone()),
     });
 

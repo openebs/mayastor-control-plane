@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use csi_driver::CSI_PLUGIN_NAME;
 
-use crate::IoEngineApiClient;
+use crate::RestApiClient;
 
 /// Struct for PV Garbage collector
 #[derive(Clone)]
@@ -83,7 +83,7 @@ impl PvGarbageCollector {
     /// Handle if there is any missed events at startup.
     async fn handle_missed_events(&self) {
         debug!("Handling if any missed events");
-        match IoEngineApiClient::get_client()
+        match RestApiClient::get_client()
             .list_volumes(0, "".to_string())
             .await
         {
@@ -110,7 +110,7 @@ impl PvGarbageCollector {
 /// Accepts volume id and calls Control plane api to delete the Volume
 async fn delete_volume(vol_handle: &str) {
     let volume_uuid = Uuid::parse_str(vol_handle).unwrap();
-    match IoEngineApiClient::get_client()
+    match RestApiClient::get_client()
         .delete_volume(&volume_uuid)
         .await
     {

@@ -112,26 +112,26 @@ impl From<ApiClientError> for Status {
     }
 }
 
-pub static REST_CLIENT: OnceCell<IoEngineApiClient> = OnceCell::new();
+pub static REST_CLIENT: OnceCell<RestApiClient> = OnceCell::new();
 
 /// Single instance API client for accessing REST API gateway.
 /// Encapsulates communication with REST API by exposing a set of
 /// high-level API functions, which perform (de)serialization
 /// of API request/response objects.
 #[derive(Debug)]
-pub struct IoEngineApiClient {
+pub struct RestApiClient {
     pub rest_client: clients::tower::ApiClient,
 }
 
-impl IoEngineApiClient {
+impl RestApiClient {
     /// Obtain client instance. Panics if called before the client
     /// has been initialized.
-    pub fn get_client() -> &'static IoEngineApiClient {
+    pub fn get_client() -> &'static RestApiClient {
         REST_CLIENT.get().expect("Rest client is not initialized")
     }
 }
 
-impl IoEngineApiClient {
+impl RestApiClient {
     /// List all nodes available in IoEngine cluster.
     pub async fn list_nodes(&self) -> Result<Vec<Node>, ApiClientError> {
         let response = self.rest_client.nodes_api().get_nodes(None).await?;

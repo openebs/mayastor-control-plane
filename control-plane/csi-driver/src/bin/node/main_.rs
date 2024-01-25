@@ -21,7 +21,7 @@ use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 use crate::registration::run_registration_loop;
 use anyhow::anyhow;
 use clap::Arg;
-use csi_driver::client::{IoEngineApiClient, REST_CLIENT};
+use csi_driver::client::{RestApiClient, REST_CLIENT};
 use futures::TryFutureExt;
 use k8s_openapi::api::core::v1::Node as K8sNode;
 use kube::{
@@ -321,7 +321,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
         }
     }
 
-    if let Err(error) = IoEngineApiClient::get_client()
+    if let Err(error) = RestApiClient::get_client()
         .deregister_frontend_node(node_name)
         .await
     {
@@ -439,7 +439,7 @@ pub(crate) fn initialize_rest_api(endpoint: &String) -> anyhow::Result<()> {
             )
         })?;
 
-    REST_CLIENT.get_or_init(|| IoEngineApiClient {
+    REST_CLIENT.get_or_init(|| RestApiClient {
         rest_client: clients::tower::ApiClient::new(tower.clone()),
     });
 
