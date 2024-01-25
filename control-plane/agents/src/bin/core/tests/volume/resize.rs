@@ -1,9 +1,49 @@
 use deployer_cluster::{Cluster, ClusterBuilder};
-use grpc::operations::{replica::traits::ReplicaOperations, volume::traits::VolumeOperations};
+use grpc::operations::{
+    nexus::traits::NexusOperations, replica::traits::ReplicaOperations,
+    volume::traits::VolumeOperations,
+};
 use std::time::Duration;
 use stor_port::types::v0::transport::{
-    CreateVolume, DestroyVolume, Filter, PublishVolume, ResizeVolume, VolumeShareProtocol,
+    CreateVolume, DestroyVolume, Filter, PublishVolume, ResizeVolume, Volume, VolumeId,
+    VolumeShareProtocol,
 };
+
+/// Validate that the size of volume and replicas are as per expected_size
+/// Return true if validation is successful, otherwise false.
+async fn validate_resized_volume(
+    cluster: &Cluster,
+    uuid: &VolumeId,
+    resized_volume: &Volume,
+    expected_size: u64,
+    published: bool,
+) {
+    let nex_cli = cluster.grpc_client().nexus();
+    let repl_cli = cluster.grpc_client().replica();
+    assert!(resized_volume.spec().uuid == *uuid);
+    assert!(resized_volume.spec().size == expected_size);
+
+    let replicas = repl_cli
+        .get(Filter::Volume(uuid.clone()), None)
+        .await
+        .unwrap();
+    // Compare >= since replicas have some additional book-keeping space.
+    replicas
+        .into_inner()
+        .iter()
+        .for_each(|r| assert!(r.size >= resized_volume.spec().size));
+
+    if published {
+        let nexus = nex_cli
+            .get(Filter::Volume(uuid.clone()), None)
+            .await
+            .unwrap()
+            .0;
+        assert!(nexus.len() == 1);
+        assert!(nexus[0].size == expected_size);
+        tracing::info!("Validated Resized Nexus: {:?}", nexus[0]);
+    }
+}
 
 #[tokio::test]
 async fn resize_unpublished() {
@@ -21,13 +61,14 @@ async fn resize_unpublished() {
         .unwrap();
 
     let vol_cli = cluster.grpc_client().volume();
-    let repl_cli = cluster.grpc_client().replica();
 
+    // Create the volume.
+    let volume_size_orig = 50 * 1024 * 1024;
     let volume = vol_cli
         .create(
             &CreateVolume {
                 uuid: "de3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
-                size: 50 * 1024 * 1024,
+                size: volume_size_orig,
                 replicas: 3,
                 thin: false,
                 ..Default::default()
@@ -52,19 +93,16 @@ async fn resize_unpublished() {
         .await
         .unwrap();
 
-    tracing::info!("Resized {resized_volume:?}");
-    assert!(resized_volume.spec().uuid == volume.spec().uuid);
-    assert!(resized_volume.spec().size == (2 * volume.spec().size));
+    tracing::info!("Resized Unpublished {resized_volume:?}");
+    validate_resized_volume(
+        &cluster,
+        &volume.spec().uuid,
+        &resized_volume,
+        2 * volume_size_orig,
+        false,
+    )
+    .await;
 
-    let replicas = repl_cli
-        .get(Filter::Volume(volume.uuid().clone()), None)
-        .await
-        .unwrap();
-    // Compare >= since replicas have some additional book-keeping space.
-    replicas
-        .into_inner()
-        .iter()
-        .for_each(|r| assert!(r.size >= resized_volume.spec().size));
     let _ = vol_cli
         .destroy(
             &DestroyVolume {
@@ -74,7 +112,7 @@ async fn resize_unpublished() {
         )
         .await;
 
-    // Test that resizing a published volume throws error.
+    // Test resizing a published volume.
     resize_published(&cluster).await;
 }
 
@@ -82,12 +120,13 @@ async fn resize_unpublished() {
 async fn resize_published(cluster: &Cluster) {
     let vol_cli = cluster.grpc_client().volume();
     // Create and publish the volume.
+    let volume_size_orig = 50 * 1024 * 1024;
     let volume = vol_cli
         .create(
             &CreateVolume {
                 uuid: "df3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
                 size: 50 * 1024 * 1024,
-                replicas: 1,
+                replicas: 3,
                 thin: false,
                 ..Default::default()
             },
@@ -109,7 +148,7 @@ async fn resize_published(cluster: &Cluster) {
         .await
         .unwrap();
 
-    let _ = vol_cli
+    let resized_volume = vol_cli
         .resize(
             &ResizeVolume {
                 uuid: volume.uuid().clone(),
@@ -119,7 +158,17 @@ async fn resize_published(cluster: &Cluster) {
             None,
         )
         .await
-        .expect_err("Expected error upon resize");
+        .unwrap();
+
+    tracing::info!("Resized Published {resized_volume:?}");
+    validate_resized_volume(
+        cluster,
+        &volume.spec().uuid,
+        &resized_volume,
+        2 * volume_size_orig,
+        true,
+    )
+    .await;
 }
 
 // Try to resize a volume. When any one of the replica can't be resized due to
