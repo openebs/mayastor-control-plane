@@ -114,6 +114,8 @@ enum ResourceKind {
   VolumeSnapshotClone = 20;
   // Replica Snapshot Clone
   ReplicaSnapshotClone = 21;
+  // App Node
+  AppNode = 22;
 }
 
 // Filter by Node and Replica id
@@ -181,6 +183,11 @@ message SnapshotFilter {
 message VolumeSnapshotFilter {
   string volume_id = 1;
   string snapshot_id = 2;
+}
+
+// Filter by App node id
+message AppNodeFilter {
+  string app_node_id = 1;
 }
 
 // Pagination related parameters.

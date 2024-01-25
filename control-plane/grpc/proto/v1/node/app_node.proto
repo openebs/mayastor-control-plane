@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+import "v1/misc/common.proto";
+
+package v1.app_node;
+
+// App Node information.
+message AppNode {
+  // App Node identification.
+  string id = 1;
+  // Specification of the app node.
+  AppNodeSpec spec = 2;
+  // Runtime state of the app node.
+  AppNodeState state = 3;
+}
+
+// App Node specification.
+message AppNodeSpec {
+  // Id of the app node instance.
+  string id = 1;
+  // Grpc endpoint of the app node instance.
+  string grpc_endpoint = 2;
+  // App node labels.
+  optional common.StringMapValue labels = 3;
+}
+
+// App Node state.
+message AppNodeState {
+  // Id of the app node instance.
+  string id = 1;
+  // Grpc endpoint of the app node instance.
+  string grpc_endpoint = 2;
+  // App node status.
+  AppNodeStatus status = 3;
+}
+
+// Status of the AppNode
+enum AppNodeStatus {
+  // AppNode is deemed offline if has missed the
+  // registration.
+  Offline = 0;
+  // AppNode is deemed online if it has not missed the
+  // registration.
+  Online = 1;
+}
+
+// Multiple app nodes.
+message AppNodes {
+  repeated AppNode entries = 1;
+  // This token allows you to get the next page of entries for
+  // `ListAppNodes` request. If the number of entries is larger than
+  // `max_entries`, use the `next_token` as a value for the
+  // `starting_token` field in the next `ListAppNodes` request.
+  optional uint64 next_token = 3;
+}
+
+// Request type for a GetAppNodes request.
+message GetAppNodeRequest {
+  // Get the app node with the specified id.
+  oneof filter {
+    common.AppNodeFilter app_node = 1;
+  }
+}
+
+// Request type for a ListAppNodes request.
+message ListAppNodesRequest {
+  // Pagination to allow for multiple requests to get all app nodes.
+  common.Pagination pagination = 2;
+}
+
+// Reply type for a GetAppNodes request
+message GetAppNodeReply {
+  // App node with the specified id.
+  AppNode app_node = 1;
+}
+
+// Reply type for a ListAppNodes request
+message ListAppNodesReply {
+  // List of app nodes.
+  AppNodes app_nodes = 1;
+}
+
+service AppNodeGrpc {
+  rpc GetAppNode (GetAppNodeRequest) returns (GetAppNodeReply) {}
+  rpc ListAppNodes (ListAppNodesRequest) returns (ListAppNodesReply) {}
+}

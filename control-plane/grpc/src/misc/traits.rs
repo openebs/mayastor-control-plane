@@ -33,6 +33,7 @@ impl From<ResourceKind> for common::ResourceKind {
             ResourceKind::ReplicaSnapshot => Self::ReplicaSnapshot,
             ResourceKind::VolumeSnapshotClone => Self::VolumeSnapshotClone,
             ResourceKind::ReplicaSnapshotClone => Self::ReplicaSnapshotClone,
+            ResourceKind::AppNode => Self::AppNode,
         }
     }
 }
@@ -61,6 +62,7 @@ impl From<common::ResourceKind> for ResourceKind {
             common::ResourceKind::ReplicaSnapshot => Self::ReplicaSnapshot,
             common::ResourceKind::VolumeSnapshotClone => Self::VolumeSnapshotClone,
             common::ResourceKind::ReplicaSnapshotClone => Self::ReplicaSnapshotClone,
+            common::ResourceKind::AppNode => Self::AppNode,
         }
     }
 }
