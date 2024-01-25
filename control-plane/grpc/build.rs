@@ -7,7 +7,7 @@ fn main() {
                 "proto/v1/misc/common.proto",
                 "proto/v1/nexus/nexus.proto",
                 "proto/v1/volume/volume.proto",
-                "proto/v1/node/node.proto",
+                "proto/v1/node/target_node.proto",
                 "proto/v1/blockdevice/blockdevice.proto",
                 "proto/v1/registry/registry.proto",
                 "proto/v1/jsongrpc/jsongrpc.proto",
@@ -16,6 +16,8 @@ fn main() {
                 "proto/v1/ha/node_agent.proto",
                 "proto/v1/ha/csi_node_nvme.proto",
                 "proto/v1/snapshot/snapshot.proto",
+                "proto/v1/node/app_node.proto",
+                "proto/v1/registration/app_node_registration.proto",
             ],
             &["proto/"],
         )

@@ -1,3 +1,4 @@
+mod app_node;
 mod controller;
 mod deserializer;
 mod event;

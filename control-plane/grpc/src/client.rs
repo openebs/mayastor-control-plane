@@ -1,6 +1,7 @@
 use crate::{
     context::Context,
     operations::{
+        app_node::{client::AppNodeClient, traits::AppNodeOperations},
         nexus::{client::NexusClient, traits::NexusOperations},
         node::{client::NodeClient, traits::NodeOperations},
         pool::{client::PoolClient, traits::PoolOperations},
@@ -20,6 +21,7 @@ pub struct CoreClient {
     replica: ReplicaClient,
     volume: VolumeClient,
     node: NodeClient,
+    app_node: AppNodeClient,
     registry: RegistryClient,
     nexus: NexusClient,
     watch: WatchClient,
@@ -33,6 +35,7 @@ impl CoreClient {
         let replica_client = ReplicaClient::new(addr.clone(), timeout_opts.clone()).await;
         let volume_client = VolumeClient::new(addr.clone(), timeout_opts.clone()).await;
         let node_client = NodeClient::new(addr.clone(), timeout_opts.clone()).await;
+        let app_node_client = AppNodeClient::new(addr.clone(), timeout_opts.clone()).await;
         let registry_client = RegistryClient::new(addr.clone(), timeout_opts.clone()).await;
         let nexus_client = NexusClient::new(addr.clone(), timeout_opts.clone()).await;
         let watch_client = WatchClient::new(addr, timeout_opts).await;
@@ -41,6 +44,7 @@ impl CoreClient {
             replica: replica_client,
             volume: volume_client,
             node: node_client,
+            app_node: app_node_client,
             registry: registry_client,
             nexus: nexus_client,
             watch: watch_client,
@@ -61,6 +65,10 @@ impl CoreClient {
     /// retrieve the corresponding node client
     pub fn node(&self) -> impl NodeOperations {
         self.node.clone()
+    }
+    /// Retrieve the corresponding app node client.
+    pub fn app_node(&self) -> impl AppNodeOperations {
+        self.app_node.clone()
     }
     /// retrieve the corresponding registry client
     pub fn registry(&self) -> impl RegistryOperations {

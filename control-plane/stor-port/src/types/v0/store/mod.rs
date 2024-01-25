@@ -1,3 +1,4 @@
+pub mod app_node;
 pub mod child;
 pub mod definitions;
 pub mod nexus;

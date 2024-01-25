@@ -34,6 +34,9 @@ pub mod watch;
 /// Module for all corresponding client, server, traits for HA node-agent transport.
 pub mod ha_node;
 
+/// Module for all corresponding client, server, traits for app node transport.
+pub mod app_node;
+
 /// Module for all corresponding client, server, traits for snapshot transport.
 pub mod snapshot;
 

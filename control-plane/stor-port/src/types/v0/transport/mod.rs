@@ -1,3 +1,4 @@
+pub mod app_node;
 pub mod blockdevice;
 pub mod child;
 pub mod cluster_agent;
@@ -14,6 +15,7 @@ pub mod state;
 pub mod volume;
 pub mod watch;
 
+pub use app_node::*;
 pub use blockdevice::*;
 pub use child::*;
 pub use cluster_agent::*;
@@ -58,6 +60,10 @@ pub enum MessageIdVs {
     Register,
     /// Deregister the io-engine.
     Deregister,
+    /// Register the app node.
+    RegisterAppNode,
+    /// Deregister the app node.
+    DeregisterAppNode,
     /// Node Service
     /// Get all node information.
     GetNodes,
@@ -177,6 +183,10 @@ pub enum MessageIdVs {
     GetRebuildRecord,
     /// List rebuild records.
     ListRebuildRecord,
+    /// Get an app node.
+    GetAppNode,
+    /// List app nodes.
+    ListAppNodes,
 }
 
 impl From<MessageIdVs> for MessageId {
