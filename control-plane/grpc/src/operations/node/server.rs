@@ -148,7 +148,11 @@ impl NodeGrpc for NodeServer {
         request: tonic::Request<UnlabelNodeRequest>,
     ) -> Result<tonic::Response<UnlabelNodeReply>, tonic::Status> {
         let req: UnlabelNodeRequest = request.into_inner();
-        match self.service.unlabel(req.node_id.into(), req.label).await {
+        match self
+            .service
+            .unlabel(req.node_id.into(), req.label_key)
+            .await
+        {
             Ok(node) => Ok(Response::new(UnlabelNodeReply {
                 reply: Some(unlabel_node_reply::Reply::Node(node.into())),
             })),

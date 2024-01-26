@@ -31,13 +31,13 @@ pub enum SvcError {
     NoNodes {},
     #[snafu(display("Node {} is cordoned", node_id))]
     CordonedNode { node_id: String },
-    #[snafu(display("Node {} is already labelled with label '{}'", node_id, label))]
-    LabelExists { node_id: String, label: String },
-    #[snafu(display("Node {} doesn't have the label '{}'", node_id, label))]
-    LabelNotFound { node_id: String, label: String },
-    #[snafu(display("Node {} is already cordoned with label '{}'", node_id, label))]
+    #[snafu(display("Node {node_id} is already labelled with labels '{labels}'"))]
+    LabelsExists { node_id: String, labels: String },
+    #[snafu(display("Node {node_id} doesn't have the label key '{label_key}'"))]
+    LabelNotFound { node_id: String, label_key: String },
+    #[snafu(display("Node {node_id} is already cordoned with label '{label}'"))]
     CordonLabel { node_id: String, label: String },
-    #[snafu(display("Node {} does not have a cordon label '{}'", node_id, label))]
+    #[snafu(display("Node {node_id} does not have a cordon label '{label}'"))]
     UncordonLabel { node_id: String, label: String },
     #[snafu(display(
         "Timed out after '{:?}' attempting to connect to node '{}' via gRPC endpoint '{}'",
@@ -554,7 +554,7 @@ impl From<SvcError> for ReplyError {
                 extra,
             },
 
-            SvcError::LabelExists { .. } => ReplyError {
+            SvcError::LabelsExists { .. } => ReplyError {
                 kind: ReplyErrorKind::AlreadyExists,
                 resource: ResourceKind::Node,
                 source,

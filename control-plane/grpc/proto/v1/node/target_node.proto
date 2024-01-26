@@ -165,8 +165,8 @@ message LabelNodeReply {
 message UnlabelNodeRequest {
   // Node identification
   string node_id = 1;
-  // Node cordon label
-  string label = 2;
+  // Node label key to remove
+  string label_key = 2;
 }
 
 message UnlabelNodeReply {

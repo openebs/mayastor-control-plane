@@ -67,7 +67,7 @@ impl ResourceLabel for OperationGuardArc<NodeSpec> {
             .start_update(
                 registry,
                 &cloned_node_spec,
-                NodeOperation::Label(label, overwrite),
+                NodeOperation::Label((label, overwrite).into()),
             )
             .await?;
 
@@ -79,11 +79,15 @@ impl ResourceLabel for OperationGuardArc<NodeSpec> {
     async fn unlabel(
         &mut self,
         registry: &Registry,
-        label: String,
+        label_key: String,
     ) -> Result<Self::UnlabelOutput, SvcError> {
         let cloned_node_spec = self.lock().clone();
         let spec_clone = self
-            .start_update(registry, &cloned_node_spec, NodeOperation::Unlabel(label))
+            .start_update(
+                registry,
+                &cloned_node_spec,
+                NodeOperation::Unlabel(label_key.into()),
+            )
             .await?;
 
         self.complete_update(registry, Ok(()), spec_clone).await?;
