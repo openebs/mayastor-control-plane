@@ -101,6 +101,17 @@ pub enum DrainResources {
     Node(DrainNodeArgs),
 }
 
+/// The types of resources that support the 'label' operation.
+#[derive(clap::Subcommand, Debug)]
+pub enum LabelResources {
+    /// Label node with the given ID.
+    Node {
+        id: NodeId,
+        label: String,
+        overwrite: bool,
+    },
+}
+
 #[derive(clap::Subcommand, Debug)]
 pub enum GetDrainArgs {
     /// Get the drain for the node with the given ID.

@@ -146,6 +146,36 @@ message DrainState {
   repeated string drain_labels = 2;
 }
 
+message LabelNodeRequest {
+  // Node identification
+  string node_id = 1;
+  // Node label map
+  common.StringMapValue label = 2;
+  // Overwrite an existing key
+  bool overwrite = 3;
+}
+
+message LabelNodeReply {
+  oneof reply {
+    Node node = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+message UnlabelNodeRequest {
+  // Node identification
+  string node_id = 1;
+  // Node cordon label
+  string label = 2;
+}
+
+message UnlabelNodeReply {
+  oneof reply {
+    Node node = 1;
+    common.ReplyError error = 2;
+  }
+}
+
 service NodeGrpc {
   rpc GetNodes (GetNodesRequest) returns (GetNodesReply) {}
   rpc GetBlockDevices (blockdevice.GetBlockDevicesRequest) returns (blockdevice.GetBlockDevicesReply) {}
@@ -153,4 +183,6 @@ service NodeGrpc {
   rpc CordonNode (CordonNodeRequest) returns (CordonNodeReply) {}
   rpc UncordonNode (UncordonNodeRequest) returns (UncordonNodeReply) {}
   rpc DrainNode (DrainNodeRequest) returns (DrainNodeReply) {}
+  rpc LabelNode (LabelNodeRequest) returns (LabelNodeReply) {}
+  rpc UnlabelNode (UnlabelNodeRequest) returns (UnlabelNodeReply) {}
 }

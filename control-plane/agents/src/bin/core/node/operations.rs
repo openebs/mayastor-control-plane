@@ -5,11 +5,12 @@ use stor_port::types::v0::store::node::{DrainingVolumes, NodeOperation, NodeSpec
 use crate::controller::{
     registry::Registry,
     resources::{
-        operations::{ResourceCordon, ResourceDrain},
+        operations::{ResourceCordon, ResourceDrain, ResourceLabel},
         operations_helper::GuardedOperationsHelper,
         OperationGuardArc,
     },
 };
+use std::collections::HashMap;
 
 /// Resource Cordon Operations.
 #[async_trait::async_trait]
@@ -41,6 +42,48 @@ impl ResourceCordon for OperationGuardArc<NodeSpec> {
         let cloned_node_spec = self.lock().clone();
         let spec_clone = self
             .start_update(registry, &cloned_node_spec, NodeOperation::Uncordon(label))
+            .await?;
+
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
+    }
+}
+
+/// Resource Label Operations.
+#[async_trait::async_trait]
+impl ResourceLabel for OperationGuardArc<NodeSpec> {
+    type LabelOutput = NodeSpec;
+    type UnlabelOutput = NodeSpec;
+
+    /// Label a node via operation guard functions.
+    async fn label(
+        &mut self,
+        registry: &Registry,
+        label: HashMap<String, String>,
+        overwrite: bool,
+    ) -> Result<Self::LabelOutput, SvcError> {
+        let cloned_node_spec = self.lock().clone();
+        let spec_clone = self
+            .start_update(
+                registry,
+                &cloned_node_spec,
+                NodeOperation::Label(label, overwrite),
+            )
+            .await?;
+
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
+    }
+
+    /// Unlabel a node via operation guard functions.
+    async fn unlabel(
+        &mut self,
+        registry: &Registry,
+        label: String,
+    ) -> Result<Self::UnlabelOutput, SvcError> {
+        let cloned_node_spec = self.lock().clone();
+        let spec_clone = self
+            .start_update(registry, &cloned_node_spec, NodeOperation::Unlabel(label))
             .await?;
 
         self.complete_update(registry, Ok(()), spec_clone).await?;

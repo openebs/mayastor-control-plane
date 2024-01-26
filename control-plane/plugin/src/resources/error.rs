@@ -23,6 +23,14 @@ pub enum Error {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
+    /// Error when node label request fails.
+    #[snafu(display("Failed to get node {id}. Error {source}"))]
+    NodeLabelError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
+    #[snafu(display("Empty node label {id}."))]
+    EmptyNodeLabelError { id: String },
     /// Error when node uncordon request fails.
     #[snafu(display("Failed to uncordon node {id}. Error {source}"))]
     NodeUncordonError {

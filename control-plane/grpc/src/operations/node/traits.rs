@@ -2,7 +2,7 @@ use crate::{
     blockdevice, blockdevice::GetBlockDevicesRequest, context::Context, node,
     node::get_nodes_request,
 };
-use std::{convert::TryFrom, str::FromStr};
+use std::{collections::HashMap, convert::TryFrom, str::FromStr};
 use stor_port::{
     transport_api::{
         v0::{BlockDevices, Nodes},
@@ -42,6 +42,15 @@ pub trait NodeOperations: Send + Sync {
     async fn uncordon(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
     /// Drain the node with the given ID and associate the label with the draining node.
     async fn drain(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
+    /// Associate the labels with the given node.
+    async fn label(
+        &self,
+        id: NodeId,
+        label: HashMap<String, String>,
+        overwrite: bool,
+    ) -> Result<Node, ReplyError>;
+    /// Remove label from the a given node.
+    async fn unlabel(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
 }
 
 impl TryFrom<node::Node> for Node {

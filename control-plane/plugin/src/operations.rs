@@ -1,6 +1,6 @@
 use crate::resources::{
-    error::Error, utils, CordonResources, DrainResources, GetResources, ScaleResources,
-    UnCordonResources,
+    error::Error, utils, CordonResources, DrainResources, GetResources, LabelResources,
+    ScaleResources, UnCordonResources,
 };
 use async_trait::async_trait;
 
@@ -25,6 +25,9 @@ pub enum Operations {
     /// 'Uncordon' resources.
     #[clap(subcommand)]
     Uncordon(UnCordonResources),
+    /// 'Label' resources.
+    #[clap(subcommand)]
+    Label(LabelResources),
 }
 
 /// Drain trait.
@@ -36,6 +39,19 @@ pub trait Drain {
         id: &Self::ID,
         label: String,
         drain_timeout: Option<humantime::Duration>,
+        output: &utils::OutputFormat,
+    ) -> PluginResult;
+}
+
+/// Label trait.
+/// To be implemented by resources which support the 'label' operation.
+#[async_trait(?Send)]
+pub trait Label {
+    type ID;
+    async fn label(
+        id: &Self::ID,
+        label: String,
+        overwrite: bool,
         output: &utils::OutputFormat,
     ) -> PluginResult;
 }

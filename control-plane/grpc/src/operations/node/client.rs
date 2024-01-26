@@ -3,13 +3,14 @@ use crate::{
     common::NodeFilter,
     context::{Client, Context, TracedChannel},
     node::{
-        cordon_node_reply, drain_node_reply, get_nodes_reply, get_nodes_request,
-        node_grpc_client::NodeGrpcClient, uncordon_node_reply, CordonNodeRequest, DrainNodeRequest,
-        GetNodesRequest, ProbeRequest, UncordonNodeRequest,
+        cordon_node_reply, drain_node_reply, get_nodes_reply, get_nodes_request, label_node_reply,
+        node_grpc_client::NodeGrpcClient, uncordon_node_reply, unlabel_node_reply,
+        CordonNodeRequest, DrainNodeRequest, GetNodesRequest, LabelNodeRequest, ProbeRequest,
+        UncordonNodeRequest, UnlabelNodeRequest,
     },
     operations::node::traits::{GetBlockDeviceInfo, NodeOperations},
 };
-use std::{convert::TryFrom, ops::Deref};
+use std::{collections::HashMap, convert::TryFrom, ops::Deref};
 use stor_port::{
     transport_api::{
         v0::{BlockDevices, Nodes},
@@ -137,6 +138,44 @@ impl NodeOperations for NodeClient {
             Some(drain_node_reply) => match drain_node_reply {
                 drain_node_reply::Reply::Node(node) => Ok(Node::try_from(node)?),
                 drain_node_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Node)),
+        }
+    }
+
+    #[tracing::instrument(name = "NodeClient::label", level = "debug", skip(self), err)]
+    async fn label(
+        &self,
+        id: NodeId,
+        label: HashMap<String, String>,
+        overwrite: bool,
+    ) -> Result<Node, ReplyError> {
+        let req = LabelNodeRequest {
+            node_id: id.to_string(),
+            label: Some(crate::common::StringMapValue { value: label }),
+            overwrite,
+        };
+        let response = self.client().label_node(req).await?.into_inner();
+        match response.reply {
+            Some(label_node_reply) => match label_node_reply {
+                label_node_reply::Reply::Node(node) => Ok(Node::try_from(node)?),
+                label_node_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Node)),
+        }
+    }
+
+    #[tracing::instrument(name = "NodeClient::unlabel", level = "debug", skip(self), err)]
+    async fn unlabel(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
+        let req = UnlabelNodeRequest {
+            node_id: id.to_string(),
+            label,
+        };
+        let response = self.client().unlabel_node(req).await?.into_inner();
+        match response.reply {
+            Some(unlabel_node_reply) => match unlabel_node_reply {
+                unlabel_node_reply::Reply::Node(node) => Ok(Node::try_from(node)?),
+                unlabel_node_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Node)),
         }

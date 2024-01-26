@@ -1,5 +1,6 @@
 use crate::controller::{registry::Registry, resources::OperationGuardArc};
 use agents::errors::SvcError;
+use std::collections::HashMap;
 use stor_port::types::v0::store::volume::VolumeSpec;
 
 /// Resource Cordon Operations.
@@ -20,6 +21,27 @@ pub(crate) trait ResourceCordon {
         registry: &Registry,
         label: String,
     ) -> Result<Self::UncordonOutput, SvcError>;
+}
+
+/// Resource Label Operations.
+#[async_trait::async_trait]
+pub(crate) trait ResourceLabel {
+    type LabelOutput: Sync + Send + Sized;
+    type UnlabelOutput: Sync + Send + Sized;
+
+    /// Label the resource.
+    async fn label(
+        &mut self,
+        registry: &Registry,
+        label: HashMap<String, String>,
+        overwrite: bool,
+    ) -> Result<Self::LabelOutput, SvcError>;
+    /// Remove label from the resource.
+    async fn unlabel(
+        &mut self,
+        registry: &Registry,
+        label: String,
+    ) -> Result<Self::UnlabelOutput, SvcError>;
 }
 
 /// Resource Drain Operations.
