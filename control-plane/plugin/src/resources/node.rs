@@ -9,9 +9,10 @@ use crate::{
     rest_wrapper::RestClient,
 };
 use async_trait::async_trait;
-use openapi::models::CordonDrainState;
+use openapi::{apis::StatusCode, models::CordonDrainState};
 use prettytable::{Cell, Row};
 use serde::Serialize;
+use snafu::ResultExt;
 use std::time;
 use strum_macros::{AsRefStr, Display, EnumString};
 use tokio::time::Duration;
@@ -555,6 +556,109 @@ impl Drain for Node {
     }
 }
 
+/// Errors related to node label topology formats.
+#[derive(Debug, snafu::Snafu)]
+pub enum TopologyError {
+    #[snafu(display("key must not be an empty string"))]
+    KeyIsEmpty {},
+    #[snafu(display("value must not be an empty string"))]
+    ValueIsEmpty {},
+    #[snafu(display("key part must no more than 63 characters"))]
+    KeyTooLong {},
+    #[snafu(display("value part must no more than 63 characters"))]
+    ValueTooLong {},
+    #[snafu(display("both key and value parts must start with an ascii alphanumeric character"))]
+    EdgesNotAlphaNum {},
+    #[snafu(display("key can contain at most one / character"))]
+    KeySlashCount {},
+    #[snafu(display(
+        "only ascii alphanumeric characters and (/ - _ .) are allowed for the key part"
+    ))]
+    KeyIsNotAlphaNumericPlus {},
+    #[snafu(display(
+        "only ascii alphanumeric characters and (- _ .) are allowed for the label part"
+    ))]
+    ValueIsNotAlphaNumericPlus {},
+    #[snafu(display("only a single assignment key=value is allowed"))]
+    LabelMultiAssign {},
+    #[snafu(display(
+        "the supported formats are: \
+        key=value for adding (example: group=a) \
+        and key- for removing (example: group-)"
+    ))]
+    LabelAssign {},
+}
+
+/// Errors related to node label topology operation execution.
+#[derive(Debug, snafu::Snafu)]
+pub enum OpError {
+    #[snafu(display("Node {id} not unlabelled as it did not contain the label"))]
+    LabelNotFound { id: String },
+    #[snafu(display("Node {id} not labelled as the same label already exists"))]
+    LabelExists { id: String },
+    #[snafu(display("Node {id} not found"))]
+    NodeNotFound { id: String },
+    #[snafu(display(
+        "Node {id} not labelled as the label key already exists, but with a different value and --overwrite is false"
+    ))]
+    LabelConflict { id: String },
+    #[snafu(display("Failed to label node {id}. Error {source}"))]
+    Generic {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
+}
+
+impl From<TopologyError> for Error {
+    fn from(source: TopologyError) -> Self {
+        Self::NodeLabelFormat { source }
+    }
+}
+impl From<OpError> for Error {
+    fn from(source: OpError) -> Self {
+        Self::NodeLabel { source }
+    }
+}
+
+fn allowed_topology_chars(key: char) -> bool {
+    key.is_ascii_alphanumeric() || matches!(key, '_' | '-' | '.')
+}
+fn allowed_topology_tips(label: &str) -> bool {
+    fn allowed_topology_tips_chars(char: Option<char>) -> bool {
+        char.map(|c| c.is_ascii_alphanumeric()).unwrap_or(true)
+    }
+
+    allowed_topology_tips_chars(label.chars().next())
+        && allowed_topology_tips_chars(label.chars().last())
+}
+fn validate_topology_key(key: &str) -> Result<(), TopologyError> {
+    snafu::ensure!(!key.is_empty(), KeyIsEmptySnafu);
+    snafu::ensure!(key.len() <= 63, KeyTooLongSnafu);
+    snafu::ensure!(allowed_topology_tips(key), EdgesNotAlphaNumSnafu);
+
+    snafu::ensure!(
+        key.chars().filter(|c| c == &'/').count() <= 1,
+        KeySlashCountSnafu
+    );
+
+    snafu::ensure!(
+        key.chars().all(|c| allowed_topology_chars(c) || c == '/'),
+        KeyIsNotAlphaNumericPlusSnafu
+    );
+
+    Ok(())
+}
+fn validate_topology_value(value: &str) -> Result<(), TopologyError> {
+    snafu::ensure!(!value.is_empty(), ValueIsEmptySnafu);
+    snafu::ensure!(value.len() <= 63, ValueTooLongSnafu);
+    snafu::ensure!(allowed_topology_tips(value), EdgesNotAlphaNumSnafu);
+    snafu::ensure!(
+        value.chars().all(allowed_topology_chars),
+        ValueIsNotAlphaNumericPlusSnafu
+    );
+    Ok(())
+}
+
 #[async_trait(?Send)]
 impl Label for Node {
     type ID = NodeId;
@@ -564,43 +668,69 @@ impl Label for Node {
         overwrite: bool,
         output: &utils::OutputFormat,
     ) -> PluginResult {
-        let result = match label.chars().last() {
-            Some(last_char) => {
-                // If the last character is a hyphen the it signifies that the lable needs to be
-                // removed.
-                if last_char == '-' {
-                    RestClient::client()
-                        .nodes_api()
-                        .delete_node_label(id, &label[.. label.len() - 1])
-                        .await
-                } else {
-                    RestClient::client()
-                        .nodes_api()
-                        .put_node_label(id, &label, Some(overwrite))
-                        .await
-                }
-            }
-            None => {
-                return Err(Error::EmptyNodeLabelError { id: id.to_string() });
-            }
-        };
+        let result = if label.contains('=') {
+            let [key, value] = label.split('=').collect::<Vec<_>>()[..] else {
+                return Err(TopologyError::LabelMultiAssign {}.into());
+            };
 
-        match result {
-            Ok(node) => match output {
-                OutputFormat::Yaml | OutputFormat::Json => {
-                    // Print json or yaml based on output format.
-                    utils::print_table(output, node.into_body());
-                }
-                OutputFormat::None => {
-                    // In case the output format is not specified, show a success message.
-                    println!("Node {id} labelled successfully")
-                }
-            },
-            Err(e) => {
-                return Err(Error::NodeLabelError {
-                    id: id.to_string(),
-                    source: e,
-                });
+            validate_topology_key(key).context(super::error::NodeLabelFormatSnafu)?;
+            validate_topology_value(value).context(super::error::NodeLabelFormatSnafu)?;
+            match RestClient::client()
+                .nodes_api()
+                .put_node_label(id, key, value, Some(overwrite))
+                .await
+            {
+                Err(source) => match source.status() {
+                    Some(StatusCode::UNPROCESSABLE_ENTITY) if output.none() => {
+                        Err(OpError::LabelExists { id: id.to_string() })
+                    }
+                    Some(StatusCode::PRECONDITION_FAILED) if output.none() => {
+                        Err(OpError::LabelConflict { id: id.to_string() })
+                    }
+                    Some(StatusCode::NOT_FOUND) if output.none() => {
+                        Err(OpError::NodeNotFound { id: id.to_string() })
+                    }
+                    _ => Err(OpError::Generic {
+                        id: id.to_string(),
+                        source,
+                    }),
+                },
+                Ok(node) => Ok(node),
+            }
+        } else {
+            snafu::ensure!(label.len() >= 2 && label.ends_with('-'), LabelAssignSnafu);
+            let key = &label[.. label.len() - 1];
+            validate_topology_key(key)?;
+            match RestClient::client()
+                .nodes_api()
+                .delete_node_label(id, key)
+                .await
+            {
+                Err(source) => match source.status() {
+                    Some(StatusCode::PRECONDITION_FAILED) if output.none() => {
+                        Err(OpError::LabelNotFound { id: id.to_string() })
+                    }
+                    Some(StatusCode::NOT_FOUND) if output.none() => {
+                        Err(OpError::NodeNotFound { id: id.to_string() })
+                    }
+                    _ => Err(OpError::Generic {
+                        id: id.to_string(),
+                        source,
+                    }),
+                },
+                Ok(node) => Ok(node),
+            }
+        }?;
+        let node = result.into_body();
+        match output {
+            OutputFormat::Yaml | OutputFormat::Json => {
+                // Print json or yaml based on output format.
+                print_table(output, node);
+            }
+            OutputFormat::None => {
+                // In case the output format is not specified, show a success message.
+                let labels = node.spec.unwrap().labels.unwrap_or_default();
+                println!("Node {id} labelled successfully. Current labels: {labels:?}");
             }
         }
         Ok(())

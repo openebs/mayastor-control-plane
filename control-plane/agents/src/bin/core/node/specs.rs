@@ -169,12 +169,12 @@ impl SpecOperationsHelper for NodeSpec {
                 }
             }
             NodeOperation::Label(NodeLabelOp { labels, overwrite }) => {
-                // Check that the label is present.
-                let collisions = self.label_collisions(labels);
-                if !*overwrite && !collisions.is_empty() {
+                let (existing, conflict) = self.label_collisions(labels);
+                if !*overwrite && !existing.is_empty() {
                     Err(SvcError::LabelsExists {
                         node_id: self.id().to_string(),
-                        labels: format!("{collisions:?}"),
+                        labels: format!("{existing:?}"),
+                        conflict,
                     })
                 } else {
                     self.start_op(op);

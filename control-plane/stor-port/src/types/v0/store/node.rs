@@ -352,15 +352,22 @@ impl NodeSpec {
     pub fn has_labels_key(&self, key: &str) -> bool {
         self.labels.contains_key(key)
     }
-    /// Get map of key collisions between current topology labels and the given labels.
+    /// Check if there are key collisions between current topology labels and the given labels.
     pub fn label_collisions<'a>(
         &self,
         labels: &'a HashMap<String, String>,
-    ) -> HashMap<&'a String, &'a String> {
-        labels
-            .iter()
-            .filter(|(key, _)| self.labels.contains_key(*key))
-            .collect()
+    ) -> (HashMap<&'a String, &'a String>, bool) {
+        let mut conflict = false;
+        let existing = labels.iter().filter(|(key, value)| {
+            let Some(existing) = self.labels.get(*key) else {
+                return false;
+            };
+            if &existing != value {
+                conflict = true;
+            }
+            true
+        });
+        (existing.collect(), conflict)
     }
 
     /// Returns true if it has the label in the cordon list.

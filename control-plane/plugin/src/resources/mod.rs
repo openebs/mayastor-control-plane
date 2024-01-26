@@ -104,18 +104,18 @@ pub enum DrainResources {
 /// The types of resources that support the 'label' operation.
 #[derive(clap::Subcommand, Debug)]
 pub enum LabelResources {
-    /// Adds or removes a label from the specified node.
+    /// Adds or removes a label to or from the specified node.
     Node {
-        /// The id of the node to label.
+        /// The id of the node to label/unlabel.
         id: NodeId,
         /// The label to be added or removed from the node.
-        /// To add a label, specify the following format:
+        /// To add a label, please use the following format:
         /// ${key}=${value}
-        /// To remove a label, specify the following format:
+        /// To remove a label, please use the following format:
         /// ${key}-
         /// A label key and value must begin with a letter or number, and may contain letters,
         /// numbers, hyphens, dots, and underscores, up to 63 characters each.
-        /// The key may contain a single slash as long as it's not the first or last character.
+        /// The key may contain a single slash.
         label: String,
         /// Allow labels to be overwritten, otherwise reject label updates that overwrite existing
         /// labels.
