@@ -6,7 +6,7 @@ let
     name = "${src_json.repo}-${src_json.rev}-src";
     inherit (src_json) owner repo rev hash;
   };
-  version = "6.1.0-${src.rev}";
+  version = "6.4.0-${src.rev}";
 
   # perform fake build to make a fixed-output derivation out of the files downloaded from maven central
   deps = stdenv.mkDerivation {
@@ -17,7 +17,7 @@ let
     buildPhase = ''
       runHook preBuild
 
-      while mvn package -Dmaven.test.skip=true -Dmaven.repo.local=$out/.m2; [ $? = 1 ]; do
+      while mvn package -Dmaven.test.skip=true -Dmaven.javadoc.skip=true -Dmaven.repo.local=$out/.m2; [ $? = 1 ]; do
         echo "timeout, restart maven to continue downloading"
       done
 
@@ -28,7 +28,7 @@ let
       "find $out/.m2 -type f -regex '.+\\(\\.lastUpdated\\|resolver-status\\.properties\\|_remote\\.repositories\\)' -delete";
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
-    outputHash = if stdenv.hostPlatform.isDarwin then "sha256-9Li0uSD39ZwptIRgOXeBkLeZvfy/9w69faNDm75zdws=" else "sha256-MieSA5Y8u35H1xdP27A+YDekyyQ6CThNXOjQ82ArM7U=";
+    outputHash = if stdenv.hostPlatform.isDarwin then "sha256-8fk0lC3zBFgcGeBSASEDk0Zgz1xXLhJw6CSWszeSGf4=" else "sha256-mk6opj5FzELc/NambThC0K2ADJG2aRV4f8F2ZteMvMc=";
   };
 in
 stdenv.mkDerivation rec {
