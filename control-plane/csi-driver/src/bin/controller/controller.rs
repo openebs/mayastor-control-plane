@@ -303,7 +303,18 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             // If the volume doesn't exist, create it.
             Err(ApiClientError::ResourceNotExists(_)) => {
                 let volume_topology = CreateVolumeTopology::new(
-                    None,
+                    Some(models::NodeTopology::labelled(LabelledTopology {
+                        exclusion: context
+                            .publish_params()
+                            .node_topology_spread()
+                            .clone()
+                            .unwrap_or_default(),
+                        inclusion: context
+                            .publish_params()
+                            .node_topology_affinity()
+                            .clone()
+                            .unwrap_or_default(),
+                    })),
                     Some(PoolTopology::labelled(LabelledTopology {
                         exclusion: context
                             .publish_params()

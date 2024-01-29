@@ -57,6 +57,10 @@ pub enum Parameters {
     PoolTopologyAffinity,
     #[strum(serialize = "poolTopologySpread")]
     PoolTopologySpread,
+    #[strum(serialize = "nodeTopologyAffinity")]
+    NodeTopologyAffinity,
+    #[strum(serialize = "nodeTopologySpread")]
+    NodeTopologySpread,
 }
 impl Parameters {
     fn parse_human_time(
@@ -161,6 +165,18 @@ impl Parameters {
     ) -> Result<Option<HashMap<String, String>>, serde_json::Error> {
         Self::parse_map(value)
     }
+    /// Parse the value for `Self::NodeTopologyAffinity`.
+    pub fn node_topology_affinity(
+        value: Option<&String>,
+    ) -> Result<Option<HashMap<String, String>>, serde_json::Error> {
+        Self::parse_map(value)
+    }
+    /// Parse the value for `Self::NodeTopologySpread`.
+    pub fn node_topology_spread(
+        value: Option<&String>,
+    ) -> Result<Option<HashMap<String, String>>, serde_json::Error> {
+        Self::parse_map(value)
+    }
 }
 
 /// Volume publish parameters.
@@ -175,6 +191,8 @@ pub struct PublishParams {
     fs_id: Option<Uuid>,
     pool_topology_affinity: Option<HashMap<String, String>>,
     pool_topology_spread: Option<HashMap<String, String>>,
+    node_topology_affinity: Option<HashMap<String, String>>,
+    node_topology_spread: Option<HashMap<String, String>>,
 }
 impl PublishParams {
     /// Get the `Parameters::IoTimeout` value.
@@ -204,6 +222,14 @@ impl PublishParams {
     /// Get the `Parameters::PoolTopologySpread` value.
     pub fn pool_topology_spread(&self) -> &Option<HashMap<String, String>> {
         &self.pool_topology_spread
+    }
+    /// Get the `Parameters::NodeTopologyAffinity` value.
+    pub fn node_topology_affinity(&self) -> &Option<HashMap<String, String>> {
+        &self.node_topology_affinity
+    }
+    /// Get the `Parameters::NodeTopologySpread` value.
+    pub fn node_topology_spread(&self) -> &Option<HashMap<String, String>> {
+        &self.node_topology_spread
     }
     /// Convert `Self` into a publish context.
     pub fn into_context(self) -> HashMap<String, String> {
@@ -261,6 +287,12 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
         let pool_topology_spread =
             Parameters::pool_topology_spread(args.get(Parameters::PoolTopologySpread.as_ref()))
                 .map_err(|_| tonic::Status::invalid_argument("Invalid pool_topology_spread"))?;
+        let node_topology_affinity =
+            Parameters::node_topology_affinity(args.get(Parameters::NodeTopologyAffinity.as_ref()))
+                .map_err(|_| tonic::Status::invalid_argument("Invalid node_topology_affinity"))?;
+        let node_topology_spread =
+            Parameters::node_topology_spread(args.get(Parameters::NodeTopologySpread.as_ref()))
+                .map_err(|_| tonic::Status::invalid_argument("Invalid node_topology_spread"))?;
         Ok(Self {
             io_timeout,
             nvme_io_timeout,
@@ -270,6 +302,8 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
             fs_id,
             pool_topology_affinity,
             pool_topology_spread,
+            node_topology_affinity,
+            node_topology_spread,
         })
     }
 }

@@ -152,7 +152,7 @@ pub struct NodeSpec {
     /// Endpoint of the io-engine instance (gRPC).
     endpoint: std::net::SocketAddr,
     /// Node labels.
-    labels: NodeLabels,
+    pub labels: NodeLabels,
     /// Cordon/drain state.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)] // Ensure backwards compatibility in etcd when upgrading.
