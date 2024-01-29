@@ -3,8 +3,8 @@ use crate::controller::{
     resources::ResourceMutex,
     scheduling::{
         resources::{ChildItem, NodeItem},
-        ChildInfoFilters, ChildItemSorters, NodeFilters, NodeSorters, ReplicaFilters, ResourceData,
-        ResourceFilter,
+        volume_policy::node::{NodeFilters, NodeSorters},
+        ChildInfoFilters, ChildItemSorters, ReplicaFilters, ResourceData, ResourceFilter,
     },
 };
 use agents::errors::SvcError;

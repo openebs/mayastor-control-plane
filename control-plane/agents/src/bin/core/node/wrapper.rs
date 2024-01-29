@@ -82,7 +82,7 @@ pub(crate) type ReplicaSnapshotInfo = SnapshotInfo<ReplicaId>;
 #[derive(Debug, Clone)]
 pub(crate) struct NodeWrapper {
     /// The inner Node state.
-    node_state: NodeState,
+    pub(crate) node_state: NodeState,
     /// The watchdog to track the node state.
     watchdog: Watchdog,
     /// Indicates whether the node has already missed its deadline and in such case we don't
