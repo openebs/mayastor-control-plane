@@ -130,16 +130,16 @@ impl NodeOperations for Service {
         let node = self.label(id, label, overwrite).await?;
         Ok(node)
     }
-    /// Remove the specified label from the node.
-    async fn unlabel(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
-        if label.is_empty() {
+    /// Remove the specified label key from the node.
+    async fn unlabel(&self, id: NodeId, label_key: String) -> Result<Node, ReplyError> {
+        if label_key.is_empty() {
             return Err(SvcError::InvalidLabel {
-                labels: label,
+                labels: label_key,
                 resource_kind: ResourceKind::Node,
             }
             .into());
         }
-        let node = self.unlabel(id, label).await?;
+        let node = self.unlabel(id, label_key).await?;
         Ok(node)
     }
 }

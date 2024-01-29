@@ -11,7 +11,7 @@ use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
         store::{
-            node::{NodeLabels, NodeOperation, NodeSpec},
+            node::{NodeLabelOp, NodeLabels, NodeOperation, NodeSpec, NodeUnLabelOp},
             SpecStatus, SpecTransaction,
         },
         transport::{NodeId, Register},
@@ -143,13 +143,13 @@ impl SpecOperationsHelper for NodeSpec {
         _state: &Self::State,
         op: Self::UpdateOp,
     ) -> Result<(), SvcError> {
-        match op.clone() {
+        match &op {
             NodeOperation::Cordon(label) | NodeOperation::Drain(label) => {
                 // Do not allow the same label to be applied more than once.
-                if self.has_cordon_label(&label) {
+                if self.has_cordon_label(label) {
                     Err(SvcError::CordonLabel {
                         node_id: self.id().to_string(),
-                        label,
+                        label: label.clone(),
                     })
                 } else {
                     self.start_op(op);
@@ -158,38 +158,35 @@ impl SpecOperationsHelper for NodeSpec {
             }
             NodeOperation::Uncordon(label) => {
                 // Check that the label is present.
-                if !self.has_cordon_label(&label) {
+                if !self.has_cordon_label(label) {
                     Err(SvcError::UncordonLabel {
                         node_id: self.id().to_string(),
-                        label,
+                        label: label.clone(),
                     })
                 } else {
                     self.start_op(op);
                     Ok(())
                 }
             }
-            NodeOperation::Label(label, overwrite) => {
-                // Check that the label is present.
-                if !overwrite && self.has_labels_key(label.keys().collect()) {
-                    Err(SvcError::LabelExists {
+            NodeOperation::Label(NodeLabelOp { labels, overwrite }) => {
+                let (existing, conflict) = self.label_collisions(labels);
+                if !*overwrite && !existing.is_empty() {
+                    Err(SvcError::LabelsExists {
                         node_id: self.id().to_string(),
-                        label: label
-                            .into_iter()
-                            .map(|(key, value)| format!("{key}: {value}"))
-                            .collect::<Vec<String>>()
-                            .join(", "),
+                        labels: format!("{existing:?}"),
+                        conflict,
                     })
                 } else {
                     self.start_op(op);
                     Ok(())
                 }
             }
-            NodeOperation::Unlabel(label) => {
+            NodeOperation::Unlabel(NodeUnLabelOp { label_key }) => {
                 // Check that the label is present.
-                if !self.has_labels_key(vec![&label]) {
+                if !self.has_labels_key(label_key) {
                     Err(SvcError::LabelNotFound {
                         node_id: self.id().to_string(),
-                        label,
+                        label_key: label_key.to_string(),
                     })
                 } else {
                     self.start_op(op);

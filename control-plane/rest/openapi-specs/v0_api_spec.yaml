@@ -319,7 +319,7 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
-  '/nodes/{id}/label/{label}':
+  '/nodes/{id}/label/{key}={value}':
     put:
       tags:
         - Nodes
@@ -334,12 +334,19 @@ paths:
             type: string
           example: io-engine-1
         - in: path
-          name: label
+          name: key
           required: true
           schema:
             type: string
           description: |-
-            The label to the node.
+            The key of the label to be added.
+        - in: path
+          name: value
+          required: true
+          schema:
+            type: string
+          description: |-
+            The value of the label to be added.
         - in: query
           name: overwrite
           description: |-
@@ -361,6 +368,7 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
+  '/nodes/{id}/label/{key}':
     delete:
       tags:
         - Nodes
@@ -373,12 +381,12 @@ paths:
             type: string
           example: io-engine-1
         - in: path
-          name: label
+          name: key
           required: true
           schema:
             type: string
           description: |-
-            The key of the label to the node.
+            The key of the label to be removed.
       responses:
         '200':
           description: OK

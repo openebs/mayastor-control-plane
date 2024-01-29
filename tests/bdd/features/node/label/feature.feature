@@ -12,7 +12,7 @@ Feature: Label a node, this will be used while scheduling replica of volume cons
   Scenario: Label a node when label key already exist and overwrite is false
     Given a labeled node
     When the user attempts to label the same node with the same label key with overwrite as false
-    Then the node label should fail with error "AlreadyExists"
+    Then the node label should fail with error "PRECONDITION_FAILED"
 
   Scenario: Label a node when label key already exist and overwrite is true
     Given a labeled node
@@ -27,4 +27,4 @@ Feature: Label a node, this will be used while scheduling replica of volume cons
   Scenario: Unlabel a node when the label key is not present
     Given a labeled node
     When the user issues an unlabel command with a label key that is not currently associated with the node
-    Then the unlabel operation for the node should fail with error NotPresent
+    Then the unlabel operation for the node should fail with error PRECONDITION_FAILED

@@ -1,3 +1,4 @@
+use crate::resources::node;
 use snafu::Snafu;
 
 /// All errors returned when resources command fails.
@@ -23,14 +24,10 @@ pub enum Error {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
-    /// Error when node label request fails.
-    #[snafu(display("Failed to get node {id}. Error {source}"))]
-    NodeLabelError {
-        id: String,
-        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
-    },
-    #[snafu(display("Empty node label {id}."))]
-    EmptyNodeLabelError { id: String },
+    #[snafu(display("Invalid label format: {source}"))]
+    NodeLabelFormat { source: node::TopologyError },
+    #[snafu(display("{source}"))]
+    NodeLabel { source: node::OpError },
     /// Error when node uncordon request fails.
     #[snafu(display("Failed to uncordon node {id}. Error {source}"))]
     NodeUncordonError {

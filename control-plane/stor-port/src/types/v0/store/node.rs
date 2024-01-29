@@ -273,8 +273,8 @@ impl NodeSpec {
     }
 
     /// Remove label from node.
-    pub fn unlabel(&mut self, label: String) {
-        self.labels.remove(&label);
+    pub fn unlabel(&mut self, label_key: &str) {
+        self.labels.remove(label_key);
     }
 
     /// Drain node by applying the drain label.
@@ -348,15 +348,26 @@ impl NodeSpec {
         self.has_cordon_only_label(label) || self.has_drain_label(label)
     }
 
-    pub fn has_labels_key(&self, key: Vec<&String>) -> bool {
-        let mut found = false;
-        for k in key {
-            if self.labels.contains_key(k) {
-                found = true;
-                break;
+    /// Check if the node has the given topology label key.
+    pub fn has_labels_key(&self, key: &str) -> bool {
+        self.labels.contains_key(key)
+    }
+    /// Check if there are key collisions between current topology labels and the given labels.
+    pub fn label_collisions<'a>(
+        &self,
+        labels: &'a HashMap<String, String>,
+    ) -> (HashMap<&'a String, &'a String>, bool) {
+        let mut conflict = false;
+        let existing = labels.iter().filter(|(key, value)| {
+            let Some(existing) = self.labels.get(*key) else {
+                return false;
+            };
+            if &existing != value {
+                conflict = true;
             }
-        }
-        found
+            true
+        });
+        (existing.collect(), conflict)
     }
 
     /// Returns true if it has the label in the cordon list.
@@ -545,8 +556,30 @@ pub enum NodeOperation {
     RemoveDrainingVolumes(DrainingVolumes),
     RemoveAllDrainingVolumes(),
     SetDrained(),
-    Label(HashMap<String, String>, bool),
-    Unlabel(String),
+    Label(NodeLabelOp),
+    Unlabel(NodeUnLabelOp),
+}
+
+/// Parameter for adding node labels.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct NodeLabelOp {
+    pub labels: HashMap<String, String>,
+    pub overwrite: bool,
+}
+impl From<(HashMap<String, String>, bool)> for NodeLabelOp {
+    fn from((labels, overwrite): (HashMap<String, String>, bool)) -> Self {
+        Self { labels, overwrite }
+    }
+}
+/// Parameter for removing node labels.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct NodeUnLabelOp {
+    pub label_key: String,
+}
+impl From<String> for NodeUnLabelOp {
+    fn from(label_key: String) -> Self {
+        Self { label_key }
+    }
 }
 
 /// Operation State for a Node spec resource.
@@ -587,11 +620,11 @@ impl SpecTransaction<NodeOperation> for NodeSpec {
                 NodeOperation::SetDrained() => {
                     self.set_drained();
                 }
-                NodeOperation::Label(label, _) => {
-                    self.label(label);
+                NodeOperation::Label(NodeLabelOp { labels, .. }) => {
+                    self.label(labels);
                 }
-                NodeOperation::Unlabel(label) => {
-                    self.unlabel(label);
+                NodeOperation::Unlabel(NodeUnLabelOp { label_key }) => {
+                    self.unlabel(&label_key);
                 }
             }
         }
@@ -624,7 +657,7 @@ impl SpecTransaction<NodeOperation> for NodeSpec {
             NodeOperation::RemoveDrainingVolumes(_) => (false, true),
             NodeOperation::RemoveAllDrainingVolumes() => (false, true),
             NodeOperation::SetDrained() => (false, true),
-            NodeOperation::Label(_, _) => (false, true),
+            NodeOperation::Label(_) => (false, true),
             NodeOperation::Unlabel(_) => (false, true),
         }
     }

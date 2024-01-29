@@ -36,11 +36,11 @@ pub(crate) trait ResourceLabel {
         label: HashMap<String, String>,
         overwrite: bool,
     ) -> Result<Self::LabelOutput, SvcError>;
-    /// Remove label from the resource.
+    /// Remove the label key from the resource.
     async fn unlabel(
         &mut self,
         registry: &Registry,
-        label: String,
+        label_key: String,
     ) -> Result<Self::UnlabelOutput, SvcError>;
 }
 

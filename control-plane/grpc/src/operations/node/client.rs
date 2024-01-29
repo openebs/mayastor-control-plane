@@ -166,10 +166,10 @@ impl NodeOperations for NodeClient {
     }
 
     #[tracing::instrument(name = "NodeClient::unlabel", level = "debug", skip(self), err)]
-    async fn unlabel(&self, id: NodeId, label: String) -> Result<Node, ReplyError> {
+    async fn unlabel(&self, id: NodeId, label_key: String) -> Result<Node, ReplyError> {
         let req = UnlabelNodeRequest {
             node_id: id.to_string(),
-            label,
+            label_key,
         };
         let response = self.client().unlabel_node(req).await?.into_inner();
         match response.reply {

@@ -132,6 +132,12 @@ pub enum OutputFormat {
     Yaml,
     Json,
 }
+impl OutputFormat {
+    /// Check for non output format.
+    pub fn none(&self) -> bool {
+        matches!(self, Self::None)
+    }
+}
 
 impl<T> CreateRows for Vec<T>
 where
