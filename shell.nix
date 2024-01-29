@@ -71,8 +71,11 @@ mkShell {
 
   shellHook = ''
     ./scripts/nix/git-submodule-init.sh
-    pre-commit install
-    pre-commit install --hook commit-msg
+    if [ -z "$CI" ]; then
+      echo
+      pre-commit install
+      pre-commit install --hook commit-msg
+    fi
 
     ${pkgs.lib.optionalString (norust) "cowsay ${norust_moth}"}
     ${pkgs.lib.optionalString (norust) "echo"}
