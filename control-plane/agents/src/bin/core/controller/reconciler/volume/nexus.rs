@@ -2,7 +2,7 @@ use crate::controller::{
     reconciler::{
         nexus::{
             capacity::enospc_children_onliner, faulted_nexus_remover, fixup_nexus_protocol,
-            missing_nexus_recreate,
+            fixup_nexus_size, missing_nexus_recreate,
         },
         PollContext, TaskPoller,
     },
@@ -62,6 +62,8 @@ async fn volume_nexus_reconcile(
                 missing_nexus_recreate(&mut nexus, context).await?;
                 enospc_children_onliner(&mut nexus, context).await?;
             }
+
+            fixup_nexus_size(&mut nexus, &volume, context).await?;
             fixup_nexus_protocol(&mut nexus, context).await
         }
         None => PollResult::Ok(PollerState::Idle),
