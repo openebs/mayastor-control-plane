@@ -5,6 +5,7 @@ use crate::{
         transport::Filter,
     },
 };
+use openapi::models;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
@@ -123,5 +124,25 @@ impl GetAppNode {
     /// Get the inner `Filter`.
     pub fn filter(&self) -> &Filter {
         &self.filter
+    }
+}
+
+impl From<AppNodeStatus> for models::app_node_state::Status {
+    fn from(value: AppNodeStatus) -> Self {
+        match value {
+            AppNodeStatus::Online => Self::Online,
+            AppNodeStatus::Offline => Self::Offline,
+        }
+    }
+}
+impl From<AppNodeState> for models::AppNodeState {
+    fn from(src: AppNodeState) -> Self {
+        Self::new_all(src.id, src.endpoint.to_string(), src.status)
+    }
+}
+
+impl From<AppNode> for models::AppNode {
+    fn from(src: AppNode) -> Self {
+        Self::new_all(src.id, src.spec, src.state.map(|state| state.into()))
     }
 }
