@@ -521,7 +521,7 @@ impl OperationGuardArc<NexusSpec> {
         }?;
 
         self.info_span(|| tracing::info!("Nexus successfully recreated"));
-        // todo: would be good if nexus create also supported publish..
+        // todo: would be good if nexus create also supported publish/share..
         if nexus_state.share != nexus.share {
             node.share_nexus(&ShareNexus::from(&nexus)).await?;
             self.info_span(|| tracing::info!("Nexus protocol changed successfully"));
