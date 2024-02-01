@@ -550,10 +550,11 @@ impl LeaseLockKeeperClocking<KeepAlive> for EtcdSingletonLock {
 impl LeaseLockKeeperClocking<Replaced> for EtcdSingletonLock {
     #[tracing::instrument(skip(self, _state), err)]
     async fn clock(&mut self, _state: Replaced) -> LockStatesResult {
-        panic!(
+        eprintln!(
             "Lost lock to another service instance: {}. Giving up...",
             self.service_name
         );
+        std::process::exit(128);
     }
 }
 
