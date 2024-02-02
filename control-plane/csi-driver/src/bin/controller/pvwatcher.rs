@@ -13,7 +13,7 @@ use tracing::{debug, error, info};
 pub(crate) struct PvGarbageCollector {
     pub(crate) pv_handle: Api<PersistentVolume>,
     orphan_period: Option<humantime::Duration>,
-    rest_client: &'static crate::IoEngineApiClient,
+    rest_client: &'static crate::RestApiClient,
 }
 
 /// Methods implemented by PV Garbage Collector
@@ -24,7 +24,7 @@ impl PvGarbageCollector {
         Ok(Self {
             pv_handle: Api::<PersistentVolume>::all(client),
             orphan_period,
-            rest_client: crate::IoEngineApiClient::get_client(),
+            rest_client: crate::RestApiClient::get_client(),
         })
     }
     /// Starts watching PV events.
