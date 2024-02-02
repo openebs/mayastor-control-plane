@@ -1,6 +1,5 @@
-use tracing::info;
-
-use clap::{Arg, ArgMatches};
+use client::{ApiClientError, CreateVolumeTopology, RestApiClient};
+use config::CsiControllerConfig;
 mod client;
 mod config;
 mod controller;
@@ -8,8 +7,8 @@ mod identity;
 mod pvwatcher;
 mod server;
 
-use client::{ApiClientError, CreateVolumeTopology, IoEngineApiClient};
-use config::CsiControllerConfig;
+use clap::{Arg, ArgMatches};
+use tracing::info;
 
 const CSI_SOCKET: &str = "/var/tmp/csi.sock";
 const CONCURRENCY_LIMIT: usize = 10;
@@ -18,7 +17,7 @@ const REST_TIMEOUT: &str = "30s";
 /// Initialize all components before starting the CSI controller.
 fn initialize_controller(args: &ArgMatches) -> anyhow::Result<()> {
     CsiControllerConfig::initialize(args)?;
-    IoEngineApiClient::initialize()
+    RestApiClient::initialize()
         .map_err(|error| anyhow::anyhow!("Failed to initialize API client, error = {error}"))?;
     Ok(())
 }
@@ -27,7 +26,7 @@ fn initialize_controller(args: &ArgMatches) -> anyhow::Result<()> {
 async fn ping_rest_api() {
     info!("Checking REST API endpoint accessibility ...");
 
-    match IoEngineApiClient::get_client().list_nodes().await {
+    match RestApiClient::get_client().list_nodes().await {
         Err(error) => tracing::error!(?error, "REST API endpoint is not accessible"),
         Ok(nodes) => {
             let names: Vec<String> = nodes.into_iter().map(|n| n.id).collect();

@@ -1,5 +1,4 @@
 use crate::CsiControllerConfig;
-use std::collections::HashMap;
 use stor_port::types::v0::openapi::{
     clients,
     clients::tower::StatusCode,
@@ -12,6 +11,7 @@ use stor_port::types::v0::openapi::{
 
 use anyhow::{anyhow, Result};
 use once_cell::sync::OnceCell;
+use std::collections::HashMap;
 use tracing::{debug, info, instrument};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -93,18 +93,18 @@ impl From<clients::tower::Error<RestJsonError>> for ApiClientError {
     }
 }
 
-static REST_CLIENT: OnceCell<IoEngineApiClient> = OnceCell::new();
+static REST_CLIENT: OnceCell<RestApiClient> = OnceCell::new();
 
 /// Single instance API client for accessing REST API gateway.
 /// Encapsulates communication with REST API by exposing a set of
 /// high-level API functions, which perform (de)serialization
 /// of API request/response objects.
 #[derive(Debug)]
-pub struct IoEngineApiClient {
+pub struct RestApiClient {
     rest_client: clients::tower::ApiClient,
 }
 
-impl IoEngineApiClient {
+impl RestApiClient {
     /// Initialize API client instance. Must be called prior to
     /// obtaining the client instance.
     pub(crate) fn initialize() -> Result<()> {
@@ -143,7 +143,7 @@ impl IoEngineApiClient {
 
     /// Obtain client instance. Panics if called before the client
     /// has been initialized.
-    pub(crate) fn get_client() -> &'static IoEngineApiClient {
+    pub(crate) fn get_client() -> &'static RestApiClient {
         REST_CLIENT.get().expect("Rest client is not initialized")
     }
 }
@@ -154,7 +154,7 @@ pub(crate) enum ListToken {
     Number(isize),
 }
 
-impl IoEngineApiClient {
+impl RestApiClient {
     /// List all nodes available in IoEngine cluster.
     pub(crate) async fn list_nodes(&self) -> Result<Vec<Node>, ApiClientError> {
         let response = self.rest_client.nodes_api().get_nodes(None).await?;
