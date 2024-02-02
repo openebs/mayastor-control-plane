@@ -10,7 +10,7 @@ import csi_pb2 as pb
 
 from common.apiclient import ApiClient
 from common.deployer import Deployer
-from common.nvme import nvme_find_device
+from common.nvme import nvme_find_device, nvme_find_device_path
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.publish_volume_body import PublishVolumeBody
@@ -54,19 +54,18 @@ def staging_a_volume(staging_a_volume):
 def the_nvme_device_should_report_total_queues(total):
     """the nvme device should report <TOTAL> queues."""
     print(total)
-    device = volume_device()
-    print(device)
-    dev = device.replace("/dev/", "").replace("n1", "")
-    file = f"/sys/class/nvme/{dev}/queue_count"
+    device_path = volume_device_path()
+    print(device_path)
+    file = f"/sys/block/{device_path}/device/queue_count"
     queue_count = int(subprocess.run(["sudo", "cat", file], capture_output=True).stdout)
     print(f"queue_count: {queue_count}")
     # max io queues is cpu_count
     # admin q is 1
     assert queue_count == min(total, os.cpu_count() + 1)
-    file = f"/sys/block/nvme2c2n1/queue/io_timeout"
-    io_timoout = int(subprocess.run(["sudo", "cat", file], capture_output=True).stdout)
-    print(f"io_timeout: {io_timoout}")
-    assert io_timoout == 33000
+    file = f"/sys/block/{device_path}/queue/io_timeout"
+    io_timeout = int(subprocess.run(["sudo", "cat", file], capture_output=True).stdout)
+    print(f"io_timeout: {io_timeout}")
+    assert io_timeout == 33000, "Should be set by the csi-node --nvme-io-timeout arg"
 
 
 @pytest.fixture
@@ -110,10 +109,10 @@ def staging_a_volume(staging_target_path, csi_instance, block_volume_capability)
     ApiClient.volumes_api().del_volume(volume.spec.uuid)
 
 
-def volume_device():
+def volume_device_path():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    device = nvme_find_device(volume.state["target"]["deviceUri"])
-    return device
+    device_path = nvme_find_device_path(volume.state["target"]["deviceUri"])
+    return device_path
 
 
 @pytest.fixture(scope="module")
