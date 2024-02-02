@@ -10,12 +10,11 @@ use crate::types::v0::{
     transport::{
         self, ChildState, ChildStateReason, ChildUri, CreateNexus, DestroyNexus, HostNqn, NexusId,
         NexusNvmfConfig, NexusOwners, NexusShareProtocol, NexusStatus, NodeId, Protocol, ReplicaId,
-        VolumeId,
+        ShareNexus, VolumeId,
     },
 };
 use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
 
 /// Nexus information.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -182,6 +181,17 @@ impl From<&NexusSpec> for CreateNexus {
         )
     }
 }
+impl From<&NexusSpec> for ShareNexus {
+    fn from(from: &NexusSpec) -> Self {
+        Self {
+            node: from.node.clone(),
+            uuid: from.uuid.clone(),
+            key: None,
+            protocol: from.share.try_into().unwrap_or_default(),
+            allowed_hosts: from.allowed_hosts.clone(),
+        }
+    }
+}
 
 impl AsOperationSequencer for NexusSpec {
     fn as_ref(&self) -> &OperationSequence {
@@ -202,7 +212,7 @@ impl From<NexusSpec> for models::NexusSpec {
             src.share,
             src.size,
             src.spec_status,
-            openapi::apis::Uuid::try_from(src.uuid).unwrap(),
+            src.uuid,
         )
     }
 }

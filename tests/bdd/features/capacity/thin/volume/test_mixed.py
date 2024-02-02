@@ -126,11 +126,14 @@ def data_is_being_written_to_the_thin_volume_which_exceeds_the_free_space_on_the
     thin_replica = list(volume.state.replica_topology.values())[0]
     pool = ApiClient.pools_api().get_pool(thin_replica.pool)
 
-    pool_size_mb = int((pool.state.capacity - pool.state.used) / 1024 / 1024)
+    pool_avail_size_mb = int((pool.state.capacity - pool.state.used) / 1024 / 1024)
+    assert (
+        volume.spec.size > pool_avail_size_mb
+    ), "Volume data cannot fit in the pool free space"
 
     uri = urlparse(volume.state.target["deviceUri"])
 
-    fio = Fio(name="job", rw="write", uri=uri, size=f"{pool_size_mb}M")
+    fio = Fio(name="job", rw="write", uri=uri, size=f"{pool_avail_size_mb+1}M")
     pytest.thin_fio = fio.open()
 
 

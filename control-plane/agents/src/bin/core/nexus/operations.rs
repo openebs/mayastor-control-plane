@@ -501,11 +501,8 @@ impl OperationGuardArc<NexusSpec> {
             return Err(SvcError::NoOnlineReplicas { id: nexus.name });
         }
 
-        match node.create_nexus(&CreateNexus::from(&nexus)).await {
-            Ok(nexus_state) if nexus_state.io_online() => {
-                nexus.info_span(|| tracing::info!("Nexus successfully recreated"));
-                Ok(())
-            }
+        let nexus_state = match node.create_nexus(&CreateNexus::from(&nexus)).await {
+            Ok(nexus_state) if nexus_state.io_online() => Ok(nexus_state),
             Ok(nexus_state) => {
                 nexus.warn_span(|| {
                     tracing::warn!(
@@ -521,6 +518,15 @@ impl OperationGuardArc<NexusSpec> {
                 nexus.error_span(|| tracing::error!(error=%error, "Failed to recreate the nexus"));
                 Err(error)
             }
+        }?;
+
+        self.info_span(|| tracing::info!("Nexus successfully recreated"));
+        // todo: would be good if nexus create also supported publish/share..
+        if nexus_state.share != nexus.share {
+            node.share_nexus(&ShareNexus::from(&nexus)).await?;
+            self.info_span(|| tracing::info!("Nexus protocol changed successfully"));
         }
+
+        Ok(())
     }
 }
