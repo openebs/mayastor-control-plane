@@ -49,7 +49,6 @@ Feature: Volume resize
         And the onlined replica should be rebuilt
 
 
-
     Scenario: Expand an unpublished volume with an offline replica
         Given an unpublished volume with more than one replica
         And one of the replica is not in online state
