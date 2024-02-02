@@ -1,7 +1,7 @@
 use crate::controller::{
     reconciler::{GarbageCollect, PollContext, TaskPoller},
     resources::{
-        operations::ResourceLifecycle,
+        operations::{ResourceLifecycle, ResourceResize},
         operations_helper::{OperationSequenceGuard, SpecOperationsHelper},
         OperationGuardArc, TraceSpan, TraceStrLog,
     },
@@ -17,7 +17,7 @@ use stor_port::types::v0::{
     store::{
         nexus::NexusSpec, nexus_persistence::NexusInfo, replica::ReplicaSpec, volume::VolumeSpec,
     },
-    transport::{DestroyVolume, NexusOwners, ReplicaOwners, VolumeStatus},
+    transport::{DestroyVolume, NexusOwners, ReplicaOwners, ResizeReplica, VolumeStatus},
 };
 use tracing::Instrument;
 
@@ -71,6 +71,7 @@ impl GarbageCollect for OperationGuardArc<VolumeSpec> {
             self.destroy_deleting(context).await,
             self.disown_unused(context).await,
             self.disown_invalid(context).await,
+            self.reclaim_space(context).await,
         ])
     }
 
@@ -98,6 +99,13 @@ impl GarbageCollect for OperationGuardArc<VolumeSpec> {
     // disown them.
     async fn disown_invalid(&mut self, context: &PollContext) -> PollResult {
         disown_non_reservable_replicas(self, context).await
+    }
+
+    // Volume replicas could have been possibly expanded as part of volume resize,
+    // but the volume expansion failed overall leaving behind expanded replicas. So we
+    // bring back the replica size to what is expected by the volume spec.
+    async fn reclaim_space(&mut self, context: &PollContext) -> PollResult {
+        revert_expanded_replicas(self, context).await
     }
 }
 
@@ -248,6 +256,57 @@ async fn disown_unused_replicas(
     }
 
     GarbageCollector::squash_results(results)
+}
+
+/// Volume replicas could have been possibly expanded as part of volume resize,
+/// but the volume expansion failed overall leaving behind expanded replicas. So we
+/// bring back the replica size to what is expected by the volume spec.
+#[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.uuid(), request.reconcile = true))]
+async fn revert_expanded_replicas(
+    volume: &mut OperationGuardArc<VolumeSpec>,
+    context: &PollContext,
+) -> PollResult {
+    let target = context.specs().volume_target_nexus_rsc(volume.as_ref());
+    if let Some(tgt) = target {
+        let nexus_size = tgt.lock().size;
+        // panic only in debug environments e.g certain tests.
+        debug_assert_eq!(nexus_size, volume.as_ref().size);
+        if nexus_size != volume.as_ref().size {
+            // This should never happen, but just emit a warning.
+            volume.warn_span(|| tracing::info!(volume_size = %volume.as_ref().size, nexus_size = %nexus_size, "Nexus and Volume size mismatch!"));
+        }
+        // If there is a target present, we don't try to reclaim space from replicas because the
+        // attempt to downsize replica/lvol will potentially fail with -EBUSY if the lvol bdev
+        // has open descriptors.
+        return PollResult::Ok(PollerState::Idle);
+    }
+
+    for replica in context.specs().volume_replicas(volume.uuid()) {
+        let mut replica = match replica.operation_guard() {
+            Ok(guard) => guard,
+            Err(_) => continue,
+        };
+
+        if replica.as_ref().size > volume.as_ref().size {
+            let replica_state = context.registry().replica(replica.uuid()).await?;
+            volume.info_span(|| tracing::info!(replica = %replica.as_ref().uuid, replica_size = %replica.as_ref().size, "Reclaiming space from replica. Volume size {}", volume.as_ref().size));
+            // Resize replica back to volume spec size.
+            replica
+                .resize(
+                    context.registry(),
+                    &ResizeReplica::new(
+                        &replica_state.node,
+                        replica.as_ref().pool_name(),
+                        None,
+                        replica.uuid(),
+                        volume.as_ref().size,
+                    ),
+                )
+                .await?;
+        }
+    }
+
+    PollResult::Ok(PollerState::Idle)
 }
 
 /// After republishing if the nexus was not shutdown gracefully, we should disown its local
