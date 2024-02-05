@@ -1,6 +1,5 @@
 use crate::filesystem::FileSystem;
 use regex::Regex;
-use serde_json::Value;
 use std::{
     collections::HashMap,
     convert::AsRef,
@@ -53,14 +52,18 @@ pub enum Parameters {
     CloneFsIdAsVolumeId,
     #[strum(serialize = "fsId")]
     FsId,
-    #[strum(serialize = "poolTopologyAffinity")]
-    PoolTopologyAffinity,
-    #[strum(serialize = "poolTopologySpread")]
-    PoolTopologySpread,
     #[strum(serialize = "maxSnapshots")]
     MaxSnapshots,
     #[strum(serialize = "quiesceFs")]
     QuiesceFs,
+    #[strum(serialize = "poolAffinityTopologyLabel")]
+    PoolAffinityTopologyLabel,
+    #[strum(serialize = "poolHasTopologyKey")]
+    PoolHasTopologyKey,
+    #[strum(serialize = "nodeAffinityTopologyLabel")]
+    NodeAffinityTopologyLabel,
+    #[strum(serialize = "nodeHasTopologyKey")]
+    NodeHasTopologyKey,
 }
 impl Parameters {
     fn parse_human_time(
@@ -72,33 +75,45 @@ impl Parameters {
         })
     }
 
-    // This function parses the input string into a HashMap<String, String>
-    // Input {"key1": "value1", "key2": "value2"} :output {"key1": "value1", "key2": "value2"}
-    // Input : "singleKey" output {"singleKey": ""}
-    fn parse_map(
+    /// Parses storage class label when passed as a string
+    /// PoolAffinityTopologyLabel: |
+    ///   A1: B1
+    ///   CE : D1
+    /// The input value to this function is like Some("A1: B1\nCE  : D1\n")
+    /// and it will be parsed as {"A1": "B1", "CE ": "D1"}
+    /// PoolHasTopologyKey: |
+    ///   A1
+    ///   CE
+    ///  The input value to this function is like Some("A1\nCE \n")
+    ///  and it will be parsed as {"A1": "", "CE ": ""}
+    fn parse_topology_param(
         value: Option<&String>,
-    ) -> Result<Option<HashMap<String, String>>, serde_json::Error> {
+    ) -> Result<Option<HashMap<String, String>>, tonic::Status> {
         Ok(match value {
-            Some(json_str) => {
-                if !json_str.contains(':') {
-                    let mut map = HashMap::new();
-                    map.insert(json_str.to_string(), "".to_string());
-                    Some(map)
-                } else {
-                    let value: Value = serde_json::from_str(json_str)?;
-                    // Convert Value to Map
-                    value.as_object().map(|map| {
-                        map.into_iter()
-                            .map(|(k, v)| {
-                                (k.to_string(), v.as_str().unwrap_or_default().to_string())
-                            })
-                            .collect()
-                    })
+            Some(labels) => {
+                let mut result_map = HashMap::new();
+                for label in labels.split('\n') {
+                    if !label.is_empty() {
+                        if label.contains(':') {
+                            let parts: Vec<&str> = label.split(':').map(|s| s.trim()).collect();
+                            if let [key, val, ..] = parts.as_slice() {
+                                result_map.insert(key.to_string(), val.to_string());
+                            } else {
+                                return Err(tonic::Status::invalid_argument(format!(
+                                    "Invalid label : {value:?}"
+                                )));
+                            }
+                        } else {
+                            result_map.insert(label.to_string(), "".to_string());
+                        }
+                    }
                 }
+                Some(result_map)
             }
             None => None,
         })
     }
+
     fn parse_u32(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
         Ok(match value {
             Some(value) => value.parse::<u32>().map(Some)?,
@@ -153,17 +168,29 @@ impl Parameters {
     pub fn fs_id(value: Option<&String>) -> Result<Option<Uuid>, UuidError> {
         Self::parse_uuid(value)
     }
-    /// Parse the value for `Self::PoolTopologyAffinity`.
-    pub fn pool_topology_affinity(
+    /// Parse the value for `Self::PoolAffinityTopologyLabel`.
+    pub fn pool_affinity_topology_label(
         value: Option<&String>,
-    ) -> Result<Option<HashMap<String, String>>, serde_json::Error> {
-        Self::parse_map(value)
+    ) -> Result<Option<HashMap<String, String>>, tonic::Status> {
+        Self::parse_topology_param(value)
     }
-    /// Parse the value for `Self::PoolTopologySpread`.
-    pub fn pool_topology_spread(
+    /// Parse the value for `Self::PoolHasTopologyKey`.
+    pub fn pool_has_topology_key(
         value: Option<&String>,
-    ) -> Result<Option<HashMap<String, String>>, serde_json::Error> {
-        Self::parse_map(value)
+    ) -> Result<Option<HashMap<String, String>>, tonic::Status> {
+        Self::parse_topology_param(value)
+    }
+    /// Parse the value for `Self::NodeAffinityTopologyLabel`.
+    pub fn node_affinity_topology_label(
+        value: Option<&String>,
+    ) -> Result<Option<HashMap<String, String>>, tonic::Status> {
+        Self::parse_topology_param(value)
+    }
+    /// Parse the value for `Self::NodeHasTopologyKey`.
+    pub fn node_has_topology_key(
+        value: Option<&String>,
+    ) -> Result<Option<HashMap<String, String>>, tonic::Status> {
+        Self::parse_topology_param(value)
     }
     /// Parse the value for `Self::MaxSnapshots`.
     pub fn max_snapshots(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
@@ -181,8 +208,10 @@ pub struct PublishParams {
     keep_alive_tmo: Option<u32>,
     fs_type: Option<FileSystem>,
     fs_id: Option<Uuid>,
-    pool_topology_affinity: Option<HashMap<String, String>>,
-    pool_topology_spread: Option<HashMap<String, String>>,
+    pool_affinity_topology_label: Option<HashMap<String, String>>,
+    pool_has_topology_key: Option<HashMap<String, String>>,
+    node_affinity_topology_label: Option<HashMap<String, String>>,
+    node_has_topology_key: Option<HashMap<String, String>>,
 }
 impl PublishParams {
     /// Get the `Parameters::IoTimeout` value.
@@ -205,13 +234,21 @@ impl PublishParams {
     pub fn fs_id(&self) -> &Option<Uuid> {
         &self.fs_id
     }
-    /// Get the `Parameters::PoolTopologyAffinity` value.
-    pub fn pool_topology_affinity(&self) -> &Option<HashMap<String, String>> {
-        &self.pool_topology_affinity
+    /// Get the `Parameters::PoolAffinityTopologyLabel` value.
+    pub fn pool_affinity_topology_label(&self) -> &Option<HashMap<String, String>> {
+        &self.pool_affinity_topology_label
     }
-    /// Get the `Parameters::PoolTopologySpread` value.
-    pub fn pool_topology_spread(&self) -> &Option<HashMap<String, String>> {
-        &self.pool_topology_spread
+    /// Get the `Parameters::PoolHasTopologyKey` value.
+    pub fn pool_has_topology_key(&self) -> &Option<HashMap<String, String>> {
+        &self.pool_has_topology_key
+    }
+    /// Get the `Parameters::NodeAffinityTopologyLabel` value.
+    pub fn node_affinity_topology_label(&self) -> &Option<HashMap<String, String>> {
+        &self.node_affinity_topology_label
+    }
+    /// Get the `Parameters::NodeHasTopologyKey` value.
+    pub fn node_has_topology_key(&self) -> &Option<HashMap<String, String>> {
+        &self.node_has_topology_key
     }
     /// Convert `Self` into a publish context.
     pub fn into_context(self) -> HashMap<String, String> {
@@ -263,12 +300,20 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
                 .map_err(|_| tonic::Status::invalid_argument("Invalid keep_alive_tmo"))?;
         let fs_id = Parameters::fs_id(args.get(Parameters::FsId.as_ref()))
             .map_err(|_| tonic::Status::invalid_argument("Invalid fs_id"))?;
-        let pool_topology_affinity =
-            Parameters::pool_topology_affinity(args.get(Parameters::PoolTopologyAffinity.as_ref()))
-                .map_err(|_| tonic::Status::invalid_argument("Invalid pool_topology_affinity"))?;
-        let pool_topology_spread =
-            Parameters::pool_topology_spread(args.get(Parameters::PoolTopologySpread.as_ref()))
-                .map_err(|_| tonic::Status::invalid_argument("Invalid pool_topology_spread"))?;
+        let pool_affinity_topology_label = Parameters::pool_affinity_topology_label(
+            args.get(Parameters::PoolAffinityTopologyLabel.as_ref()),
+        )
+        .map_err(|_| tonic::Status::invalid_argument("Invalid pool_affinity_topology_label"))?;
+        let pool_has_topology_key =
+            Parameters::pool_has_topology_key(args.get(Parameters::PoolHasTopologyKey.as_ref()))
+                .map_err(|_| tonic::Status::invalid_argument("Invalid pool_has_topology_key"))?;
+        let node_affinity_topology_label = Parameters::node_affinity_topology_label(
+            args.get(Parameters::NodeAffinityTopologyLabel.as_ref()),
+        )
+        .map_err(|_| tonic::Status::invalid_argument("Invalid node_affinity_topology_label"))?;
+        let node_has_topology_key =
+            Parameters::node_has_topology_key(args.get(Parameters::NodeHasTopologyKey.as_ref()))
+                .map_err(|_| tonic::Status::invalid_argument("Invalid node_has_topology_key"))?;
         Ok(Self {
             io_timeout,
             nvme_io_timeout,
@@ -276,8 +321,10 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
             keep_alive_tmo,
             fs_type,
             fs_id,
-            pool_topology_affinity,
-            pool_topology_spread,
+            pool_affinity_topology_label,
+            pool_has_topology_key,
+            node_affinity_topology_label,
+            node_has_topology_key,
         })
     }
 }
