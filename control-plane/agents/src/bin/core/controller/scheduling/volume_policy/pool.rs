@@ -1,6 +1,7 @@
 use crate::controller::scheduling::{
     resources::{ChildItem, PoolItem},
     volume::{GetSuitablePoolsContext, ReplicaResizePoolsContext},
+    volume_policy::qualifies_inclusion_labels,
 };
 use std::collections::HashMap;
 use stor_port::types::v0::transport::{PoolStatus, PoolTopology};
@@ -77,27 +78,16 @@ impl PoolBaseFilters {
     /// Should only attempt to use pools having specific creation label if topology has it.
     pub(crate) fn topology(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         let volume_pool_topology_inclusion_labels: HashMap<String, String>;
-        let volume_pool_topology_exclusion_labels: HashMap<String, String>;
         match request.topology.clone() {
             None => return true,
             Some(topology) => match topology.pool {
                 None => return true,
                 Some(pool_topology) => match pool_topology {
                     PoolTopology::Labelled(labelled_topology) => {
-                        // Return false if the exclusion and incluson labels has any common key.
-                        if labelled_topology
-                            .inclusion
-                            .keys()
-                            .any(|key| labelled_topology.exclusion.contains_key(key))
-                        {
-                            return false;
-                        }
-
-                        if !labelled_topology.inclusion.is_empty()
-                            || !labelled_topology.exclusion.is_empty()
-                        {
-                            volume_pool_topology_inclusion_labels = labelled_topology.inclusion;
-                            volume_pool_topology_exclusion_labels = labelled_topology.exclusion;
+                        // The labels in Volume Pool Topology should match the pool labels if
+                        // present, otherwise selection of any pool is allowed.
+                        if !labelled_topology.inclusion.is_empty() {
+                            volume_pool_topology_inclusion_labels = labelled_topology.inclusion
                         } else {
                             return true;
                         }
@@ -111,85 +101,10 @@ impl PoolBaseFilters {
             Ok(spec) => match spec.labels {
                 None => false,
                 Some(pool_labels) => {
-                    let inc_match = does_pool_qualify_inclusion_labels(
-                        volume_pool_topology_inclusion_labels,
-                        pool_labels.clone(),
-                    );
-                    let exc_match = does_pool_qualify_exclusion_labels(
-                        volume_pool_topology_exclusion_labels,
-                        pool_labels,
-                    );
-                    inc_match && exc_match
+                    qualifies_inclusion_labels(volume_pool_topology_inclusion_labels, &pool_labels)
                 }
             },
             Err(_) => false,
         }
-    }
-}
-
-/// Return true if all the keys present in volume's pool inclusion matches with the pool labels
-/// otherwise returns false.
-pub(crate) fn does_pool_qualify_inclusion_labels(
-    vol_pool_inc_labels: HashMap<String, String>,
-    pool_labels: HashMap<String, String>,
-) -> bool {
-    for (vol_inc_key, vol_inc_value) in vol_pool_inc_labels.iter() {
-        match pool_labels.get(vol_inc_key) {
-            Some(pool_val) => {
-                if vol_inc_value.is_empty() {
-                    continue;
-                }
-                if pool_val != vol_inc_value {
-                    return false;
-                }
-            }
-            None => {
-                return false;
-            }
-        }
-    }
-    true
-}
-
-/// Return true if all the key present in volume's pool exclusion matches with the pool labels and
-/// their corresponding value are different otherwise returns false
-pub(crate) fn does_pool_qualify_exclusion_labels(
-    vol_pool_exc_labels: HashMap<String, String>,
-    pool_labels: HashMap<String, String>,
-) -> bool {
-    // If volume's pool exclusion labels is empty, then it means that the volume has no exclusion
-    if vol_pool_exc_labels.is_empty() {
-        return true;
-    }
-
-    // exclusion_key_only are set of keys from vol_pool_exc_labels has only keys with empty values
-    // e.g. vol_pool_exc_labels = {"key1": "", "key2": "value2"}
-    let exclusion_key_only: Vec<_> = vol_pool_exc_labels
-        .iter()
-        .filter(|(_, value)| value.is_empty())
-        .map(|(key, _)| key)
-        .collect();
-
-    if exclusion_key_only.is_empty() {
-        // If volume's pool exclusion labels has any key with non-empty value, then it means that
-        // the pool should not have that key with that value
-        let common_keys: Vec<_> = vol_pool_exc_labels
-            .keys()
-            .filter(|&key| pool_labels.contains_key(key))
-            .collect();
-
-        if common_keys.is_empty() {
-            return false;
-        }
-
-        return common_keys
-            .iter()
-            .any(|&key| vol_pool_exc_labels.get(key) != pool_labels.get(key));
-    } else {
-        // If volume's pool exclusion labels has any key with empty value, then it means that the
-        // pool should not have that key
-        !exclusion_key_only
-            .iter()
-            .any(|key| pool_labels.contains_key(&key.to_string()))
     }
 }

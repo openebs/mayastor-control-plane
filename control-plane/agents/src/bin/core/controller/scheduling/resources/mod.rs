@@ -328,7 +328,7 @@ impl ChildItem {
 /// Individual Node candidate which is a wrapper over nodewrapper used for filtering.
 #[derive(Clone, Debug)]
 pub(crate) struct NodeItem {
-    node_wrapper: NodeWrapper,
+    pub(crate) node_wrapper: NodeWrapper,
     ag_nexus_count: Option<u64>,
     ag_preferred: bool,
 }

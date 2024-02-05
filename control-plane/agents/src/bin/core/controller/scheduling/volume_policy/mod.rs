@@ -1,10 +1,11 @@
 use super::{volume::ResizeVolumeReplicas, ReplicaFilters, ResourceFilter};
-use crate::controller::scheduling::{
-    volume::{AddVolumeReplica, CloneVolumeSnapshot, SnapshotVolumeReplica},
-    NodeFilters,
+use crate::controller::scheduling::volume::{
+    AddVolumeReplica, CloneVolumeSnapshot, SnapshotVolumeReplica,
 };
+use std::collections::HashMap;
 
 mod affinity_group;
+pub(crate) mod node;
 pub(crate) mod pool;
 mod simple;
 mod thick;
@@ -19,10 +20,11 @@ impl DefaultBasePolicy {
     }
     fn filter_nodes(request: AddVolumeReplica) -> AddVolumeReplica {
         request
-            .filter(NodeFilters::cordoned_for_pool)
-            .filter(NodeFilters::online_for_pool)
-            .filter(NodeFilters::allowed)
-            .filter(NodeFilters::unused)
+            .filter(node::NodeFilters::cordoned_for_pool)
+            .filter(node::NodeFilters::online_for_pool)
+            .filter(node::NodeFilters::allowed)
+            .filter(node::NodeFilters::unused)
+            .filter(node::NodeFilters::topology)
     }
     fn filter_pools(request: AddVolumeReplica) -> AddVolumeReplica {
         request
@@ -36,8 +38,8 @@ impl DefaultBasePolicy {
     }
     fn filter_snapshot_nodes(request: SnapshotVolumeReplica) -> SnapshotVolumeReplica {
         request
-            .filter(NodeFilters::cordoned_for_pool)
-            .filter(NodeFilters::online_for_pool)
+            .filter(node::NodeFilters::cordoned_for_pool)
+            .filter(node::NodeFilters::online_for_pool)
     }
     fn filter_snapshot_pools(request: SnapshotVolumeReplica) -> SnapshotVolumeReplica {
         request
@@ -50,8 +52,8 @@ impl DefaultBasePolicy {
     }
     fn filter_clone_nodes(request: CloneVolumeSnapshot) -> CloneVolumeSnapshot {
         request
-            .filter(NodeFilters::cordoned_for_pool)
-            .filter(NodeFilters::online_for_pool)
+            .filter(node::NodeFilters::cordoned_for_pool)
+            .filter(node::NodeFilters::online_for_pool)
     }
     fn filter_clone_pools(request: CloneVolumeSnapshot) -> CloneVolumeSnapshot {
         request
@@ -64,4 +66,28 @@ impl DefaultBasePolicy {
             .filter(ReplicaFilters::online_for_resize)
             .filter(pool::PoolBaseFilters::min_free_space_repl_resize)
     }
+}
+
+/// Return true if all the keys present in volume's pool/node inclusion matches with the pool/node
+/// labels otherwise returns false.
+pub(crate) fn qualifies_inclusion_labels(
+    vol_pool_inc_labels: HashMap<String, String>,
+    pool_labels: &HashMap<String, String>,
+) -> bool {
+    for (vol_inc_key, vol_inc_value) in vol_pool_inc_labels.iter() {
+        match pool_labels.get(vol_inc_key) {
+            Some(pool_val) => {
+                if vol_inc_value.is_empty() {
+                    continue;
+                }
+                if pool_val != vol_inc_value {
+                    return false;
+                }
+            }
+            None => {
+                return false;
+            }
+        }
+    }
+    true
 }
