@@ -1127,7 +1127,7 @@ impl From<&dyn DestroyVolumeInfo> for DestroyVolumeRequest {
 pub struct ValidatedResizeVolumeRequest {
     uuid: VolumeId,
     requested_size: u64,
-    capacity_limit: Option<u64>,
+    cluster_capacity_limit: Option<u64>,
 }
 /// Trait to be implemented for ResizeVolume operation.
 pub trait ResizeVolumeInfo: Send + Sync + std::fmt::Debug {
@@ -1136,7 +1136,7 @@ pub trait ResizeVolumeInfo: Send + Sync + std::fmt::Debug {
     /// Requested new size of the volume, in bytes
     fn req_size(&self) -> u64;
     /// Total capacity limit for all volumes, in bytes
-    fn capacity_limit(&self) -> Option<u64>;
+    fn cluster_capacity_limit(&self) -> Option<u64>;
 }
 
 impl ResizeVolumeInfo for ResizeVolume {
@@ -1148,8 +1148,8 @@ impl ResizeVolumeInfo for ResizeVolume {
         self.requested_size
     }
 
-    fn capacity_limit(&self) -> Option<u64> {
-        self.capacity_limit
+    fn cluster_capacity_limit(&self) -> Option<u64> {
+        self.cluster_capacity_limit
     }
 }
 
@@ -1159,7 +1159,7 @@ impl ValidateRequestTypes for ResizeVolumeRequest {
         Ok(ValidatedResizeVolumeRequest {
             uuid: VolumeId::try_from(StringValue(Some(self.uuid)))?,
             requested_size: self.requested_size,
-            capacity_limit: self.capacity_limit,
+            cluster_capacity_limit: self.capacity_limit,
         })
     }
 }
@@ -1169,7 +1169,7 @@ impl From<&dyn ResizeVolumeInfo> for ResizeVolume {
         Self {
             uuid: data.uuid(),
             requested_size: data.req_size(),
-            capacity_limit: data.capacity_limit(),
+            cluster_capacity_limit: data.cluster_capacity_limit(),
         }
     }
 }
@@ -1179,7 +1179,7 @@ impl From<&dyn ResizeVolumeInfo> for ResizeVolumeRequest {
         Self {
             uuid: data.uuid().to_string(),
             requested_size: data.req_size(),
-            capacity_limit: data.capacity_limit(),
+            capacity_limit: data.cluster_capacity_limit(),
         }
     }
 }
@@ -1193,8 +1193,8 @@ impl ResizeVolumeInfo for ValidatedResizeVolumeRequest {
         self.requested_size
     }
 
-    fn capacity_limit(&self) -> Option<u64> {
-        self.capacity_limit
+    fn cluster_capacity_limit(&self) -> Option<u64> {
+        self.cluster_capacity_limit
     }
 }
 

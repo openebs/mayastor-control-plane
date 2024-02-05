@@ -4,10 +4,16 @@ use grpc::operations::{
     volume::traits::VolumeOperations,
 };
 use std::time::Duration;
-use stor_port::types::v0::transport::{
-    CreateVolume, DestroyVolume, Filter, PublishVolume, ResizeVolume, Volume, VolumeId,
-    VolumeShareProtocol,
+use stor_port::{
+    transport_api::ReplyErrorKind,
+    types::v0::transport::{
+        CreateVolume, DestroyVolume, Filter, PublishVolume, ResizeVolume, VolumeShareProtocol,
+    },
 };
+
+const SIZE: u64 = 50 * 1024 * 1024; // 50MiB
+const EXPANDED_SIZE: u64 = 2 * SIZE; // 100MiB
+const CAPACITY_LIMIT_DIFF: u64 = 20 * 1024 * 1024; // 20MiB
 
 /// Validate that the size of volume and replicas are as per expected_size
 /// Return true if validation is successful, otherwise false.
@@ -46,9 +52,9 @@ async fn validate_resized_volume(
 }
 
 #[tokio::test]
-async fn resize_unpublished() {
+async fn resize_unpublished_and_published() {
     let cluster = ClusterBuilder::builder()
-        .with_rest(true)
+        .with_rest(false)
         .with_agents(vec!["core"])
         .with_io_engines(3)
         .with_pool(0, "malloc:///p1?size_mb=200")
@@ -56,6 +62,7 @@ async fn resize_unpublished() {
         .with_pool(2, "malloc:///p1?size_mb=200")
         .with_cache_period("1s")
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
+        .with_options(|o| o.with_isolated_io_engine(true))
         .build()
         .await
         .unwrap();
@@ -85,8 +92,8 @@ async fn resize_unpublished() {
         .resize(
             &ResizeVolume {
                 uuid: volume.uuid().clone(),
-                requested_size: 2 * volume.spec().size,
-                capacity_limit: None,
+                requested_size: EXPANDED_SIZE,
+                cluster_capacity_limit: None,
             },
             None,
         )
@@ -125,8 +132,8 @@ async fn resize_published(cluster: &Cluster) {
         .create(
             &CreateVolume {
                 uuid: "df3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
-                size: 50 * 1024 * 1024,
-                replicas: 3,
+                size: SIZE,
+                replicas: 1,
                 thin: false,
                 ..Default::default()
             },
@@ -152,8 +159,8 @@ async fn resize_published(cluster: &Cluster) {
         .resize(
             &ResizeVolume {
                 uuid: volume.uuid().clone(),
-                requested_size: 2 * volume.spec().size,
-                capacity_limit: None,
+                requested_size: EXPANDED_SIZE,
+                cluster_capacity_limit: None,
             },
             None,
         )
@@ -177,7 +184,7 @@ async fn resize_published(cluster: &Cluster) {
 #[tokio::test]
 async fn resize_on_no_capacity_pool() {
     let cluster = ClusterBuilder::builder()
-        .with_rest(true)
+        .with_rest(false)
         .with_agents(vec!["core"])
         .with_io_engines(3)
         .with_pool(0, "malloc:///p1?size_mb=200")
@@ -185,6 +192,7 @@ async fn resize_on_no_capacity_pool() {
         .with_pool(2, "malloc:///p1?size_mb=100")
         .with_cache_period("1s")
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
+        .with_options(|o| o.with_isolated_io_engine(true))
         .build()
         .await
         .unwrap();
@@ -195,7 +203,7 @@ async fn resize_on_no_capacity_pool() {
         .create(
             &CreateVolume {
                 uuid: "de3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
-                size: 50 * 1024 * 1024,
+                size: SIZE,
                 replicas: 3,
                 thin: false,
                 ..Default::default()
@@ -209,8 +217,8 @@ async fn resize_on_no_capacity_pool() {
         .resize(
             &ResizeVolume {
                 uuid: volume.uuid().clone(),
-                requested_size: 2 * volume.spec().size,
-                capacity_limit: None,
+                requested_size: EXPANDED_SIZE,
+                cluster_capacity_limit: None,
             },
             None,
         )
@@ -227,4 +235,94 @@ async fn resize_on_no_capacity_pool() {
     assert!(vol_obj.spec().size == volume.spec().size);
     // TODO: Add reclaim monitor validations for replicas that got resized as part
     // of this failed volume resize.
+}
+
+#[tokio::test]
+async fn resize_with_cluster_capacity_limit() {
+    let cluster = ClusterBuilder::builder()
+        .with_rest(false)
+        .with_agents(vec!["core"])
+        .with_io_engines(2)
+        .with_pool(0, "malloc:///p1?size_mb=200")
+        .with_pool(1, "malloc:///p1?size_mb=200")
+        .with_cache_period("1s")
+        .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
+        .with_options(|o| o.with_isolated_io_engine(true))
+        .build()
+        .await
+        .unwrap();
+
+    let vol_cli = cluster.grpc_client().volume();
+
+    // resize exceeding the capacity limit
+    grpc_resize_volume_with_limit(
+        &vol_cli,
+        Some(EXPANDED_SIZE - CAPACITY_LIMIT_DIFF),
+        Some(ReplyErrorKind::CapacityLimitExceeded {}),
+    )
+    .await;
+
+    // resize within the capacity limit
+    grpc_resize_volume_with_limit(&vol_cli, Some(EXPANDED_SIZE + CAPACITY_LIMIT_DIFF), None).await;
+}
+
+async fn grpc_resize_volume_with_limit(
+    volume_client: &dyn VolumeOperations,
+    capacity: Option<u64>,
+    expected_error: Option<ReplyErrorKind>,
+) {
+    let volume = volume_client
+        .create(
+            &CreateVolume {
+                uuid: "de3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
+                size: SIZE,
+                replicas: 2,
+                thin: false,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let result = volume_client
+        .resize(
+            &ResizeVolume {
+                uuid: volume.uuid().clone(),
+                requested_size: EXPANDED_SIZE,
+                cluster_capacity_limit: capacity,
+            },
+            None,
+        )
+        .await;
+
+    match result {
+        Ok(resized_volume) => {
+            assert!(resized_volume.spec().uuid == volume.spec().uuid);
+            assert!(resized_volume.spec().size == EXPANDED_SIZE);
+            volume_client
+                .destroy(
+                    &DestroyVolume {
+                        uuid: resized_volume.uuid().try_into().unwrap(),
+                    },
+                    None,
+                )
+                .await
+                .unwrap();
+            assert!(expected_error.is_none());
+        }
+        Err(e) => {
+            assert_eq!(expected_error, Some(e.kind)); // wrong error
+                                                      // Volume not needed anymore.
+            volume_client
+                .destroy(
+                    &DestroyVolume {
+                        uuid: volume.uuid().try_into().unwrap(),
+                    },
+                    None,
+                )
+                .await
+                .unwrap();
+        }
+    }
 }
