@@ -1,7 +1,11 @@
 use crate::{
-    client::ListToken, ApiClientError, CreateVolumeTopology, CsiControllerConfig, RestApiClient,
+    client::{ApiClientError, CreateVolumeTopology, ListToken, RestApiClient},
+    CsiControllerConfig,
 };
-use csi_driver::context::{CreateParams, PublishParams};
+use csi_driver::{
+    context::{CreateParams, CreateSnapshotParams, PublishParams, QuiesceFsCandidate},
+    node::internal::{node_plugin_client::NodePluginClient, FreezeFsRequest, UnfreezeFsRequest},
+};
 use rpc::csi::{volume_content_source::Type, Topology as CsiTopology, *};
 use stor_port::types::v0::openapi::{
     models,
@@ -14,8 +18,8 @@ use utils::{CREATED_BY_KEY, DSP_OPERATOR};
 
 use regex::Regex;
 use std::{collections::HashMap, str::FromStr};
-use tonic::{Response, Status};
-use tracing::{debug, error, instrument, warn};
+use tonic::{Request, Response, Status};
+use tracing::{debug, error, instrument, trace, warn};
 use uuid::Uuid;
 
 const OPENEBS_TOPOLOGY_KEY: &str = "openebs.io/nodename";
@@ -71,6 +75,61 @@ fn parse_protocol(proto: Option<&String>) -> Result<VolumeShareProtocol, Status>
         _ => Err(Status::invalid_argument(format!(
             "Invalid protocol: {proto:?}"
         ))),
+    }
+}
+
+/// Get app node where volume frontend is situated.
+fn volume_app_node(volume: &Volume) -> Option<String> {
+    match volume.spec.target.as_ref() {
+        // todo: Might need to deal with multiple app nodes later?
+        Some(target) => target
+            .frontend_nodes
+            .as_ref()
+            .and_then(|nodes| nodes.get(0))
+            .map(|node| node.name.clone()),
+        None => None,
+    }
+}
+
+#[tracing::instrument]
+async fn issue_fs_freeze(endpoint: String, volume_id: String) -> Result<(), Status> {
+    trace!("Issuing fs freeze");
+    let mut client = NodePluginClient::connect(format!("http://{endpoint}"))
+        .await
+        .map_err(|error| Status::failed_precondition(error.to_string()))?;
+    match client
+        .freeze_fs(Request::new(FreezeFsRequest {
+            volume_id: volume_id.clone(),
+        }))
+        .await
+    {
+        Ok(_) => Ok(()),
+        Err(status) if status.code() == tonic::Code::InvalidArgument => {
+            trace!("fs unfreeze not supported for raw block volume: {volume_id}");
+            Ok(())
+        }
+        Err(error) => Err(error),
+    }
+}
+
+#[tracing::instrument]
+async fn issue_fs_unfreeze(endpoint: String, volume_id: String) -> Result<(), Status> {
+    trace!("Issuing fs unfreeze");
+    let mut client = NodePluginClient::connect(format!("http://{endpoint}"))
+        .await
+        .map_err(|error| Status::failed_precondition(error.to_string()))?;
+    match client
+        .unfreeze_fs(Request::new(UnfreezeFsRequest {
+            volume_id: volume_id.clone(),
+        }))
+        .await
+    {
+        Ok(_) => Ok(()),
+        Err(status) if status.code() == tonic::Code::InvalidArgument => {
+            trace!("fs unfreeze not supported for raw block volume: {volume_id}");
+            Ok(())
+        }
+        Err(error) => Err(error),
     }
 }
 
@@ -798,15 +857,73 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let snap_uuid = Uuid::parse_str(&snapshot_uuid_str).map_err(|_e| {
             Status::invalid_argument(format!("Malformed snapshot ID: {}", request.name))
         })?;
+        let create_params = CreateSnapshotParams::try_from(&request.parameters)?;
 
-        let snapshot = RestApiClient::get_client()
-            .create_volume_snapshot(&volume_uuid, &snap_uuid)
+        // Get the volume object. Extract the app node endpoint if the quiesce is requested.
+        let volume = RestApiClient::get_client().get_volume(&volume_uuid).await?;
+        let app_node_endpoint_info = match volume_app_node(&volume) {
+            // Volume is not published, so no need to quiesce.
+            None => None,
+            Some(info) => match create_params.quiesce().clone() {
+                None | Some(QuiesceFsCandidate::Freeze) => {
+                    // If quiesce is requested, get the app node endpoint. Request would fail to
+                    // proceed if app node endpoint is not retieved.
+                    let app_node = RestApiClient::get_client().get_app_node(&info).await?;
+                    Some(app_node.spec.endpoint)
+                }
+                Some(QuiesceFsCandidate::None) => None,
+            },
+        };
+
+        let snapshot_creation_result = match RestApiClient::get_client()
+            .get_volumes_snapshot(&snap_uuid)
             .await
-            .map_err(|error| match error {
-                ApiClientError::ResourceExhausted(reason) => Status::resource_exhausted(reason),
-                ApiClientError::PreconditionFailed(reason) => Status::resource_exhausted(reason),
-                error => error.into(),
-            })?;
+        {
+            // If snapshot is already created in previous attempts, fetch and return it.
+            Ok(snapshot) => Ok(snapshot),
+            Err(ApiClientError::ResourceNotExists(_)) => {
+                if let Some(app_node_endpoint) = app_node_endpoint_info.clone() {
+                    issue_fs_freeze(app_node_endpoint, volume_uuid.to_string()).await?;
+                }
+
+                // Create the snapshot.
+                RestApiClient::get_client()
+                    .create_volume_snapshot(&volume_uuid, &snap_uuid)
+                    .await
+                    .map_err(|error| match error {
+                        ApiClientError::ResourceExhausted(reason) => {
+                            Status::resource_exhausted(reason)
+                        }
+                        ApiClientError::PreconditionFailed(reason) => {
+                            Status::resource_exhausted(reason)
+                        }
+                        error => error.into(),
+                    })
+            }
+            Err(error) => Err(error.into()),
+        };
+
+        // Always unfreeze the filesystem if it quiesce was requested, as the retry mechanism can
+        // leave filesystem frozen.
+        let snapshot = if let Some(app_node_endpoint) = app_node_endpoint_info {
+            let unfreeze_result =
+                issue_fs_unfreeze(app_node_endpoint, volume_uuid.to_string()).await;
+            match (snapshot_creation_result, unfreeze_result) {
+                (result, Ok(())) => result,
+                (Ok(_snapshot), Err(unfreeze_error)) => Err(Status::failed_precondition(format!(
+                    "Snapshot creation succeeded but filesystem unfreeze failed: {}",
+                    unfreeze_error
+                ))),
+                (Err(snap_error), Err(unfreeze_error)) => {
+                    Err(Status::failed_precondition(format!(
+                        "Snapshot creation failed: {}, filesystem unfreeze failed: {}",
+                        snap_error, unfreeze_error
+                    )))
+                }
+            }
+        } else {
+            snapshot_creation_result
+        }?;
 
         Ok(tonic::Response::new(CreateSnapshotResponse {
             snapshot: Some(snapshot_to_csi(snapshot)),
