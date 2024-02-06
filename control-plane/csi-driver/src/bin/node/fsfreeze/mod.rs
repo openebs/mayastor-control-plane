@@ -49,9 +49,8 @@ fn exitcode_to_status(output: std::process::Output) -> Status {
         Some(code) if code == Errno::ENODEV as i32 || code == Errno::ENODATA as i32 => {
             Status::not_found(stderr_msg)
         }
-        Some(code) if code == Errno::EINVAL as i32 || code == Errno::EMEDIUMTYPE as i32 => {
-            Status::invalid_argument(stderr_msg)
-        }
+        Some(code) if code == Errno::EINVAL as i32 => Status::invalid_argument(stderr_msg),
+        Some(code) if code == Errno::EMEDIUMTYPE as i32 => Status::unimplemented(stderr_msg),
         Some(code)
             if code == Errno::EOPNOTSUPP as i32
                 || code == Errno::ENOENT as i32

@@ -57,6 +57,8 @@ pub enum Parameters {
     PoolTopologyAffinity,
     #[strum(serialize = "poolTopologySpread")]
     PoolTopologySpread,
+    #[strum(serialize = "quiesce")]
+    Quiesce,
 }
 impl Parameters {
     fn parse_human_time(
@@ -389,6 +391,40 @@ fn generate_sts_affinity_group_name(
             warn!("Invalid PVC Name: {pvc_name:?} or PVC Namespace: {pvc_ns:?}, not triggering statefulset volume replica anti-affinity");
             None
         }
+    }
+}
+
+#[derive(EnumString, Clone, Debug, Eq, PartialEq)]
+#[strum(serialize_all = "lowercase")]
+pub enum QuiesceCandidate {
+    None,
+    Filesystem,
+}
+
+/// Snapshot creation parameters.
+#[allow(dead_code)]
+#[derive(Debug)]
+pub struct CreateSnapshotParams {
+    queisce: Option<QuiesceCandidate>,
+}
+impl CreateSnapshotParams {
+    /// Get the `Parameters::quiesce` value.
+    pub fn quiesce(&self) -> &Option<QuiesceCandidate> {
+        &self.queisce
+    }
+}
+impl TryFrom<&HashMap<String, String>> for CreateSnapshotParams {
+    type Error = tonic::Status;
+
+    fn try_from(args: &HashMap<String, String>) -> Result<Self, Self::Error> {
+        let queisce = match args.get(Parameters::Quiesce.as_ref()) {
+            Some(fs) => QuiesceCandidate::from_str(fs.as_str())
+                .map(Some)
+                .map_err(|_| tonic::Status::invalid_argument("Invalid quiesce type"))?,
+            None => None,
+        };
+
+        Ok(Self { queisce })
     }
 }
 
