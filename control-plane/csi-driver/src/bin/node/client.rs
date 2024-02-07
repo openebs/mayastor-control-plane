@@ -102,7 +102,13 @@ pub(crate) struct AppNodesClientWrapper {
 
 impl AppNodesClientWrapper {
     /// Initialize AppNodes API client instance.
-    pub(crate) fn initialize(endpoint: &String) -> anyhow::Result<AppNodesClientWrapper> {
+    pub(crate) fn initialize(
+        endpoint: Option<&String>,
+    ) -> anyhow::Result<Option<AppNodesClientWrapper>> {
+        let Some(endpoint) = endpoint else {
+            return Ok(None);
+        };
+
         let url = clients::tower::Url::parse(endpoint)
             .map_err(|error| anyhow!("Invalid API endpoint URL {}: {:?}", endpoint, error))?;
 
@@ -121,9 +127,9 @@ impl AppNodesClientWrapper {
             endpoint, DEFAULT_TIMEOUT_FOR_REST_REQUESTS,
         );
 
-        Ok(Self {
+        Ok(Some(Self {
             client: AppNodesClient::new(Arc::new(tower)),
-        })
+        }))
     }
 
     /// Register an app node.
