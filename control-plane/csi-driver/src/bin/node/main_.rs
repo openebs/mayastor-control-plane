@@ -133,7 +133,8 @@ pub(super) async fn main() -> anyhow::Result<()> {
                 .long("grpc-endpoint")
                 .value_name("ENDPOINT")
                 .help("ip address where this instance runs, and optionally the gRPC port")
-                .required(true)
+                .default_value("0.0.0.0")
+                .required(false)
         )
         .arg(
             Arg::new("v")
