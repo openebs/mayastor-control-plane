@@ -307,6 +307,9 @@ pub struct StartOptions {
 
     #[clap(long, default_value = "false")]
     pub eventing: bool,
+
+    #[clap(long, default_value = "false")]
+    pub enable_app_node_registration: bool,
 }
 
 /// List of KeyValues

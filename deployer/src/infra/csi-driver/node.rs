@@ -34,11 +34,11 @@ impl ComponentAction for CsiNode {
             };
 
             for i in 0 .. local_nodes {
-                cfg = CsiNode::with_local_node(i, options, cfg);
+                cfg = CsiNode::with_local_node(i, options, cfg)?;
             }
 
             for i in 0 .. options.app_nodes() {
-                cfg = CsiNode::with_app_node(i, cfg);
+                cfg = CsiNode::with_app_node(i, cfg, options.enable_app_node_registration)?;
             }
             cfg
         })
@@ -102,34 +102,64 @@ impl CsiNode {
     pub fn socket(node_name: &str) -> String {
         format!("/var/tmp/csi-{node_name}.sock")
     }
-    fn with_app_node(index: u32, cfg: Builder) -> Builder {
+    fn with_app_node(
+        index: u32,
+        cfg: Builder,
+        enable_registration: bool,
+    ) -> Result<Builder, Error> {
         let container_name = Self::container_name(index);
         let node_name = Self::name(index);
         let socket = Self::socket(&node_name);
 
-        Self::with_node(&container_name, &node_name, &socket, cfg)
+        Self::with_node(
+            &container_name,
+            &node_name,
+            &socket,
+            cfg,
+            enable_registration,
+        )
     }
-    fn with_local_node(index: u32, options: &StartOptions, cfg: Builder) -> Builder {
+    fn with_local_node(index: u32, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         let container_name = Self::local_container_name(&IoEngine::name(index, options));
         let node_name = IoEngine::name(index, options);
         let socket = Self::socket(&node_name);
 
-        Self::with_node(&container_name, &node_name, &socket, cfg)
+        Self::with_node(
+            &container_name,
+            &node_name,
+            &socket,
+            cfg,
+            options.enable_app_node_registration,
+        )
     }
-    fn with_node(container_name: &str, node_name: &str, socket: &str, cfg: Builder) -> Builder {
-        let binary = Binary::from_dbg(CSI_NODE)
+    fn with_node(
+        container_name: &str,
+        node_name: &str,
+        socket: &str,
+        cfg: Builder,
+        enable_registation: bool,
+    ) -> Result<Builder, Error> {
+        let mut binary = Binary::from_dbg(CSI_NODE)
             .with_args(vec!["--nvme-nr-io-queues", "1"])
             .with_args(vec!["--node-name", node_name])
             // Make sure that CSI socket is always under shared directory
             // regardless of what its default value is.
             .with_args(vec!["--csi-socket", socket]);
 
+        if enable_registation {
+            let endpoint = format!("{}:10199", cfg.next_ip_for_name(container_name)?);
+            binary = binary
+                .with_args(vec!["--enable-registration"])
+                .with_args(vec!["--rest-endpoint", "http://rest:8081"])
+                .with_args(vec!["--grpc-endpoint", &endpoint])
+        }
+
         let path = format!(
             "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:{}",
             std::env::var("PATH").unwrap()
         );
 
-        cfg.add_container_spec(
+        Ok(cfg.add_container_spec(
             ContainerSpec::from_binary(container_name, binary)
                 .with_bypass_default_mounts(true)
                 .with_bind("/var/tmp", "/var/tmp")
@@ -137,7 +167,7 @@ impl CsiNode {
                 .with_bind("/run/udev", "/run/udev:ro")
                 .with_env("PATH", path.as_str())
                 .with_privileged(Some(true)),
-        )
+        ))
     }
     async fn wait_app_node(index: u32) -> Result<(), Error> {
         let node_name = Self::name(index);
