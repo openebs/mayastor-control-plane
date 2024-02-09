@@ -146,13 +146,15 @@ impl CsiNode {
             // regardless of what its default value is.
             .with_args(vec!["--csi-socket", socket]);
 
-        if enable_registation {
-            let endpoint = format!("{}:10199", cfg.next_ip_for_name(container_name)?);
-            binary = binary
+        binary = if enable_registation {
+            let endpoint = format!("{}:50055", cfg.next_ip_for_name(container_name)?);
+            binary
                 .with_args(vec!["--enable-registration"])
                 .with_args(vec!["--rest-endpoint", "http://rest:8081"])
                 .with_args(vec!["--grpc-endpoint", &endpoint])
-        }
+        } else {
+            binary.with_args(vec!["--grpc-endpoint", "[::]:50055"])
+        };
 
         let path = format!(
             "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:{}",
@@ -166,7 +168,8 @@ impl CsiNode {
                 .with_bind("/dev", "/dev:ro")
                 .with_bind("/run/udev", "/run/udev:ro")
                 .with_env("PATH", path.as_str())
-                .with_privileged(Some(true)),
+                .with_privileged(Some(true))
+                .with_portmap("50055", "50055"),
         ))
     }
     async fn wait_app_node(index: u32) -> Result<(), Error> {

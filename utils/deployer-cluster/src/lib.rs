@@ -27,7 +27,7 @@ use grpc::{
 };
 use openapi::models::Volume;
 use rpc::{
-    csi::{NodeStageVolumeResponse, NodeUnstageVolumeResponse},
+    csi::{CreateSnapshotResponse, NodeStageVolumeResponse, NodeUnstageVolumeResponse},
     io_engine::RpcHandle,
 };
 use std::{
@@ -49,8 +49,9 @@ use stor_port::{
         transport::CreatePool,
     },
 };
-use tokio::net::UnixStream;
+use tokio::{net::UnixStream, time::sleep};
 use tonic::transport::Uri;
+use tower::service_fn;
 use tracing::dispatcher::DefaultGuard;
 use tracing_subscriber::{filter::Directive, layer::SubscriberExt, EnvFilter, Registry};
 use utils::tracing_telemetry::default_tracing_tags;
@@ -281,11 +282,30 @@ impl Cluster {
             .composer()
             .container_ip(&CsiNode::container_name(index));
         let internal = csi_driver::node::internal::node_plugin_client::NodePluginClient::connect(
-            format!("http://{csi_endpoint}:50051"),
+            format!("http://{csi_endpoint}:50055"),
         )
         .await?;
 
         Ok(CsiNodeClient { csi, internal })
+    }
+
+    /// Return a grpc handle to the csi-controller.
+    pub async fn csi_controller_client(&self) -> Result<CsiControllerClient, Error> {
+        let endpoint = tonic::transport::Endpoint::try_from("http://[::]")?
+            .connect_timeout(Duration::from_millis(100));
+        let channel = loop {
+            match endpoint
+                .connect_with_connector(service_fn(|_: Uri| UnixStream::connect(CSI_SOCKET)))
+                .await
+            {
+                Ok(channel) => break channel,
+                Err(_) => sleep(Duration::from_millis(25)).await,
+            }
+        };
+
+        let csi = rpc::csi::controller_client::ControllerClient::new(channel);
+
+        Ok(CsiControllerClient { csi })
     }
 
     /// Restart the core agent.
@@ -820,6 +840,12 @@ impl ClusterBuilder {
         self.opts = self.opts.with_csi(controller, node);
         self
     }
+    /// Specify whether csi node registration should be enabled.
+    #[must_use]
+    pub fn with_csi_registration(mut self, opt: bool) -> Self {
+        self.opts = self.opts.with_csi_registration(opt);
+        self
+    }
     /// Specify whether jaeger is enabled or not.
     #[must_use]
     pub fn with_jaeger(mut self, enabled: bool) -> Self {
@@ -1069,17 +1095,17 @@ impl CsiNodeClient {
     pub async fn node_stage_volume(
         &mut self,
         volume: &Volume,
+        publish_context: HashMap<String, String>,
     ) -> Result<NodeStageVolumeResponse, Error> {
+        let mut context = std::collections::HashMap::new();
+        context.insert(
+            "uri".into(),
+            volume.state.target.as_ref().unwrap().device_uri.to_string(),
+        );
+        context.extend(publish_context);
         let request = rpc::csi::NodeStageVolumeRequest {
             volume_id: volume.spec.uuid.to_string(),
-            publish_context: {
-                let mut context = std::collections::HashMap::new();
-                context.insert(
-                    "uri".into(),
-                    volume.state.target.as_ref().unwrap().device_uri.to_string(),
-                );
-                context
-            },
+            publish_context: context,
             staging_target_path: "unused".to_string(),
             volume_capability: Some(rpc::csi::VolumeCapability {
                 access_mode: Some(rpc::csi::volume_capability::AccessMode {
@@ -1099,17 +1125,18 @@ impl CsiNodeClient {
     pub async fn node_stage_volume_fs(
         &mut self,
         volume: &Volume,
+        fs_type: &str,
+        publish_context: HashMap<String, String>,
     ) -> Result<NodeStageVolumeResponse, Error> {
+        let mut context = std::collections::HashMap::new();
+        context.insert(
+            "uri".into(),
+            volume.state.target.as_ref().unwrap().device_uri.to_string(),
+        );
+        context.extend(publish_context);
         let request = rpc::csi::NodeStageVolumeRequest {
             volume_id: volume.spec.uuid.to_string(),
-            publish_context: {
-                let mut context = std::collections::HashMap::new();
-                context.insert(
-                    "uri".into(),
-                    volume.state.target.as_ref().unwrap().device_uri.to_string(),
-                );
-                context
-            },
+            publish_context: context,
             staging_target_path: format!("/var/tmp/staging/mount/{}", volume.spec.uuid),
             volume_capability: Some(rpc::csi::VolumeCapability {
                 access_mode: Some(rpc::csi::volume_capability::AccessMode {
@@ -1117,7 +1144,7 @@ impl CsiNodeClient {
                 }),
                 access_type: Some(rpc::csi::volume_capability::AccessType::Mount(
                     rpc::csi::volume_capability::MountVolume {
-                        fs_type: "ext4".to_string(),
+                        fs_type: fs_type.to_string(),
                         mount_flags: vec![],
                         volume_mount_group: "".to_string(),
                     },
@@ -1139,6 +1166,204 @@ impl CsiNodeClient {
             staging_target_path: format!("/var/tmp/staging/mount/{}", volume.spec.uuid),
         };
         let response = self.csi.node_unstage_volume(request).await?;
+        Ok(response.into_inner())
+    }
+    /// Stage the given volume.
+    pub async fn node_publish_volume(
+        &mut self,
+        volume: &Volume,
+        publish_context: HashMap<String, String>,
+    ) -> Result<rpc::csi::NodePublishVolumeResponse, Error> {
+        std::fs::create_dir_all("/var/tmp/target/mount")?;
+
+        let request = rpc::csi::NodePublishVolumeRequest {
+            volume_id: volume.spec.uuid.to_string(),
+            publish_context,
+            staging_target_path: format!("/var/tmp/staging/mount/{}", volume.spec.uuid),
+            target_path: format!("/var/tmp/target/mount/{}", volume.spec.uuid),
+            volume_capability: Some(rpc::csi::VolumeCapability {
+                access_mode: Some(rpc::csi::volume_capability::AccessMode {
+                    mode: rpc::csi::volume_capability::access_mode::Mode::SingleNodeWriter as i32,
+                }),
+                access_type: Some(rpc::csi::volume_capability::AccessType::Block(
+                    rpc::csi::volume_capability::BlockVolume {},
+                )),
+            }),
+            readonly: false,
+            secrets: Default::default(),
+            volume_context: Default::default(),
+        };
+        let response = self.csi.node_publish_volume(request).await?;
+        Ok(response.into_inner())
+    }
+    /// Publish the given volume.
+    pub async fn node_publish_volume_fs(
+        &mut self,
+        volume: &Volume,
+        fs_type: &str,
+        publish_context: HashMap<String, String>,
+    ) -> Result<rpc::csi::NodePublishVolumeResponse, Error> {
+        std::fs::create_dir_all("/var/tmp/target/mount")?;
+
+        let request = rpc::csi::NodePublishVolumeRequest {
+            volume_id: volume.spec.uuid.to_string(),
+            publish_context,
+            staging_target_path: format!("/var/tmp/staging/mount/{}", volume.spec.uuid),
+            target_path: format!("/var/tmp/target/mount/{}", volume.spec.uuid),
+            volume_capability: Some(rpc::csi::VolumeCapability {
+                access_mode: Some(rpc::csi::volume_capability::AccessMode {
+                    mode: rpc::csi::volume_capability::access_mode::Mode::SingleNodeWriter as i32,
+                }),
+                access_type: Some(rpc::csi::volume_capability::AccessType::Mount(
+                    rpc::csi::volume_capability::MountVolume {
+                        fs_type: fs_type.to_string(),
+                        mount_flags: vec![],
+                        volume_mount_group: "".to_string(),
+                    },
+                )),
+            }),
+            readonly: false,
+            secrets: Default::default(),
+            volume_context: Default::default(),
+        };
+        let response = self.csi.node_publish_volume(request).await?;
+        Ok(response.into_inner())
+    }
+    /// Unpublish the given volume.
+    pub async fn node_unpublish_volume(
+        &mut self,
+        volume: &Volume,
+    ) -> Result<rpc::csi::NodeUnpublishVolumeResponse, Error> {
+        let request = rpc::csi::NodeUnpublishVolumeRequest {
+            volume_id: volume.spec.uuid.to_string(),
+            target_path: format!("/var/tmp/target/mount/{}", volume.spec.uuid),
+        };
+        let response = self.csi.node_unpublish_volume(request).await?;
+
+        std::fs::remove_dir_all("/var/tmp/target/mount")?;
+
+        Ok(response.into_inner())
+    }
+}
+
+const CSI_SOCKET: &str = "/var/tmp/csi-controller.sock";
+
+/// Bundles the csi controller client.
+pub struct CsiControllerClient {
+    csi: csi_driver::csi::controller_client::ControllerClient<tonic::transport::Channel>,
+}
+
+impl CsiControllerClient {
+    /// Get a mutable reference to the csi controller client.
+    pub fn csi(
+        &mut self,
+    ) -> &mut csi_driver::csi::controller_client::ControllerClient<tonic::transport::Channel> {
+        &mut self.csi
+    }
+
+    /// Create the given snapshot.
+    pub async fn create_snapshot(
+        &mut self,
+        volume: &Volume,
+        snap_uuid: &str,
+        enable_fs_quiesce: bool,
+    ) -> Result<CreateSnapshotResponse, Error> {
+        let mut map = HashMap::new();
+        if enable_fs_quiesce {
+            map.insert("quiesceFs".to_string(), "freeze".to_string());
+        } else {
+            map.insert("quiesceFs".to_string(), "none".to_string());
+        }
+        let request = rpc::csi::CreateSnapshotRequest {
+            source_volume_id: volume.spec.uuid.to_string(),
+            name: snap_uuid.to_string(),
+            secrets: Default::default(),
+            parameters: map,
+        };
+        let response = self.csi().create_snapshot(request).await?;
+        Ok(response.into_inner())
+    }
+
+    /// Delete the given snapshot.
+    pub async fn delete_snapshot(
+        &mut self,
+        snap_uuid: &str,
+    ) -> Result<rpc::csi::DeleteSnapshotResponse, Error> {
+        let request = rpc::csi::DeleteSnapshotRequest {
+            snapshot_id: snap_uuid.to_string(),
+            secrets: Default::default(),
+        };
+        let response = self.csi().delete_snapshot(request).await?;
+        Ok(response.into_inner())
+    }
+
+    /// Controller Publish the given fs volume.
+    pub async fn controller_publish_volume_fs(
+        &mut self,
+        volume: &Volume,
+        fs_type: &str,
+        node_id: &str,
+    ) -> Result<rpc::csi::ControllerPublishVolumeResponse, Error> {
+        let request = rpc::csi::ControllerPublishVolumeRequest {
+            volume_id: volume.spec.uuid.to_string(),
+            volume_capability: Some(rpc::csi::VolumeCapability {
+                access_mode: Some(rpc::csi::volume_capability::AccessMode {
+                    mode: rpc::csi::volume_capability::access_mode::Mode::SingleNodeWriter as i32,
+                }),
+                access_type: Some(rpc::csi::volume_capability::AccessType::Mount(
+                    rpc::csi::volume_capability::MountVolume {
+                        fs_type: fs_type.to_string(),
+                        mount_flags: vec![],
+                        volume_mount_group: "".to_string(),
+                    },
+                )),
+            }),
+            readonly: false,
+            secrets: Default::default(),
+            volume_context: Default::default(),
+            node_id: node_id.to_string(),
+        };
+        let response = self.csi().controller_publish_volume(request).await?;
+        Ok(response.into_inner())
+    }
+
+    /// Controller Publish the given volume.
+    pub async fn controller_publish_volume(
+        &mut self,
+        volume: &Volume,
+        node_id: &str,
+    ) -> Result<rpc::csi::ControllerPublishVolumeResponse, Error> {
+        let request = rpc::csi::ControllerPublishVolumeRequest {
+            volume_id: volume.spec.uuid.to_string(),
+            volume_capability: Some(rpc::csi::VolumeCapability {
+                access_mode: Some(rpc::csi::volume_capability::AccessMode {
+                    mode: rpc::csi::volume_capability::access_mode::Mode::SingleNodeWriter as i32,
+                }),
+                access_type: Some(rpc::csi::volume_capability::AccessType::Block(
+                    rpc::csi::volume_capability::BlockVolume {},
+                )),
+            }),
+            readonly: false,
+            secrets: Default::default(),
+            volume_context: Default::default(),
+            node_id: node_id.to_string(),
+        };
+        let response = self.csi().controller_publish_volume(request).await?;
+        Ok(response.into_inner())
+    }
+
+    /// Controller Unpublish the given volume.
+    pub async fn controller_unpublish_volume(
+        &mut self,
+        volume: &Volume,
+        node_id: &str,
+    ) -> Result<rpc::csi::ControllerUnpublishVolumeResponse, Error> {
+        let request = rpc::csi::ControllerUnpublishVolumeRequest {
+            volume_id: volume.spec.uuid.to_string(),
+            node_id: node_id.to_string(),
+            secrets: Default::default(),
+        };
+        let response = self.csi().controller_unpublish_volume(request).await?;
         Ok(response.into_inner())
     }
 }
