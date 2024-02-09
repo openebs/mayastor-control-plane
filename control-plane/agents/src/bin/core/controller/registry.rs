@@ -100,6 +100,8 @@ pub(crate) struct RegistryInner<S: Store> {
     thin_args: ThinArgs,
     /// Check if the HA feature is enabled.
     ha_disabled: bool,
+    /// Etcd max page size.
+    etcd_max_page_size: i64,
 }
 
 impl Registry {
@@ -121,6 +123,7 @@ impl Registry {
         host_acl: Vec<HostAccessControl>,
         thin_args: ThinArgs,
         ha_enabled: bool,
+        etcd_max_page_size: i64,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -171,6 +174,7 @@ impl Registry {
                 legacy_prefix_present,
                 thin_args,
                 ha_disabled: ha_enabled,
+                etcd_max_page_size,
             }),
         };
         registry.init().await?;
@@ -178,7 +182,7 @@ impl Registry {
         // Disable v1 compat if nexus_info keys are migrated.
         if registry.config().mayastor_compat_v1() && registry.nexus_info_v1_migrated().await? {
             // Delete the v1 nexus_info keys by brute force.
-            delete_all_v1_nexus_info(&mut store)
+            delete_all_v1_nexus_info(&mut store, etcd_max_page_size)
                 .await
                 .map_err(|error| StoreError::Generic {
                     source: Box::new(error),
@@ -406,7 +410,11 @@ impl Registry {
     async fn init(&self) -> Result<(), SvcError> {
         let mut store = self.store.lock().await;
         self.specs
-            .init(store.deref_mut(), self.legacy_prefix_present)
+            .init(
+                store.deref_mut(),
+                self.legacy_prefix_present,
+                self.etcd_max_page_size,
+            )
             .await?;
         Ok(())
     }
