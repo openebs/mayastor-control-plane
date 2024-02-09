@@ -221,23 +221,27 @@ impl StoreKv for Etcd {
         &mut self,
         key_prefix: &str,
         limit: i64,
+        range_end: &str,
     ) -> Result<Vec<(String, Value)>, Error> {
         if limit <= 2 {
             return Err(Error::PagedMinimum);
         }
 
+        let get_options = if range_end.is_empty() {
+            GetOptions::new()
+                .with_from_key()
+                .with_sort(SortTarget::Key, SortOrder::Ascend)
+                .with_limit(limit)
+        } else {
+            GetOptions::new()
+                .with_range(range_end)
+                .with_sort(SortTarget::Key, SortOrder::Ascend)
+                .with_limit(limit)
+        };
+
         let resp = self
             .client
-            .get(
-                key_prefix,
-                Some(
-                    GetOptions::new()
-                        .with_prefix()
-                        .with_from_key()
-                        .with_sort(SortTarget::Key, SortOrder::Ascend)
-                        .with_limit(limit),
-                ),
-            )
+            .get(key_prefix, Some(get_options))
             .await
             .context(GetPrefix { prefix: key_prefix })?;
 
@@ -254,6 +258,37 @@ impl StoreKv for Etcd {
             })
             .collect();
         Ok(result)
+    }
+
+    /// Returns a vector of tuples. Each tuple represents a key-value pair. It paginates through all
+    /// the values for the prefix with limit.
+    async fn get_values_paged_all(
+        &mut self,
+        key_prefix: &str,
+        limit: i64,
+    ) -> Result<Vec<(String, Value)>, Error> {
+        let range_end = get_prefix_range_end(key_prefix).map_err(|_| Error::RangeEnd {
+            start_key: key_prefix.to_string(),
+        })?;
+
+        let mut first = true;
+        let mut all_values = vec![];
+        let mut values;
+        let mut last = Some(key_prefix.to_string());
+
+        while let Some(prefix) = &last {
+            values = self.get_values_paged(prefix, limit, &range_end).await?;
+
+            if !first && values.get(0).is_some() {
+                values.remove(0);
+            }
+            first = false;
+
+            last = values.last().map(|(key, _)| key.to_string());
+
+            all_values.extend(values);
+        }
+        Ok(all_values)
     }
 
     /// Deletes objects with the given key prefix.
@@ -424,4 +459,17 @@ fn deserialise_kv(kv: &KeyValue) -> Result<(String, Value), Error> {
 pub fn build_key_prefix(_platform: impl platform::PlatformInfo) -> String {
     //crate::types::v0::store::definitions::build_key_prefix(&platform, namespace)
     "".to_string()
+}
+
+/// Returns the range end key for the given start key. If the start key is "abc", the end key will
+/// be "abd". It will return the start key if its empty.
+pub fn get_prefix_range_end(prefix: &str) -> Result<String, std::string::FromUtf8Error> {
+    let mut end = prefix.as_bytes().to_vec();
+    for byte in end.iter_mut().rev() {
+        if *byte < 0xff {
+            *byte += 1;
+            break;
+        }
+    }
+    String::from_utf8(end)
 }

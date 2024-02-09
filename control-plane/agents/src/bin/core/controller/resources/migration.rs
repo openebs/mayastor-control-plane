@@ -16,10 +16,13 @@ pub const MSP_OPERATOR: &str = "msp-operator";
 pub(crate) async fn migrate_product_v1_to_v2<S: Store>(
     store: &mut S,
     spec_type: StorableObjectType,
+    etcd_max_page_size: i64,
 ) -> Result<(), StoreError> {
     info!("Migrating {spec_type:?} from v1 to v2 key space");
     let prefix = &product_v1_key_prefix_obj(spec_type);
-    let store_entries = store.get_values_prefix(prefix).await?;
+    let store_entries = store
+        .get_values_paged_all(prefix, etcd_max_page_size)
+        .await?;
     for (k, v) in store_entries {
         let id = k
             .split('/')
