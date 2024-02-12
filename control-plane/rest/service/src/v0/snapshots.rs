@@ -185,6 +185,7 @@ fn to_models_volume_snapshot(snap: &VolumeSnapshot) -> models::VolumeSnapshot {
                     })
                     .collect::<HashMap<_, _>>(),
                 snap.meta().num_restores(),
+                snap.meta().num_snapshot_replicas(),
             ),
             models::VolumeSnapshotSpec::new_all(snap.spec().snap_id(), snap.spec().source_id()),
         ),

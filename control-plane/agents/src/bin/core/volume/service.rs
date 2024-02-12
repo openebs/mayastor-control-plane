@@ -291,7 +291,6 @@ impl Service {
             }
             filter => return Err(SvcError::InvalidFilter { filter }),
         };
-
         Ok(Volumes {
             entries: filtered_volumes,
             next_token: match last_result {
@@ -403,7 +402,6 @@ impl Service {
         volume.set_replica(&self.registry, request).await?;
         self.registry.volume(&request.uuid).await
     }
-
     /// Create a volume snapshot.
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.source_id, snapshot.source_uuid = %request.source_id, snapshot.uuid = %request.snap_id))]
     async fn create_snapshot(
@@ -426,6 +424,16 @@ impl Service {
             }
             Err(error) => Err(error),
         }?;
+
+        if let Some(max_snapshots) = volume.as_ref().max_snapshots {
+            if volume.as_ref().metadata.num_snapshots() as u32 >= max_snapshots {
+                return Err(SvcError::SnapshotMaxLimit {
+                    max_snapshots,
+                    volume_id: volume.as_ref().uuid.to_string(),
+                });
+            }
+        }
+
         let snapshot = volume
             .create_snap(
                 &self.registry,

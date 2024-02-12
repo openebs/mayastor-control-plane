@@ -811,14 +811,14 @@ impl ResourceLifecycleExt<CreateVolumeSource<'_>> for OperationGuardArc<VolumeSp
         request_src: &CreateVolumeSource,
     ) -> Result<Self::CreateOutput, SvcError> {
         request_src.pre_flight_check()?;
-        let request = request_src.source();
-
         let specs = registry.specs();
         let mut volume = specs
             .get_or_create_volume(request_src)?
             .operation_guard_wait()
             .await?;
-        let volume_clone = volume.start_create_update(registry, request).await?;
+        let volume_clone = volume
+            .start_create_update(registry, request_src.source())
+            .await?;
 
         // If the volume is a part of the ag, create or update accordingly.
         registry.specs().get_or_create_affinity_group(&volume_clone);

@@ -192,6 +192,8 @@ pub struct CreateVolumeBody {
     pub thin: bool,
     /// Affinity Group related information.
     pub affinity_group: Option<AffinityGroup>,
+    /// Max snapshot limit per volume.
+    pub max_snapshots: Option<u32>,
 }
 impl From<models::CreateVolumeBody> for CreateVolumeBody {
     fn from(src: models::CreateVolumeBody) -> Self {
@@ -203,6 +205,7 @@ impl From<models::CreateVolumeBody> for CreateVolumeBody {
             labels: src.labels,
             thin: src.thin,
             affinity_group: src.affinity_group.map(|ag| ag.into()),
+            max_snapshots: src.max_snapshots,
         }
     }
 }
@@ -216,6 +219,7 @@ impl From<CreateVolume> for CreateVolumeBody {
             labels: create.labels,
             thin: create.thin,
             affinity_group: create.affinity_group,
+            max_snapshots: create.max_snapshots,
         }
     }
 }
@@ -232,6 +236,7 @@ impl CreateVolumeBody {
             thin: self.thin,
             affinity_group: self.affinity_group.clone(),
             cluster_capacity_limit: None,
+            max_snapshots: self.max_snapshots,
         }
     }
     /// Convert into rpc request type.

@@ -57,6 +57,8 @@ pub enum Parameters {
     PoolTopologyAffinity,
     #[strum(serialize = "poolTopologySpread")]
     PoolTopologySpread,
+    #[strum(serialize = "maxSnapshots")]
+    MaxSnapshots,
 }
 impl Parameters {
     fn parse_human_time(
@@ -160,6 +162,10 @@ impl Parameters {
         value: Option<&String>,
     ) -> Result<Option<HashMap<String, String>>, serde_json::Error> {
         Self::parse_map(value)
+    }
+    /// Parse the value for `Self::MaxSnapshots`.
+    pub fn max_snapshots(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
+        Self::parse_u32(value)
     }
 }
 
@@ -283,6 +289,7 @@ pub struct CreateParams {
     replica_count: u8,
     sts_affinity_group: Option<String>,
     clone_fs_id_as_volume_id: Option<bool>,
+    max_snapshots: Option<u32>,
 }
 impl CreateParams {
     /// Get the `Parameters::PublishParams` value.
@@ -305,6 +312,10 @@ impl CreateParams {
     /// Get the `Parameters::CloneFsIdAsVolumeId` value.
     pub fn clone_fs_id_as_volume_id(&self) -> &Option<bool> {
         &self.clone_fs_id_as_volume_id
+    }
+    /// Get the `Parameters::MaxSnapshots` value.
+    pub fn max_snapshots(&self) -> Option<u32> {
+        self.max_snapshots
     }
 }
 impl TryFrom<&HashMap<String, String>> for CreateParams {
@@ -353,12 +364,18 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
         )
         .map_err(|_| tonic::Status::invalid_argument("Invalid clone_fs_id_as_volume_id"))?;
 
+        let max_snapshots = Parameters::max_snapshots(args.get(Parameters::MaxSnapshots.as_ref()))
+            .map_err(|_| {
+                tonic::Status::invalid_argument("Invalid `maxSnapshots` value, expected an u32")
+            })?;
+
         Ok(Self {
             publish_params,
             share_protocol,
             replica_count,
             sts_affinity_group: sts_affinity_group_name,
             clone_fs_id_as_volume_id,
+            max_snapshots,
         })
     }
 }

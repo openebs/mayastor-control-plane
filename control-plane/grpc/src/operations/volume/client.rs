@@ -22,7 +22,6 @@ use crate::{
         volume_grpc_client::VolumeGrpcClient, GetSnapshotsRequest, GetVolumesRequest, ProbeRequest,
     },
 };
-
 use stor_port::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind, TimeoutOptions},
     types::v0::transport::{Filter, MessageIdVs, Volume},

@@ -315,6 +315,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 );
 
                 let sts_affinity_group_name = context.sts_affinity_group();
+                let max_snapshots = context.max_snapshots();
 
                 let volume = match volume_content_source {
                     Some(snapshot_uuid) => {
@@ -327,6 +328,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                                 volume_topology,
                                 thin,
                                 sts_affinity_group_name.clone().map(AffinityGroup::new),
+                                max_snapshots,
                             )
                             .await?
                     }
@@ -339,6 +341,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                                 volume_topology,
                                 thin,
                                 sts_affinity_group_name.clone().map(AffinityGroup::new),
+                                max_snapshots,
                             )
                             .await?
                     }

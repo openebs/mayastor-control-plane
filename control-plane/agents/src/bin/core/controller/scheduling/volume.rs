@@ -636,7 +636,7 @@ pub(crate) struct SnapshotVolumeReplica {
 }
 
 impl SnapshotVolumeReplica {
-    async fn builder(registry: &Registry, volume: &VolumeSpec, item: &ChildItem) -> Self {
+    async fn builder(registry: &Registry, volume: &VolumeSpec, items: &[ChildItem]) -> Self {
         let allocated_bytes = AddVolumeReplica::allocated_bytes(registry, volume).await;
 
         Self {
@@ -649,7 +649,7 @@ impl SnapshotVolumeReplica {
                     snap_repl: true,
                     ag_restricted_nodes: None,
                 },
-                PoolItemLister::list_for_snaps(registry, item).await,
+                PoolItemLister::list_for_snaps(registry, items).await,
             ),
         }
     }
@@ -670,8 +670,7 @@ impl SnapshotVolumeReplica {
     pub(crate) async fn builder_with_defaults(
         registry: &Registry,
         volume: &VolumeSpec,
-        // todo: only 1 replica snapshot supported atm
-        items: &ChildItem,
+        items: &[ChildItem],
     ) -> Self {
         Self::builder(registry, volume, items)
             .await

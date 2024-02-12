@@ -214,6 +214,7 @@ impl IoEngineApiClient {
     /// Create a volume of target size and provision storage resources for it.
     /// This operation is not idempotent, so the caller is responsible for taking
     /// all actions with regards to idempotency.
+    #[allow(clippy::too_many_arguments)]
     #[instrument(fields(volume.uuid = %volume_id), skip(self, volume_id))]
     pub(crate) async fn create_volume(
         &self,
@@ -223,6 +224,7 @@ impl IoEngineApiClient {
         volume_topology: CreateVolumeTopology,
         thin: bool,
         affinity_group: Option<AffinityGroup>,
+        max_snapshots: Option<u32>,
     ) -> Result<Volume, ApiClientError> {
         let topology =
             Topology::new_all(volume_topology.node_topology, volume_topology.pool_topology);
@@ -235,6 +237,7 @@ impl IoEngineApiClient {
             policy: VolumePolicy::new_all(true),
             labels: None,
             affinity_group,
+            max_snapshots,
         };
 
         let result = self
@@ -259,6 +262,7 @@ impl IoEngineApiClient {
         volume_topology: CreateVolumeTopology,
         thin: bool,
         affinity_group: Option<AffinityGroup>,
+        max_snapshots: Option<u32>,
     ) -> Result<Volume, ApiClientError> {
         let topology =
             Topology::new_all(volume_topology.node_topology, volume_topology.pool_topology);
@@ -271,8 +275,8 @@ impl IoEngineApiClient {
             policy: VolumePolicy::new_all(true),
             labels: None,
             affinity_group,
+            max_snapshots,
         };
-
         let result = self
             .rest_client
             .volumes_api()
