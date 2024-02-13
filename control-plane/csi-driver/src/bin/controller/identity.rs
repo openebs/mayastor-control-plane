@@ -1,6 +1,7 @@
-use crate::{ApiClientError, IoEngineApiClient};
+use crate::{ApiClientError, RestApiClient};
 use csi_driver::CSI_PLUGIN_NAME;
 use rpc::csi::*;
+
 use std::collections::HashMap;
 use tonic::{Request, Response, Status};
 use tracing::{debug, error, instrument};
@@ -65,7 +66,7 @@ impl rpc::csi::identity_server::Identity for CsiIdentitySvc {
         // communicates to the Container Orchestrator that the plugin is not yet initialised but
         // should not be restarted. See the CSI spec:
         // https://github.com/container-storage-interface/spec/blob/5b0d4540158a260cb3347ef1c87ede8600afb9bf/csi.proto#L252-L256
-        let ready = match IoEngineApiClient::get_client().list_nodes().await {
+        let ready = match RestApiClient::get_client().list_nodes().await {
             Ok(_) => true,
             Err(ApiClientError::ServerCommunication { .. }) => {
                 error!("Failed to access REST API gateway, CSI Controller plugin is not ready",);

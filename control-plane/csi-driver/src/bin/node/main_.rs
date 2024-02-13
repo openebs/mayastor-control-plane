@@ -7,10 +7,12 @@ use crate::{
     error::FsfreezeError,
     fsfreeze::{bin::fsfreeze, FsFreezeOpt},
     identity::Identity,
+    k8s::patch_k8s_node,
     mount::probe_filesystems,
     node::Node,
     nodeplugin_grpc::NodePluginGrpcServer,
     nodeplugin_nvme::NvmeOperationsSvc,
+    registration::run_registration_loop,
     shutdown_event::Shutdown,
 };
 use csi_driver::csi::{identity_server::IdentityServer, node_server::NodeServer};
@@ -18,18 +20,16 @@ use grpc::csi_node_nvme::nvme_operations_server::NvmeOperationsServer;
 use stor_port::platform;
 use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
+use crate::client::AppNodesClientWrapper;
 use clap::Arg;
 use futures::TryFutureExt;
-use k8s_openapi::api::core::v1::Node as K8sNode;
-use kube::{
-    api::{Patch, PatchParams},
-    Api, Client,
-};
 use serde_json::json;
 use std::{
+    collections::HashMap,
     env, fs,
     future::Future,
     io::ErrorKind,
+    net::SocketAddr,
     pin::Pin,
     str::FromStr,
     sync::Arc,
@@ -40,7 +40,7 @@ use tokio::{
     net::UnixListener,
 };
 use tonic::transport::{server::Connected, Server};
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info};
 
 #[derive(Clone, Debug)]
 pub struct UdsConnectInfo {
@@ -93,10 +93,25 @@ impl AsyncWrite for UnixStream {
 const GRPC_PORT: u16 = 50051;
 
 pub(super) async fn main() -> anyhow::Result<()> {
+    // Parse command line arguments.
     let matches = clap::Command::new(utils::package_description!())
         .about("k8s sidecar for IoEngine implementing CSI among others")
         .version(utils::version_info_str!())
         .subcommand_negates_reqs(true)
+        .arg(
+            Arg::new("rest-endpoint")
+                .long("rest-endpoint")
+                .env("ENDPOINT")
+                .help("A URL endpoint to the control plane's rest endpoint")
+        )
+        .arg(
+            Arg::new("enable-registration")
+                .long("enable-registration")
+                .action(clap::ArgAction::SetTrue)
+                .value_name("BOOLEAN")
+                .requires("rest-endpoint")
+                .help("Enable registration of the csi node with the control plane")
+        )
         .arg(
             Arg::new("csi-socket")
                 .short('c')
@@ -116,7 +131,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
             Arg::new("grpc-endpoint")
                 .short('g')
                 .long("grpc-endpoint")
-                .value_name("NAME")
+                .value_name("ENDPOINT")
                 .help("ip address where this instance runs, and optionally the gRPC port")
                 .default_value("0.0.0.0")
                 .required(false)
@@ -197,6 +212,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
         )
         .get_matches();
 
+    // Handle fs-freeze and fs-unfreeze commands.
     if let Some(cmd) = matches.subcommand() {
         utils::tracing_telemetry::TracingTelemetry::builder()
             .with_writer(FmtLayer::Stderr)
@@ -217,29 +233,21 @@ pub(super) async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    // Print package info and command line arguments.
     utils::print_package_info!();
     println!("{:?}", env::args().collect::<Vec<String>>());
 
-    let endpoint = matches.get_one::<String>("grpc-endpoint").unwrap();
-    let csi_socket = matches
-        .get_one::<String>("csi-socket")
-        .map(|s| s.as_str())
-        .unwrap_or("/var/tmp/csi.sock");
-
+    // Initialize tracing telemetry.
     let tags = utils::tracing_telemetry::default_tracing_tags(
         utils::raw_version_str(),
         env!("CARGO_PKG_VERSION"),
     );
     utils::tracing_telemetry::init_tracing("csi-node", tags, None);
 
+    // Validate presence of nvme_tcp kernel module and set nvme_core parameters.
     if let Err(error) = crate::dev::nvmf::check_nvme_tcp_module() {
         anyhow::bail!("Failed to detect nvme_tcp kernel module. Run `modprobe nvme_tcp` to load the kernel module. {}", error);
     }
-
-    if platform::current_platform_type() == platform::PlatformType::K8s {
-        check_ana_and_label_node(matches.get_one::<String>("node-name").expect("required")).await?;
-    }
-
     if let Some(nvme_io_timeout) = matches.get_one::<String>("nvme-io-timeout") {
         let _ = humantime::Duration::from_str(nvme_io_timeout)
             .map_err(|error| anyhow::format_err!("Failed to parse 'nvme-io-timeout': {error}"))?;
@@ -261,7 +269,24 @@ pub(super) async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // Remove stale CSI socket from previous instance if there is any
+    // Check for nvme ana multipath support and generate labels.
+    let mut csi_labels = HashMap::new();
+    let nvme_enabled = utils::check_nvme_core_ana().unwrap_or_default().to_string();
+    csi_labels.insert(utils::CSI_NODE_NVME_ANA.to_string(), nvme_enabled.clone());
+
+    // If running in k8s, label the nodes with generated labels.
+    let node_name = matches.get_one::<String>("node-name").unwrap();
+    if platform::current_platform_type() == platform::PlatformType::K8s {
+        let kube_client = kube::Client::try_default().await?;
+        check_ana_and_label_node(&kube_client, node_name, nvme_enabled).await?;
+    }
+
+    // Parse the CSI socket file name from the command line arguments.
+    let csi_socket = matches
+        .get_one::<String>("csi-socket")
+        .map(|s| s.as_str())
+        .unwrap_or("/var/tmp/csi.sock");
+    // Remove stale CSI socket from previous instance if there is any.
     match fs::remove_file(csi_socket) {
         Ok(_) => info!("Removed stale CSI socket {}", csi_socket),
         Err(err) => {
@@ -271,23 +296,32 @@ pub(super) async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let sock_addr = if endpoint.contains(':') {
-        endpoint.to_string()
-    } else {
-        format!("{endpoint}:{GRPC_PORT}")
-    }
-    .parse()?;
+    // Initialize the rest api client.
+    let client = AppNodesClientWrapper::initialize(matches.get_one::<String>("rest-endpoint"))?;
 
+    let registration_enabled = matches.get_flag("enable-registration");
+
+    // Parse instance and grpc endpoints from the command line arguments and validate.
+    let grpc_sock_addr = validate_endpoints(
+        matches.get_one::<String>("grpc-endpoint").unwrap(),
+        registration_enabled,
+    )?;
+
+    // Start the CSI server, node plugin grpc server and registration loop if registration is
+    // enabled.
     *crate::config::config().nvme_as_mut() = TryFrom::try_from(&matches)?;
-    tokio::select! {
-        result = CsiServer::run(csi_socket, &matches)? => {
-            result?;
-        }
-        result = NodePluginGrpcServer::run(sock_addr) => {
-            result?;
-        }
-    }
-    Ok(())
+    let (csi, grpc, registration) = tokio::join!(
+        CsiServer::run(csi_socket, &matches)?,
+        NodePluginGrpcServer::run(grpc_sock_addr),
+        run_registration_loop(
+            node_name.clone(),
+            grpc_sock_addr.to_string(),
+            Some(csi_labels),
+            &client,
+            registration_enabled
+        )
+    );
+    vec![csi, grpc, registration].into_iter().collect()
 }
 
 struct CsiServer {}
@@ -345,37 +379,41 @@ impl CsiServer {
 }
 
 /// Gets the nvme ana multipath parameter and sets on the node as a label.
-async fn check_ana_and_label_node(node_name: &str) -> anyhow::Result<()> {
-    let patch_value = utils::check_nvme_core_ana().unwrap_or_default().to_string();
-    if let Ok(client) = Client::try_default().await {
-        let nodes: Api<K8sNode> = Api::all(client);
-        let node_patch = json!({
-            "apiVersion": "v1",
-            "kind": "Node",
-            "metadata": {
-                "labels": {
-                    utils::CSI_NODE_NVME_ANA: patch_value,
-                },
+async fn check_ana_and_label_node(
+    client: &kube::client::Client,
+    node_name: &str,
+    nvme_enabled: String,
+) -> anyhow::Result<()> {
+    let node_patch = json!({
+        "apiVersion": "v1",
+        "kind": "Node",
+        "metadata": {
+            "labels": {
+                utils::CSI_NODE_NVME_ANA: nvme_enabled,
             },
-        });
-        match nodes
-            .patch(
-                node_name,
-                &PatchParams::apply("node_label_patch").force(),
-                &Patch::Apply(&node_patch),
-            )
-            .await
-        {
-            Ok(_) => trace!("Patched node: {} with patch: {}", node_name, node_patch),
-            Err(error) => anyhow::bail!(
-                "Failed to patch node: {} with patch: {}. {}",
-                node_name,
-                node_patch,
-                error
-            ),
-        }
-    } else {
-        anyhow::bail!("Failed to get an instance of k8s client")
-    }
+        },
+    });
+    patch_k8s_node(client, node_name, &node_patch).await?;
     Ok(())
+}
+
+/// Validate that the grpc endpoint is valid.
+fn validate_endpoints(
+    grpc_endpoint: &str,
+    registration_enabled: bool,
+) -> anyhow::Result<SocketAddr> {
+    let grpc_endpoint = if grpc_endpoint.contains(':') {
+        grpc_endpoint.to_string()
+    } else {
+        format!("{grpc_endpoint}:{GRPC_PORT}")
+    };
+    let grpc_endpoint_url = SocketAddr::from_str(&grpc_endpoint)?;
+    // Should not allow using an unspecified ip if registration is enabled as grpc endpoint gets
+    // sent in registration request.
+    if registration_enabled && grpc_endpoint_url.ip().is_unspecified() {
+        return Err(anyhow::format_err!(
+            "gRPC endpoint: `0.0.0.0` is not allowed if registration is enabled"
+        ));
+    }
+    Ok(grpc_endpoint_url)
 }
