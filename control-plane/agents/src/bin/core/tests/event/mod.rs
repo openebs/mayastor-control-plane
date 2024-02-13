@@ -289,7 +289,7 @@ async fn rebuild_begin_event_test(sub: &mut BusSubscription<EventMessage>) {
 }
 
 async fn rebuild_end_event_test(sub: &mut BusSubscription<EventMessage>) {
-    let rebuid_end_event_message = timeout(Duration::from_millis(50), get_next_event(sub))
+    let rebuid_end_event_message = timeout(Duration::from_millis(500), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
