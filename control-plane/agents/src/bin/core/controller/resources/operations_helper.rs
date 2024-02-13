@@ -7,7 +7,8 @@ use crate::controller::{
 };
 use agents::errors::SvcError;
 use stor_port::{
-    transport_api::ResourceKind,
+    pstor::{product_v1_key_prefix, API_VERSION},
+    transport_api::{ErrorChain, ResourceKind},
     types::v0::{
         openapi::apis::Uuid,
         store::{
@@ -18,10 +19,11 @@ use stor_port::{
             node::NodeSpec,
             pool::PoolSpec,
             replica::ReplicaSpec,
-            volume::{AffinityGroupSpec, VolumeSpec},
+            snapshots::volume::VolumeSnapshot,
+            volume::{AffinityGroupSpec, VolumeContentSource, VolumeSpec},
             AsOperationSequencer, OperationMode, OperationSequence, SpecStatus, SpecTransaction,
         },
-        transport::{NexusId, NodeId, PoolId, ReplicaId, VolumeId},
+        transport::{NexusId, NodeId, PoolId, ReplicaId, SnapshotId, VolumeId},
     },
 };
 
@@ -30,14 +32,6 @@ use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
 use std::{fmt::Debug, ops::Deref, sync::Arc};
-use stor_port::{
-    pstor::{product_v1_key_prefix, API_VERSION},
-    transport_api::ErrorChain,
-    types::v0::{
-        store::{snapshots::volume::VolumeSnapshot, volume::VolumeContentSource},
-        transport::SnapshotId,
-    },
-};
 
 #[derive(Debug, Snafu)]
 #[snafu(context(suffix(false)))]
@@ -909,6 +903,7 @@ impl ResourceSpecsLocked {
         &self,
         store: &mut S,
         legacy_prefix_present: bool,
+        etcd_max_page_size: i64,
     ) -> Result<(), SvcError> {
         let spec_types = [
             StorableObjectType::VolumeSpec,
@@ -919,7 +914,7 @@ impl ResourceSpecsLocked {
             StorableObjectType::VolumeSnapshot,
         ];
         for spec in &spec_types {
-            self.populate_specs(store, *spec, legacy_prefix_present)
+            self.populate_specs(store, *spec, legacy_prefix_present, etcd_max_page_size)
                 .await
                 .map_err(|error| SvcError::Internal {
                     details: error.full_string(),
@@ -996,22 +991,22 @@ impl ResourceSpecsLocked {
         store: &mut S,
         spec_type: StorableObjectType,
         legacy_prefix_present: bool,
+        etcd_max_page_size: i64,
     ) -> Result<(), SpecError> {
         if legacy_prefix_present {
-            migrate_product_v1_to_v2(store, spec_type)
+            migrate_product_v1_to_v2(store, spec_type, etcd_max_page_size)
                 .await
                 .map_err(|e| SpecError::StoreMigrate {
                     source: Box::new(e),
                 })?;
         }
         let prefix = key_prefix_obj(spec_type, API_VERSION);
-        let store_entries =
-            store
-                .get_values_prefix(&prefix)
-                .await
-                .map_err(|e| SpecError::StoreGet {
-                    source: Box::new(e),
-                })?;
+        let store_entries = store
+            .get_values_paged_all(&prefix, etcd_max_page_size)
+            .await
+            .map_err(|e| SpecError::StoreGet {
+                source: Box::new(e),
+            })?;
         let store_values = store_entries.iter().map(|e| e.1.clone()).collect();
 
         let mut resource_specs = self.0.write();
