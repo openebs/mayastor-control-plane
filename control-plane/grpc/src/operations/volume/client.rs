@@ -6,9 +6,9 @@ use crate::{
             traits::{
                 CreateSnapshotVolumeInfo, CreateVolumeInfo, CreateVolumeSnapshotInfo,
                 DestroyShutdownTargetsInfo, DestroyVolumeInfo, PublishVolumeInfo,
-                RepublishVolumeInfo, ResizeVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo,
-                UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations, VolumeSnapshot,
-                VolumeSnapshots,
+                RepublishVolumeInfo, ResizeVolumeInfo, SetVolumePropertyInfo, SetVolumeReplicaInfo,
+                ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
+                VolumeSnapshot, VolumeSnapshots,
             },
             traits_snapshots::DestroyVolumeSnapshotInfo,
         },
@@ -18,8 +18,9 @@ use crate::{
         create_snapshot_reply, create_snapshot_volume_reply, create_volume_reply,
         get_snapshots_reply, get_snapshots_request, get_volumes_reply, get_volumes_request,
         publish_volume_reply, republish_volume_reply, resize_volume_reply,
-        set_volume_replica_reply, share_volume_reply, unpublish_volume_reply,
-        volume_grpc_client::VolumeGrpcClient, GetSnapshotsRequest, GetVolumesRequest, ProbeRequest,
+        set_volume_property_reply, set_volume_replica_reply, share_volume_reply,
+        unpublish_volume_reply, volume_grpc_client::VolumeGrpcClient, GetSnapshotsRequest,
+        GetVolumesRequest, ProbeRequest,
     },
 };
 use stor_port::{
@@ -233,7 +234,22 @@ impl VolumeOperations for VolumeClient {
             None => Err(ReplyError::invalid_response(ResourceKind::Volume)),
         }
     }
-
+    #[tracing::instrument(name = "VolumeClient::set_property", level = "debug", skip(self), err)]
+    async fn set_property(
+        &self,
+        req: &dyn SetVolumePropertyInfo,
+        ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let req = self.request(req, ctx, MessageIdVs::SetVolumeProperty);
+        let response = self.client().set_volume_property(req).await?.into_inner();
+        match response.reply {
+            Some(set_volume_property_reply) => match set_volume_property_reply {
+                set_volume_property_reply::Reply::Volume(volume) => Ok(Volume::try_from(volume)?),
+                set_volume_property_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Volume)),
+        }
+    }
     #[tracing::instrument(name = "VolumeClient::probe", level = "debug", skip(self))]
     async fn probe(&self, _ctx: Option<Context>) -> Result<bool, ReplyError> {
         match self.client().probe(ProbeRequest {}).await {

@@ -9,11 +9,12 @@ use crate::{
     volume::{
         get_volumes_request, CreateSnapshotVolumeRequest, CreateVolumeRequest,
         DestroyShutdownTargetRequest, DestroyVolumeRequest, PublishVolumeRequest,
-        RegisteredTargets, RepublishVolumeRequest, ResizeVolumeRequest, SetVolumeReplicaRequest,
-        ShareVolumeRequest, UnpublishVolumeRequest, UnshareVolumeRequest,
+        RegisteredTargets, RepublishVolumeRequest, ResizeVolumeRequest, SetVolumePropertyRequest,
+        SetVolumeReplicaRequest, ShareVolumeRequest, UnpublishVolumeRequest, UnshareVolumeRequest,
     },
 };
 use events_api::event::{EventAction, EventCategory, EventMessage, EventMeta, EventSource};
+use std::{borrow::Borrow, collections::HashMap, convert::TryFrom};
 use stor_port::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind},
     types::v0::{
@@ -26,15 +27,13 @@ use stor_port::{
             DestroyVolume, ExplicitNodeTopology, Filter, LabelledTopology, Nexus, NexusId,
             NexusNvmfConfig, NodeId, NodeTopology, NvmeNqn, PoolTopology, PublishVolume, ReplicaId,
             ReplicaStatus, ReplicaTopology, ReplicaUsage, RepublishVolume, ResizeVolume,
-            SetVolumeReplica, ShareVolume, SnapshotId, Topology, UnpublishVolume, UnshareVolume,
-            Volume, VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol, VolumeState,
-            VolumeUsage,
+            SetVolumeProperty, SetVolumeReplica, ShareVolume, SnapshotId, Topology,
+            UnpublishVolume, UnshareVolume, Volume, VolumeId, VolumeLabels, VolumePolicy,
+            VolumeProperty, VolumeShareProtocol, VolumeState, VolumeUsage,
         },
     },
     IntoOption, IntoVec, TryIntoOption,
 };
-
-use std::{borrow::Borrow, collections::HashMap, convert::TryFrom};
 
 /// All volume crud operations to be a part of the VolumeOperations trait.
 #[tonic::async_trait]
@@ -93,6 +92,12 @@ pub trait VolumeOperations: Send + Sync {
     async fn set_replica(
         &self,
         req: &dyn SetVolumeReplicaInfo,
+        ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError>;
+    /// Set volume property.
+    async fn set_property(
+        &self,
+        req: &dyn SetVolumePropertyInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError>;
     /// Liveness probe for volume service
@@ -1725,7 +1730,98 @@ impl From<&dyn SetVolumeReplicaInfo> for SetVolumeReplicaRequest {
         }
     }
 }
+/// Trait to be implemented for SetVolumeProperty operation.
+pub trait SetVolumePropertyInfo: Send + Sync + std::fmt::Debug {
+    /// Uuid of the concerned volume.
+    fn uuid(&self) -> VolumeId;
+    /// Property to be set for the volume.
+    fn property(&self) -> Option<VolumeProperty>;
+}
 
+impl SetVolumePropertyInfo for SetVolumeProperty {
+    fn uuid(&self) -> VolumeId {
+        self.uuid.clone()
+    }
+
+    fn property(&self) -> Option<VolumeProperty> {
+        Some(self.property.clone())
+    }
+}
+
+/// Intermediate structure that validates the conversion to SetVolumePropertyRequest type.
+#[derive(Debug)]
+pub struct ValidatedSetVolumePropertyRequest {
+    inner: SetVolumePropertyRequest,
+    uuid: VolumeId,
+}
+
+impl SetVolumePropertyInfo for ValidatedSetVolumePropertyRequest {
+    fn uuid(&self) -> VolumeId {
+        self.uuid.clone()
+    }
+    fn property(&self) -> Option<VolumeProperty> {
+        self.inner.clone().into()
+    }
+}
+
+impl From<SetVolumePropertyRequest> for Option<VolumeProperty> {
+    fn from(req: SetVolumePropertyRequest) -> Self {
+        req.property.and_then(|property| {
+            property.attr.map(|attr| match attr {
+                volume::volume_property::Attr::MaxSnapshots(volume::MaxSnapshotValue { value }) => {
+                    VolumeProperty::MaxSnapshots(value)
+                }
+            })
+        })
+    }
+}
+
+impl From<VolumeProperty> for volume::VolumeProperty {
+    fn from(req: VolumeProperty) -> Self {
+        match req {
+            VolumeProperty::MaxSnapshots(value) => volume::VolumeProperty {
+                attr: Some(volume::volume_property::Attr::MaxSnapshots(
+                    volume::MaxSnapshotValue { value },
+                )),
+            },
+        }
+    }
+}
+impl ValidateRequestTypes for SetVolumePropertyRequest {
+    type Validated = ValidatedSetVolumePropertyRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedSetVolumePropertyRequest {
+            uuid: VolumeId::try_from(StringValue(Some(self.uuid.clone())))?,
+            inner: self,
+        })
+    }
+}
+
+impl TryFrom<&dyn SetVolumePropertyInfo> for SetVolumeProperty {
+    type Error = ReplyError;
+    fn try_from(data: &dyn SetVolumePropertyInfo) -> Result<Self, Self::Error> {
+        if let Some(property) = data.property() {
+            Ok(Self {
+                uuid: data.uuid(),
+                property,
+            })
+        } else {
+            Err(ReplyError::missing_argument(
+                ResourceKind::Volume,
+                "set_volume_property_request.property",
+            ))
+        }
+    }
+}
+
+impl From<&dyn SetVolumePropertyInfo> for SetVolumePropertyRequest {
+    fn from(data: &dyn SetVolumePropertyInfo) -> Self {
+        Self {
+            uuid: data.uuid().to_string(),
+            property: data.property().into_opt(),
+        }
+    }
+}
 /// A helper to convert the replica topology map form grpc type to corresponding control plane type.
 fn to_replica_topology_map(
     map: HashMap<String, volume::ReplicaTopology>,
