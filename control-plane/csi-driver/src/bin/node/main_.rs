@@ -186,7 +186,20 @@ pub(super) async fn main() -> anyhow::Result<()> {
                 .help(
                     "The node selector label which this plugin will report as part of its topology.\n\
                     Example:\n --node-selector key=value --node-selector key2=value2",
-                ),
+                )
+            ,
+        )
+        .arg(
+            Arg::new("fmt-style")
+                .long("fmt-style")
+                .default_value(FmtStyle::Pretty.as_ref())
+                .help("Formatting style to be used while logging")
+        )
+        .arg(
+            Arg::new("ansi-colors")
+                .long("ansi-colors")
+                .action(clap::ArgAction::SetTrue)
+                .help("Enable ANSI color for logs")
         )
         .subcommand(
             clap::Command::new("fs-freeze")
@@ -211,6 +224,10 @@ pub(super) async fn main() -> anyhow::Result<()> {
                 )
         )
         .get_matches();
+    let tags = utils::tracing_telemetry::default_tracing_tags(
+        utils::raw_version_str(),
+        env!("CARGO_PKG_VERSION"),
+    );
 
     // Handle fs-freeze and fs-unfreeze commands.
     if let Some(cmd) = matches.subcommand() {
@@ -218,7 +235,8 @@ pub(super) async fn main() -> anyhow::Result<()> {
             .with_writer(FmtLayer::Stderr)
             .with_style(FmtStyle::Compact)
             .with_colours(false)
-            .init();
+            .with_tracing_tags(tags)
+            .init("csi-node");
         match cmd {
             ("fs-freeze", arg_matches) => {
                 let volume_id = arg_matches.get_one::<String>("volume-id").unwrap();
@@ -242,7 +260,20 @@ pub(super) async fn main() -> anyhow::Result<()> {
         utils::raw_version_str(),
         env!("CARGO_PKG_VERSION"),
     );
-    utils::tracing_telemetry::init_tracing("csi-node", tags, None);
+
+    let fmt_style = matches.get_one::<String>("fmt-style").unwrap().as_ref();
+    let fmt_style = match fmt_style {
+        "json" => FmtStyle::Json,
+        "compact" => FmtStyle::Compact,
+        _ => FmtStyle::Pretty,
+    };
+    let colors = matches.get_flag("ansi-colors");
+    utils::tracing_telemetry::TracingTelemetry::builder()
+        .with_writer(FmtLayer::Stdout)
+        .with_style(fmt_style)
+        .with_colours(colors)
+        .with_tracing_tags(tags.clone())
+        .init("csi-node");
 
     // Validate presence of nvme_tcp kernel module and set nvme_core parameters.
     if let Err(error) = crate::dev::nvmf::check_nvme_tcp_module() {

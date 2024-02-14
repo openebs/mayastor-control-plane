@@ -23,7 +23,7 @@ use std::{net::SocketAddr, num::ParseIntError};
 use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR, ETCD_MAX_PAGE_LIMIT};
 
 use stor_port::HostAccessControl;
-use utils::tracing_telemetry::{trace::TracerProvider, KeyValue};
+use utils::tracing_telemetry::{trace::TracerProvider, FmtLayer, FmtStyle, KeyValue};
 
 /// The Cli arguments for this binary.
 #[derive(Debug, Parser)]
@@ -114,6 +114,14 @@ pub(crate) struct CliArgs {
     /// Etcd Pagination Limit.
     #[clap(long, default_value = ETCD_MAX_PAGE_LIMIT)]
     pub(crate) etcd_page_limit: u32,
+
+    /// Formatting style to be used while logging.
+    #[clap(default_value = FmtStyle::Pretty.as_ref(), short, long)]
+    fmt_style: FmtStyle,
+
+    /// Use ANSI colors for the logs.
+    #[clap(long)]
+    ansi_colors: bool,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -156,12 +164,14 @@ async fn main() -> anyhow::Result<()> {
     let cli_args = CliArgs::args();
     utils::print_package_info!();
     println!("Using options: {cli_args:?}");
-    utils::tracing_telemetry::init_tracing_with_eventing(
-        "agent-core",
-        cli_args.tracing_tags.clone(),
-        cli_args.jaeger.clone(),
-        cli_args.events_url.clone(),
-    );
+    utils::tracing_telemetry::TracingTelemetry::builder()
+        .with_writer(FmtLayer::Stdout)
+        .with_style(cli_args.fmt_style)
+        .with_colours(cli_args.ansi_colors)
+        .with_jaeger(cli_args.jaeger.clone())
+        .with_events_url(cli_args.events_url.clone())
+        .with_tracing_tags(cli_args.tracing_tags.clone())
+        .init("agent-core");
     server(cli_args).await
 }
 

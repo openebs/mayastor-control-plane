@@ -32,6 +32,7 @@ use mayastorpool::client::{check_crd, delete, list};
 use openapi::clients::{self, tower::Url};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tracing::{error, info, trace, warn};
+use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
 const PAGINATION_LIMIT: u32 = 100;
 const BACKOFF_PERIOD: u64 = 20;
@@ -235,6 +236,18 @@ async fn main() -> anyhow::Result<()> {
                 .action(clap::ArgAction::SetTrue)
                 .help("do not attempt to validate the block device prior to pool creation"),
         )
+        .arg(
+            Arg::new("fmt-style")
+                .long("fmt-style")
+                .default_value(FmtStyle::Pretty.as_ref())
+                .help("Formatting style to be used while logging"),
+        )
+        .arg(
+            Arg::new("ansi-colors")
+                .long("ansi-colors")
+                .action(clap::ArgAction::SetTrue)
+                .help("Enable ansi color for logs"),
+        )
         .get_matches();
 
     utils::print_package_info!();
@@ -243,11 +256,16 @@ async fn main() -> anyhow::Result<()> {
         utils::raw_version_str(),
         env!("CARGO_PKG_VERSION"),
     );
-    utils::tracing_telemetry::init_tracing(
-        "dsp-operator",
-        tags,
-        matches.get_one::<String>("jaeger").cloned(),
-    );
+
+    let fmt_style = matches.get_one::<FmtStyle>("fmt-style").unwrap();
+    let ansi_colors = matches.get_flag("ansi-colors");
+    utils::tracing_telemetry::TracingTelemetry::builder()
+        .with_writer(FmtLayer::Stdout)
+        .with_style(*fmt_style)
+        .with_colours(ansi_colors)
+        .with_jaeger(matches.get_one::<String>("jaeger").cloned())
+        .with_tracing_tags(tags)
+        .init("agent-ha-node");
 
     pool_controller(matches).await?;
     utils::tracing_telemetry::flush_traces();

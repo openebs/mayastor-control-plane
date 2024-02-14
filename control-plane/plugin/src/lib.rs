@@ -5,6 +5,8 @@ extern crate lazy_static;
 
 use operations::Label;
 use resources::LabelResources;
+use std::fmt::Debug;
+use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
 use crate::{
     operations::{
@@ -60,17 +62,17 @@ impl CliArgs {
             utils::tracing_telemetry::default_tracing_tags(git_version, env!("CARGO_PKG_VERSION"));
 
         let fmt_layer = match std::env::var("RUST_LOG") {
-            Ok(_) => utils::tracing_telemetry::FmtLayer::Stderr,
-            Err(_) => utils::tracing_telemetry::FmtLayer::None,
+            Ok(_) => FmtLayer::Stderr,
+            Err(_) => FmtLayer::None,
         };
 
-        utils::tracing_telemetry::init_tracing_ext(
-            env!("CARGO_PKG_NAME"),
-            tags,
-            self.jaeger.as_ref(),
-            fmt_layer,
-            None,
-        );
+        utils::tracing_telemetry::TracingTelemetry::builder()
+            .with_writer(fmt_layer)
+            .with_style(FmtStyle::Pretty)
+            .with_colours(false)
+            .with_jaeger(self.jaeger.clone())
+            .with_tracing_tags(tags)
+            .init(env!("CARGO_PKG_NAME"));
 
         TracingFlusher {}
     }
