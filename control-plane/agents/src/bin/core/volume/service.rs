@@ -167,13 +167,11 @@ impl VolumeOperations for Service {
         req: &dyn SetVolumePropertyInfo,
         _ctx: Option<Context>,
     ) -> Result<Volume, ReplyError> {
-        let set_volume_properties = req.try_into()?;
+        let set_volume_property = req.try_into()?;
         let service = self.clone();
         let volume =
-            Context::spawn(
-                async move { service.set_volume_property(&set_volume_properties).await },
-            )
-            .await??;
+            Context::spawn(async move { service.set_volume_property(&set_volume_property).await })
+                .await??;
         Ok(volume)
     }
 

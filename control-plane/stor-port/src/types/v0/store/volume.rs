@@ -678,7 +678,7 @@ impl From<VolumeOperation> for models::volume_spec_operation::Operation {
                 models::volume_spec_operation::Operation::DestroySnapshot
             }
             VolumeOperation::SetVolumeProperty(_) => {
-                todo!()
+                models::volume_spec_operation::Operation::SetVolumeProperty
             }
             VolumeOperation::Resize(_) => models::volume_spec_operation::Operation::Resize,
         }

@@ -1544,6 +1544,36 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: []
+  '/volumes/{volume_id}/property':
+    put:
+      tags:
+        - Volumes
+      operationId: put_volume_property
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetVolumePropertyBody'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Volume'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: []
   '/volumes/{volume_id}/target':
     put:
       tags:
@@ -2562,6 +2592,20 @@ components:
         - replicas
         - size
         - thin
+    SetVolumePropertyBody:
+      example:
+        max_snapshots: 10
+      description: Set Volume Properties Body
+      type: object
+      oneOf:
+        - required:
+          - max_snapshots
+      properties:
+        max_snapshots:
+          description: Max Snapshots limit per volume.
+          type: integer
+          format: int32
+          minimum: 0
     AffinityGroup:
       example:
         id: "ag"
@@ -3401,6 +3445,7 @@ components:
                 - CreateSnapshot
                 - DestroySnapshot
                 - Resize
+                - SetVolumeProperty
             result:
               description: Result of the operation
               type: boolean

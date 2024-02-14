@@ -1,6 +1,6 @@
 use crate::resources::{
     error::Error, utils, CordonResources, DrainResources, GetResources, LabelResources,
-    ScaleResources, UnCordonResources,
+    ScaleResources, SetPropertyResources, UnCordonResources,
 };
 use async_trait::async_trait;
 
@@ -19,6 +19,9 @@ pub enum Operations {
     /// 'Scale' resources.
     #[clap(subcommand)]
     Scale(ScaleResources),
+    /// 'Set' resources.
+    #[clap(subcommand)]
+    Set(SetPropertyResources),
     /// 'Cordon' resources.
     #[clap(subcommand)]
     Cordon(CordonResources),
@@ -88,6 +91,19 @@ pub trait Scale {
     async fn resize(
         id: &Self::ID,
         requested_size: u64,
+        output: &utils::OutputFormat,
+    ) -> PluginResult;
+}
+
+/// SetProperty trait.
+/// To be implemented by resources which support the 'set_property' operation.
+#[async_trait(?Send)]
+pub trait SetProperty {
+    type ID;
+    type Property;
+    async fn set_property(
+        id: &Self::ID,
+        property: &Self::Property,
         output: &utils::OutputFormat,
     ) -> PluginResult;
 }
