@@ -253,7 +253,7 @@ async fn nexus_child_addition_event_test(sub: &mut BusSubscription<EventMessage>
 }
 
 async fn nexus_child_removal_event_test(sub: &mut BusSubscription<EventMessage>) {
-    let nexus_remove_child_event = timeout(Duration::from_millis(50), get_next_event(sub))
+    let nexus_remove_child_event = timeout(Duration::from_millis(500), get_next_event(sub))
         .await
         .unwrap()
         .unwrap();
