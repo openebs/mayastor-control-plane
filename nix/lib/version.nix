@@ -10,7 +10,7 @@ stdenv.mkDerivation {
 
     vers=${tag}
     if [ -z "$vers" ]; then
-      vers=`${git}/bin/git tag --points-at HEAD`
+      vers=`${git}/bin/git describe --exact-match 2>/dev/null || echo -n`
     fi
     if [ -z "$vers" ]; then
       vers=`${git}/bin/git rev-parse --short=12 HEAD`
