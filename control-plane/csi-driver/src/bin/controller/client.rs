@@ -4,8 +4,9 @@ use stor_port::types::v0::openapi::{
     clients::tower::StatusCode,
     models,
     models::{
-        AffinityGroup, CreateVolumeBody, Node, NodeTopology, Pool, PoolTopology, PublishVolumeBody,
-        RestJsonError, Topology, Volume, VolumePolicy, VolumeShareProtocol, Volumes,
+        AffinityGroup, AppNode, CreateVolumeBody, Node, NodeTopology, Pool, PoolTopology,
+        PublishVolumeBody, RestJsonError, Topology, Volume, VolumePolicy, VolumeShareProtocol,
+        Volumes,
     },
 };
 
@@ -486,5 +487,15 @@ impl RestApiClient {
             .await?;
 
         Ok(snapshot.into_body())
+    }
+
+    /// Get an app node.
+    pub async fn get_app_node(&self, app_node_id: &str) -> Result<AppNode, ApiClientError> {
+        let response = self
+            .rest_client
+            .app_nodes_api()
+            .get_app_node(app_node_id)
+            .await?;
+        Ok(response.into_body())
     }
 }

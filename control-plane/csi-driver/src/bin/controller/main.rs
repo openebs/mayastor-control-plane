@@ -1,5 +1,6 @@
-use client::{ApiClientError, CreateVolumeTopology, RestApiClient};
+use client::{ApiClientError, RestApiClient};
 use config::CsiControllerConfig;
+
 mod client;
 mod config;
 mod controller;
