@@ -14,7 +14,8 @@ use crate::{
     pool::wrapper::PoolWrapper,
     NumRebuilds,
 };
-use agents::errors::SvcError;
+use agents::{errors::SvcError, eventing::EventWithMeta};
+use events_api::event::{EventAction, EventCategory, EventMessage, EventMeta, EventSource};
 use grpc::operations::snapshot::SnapshotInfo;
 use stor_port::{
     transport_api::{Message, MessageId, ResourceKind},
@@ -409,6 +410,15 @@ impl NodeWrapper {
             }
 
             self.node_state.status = next;
+            self.event(
+                EventAction::StateChange,
+                event_meta(
+                    self.id().to_string(),
+                    previous.to_string(),
+                    self.node_state.status.to_string(),
+                ),
+            )
+            .generate();
             if self.node_state.status == NodeStatus::Unknown {
                 self.watchdog_mut().disarm()
             }
@@ -851,6 +861,24 @@ impl NodeWrapper {
     fn rebuild_since_timestamp(&self) -> Option<prost_types::Timestamp> {
         self.resources().rebuild_history_time()
     }
+}
+
+// State change event for node
+impl EventWithMeta for NodeWrapper {
+    fn event(&self, event_action: EventAction, meta: EventMeta) -> EventMessage {
+        EventMessage {
+            category: EventCategory::Node as i32,
+            action: event_action as i32,
+            target: self.id().to_string(),
+            metadata: Some(meta),
+        }
+    }
+}
+
+// Get event meta data for node state change event
+fn event_meta(nodeid: String, previous: String, next: String) -> EventMeta {
+    let event_source = EventSource::new(nodeid).with_state_change_data(previous, next);
+    EventMeta::from_source(event_source)
 }
 
 /// Fetches node state from the dataplane.

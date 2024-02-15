@@ -5,7 +5,6 @@
 //! It's meant to facilitate the creation of agents with a helper builder to
 //! subscribe handlers for different message identifiers.
 
-use events_api::event::{EventAction, EventMessage, EventMeta};
 use futures::Future;
 use grpc::tracing::OpenTelServer;
 use snafu::Snafu;
@@ -14,6 +13,8 @@ use std::{net::SocketAddr, sync::Arc};
 use stor_port::transport_api::ErrorChain;
 
 mod common;
+/// Event definitions.
+pub mod eventing;
 
 /// Agent level errors.
 pub use common::errors;
@@ -171,16 +172,4 @@ impl<L> Service<L> {
     {
         configure(self).await
     }
-}
-
-/// Event trait definition for creating events.
-pub trait Event {
-    /// Create event message.
-    fn event(&self, event_action: EventAction) -> EventMessage;
-}
-
-/// Event trait definition for creating events and adding meta data.
-pub trait EventWithMeta {
-    /// Create event message with meta data.
-    fn event(&self, action: EventAction, meta: EventMeta) -> EventMessage;
 }

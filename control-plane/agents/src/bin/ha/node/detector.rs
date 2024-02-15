@@ -3,7 +3,7 @@ use crate::{
     reporter::PathReporter,
     Cli,
 };
-use agents::Event;
+use agents::eventing::Event;
 use events_api::event::{EventAction, EventCategory, EventMessage, EventMeta, EventSource};
 use nvmeadm::nvmf_subsystem::Subsystem;
 use std::{collections::HashMap, convert::From, rc::Rc, sync::Arc};
