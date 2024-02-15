@@ -74,6 +74,12 @@ pub enum Error {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
+    /// Error when resize volume request fails.
+    #[snafu(display("Failed to resize volume {id}. Error {source}"))]
+    ResizeVolumeError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
     /// Error when set volume property request fails.
     #[snafu(display("Failed to set volume {id} property, Error {source}"))]
     ScaleVolumePropertyError {
