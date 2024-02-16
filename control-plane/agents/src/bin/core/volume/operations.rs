@@ -191,6 +191,13 @@ impl ResourceResize for OperationGuardArc<VolumeSpec> {
         let spec = self.as_ref().clone();
         let state = registry.volume_state(&request.uuid).await?;
 
+        // Pre-check - Don't allow resize if the volume has snapshots.
+        // NOTE: This is temporary till the fix for handling this in spdk is done.
+        if !registry.specs().snapshots_by_vol(self.uuid()).is_empty() {
+            return Err(SvcError::Internal {
+                details: "Volume can't be resized while it has snapshots".into(),
+            });
+        }
         // Pre-checks - volume state eligible for resize.
         vol_status_ok_for_resize(&spec)?;
         // Pre-check - Ensure pools that host replicas have enough space to resize the replicas,
