@@ -320,18 +320,6 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let context = CreateParams::try_from(&args.parameters)?;
         let replica_count = context.replica_count();
 
-        // labels for pool inclusion
-        let mut pool_inclusive_label_topology: HashMap<String, String> = HashMap::new();
-        pool_inclusive_label_topology
-            .insert(String::from(CREATED_BY_KEY), String::from(DSP_OPERATOR));
-        pool_inclusive_label_topology.extend(
-            context
-                .publish_params()
-                .pool_topology_affinity()
-                .clone()
-                .unwrap_or_default(),
-        );
-
         let parsed_vol_uuid = Uuid::parse_str(&volume_uuid).map_err(|_e| {
             Status::invalid_argument(format!("Malformed volume UUID: {volume_uuid}"))
         })?;
@@ -360,17 +348,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             }
             // If the volume doesn't exist, create it.
             Err(ApiClientError::ResourceNotExists(_)) => {
-                let volume_topology = CreateVolumeTopology::new(
-                    None,
-                    Some(PoolTopology::labelled(LabelledTopology {
-                        exclusion: context
-                            .publish_params()
-                            .pool_topology_spread()
-                            .clone()
-                            .unwrap_or_default(),
-                        inclusion: pool_inclusive_label_topology,
-                    })),
-                );
+                let volume_topology = context_into_topology(&context);
 
                 let sts_affinity_group_name = context.sts_affinity_group();
                 let max_snapshots = context.max_snapshots();
@@ -1025,4 +1003,49 @@ fn snapshot_to_csi(snapshot: models::VolumeSnapshot) -> Snapshot {
         // Seems like csi, doesn't really care what the state is after successful creation.
         ready_to_use: snapshot.definition.metadata.status == models::SpecStatus::Created,
     }
+}
+
+fn context_into_topology(context: &CreateParams) -> CreateVolumeTopology {
+    // labels for pool inclusion
+    let mut pool_inclusive_label_topology: HashMap<String, String> = HashMap::new();
+    let mut node_inclusive_label_topology: HashMap<String, String> = HashMap::new();
+    pool_inclusive_label_topology.insert(String::from(CREATED_BY_KEY), String::from(DSP_OPERATOR));
+    pool_inclusive_label_topology.extend(
+        context
+            .publish_params()
+            .pool_affinity_topology_label()
+            .clone()
+            .unwrap_or_default(),
+    );
+    pool_inclusive_label_topology.extend(
+        context
+            .publish_params()
+            .pool_has_topology_key()
+            .clone()
+            .unwrap_or_default(),
+    );
+    node_inclusive_label_topology.extend(
+        context
+            .publish_params()
+            .node_affinity_topology_label()
+            .clone()
+            .unwrap_or_default(),
+    );
+    node_inclusive_label_topology.extend(
+        context
+            .publish_params()
+            .node_has_topology_key()
+            .clone()
+            .unwrap_or_default(),
+    );
+    CreateVolumeTopology::new(
+        Some(models::NodeTopology::labelled(LabelledTopology {
+            exclusion: Default::default(),
+            inclusion: node_inclusive_label_topology,
+        })),
+        Some(PoolTopology::labelled(LabelledTopology {
+            exclusion: Default::default(),
+            inclusion: pool_inclusive_label_topology,
+        })),
+    )
 }
