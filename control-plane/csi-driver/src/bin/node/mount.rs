@@ -1,7 +1,7 @@
 //! Utility functions for mounting and unmounting filesystems.
 use crate::filesystem_ops::FileSystem;
 use csi_driver::filesystem::FileSystem as Fs;
-use devinfo::mountinfo::{MountInfo, MountIter};
+use devinfo::mountinfo::{MountInfo, SafeMountIter};
 
 use std::{collections::HashSet, io::Error};
 use sys_mount::{unmount, FilesystemType, Mount, MountFlags, UnmountFlags};
@@ -31,7 +31,7 @@ impl ReadOnly for &str {
 pub(crate) fn find_mount(source: Option<&str>, target: Option<&str>) -> Option<MountInfo> {
     let mut found: Option<MountInfo> = None;
 
-    for mount in MountIter::new().unwrap().flatten() {
+    for mount in SafeMountIter::get().unwrap().flatten() {
         if let Some(value) = source {
             if mount.source.to_string_lossy() == value {
                 if let Some(value) = target {
@@ -57,7 +57,7 @@ pub(crate) fn find_mount(source: Option<&str>, target: Option<&str>) -> Option<M
 /// Return all mounts for a matching source.
 /// Optionally ignore the given destination path.
 pub(crate) fn find_src_mounts(source: &str, dest_ignore: Option<&str>) -> Vec<MountInfo> {
-    MountIter::new()
+    SafeMountIter::get()
         .unwrap()
         .flatten()
         .filter(|mount| {
