@@ -60,6 +60,8 @@ pub enum Parameters {
     PoolAffinityTopologyLabel,
     #[strum(serialize = "poolHasTopologyKey")]
     PoolHasTopologyKey,
+    #[strum(serialize = "poolSpreadTopologyKey")]
+    PoolSpreadTopologyKey,
     #[strum(serialize = "nodeAffinityTopologyLabel")]
     NodeAffinityTopologyLabel,
     #[strum(serialize = "nodeHasTopologyKey")]
@@ -180,6 +182,12 @@ impl Parameters {
     ) -> Result<Option<HashMap<String, String>>, tonic::Status> {
         Self::parse_topology_param(value)
     }
+    /// Parse the value for `Self::PoolSpreadTopologyKey`.
+    pub fn pool_spread_topology_key(
+        value: Option<&String>,
+    ) -> Result<Option<HashMap<String, String>>, tonic::Status> {
+        Self::parse_topology_param(value)
+    }
     /// Parse the value for `Self::NodeAffinityTopologyLabel`.
     pub fn node_affinity_topology_label(
         value: Option<&String>,
@@ -210,6 +218,7 @@ pub struct PublishParams {
     fs_id: Option<Uuid>,
     pool_affinity_topology_label: Option<HashMap<String, String>>,
     pool_has_topology_key: Option<HashMap<String, String>>,
+    pool_spread_topology_key: Option<HashMap<String, String>>,
     node_affinity_topology_label: Option<HashMap<String, String>>,
     node_has_topology_key: Option<HashMap<String, String>>,
 }
@@ -241,6 +250,10 @@ impl PublishParams {
     /// Get the `Parameters::PoolHasTopologyKey` value.
     pub fn pool_has_topology_key(&self) -> &Option<HashMap<String, String>> {
         &self.pool_has_topology_key
+    }
+    /// Get the `Parameters::PoolSpreadTopologyKey` value.
+    pub fn pool_spread_topology_key(&self) -> &Option<HashMap<String, String>> {
+        &self.pool_spread_topology_key
     }
     /// Get the `Parameters::NodeAffinityTopologyLabel` value.
     pub fn node_affinity_topology_label(&self) -> &Option<HashMap<String, String>> {
@@ -307,6 +320,10 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
         let pool_has_topology_key =
             Parameters::pool_has_topology_key(args.get(Parameters::PoolHasTopologyKey.as_ref()))
                 .map_err(|_| tonic::Status::invalid_argument("Invalid pool_has_topology_key"))?;
+        let pool_spread_topology_key = Parameters::pool_spread_topology_key(
+            args.get(Parameters::PoolSpreadTopologyKey.as_ref()),
+        )
+        .map_err(|_| tonic::Status::invalid_argument("Invalid pool_spread_topology_key"))?;
         let node_affinity_topology_label = Parameters::node_affinity_topology_label(
             args.get(Parameters::NodeAffinityTopologyLabel.as_ref()),
         )
@@ -323,6 +340,7 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
             fs_id,
             pool_affinity_topology_label,
             pool_has_topology_key,
+            pool_spread_topology_key,
             node_affinity_topology_label,
             node_has_topology_key,
         })
