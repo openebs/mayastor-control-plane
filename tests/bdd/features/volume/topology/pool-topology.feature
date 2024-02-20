@@ -33,6 +33,11 @@ Feature: Volume Pool Topology
 #      the label           ||   node2pool3  ||     zone-eu=eu-west-3   ||     io-engine-2    ||
 #   "zone-eu=eu-west-3"    ||   node3pool3  ||     zone-eu=eu-west-3   ||     io-engine-3    ||
 #==============================================================================================
+#     "poolX" has          ||   node1poolX  ||     zone-eu=eu-west-4   ||     io-engine-1    ||
+#      the label           ||               ||                         ||                    ||
+#   "zone-eu=eu-west-X"    ||               ||                         ||                    ||
+#==============================================================================================
+
 
   Scenario Outline: Suitable pools which contain volume topology labels
     Given a request for a <replica> replica volume with poolAffinityTopologyLabel as <pool_affinity_topology_label> and pool topology inclusion as <volume_pool_topology_inclusion_label>
@@ -72,4 +77,18 @@ Feature: Volume Pool Topology
       |            True              |           zone-eu                      |    1    |        <=          | succeed   |  must be    | zone-eu=eu-west-3   |
       |            True              |           zone-eu                      |    2    |        <=          | succeed   |  must be    | zone-eu=eu-west-3   |
       |            True              |           zone-eu                      |    3    |        <=          | succeed   |  must be    | zone-eu=eu-west-3   |
-      |            True              |           zone-eu                      |    4    |        >           |   fail    |    not      | zone-eu=eu-west-3   |
+      |            True              |           zone-eu                      |    5    |        >           |   fail    |    not      | zone-eu=eu-west-3   |
+
+
+  Scenario Outline: Suitable pools which contain volume pool spread topology key
+    Given a request for a <replica> replica volume with poolSpreadTopologyKey as <spread_topology_key> and pool topology exclusion as <volume_pool_topology_exclusion_label>
+    When the desired number of replica of volume i.e. <replica> here; is <expression> number of the pools satisfying pool spread key <volume_pool_topology_exclusion_label>
+    Then the <replica> replica volume creation should <result> and <provisioned> provisioned on pools with labels <pool_label>
+    Examples:
+     |  spread_topology_key | volume_pool_topology_exclusion_label   | replica |     expression     | result    | provisioned |  pool_label                         |
+     |       True           |           zone-us                      |    1    |        <=          | succeed   |  must be    | zone-us=us-west-1                   |
+     |       True           |           zone-us                      |    2    |        >           | fail      |    not      | zone-us=us-west-1                   |
+     |       True           |           zone-ap                      |    1    |        <=          | succeed   |  must be    | zone-ap=ap-south-1                  |
+     |       True           |           zone-ap                      |    2    |        >           | fail      |    not      | zone-ap=ap-south-1                  |
+     |       True           |           zone-eu                      |    1    |        <=          | succeed   |  must be    | zone-eu=eu-west-3                   |
+     |       True           |           zone-eu                      |    2    |        <=          | succeed   |  must be    | zone-eu=eu-west-3,zone-eu=eu-west-X |
