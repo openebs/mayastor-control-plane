@@ -2,7 +2,7 @@ use crate::controller::scheduling::{
     nexus::GetSuitableNodesContext,
     resources::{NodeItem, PoolItem},
     volume::GetSuitablePoolsContext,
-    volume_policy::qualifies_inclusion_labels,
+    volume_policy::qualifies_label_criteria,
 };
 use std::collections::HashMap;
 use stor_port::types::v0::transport::NodeTopology;
@@ -96,10 +96,8 @@ impl NodeFilters {
         // We will reach this part of code only if the volume has inclusion/exclusion labels.
         match request.registry().specs().node(&item.pool.node) {
             Ok(spec) => {
-                let inc_match = qualifies_inclusion_labels(
-                    volume_node_topology_inclusion_labels,
-                    spec.labels(),
-                );
+                let inc_match =
+                    qualifies_label_criteria(volume_node_topology_inclusion_labels, spec.labels());
                 inc_match
             }
             Err(_) => false,
