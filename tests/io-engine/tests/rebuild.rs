@@ -540,7 +540,9 @@ async fn run_fio_vol_verify(
     };
 
     let mut node = cluster.csi_node_client(0).await.unwrap();
-    node.node_stage_volume(&volume).await.unwrap();
+    node.node_stage_volume(&volume, HashMap::new())
+        .await
+        .unwrap();
 
     let response = node
         .internal()

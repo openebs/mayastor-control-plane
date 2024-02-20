@@ -239,7 +239,9 @@ async fn common_enospc_builder(
     tracing::info!(?replicas, "Here's the replicas");
 
     let mut node = cluster.csi_node_client(0).await.unwrap();
-    node.node_stage_volume(&volume_1).await.unwrap();
+    node.node_stage_volume(&volume_1, HashMap::new())
+        .await
+        .unwrap();
     let response = node
         .internal()
         .find_volume(FindVolumeRequest {
@@ -250,7 +252,9 @@ async fn common_enospc_builder(
     tracing::info!(?response);
     let device_path_1 = response.into_inner().device_path;
 
-    node.node_stage_volume(&volume_2).await.unwrap();
+    node.node_stage_volume(&volume_2, HashMap::new())
+        .await
+        .unwrap();
     let response = node
         .internal()
         .find_volume(FindVolumeRequest {

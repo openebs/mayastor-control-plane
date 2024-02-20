@@ -6,5 +6,6 @@ mod nexus;
 mod node;
 mod pool;
 mod rebuild;
+mod snapshot;
 mod volume;
 mod watch;

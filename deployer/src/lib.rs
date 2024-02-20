@@ -408,6 +408,11 @@ impl StartOptions {
         self
     }
     #[must_use]
+    pub fn with_csi_registration(mut self, opt: bool) -> Self {
+        self.enable_app_node_registration = opt;
+        self
+    }
+    #[must_use]
     pub fn with_jaeger(mut self, jaeger: bool) -> Self {
         self.jaeger = jaeger;
         self
