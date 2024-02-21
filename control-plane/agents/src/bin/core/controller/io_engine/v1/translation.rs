@@ -259,6 +259,7 @@ impl AgentToIoEngine for transport::CreateReplica {
         Self::IoEngineMessage {
             name: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
             uuid: self.uuid.clone().into(),
+            entity_id: None,
             pooluuid: match self.pool_uuid.clone() {
                 Some(uuid) => uuid.into(),
                 // TODO: implement a getter function to fetch the uuid of the pool from the given
