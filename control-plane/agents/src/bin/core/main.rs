@@ -20,7 +20,7 @@ pub(crate) mod watch;
 use clap::Parser;
 use controller::registry::NumRebuilds;
 use std::{net::SocketAddr, num::ParseIntError};
-use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR};
+use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR, ETCD_MAX_PAGE_LIMIT};
 
 use stor_port::HostAccessControl;
 use utils::tracing_telemetry::{trace::TracerProvider, KeyValue};
@@ -110,6 +110,10 @@ pub(crate) struct CliArgs {
     /// This is useful when the frontend nodes do not support the NVMe ANA feature.
     #[clap(long, env = "HA_DISABLED")]
     pub(crate) disable_ha: bool,
+
+    /// Etcd Pagination Limit.
+    #[clap(long, default_value = ETCD_MAX_PAGE_LIMIT)]
+    pub(crate) etcd_page_limit: u32,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -180,6 +184,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         },
         cli_args.thin_args,
         cli_args.disable_ha,
+        cli_args.etcd_page_limit as i64,
     )
     .await?;
 

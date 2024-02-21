@@ -23,6 +23,6 @@ pub fn key_prefix_obj<K: AsRef<str>>(key_type: K) -> String {
 
 /// Fetches the product v1 key prefix and returns true if entry is present.
 pub async fn detect_product_v1_prefix<S: Store>(store: &mut S) -> Result<bool, crate::Error> {
-    let prefix = store.get_values_prefix(&key_prefix()).await?;
+    let prefix = store.get_values_paged(&key_prefix(), 3, "").await?;
     Ok(!prefix.is_empty())
 }

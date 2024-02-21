@@ -131,3 +131,6 @@ pub const SNAPSHOT_MAX_TRANSACTION_LIMIT: usize = 5;
 
 /// Label for the csi-node nvme ana multi-path.
 pub const CSI_NODE_NVME_ANA: &str = "openebs.io/csi-node.nvme-ana";
+
+/// Max limit for etcd pagination.
+pub const ETCD_MAX_PAGE_LIMIT: &str = "500";

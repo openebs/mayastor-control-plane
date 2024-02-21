@@ -33,6 +33,14 @@ pub trait StoreKv: Sync + Send + Clone {
         &mut self,
         key_prefix: &str,
         limit: i64,
+        range_end: &str,
+    ) -> Result<Vec<(String, Value)>, Error>;
+    /// Returns a vector of tuples. Each tuple represents a key-value pair. It paginates through all
+    /// the values for the prefix with limit.
+    async fn get_values_paged_all(
+        &mut self,
+        key_prefix: &str,
+        limit: i64,
     ) -> Result<Vec<(String, Value)>, Error>;
     /// Deletes all key values from a given prefix.
     async fn delete_values_prefix(&mut self, key_prefix: &str) -> Result<(), Error>;

@@ -8,9 +8,6 @@ use std::fmt::Debug;
 use tracing::info;
 use uuid::Uuid;
 
-/// ETCD Pagination limit.
-const ETCD_PAGED_LIMIT: i64 = 1000;
-
 /// Definition of the nexus information that gets saved in the persistent
 /// store.
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
@@ -139,17 +136,23 @@ impl StorableObject for NexusInfo {
 
 /// Deletes all v1 nexus_info by fetching all keys and parsing the key to UUID and deletes on
 /// success.
-pub async fn delete_all_v1_nexus_info<S: Store>(store: &mut S) -> Result<(), StoreError> {
-    let mut prefix: &str = "";
+pub async fn delete_all_v1_nexus_info<S: Store>(
+    store: &mut S,
+    etcd_page_limit: i64,
+) -> Result<(), StoreError> {
     let mut first = true;
     let mut kvs;
-    loop {
-        kvs = store.get_values_paged(prefix, ETCD_PAGED_LIMIT).await?;
+    let mut last = Some("".to_string());
+
+    while let Some(prefix) = &last {
+        kvs = store.get_values_paged(prefix, etcd_page_limit, "").await?;
+
         if !first && kvs.get(0).is_some() {
             kvs.remove(0);
         }
         first = false;
 
+        last = kvs.last().map(|(key, _)| key.to_string());
         // If the key is a uuid, i.e. nexus_info v1 key, and the value is a valid nexus_info then we
         // delete it.
         for (key, value) in &kvs {
@@ -158,12 +161,6 @@ pub async fn delete_all_v1_nexus_info<S: Store>(store: &mut S) -> Result<(), Sto
             {
                 store.delete_kv(&key).await?;
             }
-        }
-
-        if let Some((key, _)) = kvs.last() {
-            prefix = key;
-        } else {
-            break;
         }
     }
     info!("v1.0.x nexus_info cleaned up successfully");

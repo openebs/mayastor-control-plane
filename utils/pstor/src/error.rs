@@ -86,4 +86,6 @@ pub enum Error {
         source: Box<Error>,
         description: String,
     },
+    #[snafu(display("Failed to parse range end for start key: '{}'", start_key))]
+    RangeEnd { start_key: String },
 }
