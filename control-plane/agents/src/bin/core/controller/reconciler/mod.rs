@@ -9,7 +9,7 @@ mod volume;
 
 pub(crate) use crate::controller::task_poller::PollTriggerEvent;
 use crate::controller::task_poller::{
-    squash_results, PollContext, PollEvent, PollResult, TaskPoller,
+    squash_results, PollContext, PollEvent, PollResult, PollerState, TaskPoller,
 };
 use poller::ReconcilerWorker;
 use std::fmt::Debug;
@@ -99,6 +99,11 @@ trait GarbageCollect {
     async fn disown_orphaned(&mut self, context: &PollContext) -> PollResult;
     /// Disown resources which have questionable existence, for example non reservable replicas.
     async fn disown_invalid(&mut self, context: &PollContext) -> PollResult;
+    /// Reclaim unused capacity - for example an expanded but unused replica, which may
+    /// happen as part of a failed volume expand operation.
+    async fn reclaim_space(&mut self, _context: &PollContext) -> PollResult {
+        PollResult::Ok(PollerState::Idle)
+    }
 }
 
 #[async_trait::async_trait]
