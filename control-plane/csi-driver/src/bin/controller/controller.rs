@@ -1067,6 +1067,7 @@ fn context_into_topology(context: &CreateParams) -> CreateVolumeTopology {
     // labels for pool inclusion
     let mut pool_inclusive_label_topology: HashMap<String, String> = HashMap::new();
     let mut node_inclusive_label_topology: HashMap<String, String> = HashMap::new();
+    let mut node_exclusive_label_topology: HashMap<String, String> = HashMap::new();
     pool_inclusive_label_topology.insert(String::from(CREATED_BY_KEY), String::from(DSP_OPERATOR));
     pool_inclusive_label_topology.extend(
         context
@@ -1096,9 +1097,16 @@ fn context_into_topology(context: &CreateParams) -> CreateVolumeTopology {
             .clone()
             .unwrap_or_default(),
     );
+    node_exclusive_label_topology.extend(
+        context
+            .publish_params()
+            .node_spread_topology_key()
+            .clone()
+            .unwrap_or_default(),
+    );
     CreateVolumeTopology::new(
         Some(models::NodeTopology::labelled(LabelledTopology {
-            exclusion: Default::default(),
+            exclusion: node_exclusive_label_topology,
             inclusion: node_inclusive_label_topology,
         })),
         Some(PoolTopology::labelled(LabelledTopology {
