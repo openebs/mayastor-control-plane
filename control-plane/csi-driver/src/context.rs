@@ -64,6 +64,8 @@ pub enum Parameters {
     NodeAffinityTopologyLabel,
     #[strum(serialize = "nodeHasTopologyKey")]
     NodeHasTopologyKey,
+    #[strum(serialize = "nodeSpreadTopologyKey")]
+    NodeSpreadTopologyKey,
 }
 impl Parameters {
     fn parse_human_time(
@@ -192,6 +194,12 @@ impl Parameters {
     ) -> Result<Option<HashMap<String, String>>, tonic::Status> {
         Self::parse_topology_param(value)
     }
+    /// Parse the value for `Self::NodeSpreadTopologyKey`.
+    pub fn node_spread_topology_key(
+        value: Option<&String>,
+    ) -> Result<Option<HashMap<String, String>>, tonic::Status> {
+        Self::parse_topology_param(value)
+    }
     /// Parse the value for `Self::MaxSnapshots`.
     pub fn max_snapshots(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
         Self::parse_u32(value)
@@ -212,6 +220,7 @@ pub struct PublishParams {
     pool_has_topology_key: Option<HashMap<String, String>>,
     node_affinity_topology_label: Option<HashMap<String, String>>,
     node_has_topology_key: Option<HashMap<String, String>>,
+    node_spread_topology_key: Option<HashMap<String, String>>,
 }
 impl PublishParams {
     /// Get the `Parameters::IoTimeout` value.
@@ -249,6 +258,10 @@ impl PublishParams {
     /// Get the `Parameters::NodeHasTopologyKey` value.
     pub fn node_has_topology_key(&self) -> &Option<HashMap<String, String>> {
         &self.node_has_topology_key
+    }
+    /// Get the `Parameters::NodeSpreadTopologyKey` value.
+    pub fn node_spread_topology_key(&self) -> &Option<HashMap<String, String>> {
+        &self.node_spread_topology_key
     }
     /// Convert `Self` into a publish context.
     pub fn into_context(self) -> HashMap<String, String> {
@@ -314,6 +327,10 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
         let node_has_topology_key =
             Parameters::node_has_topology_key(args.get(Parameters::NodeHasTopologyKey.as_ref()))
                 .map_err(|_| tonic::Status::invalid_argument("Invalid node_has_topology_key"))?;
+        let node_spread_topology_key = Parameters::node_spread_topology_key(
+            args.get(Parameters::NodeSpreadTopologyKey.as_ref()),
+        )
+        .map_err(|_| tonic::Status::invalid_argument("Invalid node_spread_topology_key"))?;
         Ok(Self {
             io_timeout,
             nvme_io_timeout,
@@ -325,6 +342,7 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
             pool_has_topology_key,
             node_affinity_topology_label,
             node_has_topology_key,
+            node_spread_topology_key,
         })
     }
 }
