@@ -1,7 +1,7 @@
 use crate::controller::scheduling::{
     resources::{ChildItem, PoolItem},
     volume::{GetSuitablePoolsContext, ReplicaResizePoolsContext},
-    volume_policy::qualifies_inclusion_labels,
+    volume_policy::qualifies_label_criteria,
 };
 use std::collections::HashMap;
 use stor_port::types::v0::transport::{PoolStatus, PoolTopology};
@@ -78,6 +78,7 @@ impl PoolBaseFilters {
     /// Should only attempt to use pools having specific creation label if topology has it.
     pub(crate) fn topology(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         let volume_pool_topology_inclusion_labels: HashMap<String, String>;
+        let volume_pool_topology_exclusion_labels: HashMap<String, String>;
         match request.topology.clone() {
             None => return true,
             Some(topology) => match topology.pool {
@@ -86,8 +87,11 @@ impl PoolBaseFilters {
                     PoolTopology::Labelled(labelled_topology) => {
                         // The labels in Volume Pool Topology should match the pool labels if
                         // present, otherwise selection of any pool is allowed.
-                        if !labelled_topology.inclusion.is_empty() {
-                            volume_pool_topology_inclusion_labels = labelled_topology.inclusion
+                        if !labelled_topology.inclusion.is_empty()
+                            || !labelled_topology.exclusion.is_empty()
+                        {
+                            volume_pool_topology_inclusion_labels = labelled_topology.inclusion;
+                            volume_pool_topology_exclusion_labels = labelled_topology.exclusion;
                         } else {
                             return true;
                         }
@@ -101,7 +105,11 @@ impl PoolBaseFilters {
             Ok(spec) => match spec.labels {
                 None => false,
                 Some(pool_labels) => {
-                    qualifies_inclusion_labels(volume_pool_topology_inclusion_labels, &pool_labels)
+                    qualifies_label_criteria(volume_pool_topology_inclusion_labels, &pool_labels)
+                        && qualifies_label_criteria(
+                            volume_pool_topology_exclusion_labels,
+                            &pool_labels,
+                        )
                 }
             },
             Err(_) => false,

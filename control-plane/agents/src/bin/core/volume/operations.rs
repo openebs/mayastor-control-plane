@@ -35,10 +35,10 @@ use stor_port::{
             volume::{PublishOperation, RepublishOperation, VolumeOperation, VolumeSpec},
         },
         transport::{
-            CreateVolume, DestroyNexus, DestroyReplica, DestroyShutdownTargets, DestroyVolume,
-            Protocol, PublishVolume, Replica, ReplicaId, ReplicaOwners, RepublishVolume,
-            ResizeVolume, SetVolumeReplica, ShareNexus, ShareVolume, ShutdownNexus,
-            UnpublishVolume, UnshareNexus, UnshareVolume, Volume,
+            CreateReplica, CreateVolume, DestroyNexus, DestroyReplica, DestroyShutdownTargets,
+            DestroyVolume, PoolTopology, Protocol, PublishVolume, Replica, ReplicaId,
+            ReplicaOwners, RepublishVolume, ResizeVolume, SetVolumeReplica, ShareNexus,
+            ShareVolume, ShutdownNexus, UnpublishVolume, UnshareNexus, UnshareVolume, Volume,
         },
     },
 };
@@ -191,13 +191,6 @@ impl ResourceResize for OperationGuardArc<VolumeSpec> {
         let spec = self.as_ref().clone();
         let state = registry.volume_state(&request.uuid).await?;
 
-        // Pre-check - Don't allow resize if the volume has snapshots.
-        // NOTE: This is temporary till the fix for handling this in spdk is done.
-        if !registry.specs().snapshots_by_vol(self.uuid()).is_empty() {
-            return Err(SvcError::Internal {
-                details: "Volume can't be resized while it has snapshots".into(),
-            });
-        }
         // Pre-checks - volume state eligible for resize.
         vol_status_ok_for_resize(&spec)?;
         // Pre-check - Ensure pools that host replicas have enough space to resize the replicas,
@@ -942,8 +935,18 @@ impl CreateVolumeExe for CreateVolume {
         for replica in candidates.candidates() {
             if replicas.len() >= self.replicas as usize {
                 break;
-            } else if replicas.iter().any(|r| r.node == replica.node) {
-                // don't reuse the same node
+            } else if replicas.iter().any(|r| {
+                r.node == replica.node
+                    || spread_label_is_same(r, replica, context).unwrap_or_else(|error| {
+                        context.volume.error(&format!(
+                            "Failed to create replica {:?} for volume, error: {}",
+                            replica,
+                            error.full_string()
+                        ));
+                        false
+                    })
+            }) {
+                // don't reuse the same node or same exclusion labels
                 continue;
             }
             let replica = if replicas.is_empty() {
@@ -1000,4 +1003,51 @@ impl CreateVolumeExeVal for CreateVolumeSource<'_> {
             CreateVolumeSource::Snapshot(params) => params.pre_flight_check(),
         }
     }
+}
+// spread_label_is_same checks if the pool labels is same as that of all existing replicas.
+fn spread_label_is_same(
+    replica: &Replica,
+    replica_candidate: &CreateReplica,
+    context: &Context,
+) -> Result<bool, SvcError> {
+    let is_spread_label_same = match &context.volume.as_ref().topology {
+        None => false,
+        Some(topology) => {
+            match &topology.pool {
+                None => false,
+                Some(pool_topology) => match pool_topology {
+                    PoolTopology::Labelled(labelled_topology) => {
+                        let mut pool_exclusion_label_match = false;
+
+                        // If the PoolSpreadTopologyKey is present in the Volume Pool Topology, then
+                        // get the pool details from replica candidate and
+                        // check if the pool labels is same as that of all existing replicas.
+                        // If its same then don't consider the pool for replica creation
+                        if !labelled_topology.exclusion.is_empty() {
+                            let candidate_pool = context
+                                .registry
+                                .specs()
+                                .pool(&replica_candidate.pool_id)?
+                                .labels
+                                .unwrap_or_default();
+                            let replica_pool = context
+                                .registry
+                                .specs()
+                                .pool(&replica.pool_id)?
+                                .labels
+                                .unwrap_or_default();
+                            for (key, _) in labelled_topology.exclusion.iter() {
+                                if candidate_pool[key] == replica_pool[key] {
+                                    pool_exclusion_label_match = true;
+                                    break;
+                                }
+                            }
+                        }
+                        pool_exclusion_label_match
+                    }
+                },
+            }
+        }
+    };
+    Ok(is_spread_label_same)
 }

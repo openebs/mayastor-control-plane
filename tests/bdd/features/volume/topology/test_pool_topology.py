@@ -36,6 +36,8 @@ NODE_2_POOL_3_UUID = "node2pool3"
 NODE_3_POOL_1_UUID = "node3pool1"
 NODE_3_POOL_2_UUID = "node3pool2"
 NODE_3_POOL_3_UUID = "node3pool3"
+NODE_3_POOL_3_UUID = "node3pool3"
+NODE_1_POOL_X_UUID = "node1poolX"
 CREATE_REQUEST_KEY = "create_request"
 VOLUME_SIZE = 10485761
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1441"
@@ -57,7 +59,10 @@ VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1441"
 #      the label           ||   node2pool3  ||     zone-eu=eu-west-3   ||     io-engine-2    ||
 #   "zone-eu=eu-west-3"    ||   node3pool3  ||     zone-eu=eu-west-3   ||     io-engine-3    ||
 # ==============================================================================================
-# =========================================================================================
+#     "poolX" has          ||   node1poolX  ||     zone-eu=eu-west-4   ||     io-engine-1    ||
+#      the label           ||               ||                         ||                    ||
+#   "zone-eu=eu-west-X"    ||               ||                         ||                    ||
+# ==============================================================================================
 
 POOL_CONFIGURATIONS = [
     # Pool node1pool1 has the label "zone-us=us-west-1" and is on node "io-engine-1"
@@ -177,6 +182,19 @@ POOL_CONFIGURATIONS = [
             },
         ),
     },
+    # Pool node1poolX has the label "zone-eu=eu-west-4" and is on node "io-engine-1"
+    {
+        "node_name": NODE_1_NAME,
+        "pool_uuid": NODE_1_POOL_X_UUID,
+        "pool_body": CreatePoolBody(
+            ["malloc:///diskX?size_mb=50"],
+            labels={
+                "openebs.io/created-by": "operator-diskpool",
+                "node": "io-engine-1",
+                "zone-eu": "eu-west-X",
+            },
+        ),
+    },
 ]
 
 
@@ -225,6 +243,14 @@ def test_suitable_pools_which_contain_volume_topology_keys_only():
     """Suitable pools which contain volume topology keys only."""
 
 
+@scenario(
+    "pool-topology.feature",
+    "Suitable pools which contain volume pool spread topology key",
+)
+def test_suitable_pools_which_contain_volume_pool_spread_topology_key():
+    """Suitable pools which contain volume pool spread topology key."""
+
+
 @given("a control plane, three Io-Engine instances, nine pools")
 def a_control_plane_three_ioengine_instances_nine_pools():
     """a control plane, three Io-Engine instances, nine pools."""
@@ -248,7 +274,7 @@ def a_control_plane_three_ioengine_instances_nine_pools():
 
     # Check for a pools
     pools = ApiClient.pools_api().get_pools()
-    assert len(pools) == 9
+    assert len(pools) == 10
 
 
 @given(
@@ -264,7 +290,9 @@ def a_request_for_a_replica_replica_volume_with_poolaffinitytopologylabel_as_poo
 ):
     """a request for a <replica> replica volume with poolAffinityTopologyLabel as <pool_affinity_topology_label> and pool topology inclusion as <volume_pool_topology_inclusion_label>."""
     if pool_affinity_topology_label == "True":
-        request = create_volume_body(replica, volume_pool_topology_inclusion_label)
+        request = create_volume_body(
+            replica, volume_pool_topology_inclusion_label, None
+        )
         create_request[CREATE_REQUEST_KEY] = request
 
 
@@ -278,7 +306,25 @@ def a_request_for_a_replica_replica_volume_with_poolhastopologykey_as_has_topolo
 ):
     """a request for a <replica> replica volume with poolHasTopologyKey as <has_topology_key> and pool topology inclusion as <volume_pool_topology_inclusion_label>."""
     if has_topology_key == "True":
-        request = create_volume_body(replica, volume_pool_topology_inclusion_label)
+        request = create_volume_body(
+            replica, volume_pool_topology_inclusion_label, None
+        )
+        create_request[CREATE_REQUEST_KEY] = request
+
+
+@given(
+    parsers.parse(
+        "a request for a {replica} replica volume with poolSpreadTopologyKey as {spread_topology_key} and pool topology exclusion as {volume_pool_topology_exclusion_label}"
+    )
+)
+def a_request_for_a_replica_replica_volume_with_poolspreadtopologykey_as_spread_topology_key_and_pool_topology_exclusion_as_volume_pool_topology_exclusion_label(
+    create_request, replica, spread_topology_key, volume_pool_topology_exclusion_label
+):
+    """a request for a <replica> replica volume with poolSpreadTopologyKey as <spread_topology_key> and pool topology exclusion as <volume_pool_topology_exclusion_label>."""
+    if spread_topology_key == "True":
+        request = create_volume_body(
+            replica, None, volume_pool_topology_exclusion_label
+        )
         create_request[CREATE_REQUEST_KEY] = request
 
 
@@ -302,6 +348,31 @@ def the_desired_number_of_replica_of_volume_ie_replica_here_is_expression_number
         no_of_eligible_pools = no_of_suitable_pools(
             create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
                 "inclusion"
+            ],
+        )
+        assert int(replica) > no_of_eligible_pools
+
+
+@when(
+    parsers.parse(
+        "the desired number of replica of volume i.e. {replica} here; is {expression} number of the pools satisfying pool spread key {volume_pool_topology_exclusion_label}"
+    )
+)
+def the_desired_number_of_replica_of_volume_ie_replica_here_is_expression_number_of_the_pools_satisfying_pool_spread_key_volume_pool_topology_exclusion_label(
+    create_request, replica, expression, volume_pool_topology_exclusion_label
+):
+    """the desired number of replica of volume i.e. <replica> here; is <expression> number of the pools satisfying pool spread key <volume_pool_topology_exclusion_label>."""
+    if expression == "<=":
+        no_of_eligible_pools = no_of_suitable_pools_honouring_exclusion(
+            create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
+                "exclusion"
+            ],
+        )
+        assert int(replica) <= no_of_eligible_pools
+    elif expression == ">":
+        no_of_eligible_pools = no_of_suitable_pools_honouring_exclusion(
+            create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
+                "exclusion"
             ],
         )
         assert int(replica) > no_of_eligible_pools
@@ -336,50 +407,77 @@ def the_replica_replica_volume_creation_should_result_and_provisioned_provisione
     elif result == "fail":
         """volume creation should fail with an insufficient storage error."""
         request = create_request[CREATE_REQUEST_KEY]
-        try:
-            ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
-        except Exception as e:
-            exception_info = e.__dict__
-            assert exception_info["status"] == requests.codes["insufficient_storage"]
+        exclusion = create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"][
+            "labelled"
+        ]["exclusion"]
+        if exclusion:
+            try:
+                ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
+            except Exception as e:
+                exception_info = e.__dict__
+                assert ApiClient.exception_to_error(e).kind == "FailedPrecondition"
+        else:
+            try:
+                ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
+            except Exception as e:
+                exception_info = e.__dict__
+                assert (
+                    exception_info["status"] == requests.codes["insufficient_storage"]
+                )
 
         # Check that the volume wasn't created.
         volumes = ApiClient.volumes_api().get_volumes().entries
         assert len(volumes) == 0
 
 
-def get_pool_names_with_given_labels(pool_label):
+def get_pool_names_with_given_labels(pool_labels):
     pool_with_labels = get_pool_names_with_its_corresponding_labels()
     qualified_pools = list()
-    if "=" in pool_label:
-        # Splitting the pool_label into parts
-        split_parts = pool_label.split("=")
-        # Accessing the parts after splitting
-        pool_key = split_parts[0]
-        pool_value = split_parts[1]
-        for pool_id, pool_labels in pool_with_labels.items():
-            for key, value in pool_labels.items():
-                if key == pool_key and value == pool_value:
-                    qualified_pools.append(pool_id)
-    else:
-        pool_key = pool_label
-        pool_value = ""
-        for pool_id, pool_labels in pool_with_labels.items():
-            for key, value in pool_labels.items():
-                if key == pool_key:
-                    qualified_pools.append(pool_id)
+    for pool_label in pool_labels.split(","):
+        if "=" in pool_label:
+            # Splitting the pool_label into parts
+            split_parts = pool_label.split("=")
+            # Accessing the parts after splitting
+            pool_key = split_parts[0]
+            pool_value = split_parts[1]
+            for pool_id, pool_labels in pool_with_labels.items():
+                for key, value in pool_labels.items():
+                    if key == pool_key and value == pool_value:
+                        qualified_pools.append(pool_id)
+        else:
+            pool_key = pool_label
+            pool_value = ""
+            for pool_id, pool_labels in pool_with_labels.items():
+                for key, value in pool_labels.items():
+                    if key == pool_key:
+                        qualified_pools.append(pool_id)
     return qualified_pools
 
 
 # Return the create volume request body based on the input parameters.
-def create_volume_body(replica, volume_pool_topology_inclusion_label):
+def create_volume_body(
+    replica, volume_pool_topology_inclusion_label, volume_pool_topology_exclusion_label
+):
     """Create a volume body."""
-    key, _, value = volume_pool_topology_inclusion_label.partition("=")
+    if volume_pool_topology_inclusion_label is not None:
+        key_inc, _, value_inc = volume_pool_topology_inclusion_label.partition("=")
+        inclusion_labels = {key_inc.strip(): value_inc.strip()}
+    else:
+        inclusion_labels = {}
+
+    # Handle None case for volume_pool_topology_exclusion_label
+    if volume_pool_topology_exclusion_label is not None:
+        key_exc, _, value_exc = volume_pool_topology_exclusion_label.partition("=")
+        exclusion_labels = {key_exc.strip(): value_exc.strip()}
+    else:
+        exclusion_labels = {}
+
     topology = Topology(
         pool_topology=PoolTopology(
             labelled=LabelledTopology(
-                exclusion={},
+                exclusion=exclusion_labels,
                 inclusion={
-                    key.strip(): value.strip(),
+                    **inclusion_labels,
                     "openebs.io/created-by": "operator-diskpool",
                 },
             )
@@ -448,3 +546,16 @@ def does_pool_qualify_inclusion_labels(
         else:
             inc_match = False
     return inc_match
+
+
+# Return the number of pools that qualify based on the volume topology exclusion labels.
+def no_of_suitable_pools_honouring_exclusion(volume_pool_topology_exclusion_labels):
+    """Return the number of pools that qualify based on the volume topology exclusion labels."""
+    pool_with_labels = get_pool_names_with_its_corresponding_labels()
+    qualified_pools = set()
+
+    for key, value in volume_pool_topology_exclusion_labels.items():
+        for pool_id, pool_labels in pool_with_labels.items():
+            if key in pool_labels:
+                qualified_pools.add(pool_labels[key])
+    return len(qualified_pools)
