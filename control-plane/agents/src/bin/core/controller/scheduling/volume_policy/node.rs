@@ -2,7 +2,7 @@ use crate::controller::scheduling::{
     nexus::GetSuitableNodesContext,
     resources::{NodeItem, PoolItem},
     volume::GetSuitablePoolsContext,
-    volume_policy::qualifies_inclusion_labels,
+    volume_policy::qualifies_label_criteria,
 };
 use std::collections::HashMap;
 use stor_port::types::v0::transport::NodeTopology;
@@ -73,6 +73,7 @@ impl NodeFilters {
     /// Should only attempt to use nodes having specific creation label if topology has it.
     pub(crate) fn topology(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         let volume_node_topology_inclusion_labels: HashMap<String, String>;
+        let volume_node_topology_exclusion_labels: HashMap<String, String>;
         match &request.topology {
             None => return true,
             Some(topology) => match &topology.node {
@@ -81,9 +82,13 @@ impl NodeFilters {
                     NodeTopology::Labelled(labelled_topology) => {
                         // The labels in Volume Node Topology should match the node labels if
                         // present, otherwise selection of any pool is allowed.
-                        if !labelled_topology.inclusion.is_empty() {
+                        if !labelled_topology.inclusion.is_empty()
+                            || !labelled_topology.exclusion.is_empty()
+                        {
                             volume_node_topology_inclusion_labels =
-                                labelled_topology.inclusion.clone()
+                                labelled_topology.inclusion.clone();
+                            volume_node_topology_exclusion_labels =
+                                labelled_topology.exclusion.clone();
                         } else {
                             return true;
                         }
@@ -96,11 +101,11 @@ impl NodeFilters {
         // We will reach this part of code only if the volume has inclusion/exclusion labels.
         match request.registry().specs().node(&item.pool.node) {
             Ok(spec) => {
-                let inc_match = qualifies_inclusion_labels(
-                    volume_node_topology_inclusion_labels,
-                    spec.labels(),
-                );
-                inc_match
+                qualifies_label_criteria(volume_node_topology_inclusion_labels, spec.labels())
+                    && qualifies_label_criteria(
+                        volume_node_topology_exclusion_labels,
+                        spec.labels(),
+                    )
             }
             Err(_) => false,
         }
