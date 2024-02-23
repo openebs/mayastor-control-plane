@@ -72,6 +72,13 @@ pub struct VolumeState {
     pub usage: Option<VolumeUsage>,
 }
 
+/// Volume properties.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub enum VolumeProperty {
+    /// Max number of snapshots allowed per volume.
+    MaxSnapshots(u32),
+}
+
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct VolumeUsage {
     /// Capacity of the volume in bytes.
@@ -700,6 +707,22 @@ impl SetVolumeReplica {
     /// Create new `Self` based on the provided arguments.
     pub fn new(uuid: VolumeId, replicas: u8) -> Self {
         Self { uuid, replicas }
+    }
+}
+
+/// Set the volume property.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SetVolumeProperty {
+    /// The uuid of the volume.
+    pub uuid: VolumeId,
+    /// The property to set.
+    pub property: VolumeProperty,
+}
+impl SetVolumeProperty {
+    /// Create new `Self` based on the provided arguments.
+    pub fn new(uuid: VolumeId, property: VolumeProperty) -> Self {
+        Self { uuid, property }
     }
 }
 

@@ -181,6 +181,19 @@ pub(crate) trait ResourceReplicas {
     ) -> Result<Self::MoveResp, SvcError>;
 }
 
+/// Resource Property Operations.
+#[async_trait::async_trait]
+pub(crate) trait ResourceProperty {
+    type Request: Sync + Send;
+
+    /// Set property values for the resource.
+    async fn set_property(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Request,
+    ) -> Result<(), SvcError>;
+}
+
 /// Resource Children/Offspring Operations.
 #[async_trait::async_trait]
 pub(crate) trait ResourceOffspring {

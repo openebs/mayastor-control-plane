@@ -9,26 +9,16 @@ use crate::{
         },
         transport::{
             self, AffinityGroup, CreateVolume, HostNqn, NexusId, NexusNvmfConfig, NodeId,
-            ReplicaId, SnapshotId, Topology, VolumeId, VolumeLabels, VolumePolicy,
+            ReplicaId, SnapshotId, Topology, VolumeId, VolumeLabels, VolumePolicy, VolumeProperty,
             VolumeShareProtocol, VolumeStatus,
         },
     },
     IntoOption,
 };
+
 use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use strum_macros::{EnumCount as EnumCountMacro, EnumIter, EnumString};
-
-/// Volume properties.
-#[derive(
-    Serialize, Deserialize, EnumString, Debug, EnumCountMacro, EnumIter, PartialEq, Clone, Copy,
-)]
-pub enum VolumeAttr {
-    /// Max number of snapshots allowed per volume.
-    #[strum(serialize = "max_snapshots")]
-    MaxSnapshots,
-}
 
 /// Key used by the store to uniquely identify a VolumeState structure.
 pub struct VolumeStateKey(VolumeId);
@@ -519,6 +509,11 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                 VolumeOperation::Resize(size) => {
                     self.size = size;
                 }
+                VolumeOperation::SetVolumeProperty(property) => match property {
+                    VolumeProperty::MaxSnapshots(max_snapshots) => {
+                        self.max_snapshots = Some(max_snapshots);
+                    }
+                },
             }
         }
         self.clear_op();
@@ -583,6 +578,7 @@ pub enum VolumeOperation {
     CreateSnapshot(SnapshotId),
     DestroySnapshot(SnapshotId),
     Resize(u64),
+    SetVolumeProperty(VolumeProperty),
 }
 
 #[test]
@@ -680,6 +676,9 @@ impl From<VolumeOperation> for models::volume_spec_operation::Operation {
             }
             VolumeOperation::DestroySnapshot(_) => {
                 models::volume_spec_operation::Operation::DestroySnapshot
+            }
+            VolumeOperation::SetVolumeProperty(_) => {
+                todo!()
             }
             VolumeOperation::Resize(_) => todo!(),
         }

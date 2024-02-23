@@ -5,8 +5,8 @@ use crate::{
         resources::{
             operations::{
                 ResourceLifecycle, ResourceLifecycleExt, ResourceLifecycleWithLifetime,
-                ResourceOwnerUpdate, ResourcePublishing, ResourceReplicas, ResourceResize,
-                ResourceSharing, ResourceShutdownOperations,
+                ResourceOwnerUpdate, ResourceProperty, ResourcePublishing, ResourceReplicas,
+                ResourceResize, ResourceSharing, ResourceShutdownOperations,
             },
             operations_helper::{
                 GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, ResourceSpecsLocked,
@@ -37,8 +37,8 @@ use stor_port::{
         transport::{
             CreateVolume, DestroyNexus, DestroyReplica, DestroyShutdownTargets, DestroyVolume,
             Protocol, PublishVolume, Replica, ReplicaId, ReplicaOwners, RepublishVolume,
-            ResizeVolume, SetVolumeReplica, ShareNexus, ShareVolume, ShutdownNexus,
-            UnpublishVolume, UnshareNexus, UnshareVolume, Volume,
+            ResizeVolume, SetVolumeProperty, SetVolumeReplica, ShareNexus, ShareVolume,
+            ShutdownNexus, UnpublishVolume, UnshareNexus, UnshareVolume, Volume,
         },
     },
 };
@@ -645,6 +645,23 @@ impl ResourceReplicas for OperationGuardArc<VolumeSpec> {
     }
 }
 
+#[async_trait::async_trait]
+impl ResourceProperty for OperationGuardArc<VolumeSpec> {
+    type Request = SetVolumeProperty;
+
+    async fn set_property(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Request,
+    ) -> Result<(), SvcError> {
+        let state = registry.volume_state(&request.uuid).await?;
+        let operation = VolumeOperation::SetVolumeProperty(request.property.clone());
+        let spec_clone = self.start_update(registry, &state, operation).await?;
+
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(())
+    }
+}
 #[async_trait::async_trait]
 impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
     type RemoveShutdownTargets = DestroyShutdownTargets;

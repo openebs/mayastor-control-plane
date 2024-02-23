@@ -1113,6 +1113,7 @@ impl SpecOperationsHelper for VolumeSpec {
             VolumeOperation::CreateSnapshot(_) => Ok(()),
             VolumeOperation::DestroySnapshot(_) => Ok(()),
             VolumeOperation::Resize(_) => Ok(()),
+            VolumeOperation::SetVolumeProperty(_) => Ok(()),
         }?;
         self.start_op(operation);
         Ok(())
