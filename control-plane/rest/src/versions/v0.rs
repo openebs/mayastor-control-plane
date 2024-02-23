@@ -119,6 +119,7 @@ impl CreateReplicaBody {
         CreateReplica {
             node: node_id,
             name: None,
+            entity_id: None,
             uuid,
             pool_id,
             pool_uuid: None,

@@ -8,12 +8,11 @@ use crate::{
             AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{
-            self, CreateReplica, HostNqn, NodeId, PoolId, PoolUuid, Protocol, ReplicaId,
-            ReplicaKind, ReplicaName, ReplicaOwners, ReplicaShareProtocol, SnapshotCloneSpecParams,
-            VolumeId,
+            self, CreateReplica, HostNqn, PoolId, PoolUuid, Protocol, ReplicaId, ReplicaKind,
+            ReplicaName, ReplicaOwners, ReplicaShareProtocol, SnapshotCloneSpecParams, VolumeId,
         },
     },
-    IntoOption, IntoVec,
+    IntoOption,
 };
 use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
@@ -159,7 +158,7 @@ mod tests_deserializer {
         }
         let tests: Vec<Test> = vec![
             Test {
-                input: r#"{"name":"30b1a62e-4301-445b-88af-125eca1dcc6d","uuid":"30b1a62e-4301-445b-88af-125eca1dcc6d","size":10485761,"pool":"pool-1","share":"none","thin":false,"status":{"Created":"online"},"managed":true,"owners":{"volume":"ec4e66fd-3b33-4439-b504-d49aba53da26","disown_all":false},"operation":null}"#,
+                input: r#"{"name":"30b1a62e-4301-445b-88af-125eca1dcc6d","uuid":"30b1a62e-4301-445b-88af-125eca1dcc6d", "size":10485761,"pool":"pool-1","share":"none","thin":false,"status":{"Created":"online"},"managed":true,"owners":{"volume":"ec4e66fd-3b33-4439-b504-d49aba53da26","disown_all":false},"operation":null}"#,
                 expected: ReplicaSpec {
                     name: "30b1a62e-4301-445b-88af-125eca1dcc6d".into(),
                     uuid: ReplicaId::try_from("30b1a62e-4301-445b-88af-125eca1dcc6d").unwrap(),
@@ -180,7 +179,7 @@ mod tests_deserializer {
                 },
             },
             Test {
-                input: r#"{"name":"30b1a62e-4301-445b-88af-125eca1dcc6d","uuid":"30b1a62e-4301-445b-88af-125eca1dcc6d","size":10485761,"pool":["pool-1","22ca10d3-4f2b-4b95-9814-9181c025cc1a"],"share":"none","thin":false,"status":{"Created":"online"},"managed":true,"owners":{"volume":"ec4e66fd-3b33-4439-b504-d49aba53da26","disown_all":false},"operation":null}"#,
+                input: r#"{"name":"30b1a62e-4301-445b-88af-125eca1dcc6d","uuid":"30b1a62e-4301-445b-88af-125eca1dcc6d", "size":10485761,"pool":["pool-1","22ca10d3-4f2b-4b95-9814-9181c025cc1a"],"share":"none","thin":false,"status":{"Created":"online"},"managed":true,"owners":{"volume":"ec4e66fd-3b33-4439-b504-d49aba53da26","disown_all":false},"operation":null}"#,
                 expected: ReplicaSpec {
                     name: "30b1a62e-4301-445b-88af-125eca1dcc6d".into(),
                     uuid: ReplicaId::try_from("30b1a62e-4301-445b-88af-125eca1dcc6d").unwrap(),
@@ -361,26 +360,6 @@ impl StorableObject for ReplicaSpec {
     }
 }
 
-impl From<&ReplicaSpec> for transport::Replica {
-    fn from(replica: &ReplicaSpec) -> Self {
-        Self {
-            node: NodeId::default(),
-            name: replica.name.clone(),
-            uuid: replica.uuid.clone(),
-            pool_id: replica.pool.pool_name().clone(),
-            pool_uuid: replica.pool.pool_uuid(),
-            thin: replica.thin,
-            size: replica.size,
-            space: None,
-            share: replica.share,
-            uri: "".to_string(),
-            status: transport::ReplicaStatus::Unknown,
-            allowed_hosts: replica.allowed_hosts.clone().into_vec(),
-            kind: ReplicaKind::Regular,
-        }
-    }
-}
-
 /// State of the Replica Spec
 pub type ReplicaSpecStatus = SpecStatus<transport::ReplicaStatus>;
 
@@ -431,6 +410,7 @@ impl From<&SnapshotCloneSpecParams> for CreateReplica {
             node: value.node().clone(),
             name: Some(ReplicaName::from_string(request.name().to_string())),
             uuid: request.uuid().clone(),
+            entity_id: Some(value.uuid().clone()),
             pool_id: value.pool().pool_name().clone(),
             pool_uuid: value.pool().pool_uuid(),
             size: value.size(),

@@ -19,8 +19,8 @@ use stor_port::{
         GetBlockDevices, GetRebuildRecord, ImportPool, IoEngCreateSnapshotClone, ListRebuildRecord,
         ListReplicaSnapshots, ListSnapshotClones, Nexus, NexusChildAction, NexusChildActionContext,
         NexusChildActionKind, NexusId, PoolState, RebuildHistory, Register, RemoveNexusChild,
-        Replica, ReplicaId, ReplicaSnapshot, ResizeNexus, ResizeReplica, ShareNexus, ShareReplica,
-        ShutdownNexus, UnshareNexus, UnshareReplica,
+        Replica, ReplicaId, ReplicaSnapshot, ResizeNexus, ResizeReplica, SetReplicaEntityId,
+        ShareNexus, ShareReplica, ShutdownNexus, UnshareNexus, UnshareReplica,
     },
 };
 
@@ -87,6 +87,12 @@ pub(crate) trait ReplicaApi {
     async fn share_replica(&self, request: &ShareReplica) -> Result<String, SvcError>;
     /// Unshare a replica on the pool via gRPC.
     async fn unshare_replica(&self, request: &UnshareReplica) -> Result<String, SvcError>;
+
+    /// Set replica entity_id via gRPC.
+    async fn set_replica_entity_id(
+        &self,
+        request: &SetReplicaEntityId,
+    ) -> Result<Replica, SvcError>;
 }
 
 #[async_trait]

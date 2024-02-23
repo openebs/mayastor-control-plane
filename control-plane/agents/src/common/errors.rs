@@ -402,6 +402,8 @@ pub enum SvcError {
         replicas: u8,
         id: String,
     },
+    #[snafu(display("Cannot set '{attribute}' on Replica '{replica}'"))]
+    ReplicaSetPropertyFailed { attribute: String, replica: String },
 }
 
 impl SvcError {
@@ -424,6 +426,7 @@ impl SvcError {
             Self::Internal { .. } => tonic::Code::Internal,
             Self::Unimplemented { .. } => tonic::Code::Unimplemented,
             Self::RestrictedReplicaCount { .. } => tonic::Code::FailedPrecondition,
+            Self::ReplicaSetPropertyFailed { .. } => tonic::Code::DataLoss,
             _ => tonic::Code::Internal,
         }
     }
@@ -1073,6 +1076,12 @@ impl From<SvcError> for ReplyError {
             SvcError::InsufficientSnapshotsForClone { .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::VolumeSnapshot,
+                source,
+                extra,
+            },
+            SvcError::ReplicaSetPropertyFailed { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPersist,
+                resource: ResourceKind::Replica,
                 source,
                 extra,
             },

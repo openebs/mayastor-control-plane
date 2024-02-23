@@ -398,6 +398,7 @@ async fn hotspare_replica_count(cluster: &Cluster) {
                 node: cluster.node(1),
                 name: Default::default(),
                 uuid: ReplicaId::new(),
+                entity_id: None,
                 pool_id: cluster.pool(1, 0),
                 pool_uuid: None,
                 size: volume.spec().size / 1024 / 1024 + 5,

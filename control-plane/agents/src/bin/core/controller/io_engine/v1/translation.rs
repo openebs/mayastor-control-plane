@@ -14,9 +14,11 @@ use stor_port::{
         transport::{
             self, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
             NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState, PoolUuid, Protocol,
-            Replica, ReplicaId, ReplicaKind, ReplicaName, ReplicaStatus, SnapshotId,
+            Replica, ReplicaId, ReplicaKind, ReplicaName, ReplicaStatus, SetReplicaEntityId,
+            SnapshotId, VolumeId,
         },
     },
+    IntoOption,
 };
 
 use std::{convert::TryFrom, time::UNIX_EPOCH};
@@ -90,6 +92,10 @@ impl TryIoEngineToAgent for v1::replica::Replica {
                 uuid: self.uuid.to_owned(),
                 kind: ResourceKind::Replica,
             })?,
+            entity_id: match &self.entity_id {
+                None => None,
+                Some(entity_id) => VolumeId::try_from(entity_id.clone()).ok(),
+            },
             pool_id: self.poolname.clone().into(),
             pool_uuid: Some(PoolUuid::try_from(self.pooluuid.clone()).map_err(|_| {
                 SvcError::InvalidUuid {
@@ -259,7 +265,7 @@ impl AgentToIoEngine for transport::CreateReplica {
         Self::IoEngineMessage {
             name: ReplicaName::from_opt_uuid(self.name.as_ref(), &self.uuid).into(),
             uuid: self.uuid.clone().into(),
-            entity_id: None,
+            entity_id: self.entity_id.clone().into_opt(),
             pooluuid: match self.pool_uuid.clone() {
                 Some(uuid) => uuid.into(),
                 // TODO: implement a getter function to fetch the uuid of the pool from the given
@@ -314,6 +320,16 @@ impl AgentToIoEngine for transport::ResizeReplica {
         v1::replica::ResizeReplicaRequest {
             uuid: self.uuid.to_string(),
             requested_size: self.requested_size,
+        }
+    }
+}
+
+impl AgentToIoEngine for SetReplicaEntityId {
+    type IoEngineMessage = v1::replica::SetReplicaEntityIdRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
+            uuid: self.uuid().to_string(),
+            entity_id: self.entity_id().to_string(),
         }
     }
 }

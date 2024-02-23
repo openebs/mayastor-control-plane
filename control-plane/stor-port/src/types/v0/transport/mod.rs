@@ -87,6 +87,7 @@ pub enum MessageIdVs {
     DestroyReplica,
     /// Resize Replica.
     ResizeReplica,
+    SetReplicaEntityId,
     /// Share Replica.
     ShareReplica,
     /// Unshare Replica.
