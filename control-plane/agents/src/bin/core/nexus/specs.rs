@@ -88,6 +88,17 @@ impl SpecOperationsHelper for NexusSpec {
                 Ok(())
             }
             NexusOperation::Create | NexusOperation::Destroy => unreachable!(),
+            NexusOperation::Resize(_) => {
+                // Ensure that nexus is stable - either completely healthy or in a degraded
+                // state(having an ongoing replica rebuild).
+                if !matches!(state.status, NexusStatus::Online | NexusStatus::Degraded) {
+                    return Err(SvcError::NotReady {
+                        kind: self.kind(),
+                        id: self.uuid_str(),
+                    });
+                }
+                Ok(())
+            }
         }?;
         self.start_op(op);
         Ok(())

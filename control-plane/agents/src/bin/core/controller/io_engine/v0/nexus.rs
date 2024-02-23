@@ -10,7 +10,7 @@ use stor_port::{
     transport_api::ResourceKind,
     types::v0::transport::{
         AddNexusChild, Child, CreateNexus, DestroyNexus, FaultNexusChild, Nexus, NexusChildAction,
-        NexusChildActionContext, NexusId, RemoveNexusChild, ShareNexus, ShutdownNexus,
+        NexusChildActionContext, NexusId, RemoveNexusChild, ResizeNexus, ShareNexus, ShutdownNexus,
         UnshareNexus,
     },
 };
@@ -83,6 +83,14 @@ impl crate::controller::io_engine::NexusApi<()> for super::RpcClient {
                 request: "destroy_nexus",
             })?;
         Ok(())
+    }
+
+    async fn resize_nexus(&self, _request: &ResizeNexus) -> Result<Nexus, SvcError> {
+        Err(SvcError::GrpcRequestError {
+            resource: ResourceKind::Nexus,
+            request: "resize_nexus".to_string(),
+            source: tonic::Status::unimplemented(""),
+        })
     }
 
     async fn shutdown_nexus(&self, request: &ShutdownNexus) -> Result<(), SvcError> {

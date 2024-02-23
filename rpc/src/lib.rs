@@ -631,8 +631,8 @@ pub mod v1 {
             NexusNvmePreemption, NexusState, NvmeAnaState, NvmeReservation, PublishNexusRequest,
             PublishNexusResponse, RebuildHistoryRecord, RebuildHistoryRequest,
             RebuildHistoryResponse, RebuildJobState, RemoveChildNexusRequest,
-            RemoveChildNexusResponse, ShutdownNexusRequest, UnpublishNexusRequest,
-            UnpublishNexusResponse,
+            RemoveChildNexusResponse, ResizeNexusRequest, ResizeNexusResponse,
+            ShutdownNexusRequest, UnpublishNexusRequest, UnpublishNexusResponse,
         };
     }
 

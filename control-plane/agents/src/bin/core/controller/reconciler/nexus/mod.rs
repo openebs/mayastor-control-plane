@@ -7,9 +7,9 @@ use crate::{
         policies::rebuild_policies::RuleSet,
         reconciler::{ReCreate, Reconciler},
         resources::{
-            operations::ResourceSharing,
+            operations::{ResourceResize, ResourceSharing},
             operations_helper::{OperationSequenceGuard, SpecOperationsHelper},
-            OperationGuardArc, TraceSpan, TraceStrLog,
+            OperationGuardArc, ResourceUid, TraceSpan, TraceStrLog,
         },
         scheduling::resources::HealthyChildItems,
         task_poller::{
@@ -35,7 +35,7 @@ use stor_port::{
         },
         transport::{
             Child, ChildUri, CreateNexus, Nexus, NexusChildActionContext, NexusShareProtocol,
-            NexusStatus, NodeStatus, ReplicaId, ShareNexus, UnshareNexus,
+            NexusStatus, NodeStatus, ReplicaId, ResizeNexus, ShareNexus, UnshareNexus,
         },
     },
 };
@@ -605,4 +605,37 @@ pub(super) async fn faulted_nexus_remover(
         });
     }
     faulted_nexus_remover(nexus, node).await
+}
+
+/// Fixup the size of nexus if it doesn't match what the volume spec is specifying. This mismatch
+/// could have happened if as part of the volume resize operation, the status of nexus resize was
+/// not definitively known.
+#[tracing::instrument(skip(nexus, context), level = "debug", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
+pub(super) async fn fixup_nexus_size(
+    nexus: &mut OperationGuardArc<NexusSpec>,
+    volume: &OperationGuardArc<VolumeSpec>,
+    context: &PollContext,
+) -> PollResult {
+    let registry = context.registry();
+    let required_size = volume.as_ref().size;
+
+    // Nexus's size doesn't need any fixup.
+    if nexus.as_ref().size == required_size {
+        return PollResult::Ok(PollerState::Idle);
+    }
+
+    let nexus_state = registry.nexus(nexus.as_ref().uid()).await?;
+    nexus.info(&format!(
+        "Reconciling nexus to required size {required_size}B, current {}B",
+        nexus_state.size
+    ));
+
+    nexus
+        .resize(
+            registry,
+            &ResizeNexus::new(&nexus_state.node, &nexus_state.uuid, required_size),
+        )
+        .await?;
+
+    PollResult::Ok(PollerState::Idle)
 }

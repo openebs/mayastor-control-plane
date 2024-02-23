@@ -680,7 +680,7 @@ impl From<VolumeOperation> for models::volume_spec_operation::Operation {
             VolumeOperation::SetVolumeProperty(_) => {
                 todo!()
             }
-            VolumeOperation::Resize(_) => todo!(),
+            VolumeOperation::Resize(_) => models::volume_spec_operation::Operation::Resize,
         }
     }
 }

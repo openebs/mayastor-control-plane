@@ -96,6 +96,13 @@ pub enum SvcError {
     InvalidPoolDeviceNum { disks: Vec<PoolDeviceUri> },
     #[snafu(display("Nexus '{}' not found", nexus_id))]
     NexusNotFound { nexus_id: String },
+    #[snafu(display(
+        "Nexus '{nexus_id}' resize status not determined. Requested size {requested_size}",
+    ))]
+    NexusResizeStatusUnknown {
+        nexus_id: String,
+        requested_size: u64,
+    },
     #[snafu(display("VolumeSnapshot '{}' for volume `{:?}` not found", snap_id, source_id))]
     VolSnapshotNotFound {
         snap_id: String,
@@ -396,6 +403,7 @@ impl SvcError {
         match self {
             Self::NotFound { .. } => tonic::Code::NotFound,
             Self::NexusNotFound { .. } => tonic::Code::NotFound,
+            Self::NexusResizeStatusUnknown { .. } => tonic::Code::Unknown,
             Self::PoolNotFound { .. } => tonic::Code::NotFound,
             Self::ReplicaNotFound { .. } => tonic::Code::NotFound,
             Self::PoolNotLoaded { .. } => tonic::Code::FailedPrecondition,
@@ -888,6 +896,13 @@ impl From<SvcError> for ReplyError {
             SvcError::NoCapacityToOnline { .. } => ReplyError {
                 kind: ReplyErrorKind::ResourceExhausted,
                 resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            // We won't ever return this error code back though?
+            SvcError::NexusResizeStatusUnknown { .. } => ReplyError {
+                kind: ReplyErrorKind::Internal,
+                resource: ResourceKind::Nexus,
                 source,
                 extra,
             },

@@ -121,11 +121,6 @@ def create_and_publish_volume(uuid, size, rcount, publish_on):
 # utility helper functions - END
 
 
-@scenario("resize_offline.feature", "Expand a published volume")
-def test_expand_a_published_volume():
-    """Expand a published volume."""
-
-
 @scenario(
     "resize_offline.feature",
     "Expand a published volume after unpublishing it while having an offline replica",
@@ -156,6 +151,24 @@ def test_expand_an_unpublished_volume_with_an_offline_replica():
 @scenario("resize_offline.feature", "Shrink an unpublished volume")
 def test_shrink_an_unpublished_volume():
     """Shrink an unpublished volume."""
+
+
+## Below Snapshot tests need to be enabled after some feature issues with snapshot and
+## resize compatibility are fixed.
+
+# @scenario('resize/resize_offline.feature', 'Expand a volume and take a snapshot')
+# def test_expand_a_volume_and_take_a_snapshot():
+#    """Expand a volume and take a snapshot."""
+
+
+# @scenario('resize/resize_offline.feature', 'Expand a new volume created as a snapshot restore')
+# def test_expand_a_new_volume_created_as_a_snapshot_restore():
+#    """Expand a new volume created as a snapshot restore."""
+
+
+# @scenario('resize/resize_offline.feature', 'Take a snapshot and expand the volume')
+# def test_take_a_snapshot_and_expand_the_volume():
+#    """Take a snapshot and expand the volume."""
 
 
 @given("a deployer cluster")
@@ -471,7 +484,7 @@ def wait_rebuild_finish():
     )
 
 
-@retry(wait_fixed=200, stop_max_attempt_number=30)
+@retry(wait_fixed=100, stop_max_attempt_number=30)
 def wait_child_added_back():
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     target = vol.state.target

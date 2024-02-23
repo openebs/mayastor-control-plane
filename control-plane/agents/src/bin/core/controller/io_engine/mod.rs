@@ -19,7 +19,7 @@ use stor_port::{
         GetBlockDevices, GetRebuildRecord, ImportPool, IoEngCreateSnapshotClone, ListRebuildRecord,
         ListReplicaSnapshots, ListSnapshotClones, Nexus, NexusChildAction, NexusChildActionContext,
         NexusChildActionKind, NexusId, PoolState, RebuildHistory, Register, RemoveNexusChild,
-        Replica, ReplicaId, ReplicaSnapshot, ResizeReplica, ShareNexus, ShareReplica,
+        Replica, ReplicaId, ReplicaSnapshot, ResizeNexus, ResizeReplica, ShareNexus, ShareReplica,
         ShutdownNexus, UnshareNexus, UnshareReplica,
     },
 };
@@ -103,7 +103,8 @@ pub(crate) trait NexusApi<Sht> {
     async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError>;
     /// Destroy a nexus on a node via gRPC.
     async fn destroy_nexus(&self, request: &DestroyNexus) -> Result<(), SvcError>;
-
+    /// Resize a nexus via gRPC.
+    async fn resize_nexus(&self, request: &ResizeNexus) -> Result<Nexus, SvcError>;
     /// Shutdown a nexus via gRPC.
     async fn shutdown_nexus(&self, request: &ShutdownNexus) -> Result<Sht, SvcError>;
 }
