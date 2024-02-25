@@ -9,6 +9,7 @@ pub mod blockdevice;
 pub mod cordon;
 pub mod drain;
 pub mod error;
+pub mod label;
 pub mod node;
 pub mod pool;
 pub mod snapshot;
@@ -28,6 +29,9 @@ pub enum GetResources {
     /// get cordon
     #[clap(subcommand)]
     Cordon(GetCordonArgs),
+    /// get label
+    #[clap(subcommand)]
+    Label(GetLabelsArgs),
     /// get drain
     #[clap(subcommand)]
     Drain(GetDrainArgs),
@@ -91,6 +95,15 @@ pub enum GetCordonArgs {
     Node {
         id: NodeId,
     },
+    Nodes,
+}
+
+/// The types of resources that support the 'get label' operation.
+#[derive(clap::Subcommand, Debug)]
+pub enum GetLabelsArgs {
+    /// Get the label for the node with the given ID.
+    Node { id: NodeId },
+    /// Get labels for all nodes.
     Nodes,
 }
 

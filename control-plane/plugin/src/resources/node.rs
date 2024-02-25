@@ -129,6 +129,17 @@ impl Get for Node {
     }
 }
 
+/// Get the labels from the spec.
+fn node_labels_from_spec(ns: &openapi::models::NodeSpec) -> Vec<String> {
+    match &ns.labels {
+        Some(labels) => labels
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<String>>(),
+        None => Vec::<String>::new(),
+    }
+}
+
 /// Get the cordon labels from whichever state.
 fn cordon_labels_from_state(ds: &CordonDrainState) -> Vec<String> {
     match ds {
@@ -257,6 +268,7 @@ pub enum NodeDisplayFormat {
     Default,
     CordonLabels,
     Drain,
+    Labels,
 }
 
 /// The NodeDisplay structure is responsible for controlling the display formatting of Node objects.
@@ -287,18 +299,22 @@ impl NodeDisplay {
     pub(crate) fn get_label_list(node: &openapi::models::Node) -> Vec<String> {
         let mut cordon_labels: Vec<String> = vec![];
         let mut drain_labels: Vec<String> = vec![];
+        let mut labels: Vec<String> = vec![];
 
         match &node.spec {
-            Some(ns) => match &ns.cordondrainstate {
-                Some(ds) => {
-                    cordon_labels = cordon_labels_from_state(ds);
-                    drain_labels = drain_labels_from_state(ds);
+            Some(ns) => {
+                labels = node_labels_from_spec(ns);
+                match &ns.cordondrainstate {
+                    Some(ds) => {
+                        cordon_labels = cordon_labels_from_state(ds);
+                        drain_labels = drain_labels_from_state(ds);
+                    }
+                    None => {}
                 }
-                None => {}
-            },
+            }
             None => {}
         }
-        [cordon_labels, drain_labels].concat()
+        [cordon_labels, drain_labels, labels].concat()
     }
     /// Get a list of node drain labels.
     pub(crate) fn get_drain_label_list(node: &openapi::models::Node) -> Vec<String> {
@@ -353,6 +369,17 @@ impl CreateRows for NodeDisplay {
                 }
                 rows
             }
+            NodeDisplayFormat::Labels => {
+                let mut rows = vec![];
+                for node in self.inner.iter() {
+                    let mut row = node.create_rows();
+                    let labelstring = NodeDisplay::get_label_list(node).join(", ");
+                    // Add the labels to each row.
+                    row[0].add_cell(Cell::new(&labelstring));
+                    rows.push(row[0].clone());
+                }
+                rows
+            }
         }
     }
 }
@@ -404,6 +431,10 @@ impl GetHeaderRow for NodeDisplay {
             NodeDisplayFormat::Drain => {
                 header.extend(vec!["DRAIN STATE"]);
                 header.extend(vec!["DRAIN LABELS"]);
+                header
+            }
+            NodeDisplayFormat::Labels => {
+                header.extend(vec!["LABELS"]);
                 header
             }
         }

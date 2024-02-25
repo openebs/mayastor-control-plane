@@ -14,8 +14,9 @@ use crate::{
         PluginResult, RebuildHistory, ReplicaTopology, Scale,
     },
     resources::{
-        blockdevice, cordon, drain, node, pool, snapshot, volume, CordonResources, DrainResources,
-        GetCordonArgs, GetDrainArgs, GetResources, ScaleResources, UnCordonResources,
+        blockdevice, cordon, drain, label, node, pool, snapshot, volume, CordonResources,
+        DrainResources, GetCordonArgs, GetDrainArgs, GetLabelsArgs, GetResources, ScaleResources,
+        UnCordonResources,
     },
 };
 
@@ -124,6 +125,12 @@ impl ExecuteOperation for GetResources {
                     cordon::NodeCordon::get(node_id, &cli_args.output).await
                 }
                 GetCordonArgs::Nodes => cordon::NodeCordons::list(&cli_args.output).await,
+            },
+            GetResources::Label(get_label_resource) => match get_label_resource {
+                GetLabelsArgs::Node { id: node_id } => {
+                    label::NodeLabel::get(node_id, &cli_args.output).await
+                }
+                GetLabelsArgs::Nodes => label::NodeLabels::list(&cli_args.output).await,
             },
             GetResources::Drain(get_drain_resource) => match get_drain_resource {
                 GetDrainArgs::Node { id: node_id } => {
