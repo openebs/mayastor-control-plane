@@ -190,6 +190,39 @@ impl Scale for Volume {
         }
         Ok(())
     }
+
+    async fn resize(
+        id: &Self::ID,
+        requested_size: u64,
+        output: &utils::OutputFormat,
+    ) -> PluginResult {
+        let req = openapi::models::ResizeVolumeBody {
+            size: requested_size as usize,
+        };
+        match RestClient::client()
+            .volumes_api()
+            .put_volume_size(id, req)
+            .await
+        {
+            Ok(volume) => match output {
+                OutputFormat::Yaml | OutputFormat::Json => {
+                    // Print json or yaml based on output format.
+                    utils::print_table(output, volume.into_body());
+                }
+                OutputFormat::None => {
+                    // In case the output format is not specified, show a success message.
+                    println!("Volume {id} resized successfully 🚀")
+                }
+            },
+            Err(source) => {
+                return Err(Error::ScaleVolumeError {
+                    id: id.to_string(),
+                    source,
+                });
+            }
+        }
+        Ok(())
+    }
 }
 
 #[async_trait(?Send)]

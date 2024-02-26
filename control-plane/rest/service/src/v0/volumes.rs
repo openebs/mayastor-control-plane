@@ -205,7 +205,7 @@ impl apis::actix_server::Volumes for RestApi {
                 &ResizeVolume {
                     uuid: volume_id.into(),
                     requested_size: resize_volume_body.size as u64,
-                    capacity_limit: None,
+                    cluster_capacity_limit: None,
                 },
                 None,
             )

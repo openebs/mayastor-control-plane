@@ -816,6 +816,24 @@ impl ResourceSpecsLocked {
         }
     }
 
+    pub(crate) fn check_capacity_limit_for_resize(
+        &self,
+        cluster_capacity_limit: u64,
+        current_borrowed_limit: u64,
+    ) -> Result<(), SvcError> {
+        let specs = self.write();
+        let total: u64 = specs.volumes.values().map(|v| v.lock().size).sum();
+        let forthcoming_total = current_borrowed_limit + total;
+        tracing::trace!(current_borrowed_limit=%current_borrowed_limit, total=%total, forthcoming_total=%forthcoming_total, "Cluster capacity limit checks ");
+        if forthcoming_total > cluster_capacity_limit {
+            return Err(SvcError::CapacityLimitExceeded {
+                cluster_capacity_limit,
+                excess: forthcoming_total - cluster_capacity_limit,
+            });
+        }
+        Ok(())
+    }
+
     /// Worker that reconciles dirty VolumeSpecs's with the persistent store.
     /// This is useful when volume operations are performed but we fail to
     /// update the spec with the persistent store.

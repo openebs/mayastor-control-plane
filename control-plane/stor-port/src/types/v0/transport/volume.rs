@@ -477,15 +477,15 @@ pub struct ResizeVolume {
     /// The requested new size of the volume in bytes.
     pub requested_size: u64,
     /// Total capacity limit of all volumes' provisioning.
-    pub capacity_limit: Option<u64>,
+    pub cluster_capacity_limit: Option<u64>,
 }
 impl ResizeVolume {
     /// Create a new `ResizeVolume` request.
-    pub fn new(uuid: VolumeId, requested_size: u64, capacity_limit: Option<u64>) -> Self {
+    pub fn new(uuid: VolumeId, requested_size: u64, cluster_capacity_limit: Option<u64>) -> Self {
         Self {
             uuid,
             requested_size,
-            capacity_limit,
+            cluster_capacity_limit,
         }
     }
 }

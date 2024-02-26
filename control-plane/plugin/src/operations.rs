@@ -85,6 +85,11 @@ pub trait Get {
 pub trait Scale {
     type ID;
     async fn scale(id: &Self::ID, replica_count: u8, output: &utils::OutputFormat) -> PluginResult;
+    async fn resize(
+        id: &Self::ID,
+        requested_size: u64,
+        output: &utils::OutputFormat,
+    ) -> PluginResult;
 }
 
 /// Replica topology trait.
