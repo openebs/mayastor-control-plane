@@ -1,7 +1,7 @@
 use crate::controller::{
     registry::Registry,
     resources::{
-        operations::{ResourceLifecycle, ResourceSharing},
+        operations::{ResourceLifecycle, ResourceResize, ResourceSharing},
         operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
         OperationGuardArc, ResourceMutex,
     },
@@ -13,8 +13,8 @@ use grpc::{
     operations::{
         pool::traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},
         replica::traits::{
-            CreateReplicaInfo, DestroyReplicaInfo, ReplicaOperations, ShareReplicaInfo,
-            UnshareReplicaInfo,
+            CreateReplicaInfo, DestroyReplicaInfo, ReplicaOperations, ResizeReplicaInfo,
+            ShareReplicaInfo, UnshareReplicaInfo,
         },
     },
 };
@@ -27,7 +27,7 @@ use stor_port::{
         store::{pool::PoolSpec, replica::ReplicaSpec},
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas,
-            NodeId, Pool, PoolId, Replica, ShareReplica, UnshareReplica,
+            NodeId, Pool, PoolId, Replica, ResizeReplica, ShareReplica, UnshareReplica,
         },
     },
 };
@@ -122,6 +122,18 @@ impl ReplicaOperations for Service {
         let service = self.clone();
         Context::spawn(async move { service.unshare_replica(&unshare_replica).await }).await??;
         Ok(())
+    }
+
+    async fn resize(
+        &self,
+        req: &dyn ResizeReplicaInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Replica, ReplyError> {
+        let resize_replica = req.into();
+        let service = self.clone();
+        let replica =
+            Context::spawn(async move { service.resize_replica(&resize_replica).await }).await??;
+        Ok(replica)
     }
 }
 
@@ -301,5 +313,15 @@ impl Service {
         let mut replica = self.specs().replica_opt(&request.uuid).await?;
         replica.as_mut().unshare(&self.registry, request).await?;
         Ok(())
+    }
+
+    /// Resize a replica using the given parameters.
+    #[tracing::instrument(level = "info", skip(self), err, fields(replica.uuid = %request.uuid))]
+    pub(super) async fn resize_replica(
+        &self,
+        request: &ResizeReplica,
+    ) -> Result<Replica, SvcError> {
+        let mut replica = self.specs().replica(&request.uuid).await?;
+        replica.resize(&self.registry, request).await
     }
 }

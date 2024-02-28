@@ -4,9 +4,10 @@ use crate::{
     replica::{
         create_replica_reply, get_replicas_reply,
         replica_grpc_server::{ReplicaGrpc, ReplicaGrpcServer},
-        share_replica_reply, CreateReplicaReply, CreateReplicaRequest, DestroyReplicaReply,
-        DestroyReplicaRequest, GetReplicasReply, GetReplicasRequest, ShareReplicaReply,
-        ShareReplicaRequest, UnshareReplicaReply, UnshareReplicaRequest,
+        resize_replica_reply, share_replica_reply, CreateReplicaReply, CreateReplicaRequest,
+        DestroyReplicaReply, DestroyReplicaRequest, GetReplicasReply, GetReplicasRequest,
+        ResizeReplicaReply, ResizeReplicaRequest, ShareReplicaReply, ShareReplicaRequest,
+        UnshareReplicaReply, UnshareReplicaRequest,
     },
 };
 use std::{convert::TryFrom, sync::Arc};
@@ -101,6 +102,20 @@ impl ReplicaGrpc for ReplicaServer {
             Ok(()) => Ok(Response::new(UnshareReplicaReply { error: None })),
             Err(e) => Ok(Response::new(UnshareReplicaReply {
                 error: Some(e.into()),
+            })),
+        }
+    }
+    async fn resize_replica(
+        &self,
+        request: tonic::Request<ResizeReplicaRequest>,
+    ) -> Result<tonic::Response<ResizeReplicaReply>, tonic::Status> {
+        let req = request.into_inner().validated()?;
+        match self.service.resize(&req, None).await {
+            Ok(replica) => Ok(Response::new(ResizeReplicaReply {
+                reply: Some(resize_replica_reply::Reply::Replica(replica.into())),
+            })),
+            Err(err) => Ok(Response::new(ResizeReplicaReply {
+                reply: Some(resize_replica_reply::Reply::Error(err.into())),
             })),
         }
     }
