@@ -60,3 +60,6 @@ pub mod context;
 pub mod filesystem;
 /// Volume concurrency limiter.
 pub mod limiter;
+/// Contains tools to advertise the same set of capabilities across different
+/// CSI microservices.
+pub mod plugin_capabilities;

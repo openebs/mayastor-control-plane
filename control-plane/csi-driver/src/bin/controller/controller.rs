@@ -21,6 +21,7 @@ use std::{collections::HashMap, str::FromStr};
 use tonic::{Request, Response, Status};
 use tracing::{debug, error, instrument, trace, warn};
 use uuid::Uuid;
+use volume_capability::AccessType;
 
 const OPENEBS_TOPOLOGY_KEY: &str = "openebs.io/nodename";
 const VOLUME_NAME_PATTERN: &str =
@@ -790,6 +791,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             controller_service_capability::rpc::Type::GetCapacity,
             controller_service_capability::rpc::Type::CreateDeleteSnapshot,
             controller_service_capability::rpc::Type::ListSnapshots,
+            controller_service_capability::rpc::Type::ExpandVolume,
         ];
 
         Ok(Response::new(ControllerGetCapabilitiesResponse {
@@ -976,9 +978,52 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
     #[instrument(err, skip(self))]
     async fn controller_expand_volume(
         &self,
-        _request: tonic::Request<ControllerExpandVolumeRequest>,
+        request: tonic::Request<ControllerExpandVolumeRequest>,
     ) -> Result<tonic::Response<ControllerExpandVolumeResponse>, tonic::Status> {
-        Err(Status::unimplemented("Not implemented"))
+        let request = request.into_inner();
+
+        let vol_uuid = Uuid::parse_str(&request.volume_id).map_err(|error| {
+            Status::invalid_argument(format!(
+                "Malformed volume UUID '{}': {error}",
+                request.volume_id
+            ))
+        })?;
+
+        let requested_size = request
+            .capacity_range
+            .as_ref()
+            .ok_or(Status::invalid_argument(format!(
+                "Cannot expand volume '{}': invalid request {request:?}: missing CapacityRange",
+                request.volume_id
+            )))?
+            .required_bytes;
+
+        // NodeExpandVolume should be avoided only if we know without a shred of doubt that the
+        // volume is that of a Block type. The volume_capability field is optional and we should
+        // assume NodeExpandVolume is required if it is not clearly defined that the volume is
+        // Block type volume.
+        let node_expansion_required = !matches!(
+            request.volume_capability.as_ref(),
+            Some(vc) if matches!(vc.access_type, Some(AccessType::Block(_)))
+        );
+
+        let _guard = csi_driver::limiter::VolumeOpGuard::new(vol_uuid)?;
+
+        let vol = RestApiClient::get_client()
+            // This call is idempotent and should return success without expansion,
+            // if the volume size is larger than or equal to the requested size.
+            .expand_volume(&vol_uuid, requested_size as u64)
+            .await
+            .map_err(|error| match error {
+                ApiClientError::PreconditionFailed(msg) => Status::failed_precondition(msg),
+                ApiClientError::ResourceExhausted(msg) => Status::out_of_range(msg),
+                error => Status::from(error),
+            })?;
+
+        Ok(tonic::Response::new(ControllerExpandVolumeResponse {
+            capacity_bytes: vol.spec.size as i64,
+            node_expansion_required,
+        }))
     }
 
     #[instrument(err, skip(self))]

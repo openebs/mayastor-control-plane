@@ -27,8 +27,12 @@
 //!     }
 //! ```
 
-use std::{collections::HashMap, convert::TryFrom, time::Duration};
-
+use std::{
+    collections::HashMap,
+    convert::TryFrom,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 use tokio::time::sleep;
 use udev::Enumerator;
 use url::Url;
@@ -135,4 +139,17 @@ impl Device {
         }
         Err(DeviceError::new("device attach timeout"))
     }
+}
+
+/// Get the block device capacity size from the sysfs block count.
+pub(crate) fn get_size_from_dev_name<N: AsRef<Path>>(dev_name: N) -> Result<usize, DeviceError> {
+    // Linux sectors are 512 byte long. This is fixed.
+    // Ref: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/types.h?id=v5.15#n117
+    const LINUX_SECTOR_SIZE: usize = 512;
+
+    let sysfs_dir = PathBuf::from("/sys/class/block").join(dev_name);
+
+    let size: usize = sysfs::parse_value(sysfs_dir.as_path(), "size")?;
+
+    Ok(size * LINUX_SECTOR_SIZE)
 }

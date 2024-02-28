@@ -1,6 +1,7 @@
 //! Implementation of gRPC methods from CSI Identity gRPC service.
 
-use csi_driver::{csi::*, CSI_PLUGIN_NAME};
+use csi_driver::{csi::*, plugin_capabilities::plugin_capabilities, CSI_PLUGIN_NAME};
+
 use std::{boxed::Box, collections::HashMap};
 use tonic::{Request, Response, Status};
 use tracing::debug;
@@ -32,23 +33,12 @@ impl identity_server::Identity for Identity {
 
     async fn get_plugin_capabilities(
         &self,
-        _request: Request<GetPluginCapabilitiesRequest>,
+        request: Request<GetPluginCapabilitiesRequest>,
     ) -> Result<Response<GetPluginCapabilitiesResponse>, Status> {
-        let caps = vec![
-            plugin_capability::service::Type::ControllerService,
-            plugin_capability::service::Type::VolumeAccessibilityConstraints,
-        ];
-        debug!("GetPluginCapabilities request: {:?}", caps);
+        debug!("GetPluginCapabilities request: {:?}", request);
 
         Ok(Response::new(GetPluginCapabilitiesResponse {
-            capabilities: caps
-                .into_iter()
-                .map(|c| PluginCapability {
-                    r#type: Some(plugin_capability::Type::Service(
-                        plugin_capability::Service { r#type: c as i32 },
-                    )),
-                })
-                .collect(),
+            capabilities: plugin_capabilities(),
         }))
     }
 

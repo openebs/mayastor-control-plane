@@ -3,10 +3,12 @@
 //! specific filesystem, repairing of the filesystem, retrieving specific properties of the
 //! filesystem.
 
-use crate::mount;
+use crate::{findmnt::get_devicepath, mount};
 use csi_driver::filesystem::FileSystem as Fs;
-use devinfo::{blkid::probe::Probe, DevInfoError};
-use std::process::Output;
+
+use anyhow::anyhow;
+use devinfo::{blkid::probe::Probe, mountinfo::MountInfo, DevInfoError};
+use std::{process::Output, str, str::FromStr};
 use tokio::process::Command;
 use tonic::async_trait;
 use tracing::{debug, trace};
@@ -32,6 +34,23 @@ pub(crate) struct FileSystem(Fs);
 impl From<Fs> for FileSystem {
     fn from(value: Fs) -> Self {
         Self(value)
+    }
+}
+
+impl TryFrom<&MountInfo> for FileSystem {
+    type Error = anyhow::Error;
+
+    fn try_from(mnt: &MountInfo) -> Result<Self, Self::Error> {
+        if mnt.fstype.is_empty() {
+            return Err(anyhow!("fstype is empty"));
+        }
+
+        Fs::from_str(mnt.fstype.to_lowercase().as_str())
+            .map_err(|err| anyhow!("failed to parse FileSystem: {err}"))
+            .and_then(|fs_type| match fs_type {
+                Fs::Ext4 | Fs::Xfs | Fs::Btrfs => Ok(FileSystem::from(fs_type)),
+                _ => Err(anyhow!("Unsupported filesystem")),
+            })
     }
 }
 
@@ -107,6 +126,8 @@ pub(crate) trait FileSystemOps: Send + Sync {
         }
         Ok(())
     }
+    /// Write the existing filesystem on to new unused blocks on the block device.
+    async fn expand(&self, mount_path: &str) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -204,6 +225,22 @@ impl FileSystemOps for Ext4Fs {
         debug!("Changed filesystem uuid to {volume_uuid} for {device}");
         Ok(())
     }
+
+    async fn expand(&self, mount_path: &str) -> Result<(), Error> {
+        let dev_path = get_devicepath(mount_path)
+            .map_err(|err| {
+                format!(
+                    "failed to get dev path for mountpoint {}: {}",
+                    mount_path, err
+                )
+            })?
+            .ok_or(format!(
+                "no underlying device found for mountpoint {}",
+                mount_path
+            ))?;
+
+        run_fs_expand_command(vec!["resize2fs", dev_path.as_str()]).await
+    }
 }
 
 #[async_trait]
@@ -291,6 +328,10 @@ impl FileSystemOps for XFs {
         }
         debug!("Changed filesystem uuid to {volume_uuid} for {device}");
         Ok(())
+    }
+
+    async fn expand(&self, mount_path: &str) -> Result<(), Error> {
+        run_fs_expand_command(vec!["xfs_growfs", mount_path]).await
     }
 }
 
@@ -390,6 +431,10 @@ impl FileSystemOps for BtrFs {
         debug!("Changed filesystem uuid to {volume_uuid} for {device}");
         Ok(())
     }
+
+    async fn expand(&self, mount_path: &str) -> Result<(), Error> {
+        run_fs_expand_command(vec!["btrfs", "filesystem", "resize", "max", mount_path]).await
+    }
 }
 
 // Acknowledge the output from Command.
@@ -410,4 +455,44 @@ fn ack_command_output(output: Output, binary: String) -> Result<(), Error> {
         binary,
         String::from_utf8(output.stderr).unwrap()
     ))
+}
+
+/// Run the command and return an error if the execution fails, or the command fails.
+pub(crate) async fn run_fs_expand_command(cmd_and_args: Vec<&str>) -> Result<(), String> {
+    match cmd_and_args.len() {
+        0 => return Err("resize command cannot be empty".to_string()),
+        1 => {
+            return Err(
+                "cannot work with a resize command which doesn't take input arguments".to_string(),
+            )
+        }
+        _ => {}
+    };
+
+    let cmd = cmd_and_args[0];
+    let args = cmd_and_args[1 ..].to_vec();
+
+    let out = Command::new(cmd)
+        .args(args.as_slice())
+        .output()
+        .await
+        .map_err(|exec_err| {
+            format!(
+                "failed to execute resize command,\ncmd: {},\nargs: {:?}: {}",
+                cmd, args, exec_err
+            )
+        })?;
+
+    match out.status.success() {
+        true => Ok(()),
+        false => Err(format!(
+            "failed resize,\ncmd: {:?},\nargs: {:?},\nstderr: {}",
+            cmd,
+            args,
+            str::from_utf8(out.stderr.as_slice()).map_err(|error| format!(
+                "failed to convert stderr bytes-slice to str: {}",
+                error
+            ))?
+        )),
+    }
 }

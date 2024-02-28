@@ -68,6 +68,7 @@ enum ReplyErrorKind {
   VolumeNoReplicas = 28;
   InUse = 29;
   CapacityLimitExceeded = 30;
+  NotAcceptable = 31;
 }
 
 // ResourceKind for the resource which has undergone this error

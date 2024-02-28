@@ -445,6 +445,7 @@ pub enum ReplyErrorKind {
     VolumeNoReplicas,
     InUse,
     CapacityLimitExceeded,
+    NotAcceptable,
 }
 
 impl From<tonic::Code> for ReplyErrorKind {

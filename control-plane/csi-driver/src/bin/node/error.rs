@@ -1,7 +1,6 @@
 //! Definition of DeviceError used by the attach and detach code.
-use nvmeadm::{error::NvmeError, nvmf_discovery};
-
 use nix::errno::Errno;
+use nvmeadm::{error::NvmeError, nvmf_discovery};
 use snafu::Snafu;
 use std::{process::ExitCode, string::FromUtf8Error};
 
