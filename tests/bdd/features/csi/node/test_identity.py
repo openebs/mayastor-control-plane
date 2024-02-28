@@ -75,15 +75,26 @@ def plugin_information_info_request(csi_instance):
 
 @then("CSI node should report its capabilities")
 def check_csi_node_info(caps_request):
-    all_capabilities = [
+    svc_capabilities = [
         pb.PluginCapability.Service.Type.CONTROLLER_SERVICE,
         pb.PluginCapability.Service.Type.VOLUME_ACCESSIBILITY_CONSTRAINTS,
     ]
 
-    assert len(caps_request.capabilities) == len(
-        all_capabilities
+    vol_expansion_capabilities = [
+        pb.PluginCapability.VolumeExpansion.Type.OFFLINE,
+        pb.PluginCapability.VolumeExpansion.Type.ONLINE,
+    ]
+
+    assert len(caps_request.capabilities) == (
+        len(svc_capabilities) + len(vol_expansion_capabilities)
     ), "Wrong amount of plugin capabilities reported"
 
     for c in caps_request.capabilities:
-        ct = c.service.type
-        assert ct in all_capabilities, "Unexpected capability reported: %s" % str(ct)
+        # For 'volume_expansion' type capability, this is UNKNOWN(0)
+        svc_cap = c.service.type
+        # For 'service' type capability, this is UNKNOWN(0)
+        vol_exp_cap = c.volume_expansion.type
+        # This can never be UNKNOWN for both, because UNKNOWN is not listed in either of the two lists.
+        assert (svc_cap in svc_capabilities) or (
+            vol_exp_cap in vol_expansion_capabilities
+        ), "Unexpected capability reported: %s" % str(c)

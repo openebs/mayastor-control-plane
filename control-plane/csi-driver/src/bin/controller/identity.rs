@@ -1,6 +1,9 @@
 use crate::{ApiClientError, RestApiClient};
-use csi_driver::CSI_PLUGIN_NAME;
-use rpc::csi::*;
+use csi_driver::{plugin_capabilities::plugin_capabilities, CSI_PLUGIN_NAME};
+use rpc::csi::{
+    GetPluginCapabilitiesRequest, GetPluginCapabilitiesResponse, GetPluginInfoRequest,
+    GetPluginInfoResponse, ProbeRequest, ProbeResponse,
+};
 
 use std::collections::HashMap;
 use tonic::{Request, Response, Status};
@@ -33,24 +36,12 @@ impl rpc::csi::identity_server::Identity for CsiIdentitySvc {
     #[instrument]
     async fn get_plugin_capabilities(
         &self,
-        _request: tonic::Request<GetPluginCapabilitiesRequest>,
+        request: tonic::Request<GetPluginCapabilitiesRequest>,
     ) -> Result<Response<GetPluginCapabilitiesResponse>, Status> {
-        debug!("Request to get CSI plugin capabilities");
-
-        let capabilities = vec![
-            plugin_capability::service::Type::ControllerService,
-            plugin_capability::service::Type::VolumeAccessibilityConstraints,
-        ];
+        debug!("GetPluginCapabilities request: {:?}", request);
 
         Ok(Response::new(GetPluginCapabilitiesResponse {
-            capabilities: capabilities
-                .into_iter()
-                .map(|c| PluginCapability {
-                    r#type: Some(plugin_capability::Type::Service(
-                        plugin_capability::Service { r#type: c as i32 },
-                    )),
-                })
-                .collect(),
+            capabilities: plugin_capabilities(),
         }))
     }
 

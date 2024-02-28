@@ -585,6 +585,7 @@ def check_get_controller_capabilities(get_caps_request):
         pb.ControllerServiceCapability.RPC.Type.GET_CAPACITY,
         pb.ControllerServiceCapability.RPC.Type.CREATE_DELETE_SNAPSHOT,
         pb.ControllerServiceCapability.RPC.Type.LIST_SNAPSHOTS,
+        pb.ControllerServiceCapability.RPC.Type.EXPAND_VOLUME,
     ]
 
     reported_capabilities = [c.rpc.type for c in get_caps_request.capabilities]

@@ -287,17 +287,6 @@ def a_published_volume_with_more_than_one_replica_and_all_are_healthy():
     Volume.cleanup(volume)
 
 
-# @given("a published volume with more than one replicas")
-# def a_published_volume_with_more_than_one_replicas():
-#    """a published volume with more than one replicas."""
-#    volume = create_and_publish_volume(VOLUME_UUID, VOLUME_SIZE, 3, NODE2_NAME)
-#    start_fio(volume)
-#
-#    pytest.exception = None
-#    yield volume
-#    Volume.cleanup(volume)
-
-
 @given("a deployer cluster")
 def a_deployer_cluster():
     """a deployer cluster."""
@@ -484,8 +473,8 @@ def the_new_capacity_should_be_available_for_the_application(test_volume_factory
 def the_failure_reason_should_be_invalid_arguments():
     """the failure reason should be invalid arguments."""
     # Reason code: Invalid Arguments, mapped from
-    # SvcError::VolumeResizeArgsInvalid
-    assert pytest.exception.status == http.HTTPStatus.BAD_REQUEST
+    # SvcError::VolumeResizeSize
+    assert pytest.exception.status == http.HTTPStatus.NOT_ACCEPTABLE
 
 
 @then("the new capacity should be available for the application to use")

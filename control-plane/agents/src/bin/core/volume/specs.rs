@@ -329,7 +329,7 @@ pub(crate) async fn resizeable_replicas(
     requested_size: u64,
 ) -> Result<Vec<Replica>, SvcError> {
     if spec.size >= requested_size {
-        return Err(SvcError::VolumeResizeArgsInvalid {
+        return Err(SvcError::VolumeResizeSize {
             vol_id: spec.uuid_str(),
             requested_size,
             current_size: spec.size,

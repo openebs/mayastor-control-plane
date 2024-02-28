@@ -1,10 +1,15 @@
 use crate::{
     block_vol::{publish_block_volume, unpublish_block_volume},
-    dev::Device,
+    dev::{get_size_from_dev_name, Device},
     filesystem_ops::FileSystem,
     filesystem_vol::{publish_fs_volume, stage_fs_volume, unpublish_fs_volume, unstage_fs_volume},
+    mount::find_mount,
 };
-use csi_driver::csi::volume_capability::{access_mode::Mode, AccessType};
+use csi_driver::{
+    csi::volume_capability::{access_mode::Mode, AccessType},
+    filesystem::FileSystem as Fs,
+    limiter::VolumeOpGuard,
+};
 use rpc::{
     csi,
     csi::{
@@ -19,7 +24,7 @@ use rpc::{
 };
 
 use nix::{errno::Errno, sys};
-use std::{boxed::Box, collections::HashMap, path::Path, time::Duration, vec::Vec};
+use std::{collections::HashMap, path::Path, time::Duration, vec::Vec};
 use tonic::{Code, Request, Response, Status};
 use tracing::{debug, error, info, trace};
 use uuid::Uuid;
@@ -196,6 +201,7 @@ impl node_server::Node for Node {
         let caps = vec![
             node_service_capability::rpc::Type::StageUnstageVolume,
             node_service_capability::rpc::Type::GetVolumeStats,
+            node_service_capability::rpc::Type::ExpandVolume,
         ];
 
         debug!("NodeGetCapabilities request: {:?}", caps);
@@ -244,7 +250,7 @@ impl node_server::Node for Node {
                 "Failed to publish volume: missing volume id"
             ));
         }
-        let _guard = csi_driver::limiter::VolumeOpGuard::new_str(&msg.volume_id)?;
+        let _guard = VolumeOpGuard::new_str(&msg.volume_id)?;
 
         if msg.target_path.is_empty() {
             return Err(failure!(
@@ -326,7 +332,7 @@ impl node_server::Node for Node {
                 "Failed to unpublish volume: missing volume id"
             ));
         }
-        let _guard = csi_driver::limiter::VolumeOpGuard::new_str(&msg.volume_id)?;
+        let _guard = VolumeOpGuard::new_str(&msg.volume_id)?;
 
         if msg.target_path.is_empty() {
             return Err(failure!(
@@ -383,7 +389,7 @@ impl node_server::Node for Node {
                 "Failed to stage volume: missing volume path"
             ));
         }
-        let _guard = csi_driver::limiter::VolumeOpGuard::new_str(&msg.volume_id)?;
+        let _guard = VolumeOpGuard::new_str(&msg.volume_id)?;
 
         let volume_path = Path::new(&msg.volume_path);
         if volume_path.exists() {
@@ -432,9 +438,159 @@ impl node_server::Node for Node {
         &self,
         request: Request<NodeExpandVolumeRequest>,
     ) -> Result<Response<NodeExpandVolumeResponse>, Status> {
-        let msg = request.into_inner();
-        error!("Unimplemented {:?}", msg);
-        Err(Status::new(Code::Unimplemented, "Method not implemented"))
+        //===============================CsiAccessType=============================================
+        // A type alias for better readability, and also easier conversions
+        // amongst the various error types in this crate.
+        type CsiAccessTypeError = String;
+
+        // An enum to assess the state of volume when expecting it to be a filesystem type.
+        enum CsiAccessType {
+            SupportedFilesystem(FileSystem),
+            UnsupportedFilesystem(CsiAccessTypeError),
+            NotAFilesystem,
+            Unknown(CsiAccessTypeError),
+        }
+
+        // From VolumeCapability translate volume access-type into one of few known states.
+        impl From<&Option<VolumeCapability>> for CsiAccessType {
+            fn from(volume_capability: &Option<VolumeCapability>) -> Self {
+                match get_access_type(volume_capability) {
+                    Ok(access_type) => match access_type {
+                        AccessType::Mount(mv) => match mv.fs_type.to_lowercase().as_str() {
+                            "ext4" => Self::SupportedFilesystem(FileSystem::from(Fs::Ext4)),
+                            "xfs" => Self::SupportedFilesystem(FileSystem::from(Fs::Xfs)),
+                            "btrfs" => Self::SupportedFilesystem(FileSystem::from(Fs::Btrfs)),
+                            alien_fs => Self::UnsupportedFilesystem(format!(
+                                "'{alien_fs}' is not a supported filesystem"
+                            )),
+                        },
+                        AccessType::Block(_) => Self::NotAFilesystem,
+                    },
+                    Err(error) => {
+                        Self::Unknown(format!("couldn't determine CSI AccessType type: {}", error))
+                    }
+                }
+            }
+        }
+        //===============================CsiAccessType=============================================
+
+        let request = request.into_inner();
+
+        let vol_uuid = Uuid::parse_str(request.volume_id.as_str()).map_err(|error| {
+            failure!(
+                Code::InvalidArgument,
+                "Malformed volume UUID '{}': {}",
+                request.volume_id,
+                error
+            )
+        })?;
+
+        if request.volume_path.is_empty() {
+            return Err(failure!(Code::InvalidArgument, "'volume_path' is empty"));
+        }
+
+        let required_bytes = request
+            .capacity_range
+            .as_ref()
+            .ok_or(failure!(
+                Code::InvalidArgument,
+                "Cannot expand volume '{}': invalid request {:?}: missing CapacityRange",
+                request.volume_id,
+                request
+            ))?
+            .required_bytes;
+
+        let _guard = VolumeOpGuard::new(vol_uuid)?;
+
+        let dev_name = Device::lookup(&vol_uuid)
+            .await
+            .map_err(|error| {
+                failure!(
+                    Code::Internal,
+                    "device lookup error for volume '{}': {}",
+                    vol_uuid,
+                    error
+                )
+            })?
+            .ok_or(failure!(
+                Code::InvalidArgument,
+                "failed to find a device for volume {}",
+                vol_uuid
+            ))?
+            .devname();
+
+        // Get device size.
+        // The underlying block device should already have been expanded to the
+        // required size as a part of the ControllerExpandVolume call.
+        let device_capacity = get_size_from_dev_name(dev_name.as_str()).map_err(|error| {
+            failure!(
+                Code::Internal,
+                "failed to find the device size of device {}: {}",
+                dev_name,
+                error
+            )
+        })? as i64;
+
+        // The NVMf volume target capacity is often less than the requested capacity. This
+        // difference should be no more than 5 MiB in size. We should trim the required capacity
+        // down by 5 MiB so that the capacity of the device is verified to be greater than or
+        // equal to this corrected capacity. This is required because we are not comparing the
+        // required capacity against the REST API Volume resource.
+        const MAX_NEXUS_CAPACITY_DIFFERENCE: i64 = 5 * 1024 * 1024;
+        // Ensure device_capacity is greater than or equal to required_bytes.
+        if device_capacity < (required_bytes - MAX_NEXUS_CAPACITY_DIFFERENCE) {
+            return Err(failure!(
+                Code::FailedPrecondition,
+                "block device capacity is lower than the required"
+            ));
+        }
+
+        // This is what we will return for all success and no-op cases.
+        // The true capacity of the device will lead to retries from the CO. Returning the
+        // requested value to suppress the retries.
+        let success_result = Ok(Response::new(NodeExpandVolumeResponse {
+            capacity_bytes: required_bytes,
+        }));
+
+        // The CSI spec, as of v1.8.0, treats volume_capability as an optional field, so
+        // in an attempt to be as spec-compliant as possible, we must have a plan-B for the
+        // filesystem identification part.
+        let filesystem_handle = match CsiAccessType::from(&request.volume_capability) {
+            // volume_capability AccessType says this is not a 'Mount' type. Nothing to do.
+            CsiAccessType::NotAFilesystem => return success_result,
+            // volume_capability says that the filesystem is something we don't know about.
+            CsiAccessType::UnsupportedFilesystem(fs_err) => {
+                return Err(Status::invalid_argument(fs_err))
+            }
+            // volume_capability has identified a supported filesystem 🎉.
+            CsiAccessType::SupportedFilesystem(fs_type) => fs_type,
+            // volume_capability hasn't come through for us, we're on our own.
+            // Try to find the mount path at volume_path. As an extension, also validates that
+            // volume_path is in fact a filesystem.
+            CsiAccessType::Unknown(_) => match find_mount(None, Some(request.volume_path.as_str()))
+            {
+                // Not a filesystem.
+                None => return success_result,
+                // Try to generate a supported filesystem type.
+                Some(mount_info) => FileSystem::try_from(&mount_info).map_err(|error| {
+                    failure!(
+                        Code::InvalidArgument,
+                        "failed to find a supported filesystem type: {}",
+                        error
+                    )
+                })?,
+            },
+        };
+
+        // Expand the filesystem.
+        filesystem_handle
+            .fs_ops()
+            .map_err(|err| failure!(Code::InvalidArgument, "{}", err))?
+            .expand(&request.volume_path)
+            .await
+            .map_err(|err| failure!(Code::Internal, "{}", err))?;
+
+        success_result
     }
 
     async fn node_stage_volume(
@@ -501,7 +657,7 @@ impl node_server::Node for Node {
                 error
             )
         })?;
-        let _guard = csi_driver::limiter::VolumeOpGuard::new(uuid)?;
+        let _guard = VolumeOpGuard::new(uuid)?;
 
         // Note checking existence of staging_target_path, is delegated to
         // code handling those volume types where it is relevant.
@@ -640,7 +796,7 @@ impl node_server::Node for Node {
                 error
             )
         })?;
-        let _guard = csi_driver::limiter::VolumeOpGuard::new(uuid)?;
+        let _guard = VolumeOpGuard::new(uuid)?;
 
         // All checks complete, stage unmount if required.
 

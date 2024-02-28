@@ -5,8 +5,8 @@ use stor_port::types::v0::openapi::{
     models,
     models::{
         AffinityGroup, AppNode, CreateVolumeBody, Node, NodeTopology, Pool, PoolTopology,
-        PublishVolumeBody, RestJsonError, Topology, Volume, VolumePolicy, VolumeShareProtocol,
-        Volumes,
+        PublishVolumeBody, ResizeVolumeBody, RestJsonError, Topology, Volume, VolumePolicy,
+        VolumeShareProtocol, Volumes,
     },
 };
 
@@ -41,6 +41,8 @@ pub enum ApiClientError {
     Unavailable(String),
     /// Precondition Failed.
     PreconditionFailed(String),
+    /// Not Acceptable (406)
+    NotAcceptable(String),
 }
 
 /// Placeholder for volume topology for volume creation operation.
@@ -80,6 +82,7 @@ impl From<clients::tower::Error<RestJsonError>> for ApiClientError {
                         StatusCode::SERVICE_UNAVAILABLE => Self::Unavailable(detailed),
                         StatusCode::PRECONDITION_FAILED => Self::PreconditionFailed(detailed),
                         StatusCode::BAD_REQUEST => Self::InvalidArgument(detailed),
+                        StatusCode::NOT_ACCEPTABLE => Self::NotAcceptable(detailed),
                         status => Self::GenericOperation(status, detailed),
                     }
                 }
@@ -497,5 +500,41 @@ impl RestApiClient {
             .get_app_node(app_node_id)
             .await?;
         Ok(response.into_body())
+    }
+
+    /// Expand volume.
+    #[instrument(fields(volume.uuid = %volume_id, volume.size = %required_volume_size), skip(self, volume_id, required_volume_size))]
+    pub(crate) async fn expand_volume(
+        &self,
+        volume_id: &uuid::Uuid,
+        required_volume_size: u64,
+    ) -> Result<Volume, ApiClientError> {
+        use clients::tower::{Error::Response, ResponseError::Expected};
+
+        let vol_client = self.rest_client.volumes_api();
+
+        // This call should be idempotent and should return success if the volume
+        // size is already greater than or equal to the target_volume_size.
+        let resize_result = vol_client
+            .put_volume_size(
+                volume_id,
+                ResizeVolumeBody::new(required_volume_size as usize),
+            )
+            .await
+            .map(|response| response.into_body());
+
+        match resize_result {
+            // Success case.
+            Ok(vol) => Ok(vol),
+            // The volume capacity is already greater than or equal to required capacity.
+            Err(Response(Expected(err))) if err.status() == StatusCode::NOT_ACCEPTABLE => {
+                Ok(vol_client
+                    .get_volume(volume_id)
+                    .await
+                    .map(|response| response.into_body())?)
+            }
+            // Something went wrong.
+            Err(err) => Err(err.into()),
+        }
     }
 }

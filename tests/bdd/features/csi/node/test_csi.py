@@ -68,8 +68,11 @@ def test_plugin_capabilities(csi_instance):
         pb.GetPluginCapabilitiesRequest()
     )
     services = [cap.service.type for cap in response.capabilities]
+    volume_expansion = [cap.volume_expansion.type for cap in response.capabilities]
     assert pb.PluginCapability.Service.Type.CONTROLLER_SERVICE in services
     assert pb.PluginCapability.Service.Type.VOLUME_ACCESSIBILITY_CONSTRAINTS in services
+    assert pb.PluginCapability.VolumeExpansion.Type.OFFLINE in volume_expansion
+    assert pb.PluginCapability.VolumeExpansion.Type.ONLINE in volume_expansion
 
 
 def test_probe(csi_instance):

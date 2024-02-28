@@ -155,12 +155,12 @@ pub enum SvcError {
         protocol: String,
     },
     #[snafu(display(
-        "Volume '{}' - resize args invalid. Current size: '{}', requested size: '{}'",
+        "Volume '{}' - required size is invalid. Current size: '{}', requested size: '{}'",
         vol_id,
         current_size,
         requested_size
     ))]
-    VolumeResizeArgsInvalid {
+    VolumeResizeSize {
         vol_id: String,
         requested_size: u64,
         current_size: u64,
@@ -912,8 +912,8 @@ impl From<SvcError> for ReplyError {
                 source,
                 extra,
             },
-            SvcError::VolumeResizeArgsInvalid { .. } => ReplyError {
-                kind: ReplyErrorKind::InvalidArgument,
+            SvcError::VolumeResizeSize { .. } => ReplyError {
+                kind: ReplyErrorKind::NotAcceptable,
                 resource: ResourceKind::Volume,
                 source,
                 extra,
