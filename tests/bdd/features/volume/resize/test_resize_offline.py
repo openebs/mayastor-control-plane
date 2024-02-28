@@ -391,8 +391,8 @@ def all_the_replicas_of_the_volume_should_be_resized_to_the_new_capacity():
 def the_failure_reason_should_be_invalid_arguments():
     """the failure reason should be invalid arguments."""
     # Reason code: Invalid Arguments, mapped from
-    # SvcError::VolumeResizeArgsInvalid
-    assert pytest.exception.status == http.HTTPStatus.BAD_REQUEST
+    # SvcError::VolumeResizeSize
+    assert pytest.exception.status == http.HTTPStatus.NOT_ACCEPTABLE
 
 
 @then("the failure reason should be volume-in-use precondition")
