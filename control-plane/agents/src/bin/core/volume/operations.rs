@@ -688,7 +688,6 @@ impl ResourceProperty for OperationGuardArc<VolumeSpec> {
         let state = registry.volume_state(&request.uuid).await?;
         let operation = VolumeOperation::SetVolumeProperty(request.property.clone());
         let spec_clone = self.start_update(registry, &state, operation).await?;
-
         self.complete_update(registry, Ok(()), spec_clone).await?;
         Ok(())
     }

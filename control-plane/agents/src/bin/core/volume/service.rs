@@ -4,8 +4,8 @@ use crate::{
         resources::{
             operations::{
                 ResourceCloning, ResourceLifecycle, ResourceLifecycleWithLifetime,
-                ResourcePublishing, ResourceReplicas, ResourceResize, ResourceSharing,
-                ResourceShutdownOperations, ResourceSnapshotting,
+                ResourceProperty, ResourcePublishing, ResourceReplicas, ResourceResize,
+                ResourceSharing, ResourceShutdownOperations, ResourceSnapshotting,
             },
             operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
             OperationGuardArc,
@@ -21,9 +21,9 @@ use grpc::{
             CreateSnapshotVolumeInfo, CreateVolumeInfo, CreateVolumeSnapshot,
             CreateVolumeSnapshotInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo,
             DestroyVolumeSnapshot, DestroyVolumeSnapshotInfo, PublishVolumeInfo,
-            RepublishVolumeInfo, ResizeVolumeInfo, SetVolumeReplicaInfo, ShareVolumeInfo,
-            UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations, VolumeSnapshot,
-            VolumeSnapshots,
+            RepublishVolumeInfo, ResizeVolumeInfo, SetVolumePropertyInfo, SetVolumeReplicaInfo,
+            ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
+            VolumeSnapshot, VolumeSnapshots,
         },
         Pagination,
     },
@@ -37,8 +37,8 @@ use stor_port::{
         },
         transport::{
             CreateSnapshotVolume, CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter,
-            PublishVolume, RepublishVolume, ResizeVolume, SetVolumeReplica, ShareVolume,
-            UnpublishVolume, UnshareVolume, Volume,
+            PublishVolume, RepublishVolume, ResizeVolume, SetVolumeProperty, SetVolumeReplica,
+            ShareVolume, UnpublishVolume, UnshareVolume, Volume,
         },
     },
 };
@@ -159,6 +159,21 @@ impl VolumeOperations for Service {
         let volume =
             Context::spawn(async move { service.set_volume_replica(&set_volume_replica).await })
                 .await??;
+        Ok(volume)
+    }
+
+    async fn set_property(
+        &self,
+        req: &dyn SetVolumePropertyInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let set_volume_properties = req.try_into()?;
+        let service = self.clone();
+        let volume =
+            Context::spawn(
+                async move { service.set_volume_property(&set_volume_properties).await },
+            )
+            .await??;
         Ok(volume)
     }
 
@@ -402,6 +417,16 @@ impl Service {
     ) -> Result<Volume, SvcError> {
         let mut volume = self.specs().volume(&request.uuid).await?;
         volume.set_replica(&self.registry, request).await?;
+        self.registry.volume(&request.uuid).await
+    }
+    /// Set volume property.
+    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
+    pub(super) async fn set_volume_property(
+        &self,
+        request: &SetVolumeProperty,
+    ) -> Result<Volume, SvcError> {
+        let mut volume = self.specs().volume(&request.uuid).await?;
+        volume.set_property(&self.registry, request).await?;
         self.registry.volume(&request.uuid).await
     }
     /// Create a volume snapshot.

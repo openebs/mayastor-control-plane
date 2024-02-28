@@ -149,6 +149,8 @@ pub enum MessageIdVs {
     RemoveVolumeNexus,
     /// Set replica count.
     SetVolumeReplica,
+    /// Set volume property.
+    SetVolumeProperty,
     /// Create volume snapshot.
     CreateVolumeSnapshot,
     /// Delete volume snapshot.
