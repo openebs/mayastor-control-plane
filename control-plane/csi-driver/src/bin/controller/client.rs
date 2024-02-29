@@ -293,22 +293,25 @@ impl RestApiClient {
     /// This operation is idempotent, so the caller does not see errors indicating
     /// absence of the resource.
     #[instrument(fields(volume.uuid = %volume_id), skip(self, volume_id))]
-    pub(crate) async fn delete_volume(&self, volume_id: &uuid::Uuid) -> Result<(), ApiClientError> {
-        Self::delete_idempotent(
+    pub(crate) async fn delete_volume(
+        &self,
+        volume_id: &uuid::Uuid,
+    ) -> Result<bool, ApiClientError> {
+        let result = Self::delete_idempotent(
             self.rest_client.volumes_api().del_volume(volume_id).await,
             true,
         )?;
         debug!(volume.uuid=%volume_id, "Volume successfully deleted");
-        Ok(())
+        Ok(result)
     }
 
     /// Check HTTP status code, handle DELETE idempotency transparently.
     pub(crate) fn delete_idempotent<T>(
         result: Result<clients::tower::ResponseContent<T>, clients::tower::Error<RestJsonError>>,
         idempotent: bool,
-    ) -> Result<(), ApiClientError> {
+    ) -> Result<bool, ApiClientError> {
         match result {
-            Ok(_) => Ok(()),
+            Ok(_) => Ok(true),
             Err(clients::tower::Error::Request(error)) => {
                 Err(clients::tower::Error::Request(error).into())
             }
@@ -318,7 +321,7 @@ impl RestApiClient {
                 | StatusCode::NO_CONTENT
                 | StatusCode::PRECONDITION_FAILED => {
                     if idempotent {
-                        Ok(())
+                        Ok(false)
                     } else {
                         Err(clients::tower::Error::Response(response).into())
                     }
