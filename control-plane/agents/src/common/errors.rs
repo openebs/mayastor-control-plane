@@ -394,6 +394,14 @@ pub enum SvcError {
     },
     #[snafu(display("Invalid property name '{property_name}' for the volume '{id}'"))]
     InvalidSetProperty { property_name: String, id: String },
+    #[snafu(display(
+        "The number of available snapshots for cloning ({snapshots}) does not match the number of replicas ({replicas}) for the clone volume '{id}'"
+    ))]
+    InsufficientSnapshotsForClone {
+        snapshots: u8,
+        replicas: u8,
+        id: String,
+    },
 }
 
 impl SvcError {
@@ -1059,6 +1067,12 @@ impl From<SvcError> for ReplyError {
             SvcError::InvalidSetProperty { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::Volume,
+                source,
+                extra,
+            },
+            SvcError::InsufficientSnapshotsForClone { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::VolumeSnapshot,
                 source,
                 extra,
             },

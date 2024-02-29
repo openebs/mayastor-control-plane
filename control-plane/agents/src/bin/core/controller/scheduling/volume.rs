@@ -699,7 +699,11 @@ pub(crate) struct CloneVolumeSnapshot {
 }
 
 impl CloneVolumeSnapshot {
-    async fn builder(registry: &Registry, spec: &VolumeSpec, snapshot: &ReplicaSnapshot) -> Self {
+    async fn builder(
+        registry: &Registry,
+        spec: &VolumeSpec,
+        snapshots: &[ReplicaSnapshot],
+    ) -> Self {
         Self {
             data: ResourceData::new(
                 GetSuitablePoolsContext {
@@ -710,7 +714,7 @@ impl CloneVolumeSnapshot {
                     snap_repl: false,
                     ag_restricted_nodes: None,
                 },
-                PoolItemLister::list_for_clones(registry, snapshot).await,
+                PoolItemLister::list_for_clones(registry, snapshots).await,
             ),
         }
     }
@@ -722,9 +726,9 @@ impl CloneVolumeSnapshot {
     pub(crate) async fn builder_with_defaults(
         registry: &Registry,
         spec: &VolumeSpec,
-        snapshot: &ReplicaSnapshot,
+        snapshots: &[ReplicaSnapshot],
     ) -> Self {
-        Self::builder(registry, spec, snapshot)
+        Self::builder(registry, spec, snapshots)
             .await
             .with_simple_policy()
     }

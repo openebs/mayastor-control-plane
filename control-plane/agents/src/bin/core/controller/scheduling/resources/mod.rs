@@ -139,23 +139,26 @@ impl PoolItemLister {
     }
 
     /// Get a list of pool items to create a snapshot clone on.
-    /// todo: support multi-replica snapshot and clone.
     pub(crate) async fn list_for_clones(
         registry: &Registry,
-        snapshot: &ReplicaSnapshot,
+        snapshots: &[ReplicaSnapshot],
     ) -> Vec<PoolItem> {
-        let pool_id = snapshot.spec().source_id().pool_id();
-        let Ok(pool_spec) = registry.specs().pool(pool_id) else {
-            return vec![];
-        };
-        let Ok(node) = registry.node_wrapper(&pool_spec.node).await else {
-            return vec![];
-        };
-        let Some(pool) = node.pool_wrapper(pool_id).await else {
-            return vec![];
-        };
-        let node = node.read().await.deref().clone();
-        vec![PoolItem::new(node, pool, None)]
+        let mut pool_items = vec![];
+        for snapshot in snapshots {
+            let pool_id = snapshot.spec().source_id().pool_id();
+            let Ok(pool_spec) = registry.specs().pool(pool_id) else {
+                continue;
+            };
+            let Ok(node) = registry.node_wrapper(&pool_spec.node).await else {
+                continue;
+            };
+            let Some(pool) = node.pool_wrapper(pool_id).await else {
+                continue;
+            };
+            let node = node.read().await.deref().clone();
+            pool_items.push(PoolItem::new(node, pool, None));
+        }
+        pool_items
     }
 }
 
