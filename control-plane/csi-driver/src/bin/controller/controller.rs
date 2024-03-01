@@ -978,23 +978,24 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
     #[instrument(err, skip(self))]
     async fn controller_expand_volume(
         &self,
-        request: tonic::Request<ControllerExpandVolumeRequest>,
-    ) -> Result<tonic::Response<ControllerExpandVolumeResponse>, tonic::Status> {
-        let request = request.into_inner();
+        request: Request<ControllerExpandVolumeRequest>,
+    ) -> Result<Response<ControllerExpandVolumeResponse>, Status> {
+        let args = request.into_inner();
+        trace!(volume.uuid = %args.volume_id, request = ?args);
 
-        let vol_uuid = Uuid::parse_str(&request.volume_id).map_err(|error| {
+        let vol_uuid = Uuid::parse_str(&args.volume_id).map_err(|error| {
             Status::invalid_argument(format!(
                 "Malformed volume UUID '{}': {error}",
-                request.volume_id
+                args.volume_id
             ))
         })?;
 
-        let requested_size = request
+        let requested_size = args
             .capacity_range
             .as_ref()
             .ok_or(Status::invalid_argument(format!(
-                "Cannot expand volume '{}': invalid request {request:?}: missing CapacityRange",
-                request.volume_id
+                "Cannot expand volume '{}': invalid request {args:?}: missing CapacityRange",
+                args.volume_id
             )))?
             .required_bytes;
 
@@ -1003,7 +1004,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         // assume NodeExpandVolume is required if it is not clearly defined that the volume is
         // Block type volume.
         let node_expansion_required = !matches!(
-            request.volume_capability.as_ref(),
+            args.volume_capability.as_ref(),
             Some(vc) if matches!(vc.access_type, Some(AccessType::Block(_)))
         );
 
@@ -1020,6 +1021,10 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 error => Status::from(error),
             })?;
 
+        debug!(
+            size_bytes = requested_size,
+            "Expansion succeeded for volume {vol_uuid}"
+        );
         Ok(tonic::Response::new(ControllerExpandVolumeResponse {
             capacity_bytes: vol.spec.size as i64,
             node_expansion_required,
