@@ -492,12 +492,14 @@ impl node_server::Node for Node {
         let required_bytes = request
             .capacity_range
             .as_ref()
-            .ok_or(failure!(
-                Code::InvalidArgument,
-                "Cannot expand volume '{}': invalid request {:?}: missing CapacityRange",
-                request.volume_id,
-                request
-            ))?
+            .ok_or_else(|| {
+                failure!(
+                    Code::InvalidArgument,
+                    "Cannot expand volume '{}': invalid request {:?}: missing CapacityRange",
+                    request.volume_id,
+                    request
+                )
+            })?
             .required_bytes;
 
         let _guard = VolumeOpGuard::new(vol_uuid)?;
@@ -512,11 +514,13 @@ impl node_server::Node for Node {
                     error
                 )
             })?
-            .ok_or(failure!(
-                Code::InvalidArgument,
-                "failed to find a device for volume {}",
-                vol_uuid
-            ))?
+            .ok_or_else(|| {
+                failure!(
+                    Code::InvalidArgument,
+                    "failed to find a device for volume {}",
+                    vol_uuid
+                )
+            })?
             .devname();
 
         // Get device size.
