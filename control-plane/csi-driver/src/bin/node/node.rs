@@ -536,13 +536,14 @@ impl node_server::Node for Node {
         })? as i64;
 
         // The NVMf volume target capacity is often less than the requested capacity. This
-        // difference should be no more than 5 MiB in size. We should trim the required capacity
-        // down by 5 MiB so that the capacity of the device is verified to be greater than or
+        // difference should be no more than 10MiB in size. We should trim the required capacity
+        // down by 10MiB so that the capacity of the device is verified to be greater than or
         // equal to this corrected capacity. This is required because we are not comparing the
         // required capacity against the REST API Volume resource.
-        const MAX_NEXUS_CAPACITY_DIFFERENCE: i64 = 5 * 1024 * 1024;
+        // 10MiB includes addition leeway on top of the 5MiB required.
+        const MAX_NEXUS_CAPACITY_DIFFERENCE: i64 = 10 * 1024 * 1024;
         // Ensure device_capacity is greater than or equal to required_bytes.
-        if device_capacity < (required_bytes - MAX_NEXUS_CAPACITY_DIFFERENCE) {
+        if (device_capacity + MAX_NEXUS_CAPACITY_DIFFERENCE) < required_bytes {
             return Err(failure!(
                 Code::FailedPrecondition,
                 "block device capacity is lower than the required"
