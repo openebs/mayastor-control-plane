@@ -25,6 +25,7 @@ mod server;
 
 use detector::PathFailureDetector;
 use server::NodeAgentApiServer;
+use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
 /// TODO
 #[derive(Debug, Parser)]
@@ -77,6 +78,14 @@ struct Cli {
     /// Events message-bus endpoint url.
     #[clap(long, short)]
     events_url: Option<url::Url>,
+
+    /// Formatting style to be used while logging.
+    #[clap(default_value = FmtStyle::Pretty.as_ref(), short, long)]
+    fmt_style: FmtStyle,
+
+    /// Enable ansi colors for logs.
+    #[clap(long)]
+    ansi_colors: bool,
 }
 
 static CLUSTER_AGENT_CLIENT: OnceCell<ClusterAgentClient> = OnceCell::new();
@@ -107,12 +116,14 @@ async fn main() -> anyhow::Result<()> {
 
     utils::print_package_info!();
 
-    utils::tracing_telemetry::init_tracing_with_eventing(
-        "agent-ha-node",
-        cli_args.tracing_tags.clone(),
-        cli_args.jaeger.clone(),
-        cli_args.events_url.clone(),
-    );
+    utils::tracing_telemetry::TracingTelemetry::builder()
+        .with_writer(FmtLayer::Stdout)
+        .with_style(cli_args.fmt_style)
+        .with_colours(cli_args.ansi_colors)
+        .with_jaeger(cli_args.jaeger.clone())
+        .with_events_url(cli_args.events_url.clone())
+        .with_tracing_tags(cli_args.tracing_tags.clone())
+        .init("agent-ha-node");
 
     CLUSTER_AGENT_CLIENT
         .set(ClusterAgentClient::new(cli_args.cluster_agent.clone(), None).await)

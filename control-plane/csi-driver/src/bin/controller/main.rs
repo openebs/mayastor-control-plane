@@ -1,6 +1,3 @@
-use client::{ApiClientError, RestApiClient};
-use config::CsiControllerConfig;
-
 mod client;
 mod config;
 mod controller;
@@ -9,7 +6,10 @@ mod pvwatcher;
 mod server;
 
 use clap::{Arg, ArgMatches};
+use client::{ApiClientError, RestApiClient};
+use config::CsiControllerConfig;
 use tracing::info;
+use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
 const CSI_SOCKET: &str = "/var/tmp/csi.sock";
 const CONCURRENCY_LIMIT: usize = 10;
@@ -103,6 +103,18 @@ async fn main() -> anyhow::Result<()> {
                         An orphan volume is a volume with no corresponding PV",
                 )
         )
+        .arg(
+            Arg::new("fmt-style")
+                .long("fmt-style")
+                .default_value(FmtStyle::Pretty.as_ref())
+                .help("Formatting style to be used while logging")
+        )
+        .arg(
+        Arg::new("ansi-colors")
+            .long("ansi-colors")
+            .action(clap::ArgAction::SetTrue)
+            .help("Enable ansi color for logs")
+    )
         .get_matches();
 
     utils::print_package_info!();
@@ -111,11 +123,21 @@ async fn main() -> anyhow::Result<()> {
         utils::raw_version_str(),
         env!("CARGO_PKG_VERSION"),
     );
-    utils::tracing_telemetry::init_tracing(
-        "csi-controller",
-        tags,
-        args.get_one::<String>("jaeger").cloned(),
-    );
+    let fmt_style = args.get_one::<String>("fmt-style").unwrap().as_ref();
+    let fmt_style = match fmt_style {
+        "json" => FmtStyle::Json,
+        "compact" => FmtStyle::Compact,
+        _ => FmtStyle::Pretty,
+    };
+    let ansi_colors = args.get_flag("ansi-colors");
+    utils::tracing_telemetry::TracingTelemetry::builder()
+        .with_writer(FmtLayer::Stdout)
+        .with_style(fmt_style)
+        .with_colours(ansi_colors)
+        .with_jaeger(args.get_one::<String>("jaeger").cloned())
+        .with_tracing_tags(tags)
+        .init("csi-controller");
+
     let orphan_period = args
         .get_one::<String>("orphan-vol-gc-period")
         .map(|p| p.parse::<humantime::Duration>())

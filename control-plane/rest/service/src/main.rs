@@ -76,6 +76,14 @@ pub(crate) struct CliArgs {
     /// The value 0 means the number of available physical CPUs is used.
     #[clap(long, short, default_value = utils::DEFAULT_REST_MAX_WORKER_THREADS)]
     max_workers: usize,
+
+    /// Formatting style to be used while logging.
+    #[clap(default_value = FmtStyle::Pretty.as_ref(), short, long)]
+    fmt_style: FmtStyle,
+
+    /// Use ANSI colors for logs.
+    #[clap(long)]
+    ansi_colors: bool,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -105,7 +113,7 @@ use clap::Parser;
 use grpc::{client::CoreClient, operations::jsongrpc::client::JsonGrpcClient};
 use http::Uri;
 use stor_port::transport_api::{RequestMinTimeout, TimeoutOptions};
-use utils::tracing_telemetry::KeyValue;
+use utils::tracing_telemetry::{FmtLayer, FmtStyle, KeyValue};
 
 /// Extension trait for actix-web applications.
 pub trait OpenApiExt<T> {
@@ -205,11 +213,14 @@ async fn main() -> anyhow::Result<()> {
     utils::print_package_info!();
     let cli_args = CliArgs::args();
     println!("Using options: {:?}", &cli_args);
-    utils::tracing_telemetry::init_tracing(
-        "rest-server",
-        cli_args.tracing_tags.clone(),
-        cli_args.jaeger.clone(),
-    );
+
+    utils::tracing_telemetry::TracingTelemetry::builder()
+        .with_writer(FmtLayer::Stdout)
+        .with_style(cli_args.fmt_style)
+        .with_colours(cli_args.ansi_colors)
+        .with_jaeger(cli_args.jaeger.clone())
+        .with_tracing_tags(cli_args.tracing_tags.clone())
+        .init("rest-server");
 
     let app = move || {
         App::new()

@@ -5,9 +5,11 @@ use once_cell::sync::OnceCell;
 use std::net::SocketAddr;
 use tracing::info;
 use utils::{
-    package_description, tracing_telemetry::KeyValue, version_info_str,
-    DEFAULT_CLUSTER_AGENT_SERVER_ADDR, DEFAULT_GRPC_CLIENT_ADDR,
+    package_description,
+    tracing_telemetry::{FmtLayer, FmtStyle, KeyValue},
+    version_info_str, DEFAULT_CLUSTER_AGENT_SERVER_ADDR, DEFAULT_GRPC_CLIENT_ADDR,
 };
+
 mod etcd;
 mod nodes;
 mod server;
@@ -48,6 +50,14 @@ struct Cli {
     /// Events message-bus endpoint url.
     #[clap(long, short)]
     events_url: Option<url::Url>,
+
+    /// Formatting style to be used while logging.
+    #[clap(default_value = FmtStyle::Pretty.as_ref(), short, long)]
+    fmt_style: FmtStyle,
+
+    /// If set, configures the output to be in ansi color format.
+    #[clap(long)]
+    ansi_colors: bool,
 }
 
 impl Cli {
@@ -67,12 +77,14 @@ pub(crate) fn core_grpc<'a>() -> &'a CoreClient {
 }
 
 fn initialize_tracing(args: &Cli) {
-    utils::tracing_telemetry::init_tracing_with_eventing(
-        "agent-ha-cluster",
-        args.tracing_tags.clone(),
-        args.jaeger.clone(),
-        args.events_url.clone(),
-    )
+    utils::tracing_telemetry::TracingTelemetry::builder()
+        .with_writer(FmtLayer::Stdout)
+        .with_style(args.fmt_style)
+        .with_colours(args.ansi_colors)
+        .with_jaeger(args.jaeger.clone())
+        .with_events_url(args.events_url.clone())
+        .with_tracing_tags(args.tracing_tags.clone())
+        .init("agent-ha-cluster");
 }
 
 #[tokio::main]
