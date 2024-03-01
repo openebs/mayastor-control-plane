@@ -1,6 +1,6 @@
 use crate::{
     block_vol::{publish_block_volume, unpublish_block_volume},
-    dev::{get_size_from_dev_name, Device},
+    dev::{sysfs_dev_size, Device},
     filesystem_ops::FileSystem,
     filesystem_vol::{publish_fs_volume, stage_fs_volume, unpublish_fs_volume, unstage_fs_volume},
     mount::find_mount,
@@ -502,7 +502,7 @@ impl node_server::Node for Node {
 
         let _guard = VolumeOpGuard::new(vol_uuid)?;
 
-        let dev_name = Device::lookup(&vol_uuid)
+        let dev_path = Device::lookup(&vol_uuid)
             .await
             .map_err(|error| {
                 failure!(
@@ -522,11 +522,11 @@ impl node_server::Node for Node {
         // Get device size.
         // The underlying block device should already have been expanded to the
         // required size as a part of the ControllerExpandVolume call.
-        let device_capacity = get_size_from_dev_name(dev_name.as_str()).map_err(|error| {
+        let device_capacity = sysfs_dev_size(dev_path.as_str()).map_err(|error| {
             failure!(
                 Code::Internal,
                 "failed to find the device size of device {}: {}",
-                dev_name,
+                dev_path,
                 error
             )
         })? as i64;
