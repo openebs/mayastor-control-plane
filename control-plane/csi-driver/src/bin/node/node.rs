@@ -438,6 +438,9 @@ impl node_server::Node for Node {
         &self,
         request: Request<NodeExpandVolumeRequest>,
     ) -> Result<Response<NodeExpandVolumeResponse>, Status> {
+        let args = request.into_inner();
+        trace!(volume.uuid = %args.volume_id, request = ?args);
+
         //===============================CsiAccessType=============================================
         // A type alias for better readability, and also easier conversions
         // amongst the various error types in this crate.
@@ -474,30 +477,28 @@ impl node_server::Node for Node {
         }
         //===============================CsiAccessType=============================================
 
-        let request = request.into_inner();
-
-        let vol_uuid = Uuid::parse_str(request.volume_id.as_str()).map_err(|error| {
+        let vol_uuid = Uuid::parse_str(args.volume_id.as_str()).map_err(|error| {
             failure!(
                 Code::InvalidArgument,
                 "Malformed volume UUID '{}': {}",
-                request.volume_id,
+                args.volume_id,
                 error
             )
         })?;
 
-        if request.volume_path.is_empty() {
+        if args.volume_path.is_empty() {
             return Err(failure!(Code::InvalidArgument, "'volume_path' is empty"));
         }
 
-        let required_bytes = request
+        let required_bytes = args
             .capacity_range
             .as_ref()
             .ok_or_else(|| {
                 failure!(
                     Code::InvalidArgument,
                     "Cannot expand volume '{}': invalid request {:?}: missing CapacityRange",
-                    request.volume_id,
-                    request
+                    args.volume_id,
+                    args
                 )
             })?
             .required_bytes;
@@ -543,7 +544,7 @@ impl node_server::Node for Node {
         // 10MiB includes addition leeway on top of the 5MiB required.
         const MAX_NEXUS_CAPACITY_DIFFERENCE: i64 = 10 * 1024 * 1024;
         // Ensure device_capacity is greater than or equal to required_bytes.
-        if (device_capacity + MAX_NEXUS_CAPACITY_DIFFERENCE) < required_bytes {
+        if device_capacity < (required_bytes - MAX_NEXUS_CAPACITY_DIFFERENCE) {
             return Err(failure!(
                 Code::FailedPrecondition,
                 "block device capacity is lower than the required"
@@ -560,20 +561,26 @@ impl node_server::Node for Node {
         // The CSI spec, as of v1.8.0, treats volume_capability as an optional field, so
         // in an attempt to be as spec-compliant as possible, we must have a plan-B for the
         // filesystem identification part.
-        let filesystem_handle = match CsiAccessType::from(&request.volume_capability) {
+        let filesystem_handle = match CsiAccessType::from(&args.volume_capability) {
             // volume_capability AccessType says this is not a 'Mount' type. Nothing to do.
-            CsiAccessType::NotAFilesystem => return success_result,
+            CsiAccessType::NotAFilesystem => {
+                debug!(
+                    "Filesystem expansion not required as volume {vol_uuid} \
+                    is not a Filesystem type volume",
+                );
+                return success_result;
+            }
             // volume_capability says that the filesystem is something we don't know about.
             CsiAccessType::UnsupportedFilesystem(fs_err) => {
-                return Err(Status::invalid_argument(fs_err))
+                error!("Cannot expand filesystem: {}", &fs_err);
+                return Err(Status::invalid_argument(fs_err));
             }
             // volume_capability has identified a supported filesystem 🎉.
             CsiAccessType::SupportedFilesystem(fs_type) => fs_type,
             // volume_capability hasn't come through for us, we're on our own.
             // Try to find the mount path at volume_path. As an extension, also validates that
             // volume_path is in fact a filesystem.
-            CsiAccessType::Unknown(_) => match find_mount(None, Some(request.volume_path.as_str()))
-            {
+            CsiAccessType::Unknown(_) => match find_mount(None, Some(args.volume_path.as_str())) {
                 // Not a filesystem.
                 None => return success_result,
                 // Try to generate a supported filesystem type.
@@ -591,10 +598,14 @@ impl node_server::Node for Node {
         filesystem_handle
             .fs_ops()
             .map_err(|err| failure!(Code::InvalidArgument, "{}", err))?
-            .expand(&request.volume_path)
+            .expand(&args.volume_path)
             .await
             .map_err(|err| failure!(Code::Internal, "{}", err))?;
 
+        debug!(
+            size_bytes = required_bytes,
+            "Expansion succeeded for volume {vol_uuid}"
+        );
         success_result
     }
 
