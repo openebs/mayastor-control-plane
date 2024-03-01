@@ -240,6 +240,7 @@ async fn main() -> anyhow::Result<()> {
             Arg::new("fmt-style")
                 .long("fmt-style")
                 .default_value(FmtStyle::Pretty.as_ref())
+                .value_parser(clap::value_parser!(FmtStyle))
                 .help("Formatting style to be used while logging"),
         )
         .arg(

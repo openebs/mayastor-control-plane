@@ -193,6 +193,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
             Arg::new("fmt-style")
                 .long("fmt-style")
                 .default_value(FmtStyle::Pretty.as_ref())
+                .value_parser(clap::value_parser!(FmtStyle))
                 .help("Formatting style to be used while logging")
         )
         .arg(
@@ -261,16 +262,11 @@ pub(super) async fn main() -> anyhow::Result<()> {
         env!("CARGO_PKG_VERSION"),
     );
 
-    let fmt_style = matches.get_one::<String>("fmt-style").unwrap().as_ref();
-    let fmt_style = match fmt_style {
-        "json" => FmtStyle::Json,
-        "compact" => FmtStyle::Compact,
-        _ => FmtStyle::Pretty,
-    };
+    let fmt_style = matches.get_one::<FmtStyle>("fmt-style").unwrap();
     let colors = matches.get_flag("ansi-colors");
     utils::tracing_telemetry::TracingTelemetry::builder()
         .with_writer(FmtLayer::Stdout)
-        .with_style(fmt_style)
+        .with_style(*fmt_style)
         .with_colours(colors)
         .with_tracing_tags(tags.clone())
         .init("csi-node");
