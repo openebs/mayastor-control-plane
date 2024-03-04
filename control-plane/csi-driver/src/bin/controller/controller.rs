@@ -1016,8 +1016,16 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             .expand_volume(&vol_uuid, requested_size as u64)
             .await
             .map_err(|error| match error {
-                ApiClientError::PreconditionFailed(msg) => Status::failed_precondition(msg),
-                ApiClientError::ResourceExhausted(msg) => Status::out_of_range(msg),
+                // This is mapped to the GRPC 'Internal' status because the failed_precondition
+                // holds special significance in the CSI external-resizer sidecar. If the
+                // FailedPrecondition status is returned to the external-resizer, then it fails
+                // and never retries, and assumes the cause to be 'online resize request to
+                // a plugin which only supports offline resize'. This is not the case for us, and
+                // we do want retries from the resizer for all possible errors, so we're making
+                // sure we never return it, even if ApiClientError::PreconditionFailed is mapped
+                // to Status::failed_precondition at some point, in some other context.
+                ApiClientError::PreconditionFailed(msg) => Status::internal(msg),
+                ApiClientError::ResourceExhausted(msg) => Status::resource_exhausted(msg),
                 error => Status::from(error),
             })?;
 
