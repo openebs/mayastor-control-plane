@@ -107,6 +107,7 @@ async fn main() -> anyhow::Result<()> {
             Arg::new("fmt-style")
                 .long("fmt-style")
                 .default_value(FmtStyle::Pretty.as_ref())
+                .value_parser(clap::value_parser!(FmtStyle))
                 .help("Formatting style to be used while logging")
         )
         .arg(
@@ -123,16 +124,11 @@ async fn main() -> anyhow::Result<()> {
         utils::raw_version_str(),
         env!("CARGO_PKG_VERSION"),
     );
-    let fmt_style = args.get_one::<String>("fmt-style").unwrap().as_ref();
-    let fmt_style = match fmt_style {
-        "json" => FmtStyle::Json,
-        "compact" => FmtStyle::Compact,
-        _ => FmtStyle::Pretty,
-    };
+    let fmt_style = args.get_one::<FmtStyle>("fmt-style").unwrap();
     let ansi_colors = args.get_flag("ansi-colors");
     utils::tracing_telemetry::TracingTelemetry::builder()
         .with_writer(FmtLayer::Stdout)
-        .with_style(fmt_style)
+        .with_style(*fmt_style)
         .with_colours(ansi_colors)
         .with_jaeger(args.get_one::<String>("jaeger").cloned())
         .with_tracing_tags(tags)
