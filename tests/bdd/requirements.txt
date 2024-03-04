@@ -6,3 +6,4 @@ docker==5.0.3
 asyncssh==2.14.2
 etcd3==0.12.0
 requests==2.31.0
+pytest==7.4.4
