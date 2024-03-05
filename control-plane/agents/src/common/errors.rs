@@ -907,7 +907,7 @@ impl From<SvcError> for ReplyError {
                 extra,
             },
             SvcError::ResizeReplError { .. } => ReplyError {
-                kind: ReplyErrorKind::FailedPrecondition,
+                kind: ReplyErrorKind::ResourceExhausted,
                 resource: ResourceKind::Replica,
                 source,
                 extra,
