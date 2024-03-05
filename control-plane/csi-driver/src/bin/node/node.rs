@@ -598,7 +598,7 @@ impl node_server::Node for Node {
         filesystem_handle
             .fs_ops()
             .map_err(|err| failure!(Code::InvalidArgument, "{}", err))?
-            .expand(&args.volume_path)
+            .expand(&args.volume_path, Some(dev_path))
             .await
             .map_err(|err| failure!(Code::Internal, "{}", err))?;
 

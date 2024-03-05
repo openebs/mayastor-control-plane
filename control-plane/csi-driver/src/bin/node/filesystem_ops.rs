@@ -127,7 +127,7 @@ pub(crate) trait FileSystemOps: Send + Sync {
         Ok(())
     }
     /// Write the existing filesystem on to new unused blocks on the block device.
-    async fn expand(&self, mount_path: &str) -> Result<(), Error>;
+    async fn expand(&self, mount_path: &str, dev_path: Option<String>) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -226,18 +226,17 @@ impl FileSystemOps for Ext4Fs {
         Ok(())
     }
 
-    async fn expand(&self, mount_path: &str) -> Result<(), Error> {
-        let dev_path = get_devicepath(mount_path)
-            .map_err(|err| {
-                format!(
-                    "failed to get dev path for mountpoint {}: {}",
-                    mount_path, err
-                )
-            })?
-            .ok_or(format!(
-                "no underlying device found for mountpoint {}",
-                mount_path
-            ))?;
+    async fn expand(&self, mount_path: &str, dev_path: Option<String>) -> Result<(), Error> {
+        let dev_path = match dev_path {
+            Some(path) => path,
+            None => get_devicepath(mount_path)
+                .map_err(|error| {
+                    format!("failed to get dev path for mountpoint {mount_path}: {error}")
+                })?
+                .ok_or(format!(
+                    "no underlying device found for mountpoint {mount_path}"
+                ))?,
+        };
 
         run_fs_expand_command(vec!["resize2fs", dev_path.as_str()]).await
     }
@@ -330,7 +329,7 @@ impl FileSystemOps for XFs {
         Ok(())
     }
 
-    async fn expand(&self, mount_path: &str) -> Result<(), Error> {
+    async fn expand(&self, mount_path: &str, _dev_path: Option<String>) -> Result<(), Error> {
         run_fs_expand_command(vec!["xfs_growfs", mount_path]).await
     }
 }
@@ -432,7 +431,7 @@ impl FileSystemOps for BtrFs {
         Ok(())
     }
 
-    async fn expand(&self, mount_path: &str) -> Result<(), Error> {
+    async fn expand(&self, mount_path: &str, _dev_path: Option<String>) -> Result<(), Error> {
         run_fs_expand_command(vec!["btrfs", "filesystem", "resize", "max", mount_path]).await
     }
 }
@@ -477,21 +476,15 @@ pub(crate) async fn run_fs_expand_command(cmd_and_args: Vec<&str>) -> Result<(),
         .output()
         .await
         .map_err(|exec_err| {
-            format!(
-                "failed to execute resize command,\ncmd: {},\nargs: {:?}: {}",
-                cmd, args, exec_err
-            )
+            format!("failed to execute resize command,\ncmd: {cmd},\nargs: {args:?}: {exec_err}")
         })?;
 
     match out.status.success() {
         true => Ok(()),
         false => Err(format!(
-            "failed resize,\ncmd: {:?},\nargs: {:?},\nstderr: {}",
-            cmd,
-            args,
+            "failed resize,\ncmd: {cmd},\nargs: {args:?},\nstderr: {}",
             str::from_utf8(out.stderr.as_slice()).map_err(|error| format!(
-                "failed to convert stderr bytes-slice to str: {}",
-                error
+                "failed to convert stderr bytes-slice to str: {error}",
             ))?
         )),
     }
