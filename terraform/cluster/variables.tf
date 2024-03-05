@@ -103,7 +103,7 @@ variable "master_vcpu" {
 variable "kubernetes_version" {
   type        = string
   description = "Version of all kubernetes components"
-  default     = "1.26.0-00"
+  default     = "1.26.14-1.1"
 }
 
 variable "kubeconfig_output" {
