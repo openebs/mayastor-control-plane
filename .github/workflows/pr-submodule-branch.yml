@@ -13,12 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        if: github.event.pull_request.head.repo.fork
+        env:
+          checkout_token: ${{ secrets.ORG_CI_GITHUB }}
+        if: ${{ env.checkout_token == '' }}
         with:
           fetch-depth: 0
           submodules: recursive
       - uses: actions/checkout@v4
-        if: "! github.event.pull_request.head.repo.fork"
+        env:
+          checkout_token: ${{ secrets.ORG_CI_GITHUB }}
+        if: ${{ env.checkout_token != '' }}
         with:
           fetch-depth: 0
           submodules: recursive
