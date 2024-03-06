@@ -660,7 +660,8 @@ pub mod v1 {
         pub use super::pb::{
             stats_rpc_client::StatsRpcClient,
             stats_rpc_server::{StatsRpc, StatsRpcServer},
-            IoStats, ListStatsOption, NexusIoStatsResponse, PoolIoStatsResponse,
+            IoStats, ListStatsOption, NexusIoStatsResponse, PoolIoStatsResponse, ReplicaIoStats,
+            ReplicaIoStatsResponse,
         };
     }
 
