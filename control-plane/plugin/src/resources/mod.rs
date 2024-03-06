@@ -16,6 +16,7 @@ pub mod utils;
 pub mod volume;
 
 pub use error::Error;
+
 pub type VolumeId = openapi::apis::Uuid;
 pub type SnapshotId = openapi::apis::Uuid;
 pub type ReplicaCount = u8;
@@ -67,6 +68,25 @@ pub enum ScaleResources {
         /// Replica count of the volume.
         replica_count: ReplicaCount,
     },
+}
+
+/// The types of resources that support the 'SetProperty' operation.
+#[derive(clap::Subcommand, Debug)]
+pub enum SetPropertyResources {
+    /// Set volume property.
+    Volume {
+        /// ID of the volume.
+        id: VolumeId,
+        /// Volume properties.
+        #[clap(subcommand)]
+        properties: SetVolumeProperties,
+    },
+}
+/// Various kinds of settable volume properties.
+#[derive(clap::Subcommand, Debug, Clone)]
+pub enum SetVolumeProperties {
+    /// Max snapshot limit per volume.
+    MaxSnapshots { max_snapshots: u32 },
 }
 
 /// The types of resources that support cordoning.
