@@ -78,12 +78,17 @@ pub struct BlockDevice {
     /// identifies if device is available for use (ie. is not "currently" in
     /// use)
     pub available: bool,
+    /// the type of bus through which the device is connected to the system
+    pub connection_type: String,
+    /// indicates whether the device is rotational or non-rotational
+    pub is_rotational: Option<bool>,
 }
 
 impl From<BlockDevice> for models::BlockDevice {
     fn from(src: BlockDevice) -> Self {
         models::BlockDevice::new_all(
             src.available,
+            src.connection_type,
             src.devlinks,
             src.devmajor as i32,
             src.devminor as i32,
@@ -91,6 +96,7 @@ impl From<BlockDevice> for models::BlockDevice {
             src.devpath,
             src.devtype,
             src.filesystem.into_opt(),
+            src.is_rotational,
             src.model,
             src.partition.into_opt(),
             src.size,
