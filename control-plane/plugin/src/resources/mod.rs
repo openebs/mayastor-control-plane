@@ -1,8 +1,9 @@
 use crate::resources::{
     blockdevice::BlockDeviceArgs,
     node::{DrainNodeArgs, GetNodeArgs},
+    pool::GetPoolArgs,
     snapshot::VolumeSnapshotArgs,
-    volume::VolumesArgs,
+    volume::{GetVolumeArgs, VolumesArgs},
 };
 
 pub mod blockdevice;
@@ -23,7 +24,7 @@ pub type PoolId = String;
 pub type NodeId = String;
 
 /// The types of resources that support the 'get' operation.
-#[derive(clap::Subcommand, Debug)]
+#[derive(clap::Subcommand, Debug, Clone)]
 pub enum GetResources {
     /// get cordon
     #[clap(subcommand)]
@@ -34,7 +35,7 @@ pub enum GetResources {
     /// Get all volumes.
     Volumes(VolumesArgs),
     /// Get volume with the given ID.
-    Volume { id: VolumeId },
+    Volume(GetVolumeArgs),
     /// Get Rebuild history for the volume with the given ID.
     RebuildHistory { id: VolumeId },
     /// Get the replica topology for all volumes.
@@ -46,7 +47,7 @@ pub enum GetResources {
     /// Get all pools.
     Pools,
     /// Get pool with the given ID.
-    Pool { id: PoolId },
+    Pool(GetPoolArgs),
     /// Get all nodes.
     Nodes,
     /// Get node with the given ID.
@@ -85,7 +86,7 @@ pub enum UnCordonResources {
 }
 
 /// The types of resources that support the 'get cordon' operation.
-#[derive(clap::Subcommand, Debug)]
+#[derive(clap::Subcommand, Debug, Clone)]
 pub enum GetCordonArgs {
     /// Get the cordon for the node with the given ID.
     Node {
@@ -124,7 +125,7 @@ pub enum LabelResources {
     },
 }
 
-#[derive(clap::Subcommand, Debug)]
+#[derive(clap::Subcommand, Debug, Clone)]
 pub enum GetDrainArgs {
     /// Get the drain for the node with the given ID.
     Node {

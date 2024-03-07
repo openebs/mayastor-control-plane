@@ -4,7 +4,7 @@ use crate::{
         error::Error,
         utils,
         utils::{print_table, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
-        NodeId,
+        GetResources, NodeId,
     },
     rest_wrapper::RestClient,
 };
@@ -29,12 +29,19 @@ enum NodeCordonDrainState {
 pub struct GetNodeArgs {
     /// Id of the node
     node_id: NodeId,
+    /// Show the labels of the node
+    #[clap(global = true, long, default_value = "false")]
+    show_labels: bool,
 }
 
 impl GetNodeArgs {
     /// Return the node ID.
     pub fn node_id(&self) -> NodeId {
         self.node_id.clone()
+    }
+    /// Return whether to show the labels of the node.
+    pub fn show_labels(&self) -> bool {
+        self.show_labels
     }
 }
 
@@ -105,6 +112,73 @@ impl List for Nodes {
     }
 }
 
+/// The NodeDisplayLabels structure is responsible for controlling the display formatting of Node
+/// objects. `#[serde(flatten)]` and `#[serde(skip)]` attributes are used to ensure that when the
+/// object is serialised, only the `inner` object is represented.
+#[derive(Serialize, Debug)]
+pub struct NodeDisplayLabels {
+    #[serde(flatten)]
+    pub inner: Vec<openapi::models::Node>,
+    #[serde(skip)]
+    show_labels: bool,
+}
+
+impl NodeDisplayLabels {
+    /// Create a new `NodeDisplayLabels` instance.
+    pub(crate) fn new(node: openapi::models::Node, show_labels: bool) -> Self {
+        let vec: Vec<openapi::models::Node> = vec![node];
+        Self {
+            inner: vec,
+            show_labels,
+        }
+    }
+    /// Get a list of node labels.
+    pub(crate) fn get_node_label_list(node: &openapi::models::Node) -> Vec<String> {
+        let mut node_labels: Vec<String> = vec![];
+
+        match &node.spec {
+            Some(ns) => match &ns.labels {
+                Some(ds) => {
+                    node_labels = ds
+                        .iter()
+                        .map(|(key, value)| format!("{}={}", key, value))
+                        .collect();
+                }
+                None => {}
+            },
+            None => {}
+        }
+        node_labels
+    }
+}
+
+// Create the header for a `NodeDisplayLabels` object.
+impl GetHeaderRow for NodeDisplayLabels {
+    fn get_header_row(&self) -> Row {
+        let mut header = (*utils::NODE_HEADERS).clone();
+        if self.show_labels {
+            header.extend(vec!["LABELS"]);
+        }
+        header
+    }
+}
+
+impl CreateRows for NodeDisplayLabels {
+    fn create_rows(&self) -> Vec<Row> {
+        let mut rows = vec![];
+        if self.show_labels {
+            for node in self.inner.iter() {
+                let mut row = node.create_rows();
+                let labelstring = NodeDisplayLabels::get_node_label_list(node).join(", ");
+                // Add the node labels to each row.
+                row[0].add_cell(Cell::new(&labelstring));
+                rows.push(row[0].clone());
+            }
+        }
+        rows
+    }
+}
+
 /// Node resource.
 #[derive(clap::Args, Debug)]
 pub struct Node {}
@@ -112,17 +186,75 @@ pub struct Node {}
 #[async_trait(?Send)]
 impl Get for Node {
     type ID = NodeId;
-    async fn get(id: &Self::ID, output: &utils::OutputFormat) -> PluginResult {
-        match RestClient::client().nodes_api().get_node(id).await {
-            Ok(node) => {
-                // Print table, json or yaml based on output format.
-                utils::print_table(output, node.into_body());
-            }
-            Err(e) => {
-                return Err(Error::GetNodeError {
-                    id: id.to_string(),
-                    source: e,
-                });
+    async fn get(
+        id: &Self::ID,
+        get_resource: GetResources,
+        output: &utils::OutputFormat,
+    ) -> PluginResult {
+        // match get_resource {
+        //     GetResources::Node(get_node_args) => {
+        //         match RestClient::client().nodes_api().get_node(id).await {
+        //             Ok(node) => {
+        //                 let node_display = NodeDisplayLabels::new(
+        //                     node.clone().into_body(),
+        //                     get_node_args.show_labels(),
+        //                 );
+        //                 match output {
+        //                     OutputFormat::Yaml | OutputFormat::Json => {
+        //                         print_table(output, node_display.inner);
+        //                     }
+        //                     OutputFormat::None => {
+        //                         if get_node_args.show_labels() {
+        //                             let node_display =
+        //                                 NodeDisplayLabels::new(node.into_body(), true);
+        //                             print_table(output, node_display);
+        //                         } else {
+        //                             // Print table, json or yaml based on output format without
+        //                             // labels.
+        //                             print_table(output, node.into_body());
+        //                         }
+        //                     }
+        //                 }
+        //             }
+        //             Err(e) => {
+        //                 return Err(Error::GetNodeError {
+        //                     id: id.to_string(),
+        //                     source: e,
+        //                 });
+        //             }
+        //         }
+        //     }
+        //     _ => {}
+        // }
+        if let GetResources::Node(get_node_args) = get_resource {
+            match RestClient::client().nodes_api().get_node(id).await {
+                Ok(node) => {
+                    let node_display = NodeDisplayLabels::new(
+                        node.clone().into_body(),
+                        get_node_args.show_labels(),
+                    );
+                    match output {
+                        OutputFormat::Yaml | OutputFormat::Json => {
+                            print_table(output, node_display.inner);
+                        }
+                        OutputFormat::None => {
+                            if get_node_args.show_labels() {
+                                let node_display = NodeDisplayLabels::new(node.into_body(), true);
+                                print_table(output, node_display);
+                            } else {
+                                // Print table, json or yaml based on output format without
+                                // labels.
+                                print_table(output, node.into_body());
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    return Err(Error::GetNodeError {
+                        id: id.to_string(),
+                        source: e,
+                    });
+                }
             }
         }
         Ok(())

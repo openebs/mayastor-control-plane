@@ -76,7 +76,11 @@ pub trait ListExt {
 #[async_trait(?Send)]
 pub trait Get {
     type ID;
-    async fn get(id: &Self::ID, output: &utils::OutputFormat) -> PluginResult;
+    async fn get(
+        id: &Self::ID,
+        get_resources: GetResources,
+        output: &utils::OutputFormat,
+    ) -> PluginResult;
 }
 
 /// Scale trait.

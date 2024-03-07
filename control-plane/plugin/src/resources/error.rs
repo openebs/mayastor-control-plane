@@ -26,6 +26,9 @@ pub enum Error {
     },
     #[snafu(display("Invalid label format: {source}"))]
     NodeLabelFormat { source: node::TopologyError },
+    /// Error for no upgrade event present.
+    #[snafu(display("No upgrade event present."))]
+    UpgradeEventNotPresent,
     #[snafu(display("{source}"))]
     NodeLabel { source: node::OpError },
     /// Error when node uncordon request fails.

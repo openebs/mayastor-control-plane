@@ -121,20 +121,22 @@ impl ExecuteOperation for GetResources {
         match self {
             GetResources::Cordon(get_cordon_resource) => match get_cordon_resource {
                 GetCordonArgs::Node { id: node_id } => {
-                    cordon::NodeCordon::get(node_id, &cli_args.output).await
+                    cordon::NodeCordon::get(node_id, self.clone(), &cli_args.output).await
                 }
                 GetCordonArgs::Nodes => cordon::NodeCordons::list(&cli_args.output).await,
             },
             GetResources::Drain(get_drain_resource) => match get_drain_resource {
                 GetDrainArgs::Node { id: node_id } => {
-                    drain::NodeDrain::get(node_id, &cli_args.output).await
+                    drain::NodeDrain::get(node_id, self.clone(), &cli_args.output).await
                 }
                 GetDrainArgs::Nodes => drain::NodeDrains::list(&cli_args.output).await,
             },
             GetResources::Volumes(vol_args) => {
                 volume::Volumes::list(&cli_args.output, vol_args).await
             }
-            GetResources::Volume { id } => volume::Volume::get(id, &cli_args.output).await,
+            GetResources::Volume(args) => {
+                volume::Volume::get(&args.volume_id(), self.clone(), &cli_args.output).await
+            }
             GetResources::RebuildHistory { id } => {
                 volume::Volume::rebuild_history(id, &cli_args.output).await
             }
@@ -145,9 +147,13 @@ impl ExecuteOperation for GetResources {
                 volume::Volume::topology(id, &cli_args.output).await
             }
             GetResources::Pools => pool::Pools::list(&cli_args.output).await,
-            GetResources::Pool { id } => pool::Pool::get(id, &cli_args.output).await,
+            GetResources::Pool(args) => {
+                pool::Pool::get(&args.pool_id(), self.clone(), &cli_args.output).await
+            }
             GetResources::Nodes => node::Nodes::list(&cli_args.output).await,
-            GetResources::Node(args) => node::Node::get(&args.node_id(), &cli_args.output).await,
+            GetResources::Node(args) => {
+                node::Node::get(&args.node_id(), self.clone(), &cli_args.output).await
+            }
             GetResources::BlockDevices(bdargs) => {
                 blockdevice::BlockDevice::get_blockdevices(
                     &bdargs.node_id(),

@@ -10,7 +10,7 @@ use crate::{
         error::Error,
         node::{node_display_print, node_display_print_one, NodeDisplayFormat},
         utils::OutputFormat,
-        NodeId,
+        GetResources, NodeId,
     },
     rest_wrapper::RestClient,
 };
@@ -18,7 +18,11 @@ use crate::{
 #[async_trait(?Send)]
 impl Get for NodeCordon {
     type ID = NodeId;
-    async fn get(id: &Self::ID, output: &OutputFormat) -> PluginResult {
+    async fn get(
+        id: &Self::ID,
+        _get_resource: GetResources,
+        output: &OutputFormat,
+    ) -> PluginResult {
         match RestClient::client().nodes_api().get_node(id).await {
             Ok(node) => {
                 node_display_print_one(node.into_body(), output, NodeDisplayFormat::CordonLabels)

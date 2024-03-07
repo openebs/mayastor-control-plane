@@ -4,12 +4,26 @@ use crate::{
         error::Error,
         utils,
         utils::{CreateRow, GetHeaderRow},
-        PoolId,
+        GetResources, PoolId,
     },
     rest_wrapper::RestClient,
 };
 use async_trait::async_trait;
 use prettytable::Row;
+
+#[derive(Debug, Clone, clap::Args)]
+/// Arguments used when getting a pool.
+pub struct GetPoolArgs {
+    /// Id of the pool to get.
+    pool_id: PoolId,
+}
+
+impl GetPoolArgs {
+    /// Return the pool ID.
+    pub fn pool_id(&self) -> PoolId {
+        self.pool_id.clone()
+    }
+}
 
 /// Pools resource.
 #[derive(clap::Args, Debug)]
@@ -83,7 +97,11 @@ pub struct Pool {}
 #[async_trait(?Send)]
 impl Get for Pool {
     type ID = PoolId;
-    async fn get(id: &Self::ID, output: &utils::OutputFormat) -> PluginResult {
+    async fn get(
+        id: &Self::ID,
+        _get_resource: GetResources,
+        output: &utils::OutputFormat,
+    ) -> PluginResult {
         match RestClient::client().pools_api().get_pool(id).await {
             Ok(pool) => {
                 // Print table, json or yaml based on output format.

@@ -4,7 +4,7 @@ use crate::{
         error::Error,
         utils,
         utils::{optional_cell, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
-        VolumeId,
+        GetResources, VolumeId,
     },
     rest_wrapper::RestClient,
 };
@@ -145,7 +145,11 @@ pub struct Volume {}
 #[async_trait(?Send)]
 impl Get for Volume {
     type ID = VolumeId;
-    async fn get(id: &Self::ID, output: &utils::OutputFormat) -> PluginResult {
+    async fn get(
+        id: &Self::ID,
+        _get_resource: GetResources,
+        output: &utils::OutputFormat,
+    ) -> PluginResult {
         match RestClient::client().volumes_api().get_volume(id).await {
             Ok(volume) => {
                 // Print table, json or yaml based on output format.
@@ -390,4 +394,18 @@ fn child_uuid(uri: &str) -> String {
 
 fn to_human_readable(val: isize) -> String {
     ::utils::bytes::into_human(val as u64)
+}
+
+#[derive(Debug, Clone, clap::Args)]
+/// Arguments used when getting a volume.
+pub struct GetVolumeArgs {
+    /// Id of the volume to get.
+    volume_id: VolumeId,
+}
+
+impl GetVolumeArgs {
+    /// Return the volume ID.
+    pub fn volume_id(&self) -> VolumeId {
+        self.volume_id
+    }
 }
