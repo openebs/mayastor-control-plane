@@ -74,6 +74,7 @@ impl IoEngineToAgent for v0::BlockDevice {
                 .as_ref()
                 .map(|filesystem| filesystem.to_agent()),
             available: self.available,
+            ..Default::default()
         }
     }
 }

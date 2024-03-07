@@ -358,6 +358,8 @@ impl From<BlockDevice> for blockdevice::BlockDevice {
                 mountpoint: bd.mountpoint,
             }),
             available: bd.available,
+            connection_type: bd.connection_type,
+            is_rotational: bd.is_rotational,
         }
     }
 }
@@ -389,6 +391,8 @@ impl TryFrom<blockdevice::BlockDevice> for BlockDevice {
                 mountpoint: filesystem.mountpoint,
             }),
             available: bd.available,
+            connection_type: bd.connection_type,
+            is_rotational: bd.is_rotational,
         })
     }
 }
