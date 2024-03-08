@@ -191,11 +191,16 @@ impl ResourceResize for OperationGuardArc<VolumeSpec> {
         let spec = self.as_ref().clone();
         let state = registry.volume_state(&request.uuid).await?;
 
-        // Pre-check - Don't allow resize if the volume has snapshots.
+        // Pre-check - Don't allow resize if the volume has snapshots, or the volume is
+        // a snapshot restore volume.
         // NOTE: This is temporary till the fix for handling this in spdk is done.
-        if !registry.specs().snapshots_by_vol(self.uuid()).is_empty() {
+        if !registry.specs().snapshots_by_vol(self.uuid()).is_empty()
+            || spec.content_source.is_some()
+        {
             return Err(SvcError::Internal {
-                details: "Volume can't be resized while it has snapshots".into(),
+                details:
+                    "Volume can't be resized while it has snapshots, or it's a snapshot restore"
+                        .into(),
             });
         }
         // If the volume is published, then we need to resize nexus also along with replicas.
