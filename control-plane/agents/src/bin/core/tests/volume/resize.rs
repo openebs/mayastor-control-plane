@@ -7,8 +7,8 @@ use std::time::Duration;
 use stor_port::{
     transport_api::{ReplyError, ReplyErrorKind},
     types::v0::transport::{
-        CreateVolume, DestroyVolume, Filter, PublishVolume, ResizeVolume, Volume, VolumeId,
-        VolumeShareProtocol,
+        CreateVolume, DestroyVolume, Filter, PublishVolume, ReplicaId, ResizeReplica, ResizeVolume,
+        Volume, VolumeId, VolumeShareProtocol,
     },
 };
 
@@ -450,4 +450,149 @@ async fn create_volumes(volume_client: &dyn VolumeOperations, count: u64) -> Vec
     }
 
     volumes
+}
+
+// Scenario - One of the replica of the volume is bigger than the volume spec, indicating
+// a volume expand partially failed. The expanded replica's space should get reclaimed.
+// If the volume has a target, then for the above scenario, the expanded replica size
+// must not be reclaimed.
+#[tokio::test]
+async fn resize_replica_space_reclaim() {
+    let reconcile_period = Duration::from_secs(1);
+    let vol_uuid = Uuid::new_v4();
+    let cluster = ClusterBuilder::builder()
+        .with_rest(false)
+        .with_agents(vec!["core"])
+        .with_io_engines(2)
+        .with_pool(0, "malloc:///p1?size_mb=200")
+        .with_pool(1, "malloc:///p1?size_mb=200")
+        .with_cache_period("500ms")
+        .with_reconcile_period(reconcile_period, reconcile_period)
+        .with_options(|o| o.with_isolated_io_engine(true))
+        .build()
+        .await
+        .unwrap();
+
+    let vol_cli = cluster.grpc_client().volume();
+    let repl_cli = cluster.grpc_client().replica();
+
+    let volume = vol_cli
+        .create(
+            &CreateVolume {
+                uuid: vol_uuid.try_into().unwrap(),
+                size: SIZE,
+                replicas: 2,
+                thin: false,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let replicas = repl_cli
+        .get(Filter::Volume(volume.uuid().clone()), None)
+        .await
+        .unwrap();
+    assert_eq!(replicas.0.len(), 2);
+
+    // Let's pick a replica for resizing
+    let replica = replicas.0.first().unwrap();
+    let repl_orig_size = replica.size;
+    let _ = repl_cli
+        .resize(
+            &ResizeReplica {
+                node: replica.node.clone(),
+                pool_id: replica.pool_id.clone(),
+                uuid: replica.uuid.clone(),
+                name: None,
+                requested_size: EXPANDED_SIZE,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    // Expanded replica space must get reclaimed by reconciler
+    wait_expanded_replica_space_reclaimed(
+        &cluster,
+        &replica.uuid,
+        repl_orig_size,
+        reconcile_period * 5,
+        true,
+    )
+    .await;
+
+    // Publish the volume now
+    vol_cli
+        .publish(
+            &PublishVolume {
+                uuid: volume.spec().uuid,
+                target_node: Some(cluster.node(0)),
+                share: Some(VolumeShareProtocol::Nvmf),
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    // Expand the replica again
+    let _ = repl_cli
+        .resize(
+            &ResizeReplica {
+                node: replica.node.clone(),
+                pool_id: replica.pool_id.clone(),
+                uuid: replica.uuid.clone(),
+                name: None,
+                requested_size: EXPANDED_SIZE,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    // Expanded replica space must NOT get reclaimed by reconciler
+    // because a volume target/nexus is found
+    wait_expanded_replica_space_reclaimed(
+        &cluster,
+        &replica.uuid,
+        repl_orig_size,
+        reconcile_period * 5,
+        false,
+    )
+    .await;
+
+    async fn wait_expanded_replica_space_reclaimed(
+        cluster: &Cluster,
+        replica: &ReplicaId,
+        repl_orig_size: u64,
+        timeout: Duration,
+        expect_reclaim: bool,
+    ) {
+        let repl_client = cluster.grpc_client().replica();
+        let start = std::time::Instant::now();
+        loop {
+            let replica = &repl_client
+                .get(Filter::Replica(replica.clone()), None)
+                .await
+                .unwrap()
+                .0[0];
+
+            if expect_reclaim && (replica.size == repl_orig_size) {
+                // Size should get reverted back to original
+                break;
+            }
+            if std::time::Instant::now() > (start + timeout) {
+                if expect_reclaim {
+                    panic!("{:?} - Timeout while waiting to reconcile expanded replica size. Replica '{replica:#?}'", chrono::Utc::now());
+                }
+                // !expect_reclaim - replica size must not have been reclaimed to original.
+                assert!(replica.size != repl_orig_size);
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+    }
 }

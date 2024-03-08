@@ -2,10 +2,10 @@ use crate::{
     common,
     context::Context,
     misc::traits::{StringValue, ValidateRequestTypes},
-    replica,
+    operations::volume::traits::TryIntoId,
     replica::{
-        get_replicas_request, CreateReplicaRequest, DestroyReplicaRequest, ShareReplicaRequest,
-        UnshareReplicaRequest,
+        self, get_replicas_request, CreateReplicaRequest, DestroyReplicaRequest,
+        ResizeReplicaRequest, ShareReplicaRequest, UnshareReplicaRequest,
     },
 };
 use std::convert::TryFrom;
@@ -19,7 +19,7 @@ use stor_port::{
         transport::{
             CreateReplica, DestroyReplica, Filter, HostNqn, NexusId, NodeId, PoolId, PoolUuid,
             Replica, ReplicaId, ReplicaKind, ReplicaName, ReplicaOwners, ReplicaSpaceUsage,
-            ShareReplica, UnshareReplica, VolumeId,
+            ResizeReplica, ShareReplica, UnshareReplica, VolumeId,
         },
     },
     IntoOption, IntoVec,
@@ -54,6 +54,12 @@ pub trait ReplicaOperations: Send + Sync {
         req: &dyn UnshareReplicaInfo,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError>;
+    /// Resize a replica.
+    async fn resize(
+        &self,
+        req: &dyn ResizeReplicaInfo,
+        ctx: Option<Context>,
+    ) -> Result<Replica, ReplyError>;
 }
 
 impl From<Replica> for replica::Replica {
@@ -782,6 +788,86 @@ impl ValidateRequestTypes for UnshareReplicaRequest {
     }
 }
 
+/// ResizeReplicaInfo trait for the replica resize to be implemented by entities which want to
+/// avail this operation.
+pub trait ResizeReplicaInfo: Send + Sync + std::fmt::Debug {
+    /// Id of the IoEngine instance.
+    fn node(&self) -> NodeId;
+    /// Id of the pool.
+    fn pool_id(&self) -> PoolId;
+    /// Name of the replica.
+    fn name(&self) -> Option<ReplicaName>;
+    /// Uuid of the replica.
+    fn uuid(&self) -> ReplicaId;
+    /// Requested new size of the replica, in bytes.
+    fn req_size(&self) -> u64;
+}
+
+/// Intermediate structure that validates the conversion to ResizeReplicaRequest type.
+#[derive(Debug)]
+pub struct ValidatedResizeReplicaRequest {
+    inner: ResizeReplicaRequest,
+    uuid: ReplicaId,
+}
+
+impl ResizeReplicaInfo for ResizeReplica {
+    fn node(&self) -> NodeId {
+        self.node.clone()
+    }
+
+    fn pool_id(&self) -> PoolId {
+        self.pool_id.clone()
+    }
+
+    fn name(&self) -> Option<ReplicaName> {
+        self.name.clone()
+    }
+
+    fn uuid(&self) -> ReplicaId {
+        self.uuid.clone()
+    }
+
+    fn req_size(&self) -> u64 {
+        self.requested_size
+    }
+}
+
+impl ResizeReplicaInfo for ValidatedResizeReplicaRequest {
+    fn node(&self) -> NodeId {
+        self.inner.node_id.clone().into()
+    }
+
+    fn pool_id(&self) -> PoolId {
+        self.inner.pool_id.clone().into()
+    }
+
+    fn name(&self) -> Option<ReplicaName> {
+        Some(self.uuid().clone().to_string().into())
+    }
+
+    fn uuid(&self) -> ReplicaId {
+        self.uuid.clone()
+    }
+
+    fn req_size(&self) -> u64 {
+        self.inner.requested_size
+    }
+}
+
+impl ValidateRequestTypes for ResizeReplicaRequest {
+    type Validated = ValidatedResizeReplicaRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        let replica_id = self
+            .replica_id
+            .clone()
+            .try_into_id(ResourceKind::Replica, "resize_req.replica_id")?;
+        Ok(ValidatedResizeReplicaRequest {
+            uuid: replica_id,
+            inner: self,
+        })
+    }
+}
+
 impl From<&dyn CreateReplicaInfo> for CreateReplicaRequest {
     fn from(data: &dyn CreateReplicaInfo) -> Self {
         let share: common::Protocol = data.share().into();
@@ -895,6 +981,29 @@ impl From<&dyn UnshareReplicaInfo> for UnshareReplica {
             pool_uuid: data.pool_uuid(),
             uuid: data.uuid(),
             name: data.name(),
+        }
+    }
+}
+
+impl From<&dyn ResizeReplicaInfo> for ResizeReplicaRequest {
+    fn from(data: &dyn ResizeReplicaInfo) -> Self {
+        Self {
+            node_id: data.node().to_string(),
+            pool_id: data.pool_id().to_string(),
+            replica_id: data.uuid().to_string(),
+            requested_size: data.req_size(),
+        }
+    }
+}
+
+impl From<&dyn ResizeReplicaInfo> for ResizeReplica {
+    fn from(data: &dyn ResizeReplicaInfo) -> Self {
+        Self {
+            node: data.node(),
+            pool_id: data.pool_id(),
+            uuid: data.uuid(),
+            name: data.name(),
+            requested_size: data.req_size(),
         }
     }
 }

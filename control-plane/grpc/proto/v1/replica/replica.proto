@@ -157,6 +157,19 @@ message UnshareReplicaRequest {
   optional google.protobuf.StringValue pool_uuid = 5;
 }
 
+// Resize a replica to the requested size
+// For internal usage mostly.
+message ResizeReplicaRequest {
+  // id of the io-engine instance
+  string node_id = 1;
+  // uuid of the replica
+  string replica_id = 2;
+  // requested new size for the replica
+  uint64 requested_size = 3;
+  // id of the pool
+  string pool_id = 4;
+}
+
 // Reply type for a CreateReplica request
 message CreateReplicaReply {
   oneof reply {
@@ -189,6 +202,14 @@ message ShareReplicaReply {
 // Reply type for a UnshareReplica request
 message UnshareReplicaReply {
   optional common.ReplyError error = 1;
+}
+
+// Reply type for a ResizeReplica request
+message ResizeReplicaReply {
+  oneof reply {
+    Replica replica = 1;
+    common.ReplyError error = 2;
+  }
 }
 
 // Get all the replicas from specific node and pool
@@ -242,4 +263,5 @@ service ReplicaGrpc {
   rpc GetReplicas (GetReplicasRequest) returns (GetReplicasReply) {}
   rpc ShareReplica (ShareReplicaRequest) returns (ShareReplicaReply) {}
   rpc UnshareReplica (UnshareReplicaRequest) returns (UnshareReplicaReply) {}
+  rpc ResizeReplica (ResizeReplicaRequest) returns (ResizeReplicaReply) {}
 }

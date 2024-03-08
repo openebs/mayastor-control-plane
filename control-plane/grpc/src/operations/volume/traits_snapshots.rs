@@ -786,7 +786,7 @@ impl TryFrom<snapshot::ReplicaSnapshotState> for transport::ReplicaSnapshot {
 }
 
 /// Convert a string to `T`, which can be converted using `TryFrom<String, Error=uuid::Error>`.
-trait TryIntoId {
+pub(crate) trait TryIntoId {
     fn try_into_id<T: TryFrom<String, Error = uuid::Error>>(
         self,
         kind: ResourceKind,

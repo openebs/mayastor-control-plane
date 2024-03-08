@@ -7,7 +7,8 @@ use crate::{
     operations::replica::traits::ReplicaOperations,
     replica::{
         create_replica_reply, get_replicas_reply, get_replicas_request,
-        replica_grpc_client::ReplicaGrpcClient, share_replica_reply, GetReplicasRequest,
+        replica_grpc_client::ReplicaGrpcClient, resize_replica_reply, share_replica_reply,
+        GetReplicasRequest,
     },
 };
 
@@ -15,7 +16,7 @@ use std::{convert::TryFrom, ops::Deref};
 use tonic::transport::Uri;
 
 use crate::operations::replica::traits::{
-    CreateReplicaInfo, DestroyReplicaInfo, ShareReplicaInfo, UnshareReplicaInfo,
+    CreateReplicaInfo, DestroyReplicaInfo, ResizeReplicaInfo, ShareReplicaInfo, UnshareReplicaInfo,
 };
 use stor_port::{
     transport_api::{v0::Replicas, ReplyError, ResourceKind, TimeoutOptions},
@@ -169,6 +170,23 @@ impl ReplicaOperations for ReplicaClient {
         match response.error {
             None => Ok(()),
             Some(err) => Err(err.into()),
+        }
+    }
+
+    #[tracing::instrument(name = "ReplicaClient::resize", level = "debug", skip(self), err)]
+    async fn resize(
+        &self,
+        request: &dyn ResizeReplicaInfo,
+        ctx: Option<Context>,
+    ) -> Result<Replica, ReplyError> {
+        let req = self.request(request, ctx, MessageIdVs::ResizeReplica);
+        let response = self.client().resize_replica(req).await?.into_inner();
+        match response.reply {
+            Some(resize_replica_reply) => match resize_replica_reply {
+                resize_replica_reply::Reply::Replica(replica) => Ok(Replica::try_from(replica)?),
+                resize_replica_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Replica)),
         }
     }
 }
