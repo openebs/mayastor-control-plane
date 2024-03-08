@@ -97,52 +97,48 @@ impl NodeAgentSvc {
 }
 
 /// Disconnect cached NVMe controller.
-fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Result<(), SvcError> {
-    let parsed_path = parse_uri(new_path.as_str())?;
-
-    match get_nvme_path_entry(&ctrlr.path) {
+async fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Result<(), SvcError> {
+    let new_path_uri = parse_uri(new_path.as_str())?;
+    let path = &ctrlr.path;
+    match get_nvme_path_entry(path) {
         Some(pbuf) => {
             let subsystem = Subsystem::new(pbuf.path()).map_err(|_| SvcError::NotFound {
                 kind: ResourceKind::NvmeSubsystem,
-                id: ctrlr.path.to_owned(),
+                id: path.to_owned(),
             })?;
 
             // sanity check to make sure this information is still up to date!
-            if subsystem.nqn != parsed_path.nqn {
+            if subsystem.nqn != new_path_uri.nqn {
                 return Err(SvcError::UnexpectedSubsystemNqn {
                     nqn: subsystem.nqn,
-                    expected_nqn: parsed_path.nqn,
+                    expected_nqn: new_path_uri.nqn,
                     path: subsystem.name,
                 });
             }
 
             if subsystem
                 .address
-                .match_host_port(parsed_path.host(), &parsed_path.port().to_string())
+                .match_host_port(new_path_uri.host(), &new_path_uri.port().to_string())
             {
-                tracing::info!(path = ctrlr.path, "Not disconnecting same NVMe controller");
+                tracing::info!(path, "Not disconnecting same NVMe controller");
                 Ok(())
             } else {
-                tracing::info!(path = ctrlr.path, "Disconnecting NVMe controller");
+                tracing::info!(path, "Disconnecting NVMe controller");
 
                 // clarification: we're not disconnecting the subsystem, but rather the controller
-                subsystem.disconnect().map_err(|e| SvcError::Internal {
-                    details: format!(
-                        "Failed to disconnect NVMe controller {}: {:?}",
-                        ctrlr.path, e,
-                    ),
+                tokio::task::block_in_place(move || subsystem.disconnect()).map_err(|error| {
+                    SvcError::Internal {
+                        details: format!("Failed to disconnect NVMe controller {path}: {error:?}"),
+                    }
                 })
             }
         }
         None => {
-            tracing::error!(
-                path = ctrlr.path,
-                "Failed to get system path for controller"
-            );
+            tracing::error!(path, "Failed to get system path for controller");
 
             Err(SvcError::NotFound {
                 kind: ResourceKind::NvmePath,
-                id: ctrlr.path.to_owned(),
+                id: path.to_owned(),
             })
         }
     }
@@ -193,14 +189,12 @@ impl NodeAgentSvc {
             ) {
                 Ok(subsystem) => {
                     tracing::info!(new_path, "Successfully connected to NVMe target");
-                    subsystem
+                    Ok(subsystem)
                 }
-                Err(error) => {
-                    return Err(SubsystemNotFound {
-                        nqn,
-                        details: error.to_string(),
-                    });
-                }
+                Err(error) => Err(SubsystemNotFound {
+                    nqn: nqn.clone(),
+                    details: error.to_string(),
+                }),
             },
             Err(error) => {
                 tracing::error!(
@@ -208,15 +202,13 @@ impl NodeAgentSvc {
                     %error,
                     "Failed to connect to new NVMe target"
                 );
-                let nvme_err = format!(
-                    "Failed to connect to new NVMe target: {}, new path: {}, nqn: {}",
-                    error.full_string(),
-                    new_path,
-                    nqn
+                let details = format!(
+                    "Failed to connect to new NVMe target: {error}, new path: {new_path}, nqn: {nqn}",
+                    error = error.full_string(),
                 );
-                return Err(SvcError::NvmeConnectError { details: nvme_err });
+                Err(SvcError::NvmeConnectError { details })
             }
-        };
+        }?;
 
         let now = Instant::now();
         let timeout = self.path_connection_timeout;
@@ -301,16 +293,21 @@ impl NodeAgentSvc {
                         }
                     };
 
-                    // Remove the subsystem.
-                    if let Err(error) = curr_subsystem.disconnect() {
-                        tracing::error!(
-                            ?curr_subsystem,
-                            ?error,
-                            "Failed to disconnect NVMe subsystem"
-                        );
-                    } else {
-                        tracing::info!(?curr_subsystem, "NVMe subsystem successfully disconnected");
-                    }
+                    tokio::task::block_in_place(move || {
+                        // Remove the subsystem.
+                        if let Err(error) = curr_subsystem.disconnect() {
+                            tracing::error!(
+                                ?curr_subsystem,
+                                ?error,
+                                "Failed to disconnect NVMe subsystem"
+                            );
+                        } else {
+                            tracing::info!(
+                                ?curr_subsystem,
+                                "NVMe subsystem successfully disconnected"
+                            );
+                        }
+                    });
                 } else {
                     tracing::info!(?subsystem, "Keeping NVMe subsystem after connect timeout");
                 }
@@ -330,9 +327,9 @@ impl NodeAgentOperations for NodeAgentSvc {
         request: &dyn ReplacePathInfo,
         _context: Option<Context>,
     ) -> Result<(), ReplyError> {
-        tracing::info!("Replacing failed NVMe path: {:?}", request);
+        tracing::info!("Replacing failed NVMe path: {request:?}");
         // Lookup NVMe controller whose path has failed.
-        let ctrlr = self
+        let ctrlrs = self
             .path_cache
             .lookup_controllers(request.target_nqn())
             .await
@@ -359,8 +356,8 @@ impl NodeAgentOperations for NodeAgentSvc {
         // path has been successfully created, so having the first failed path in addition
         // to the second healthy one is OK: just display a warning and proceed as if
         // the call has completed successfully.
-        for ctrl in ctrlr {
-            if let Err(error) = disconnect_controller(&ctrl, request.new_path()) {
+        for ctrl in ctrlrs {
+            if let Err(error) = disconnect_controller(&ctrl, request.new_path()).await {
                 tracing::warn!(
                     uri=%request.new_path(),
                     %error,

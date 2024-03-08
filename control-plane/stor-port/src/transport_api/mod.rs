@@ -524,7 +524,7 @@ impl Default for RequestMinTimeout {
             pool: Duration::from_secs(20),
             nexus_shutdown: Duration::from_secs(15),
             nexus_snapshot: Duration::from_secs(30),
-            nvme_reconnect: Duration::from_secs(12),
+            nvme_reconnect: Duration::from_secs(62),
         }
     }
 }
