@@ -10,8 +10,8 @@ use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
 use crate::{
     operations::{
-        Cordoning, Drain, Get, GetBlockDevices, GetSnapshots, List, ListExt, Operations,
-        PluginResult, RebuildHistory, ReplicaTopology, Scale,
+        Cordoning, Drain, Get, GetBlockDevices, GetSnapshots, GetWithArgs, List, ListExt,
+        ListWithArgs, Operations, PluginResult, RebuildHistory, ReplicaTopology, Scale,
     },
     resources::{
         blockdevice, cordon, drain, node, pool, snapshot, volume, CordonResources, DrainResources,
@@ -148,8 +148,10 @@ impl ExecuteOperation for GetResources {
             }
             GetResources::Pools => pool::Pools::list(&cli_args.output).await,
             GetResources::Pool { id } => pool::Pool::get(id, &cli_args.output).await,
-            GetResources::Nodes => node::Nodes::list(&cli_args.output).await,
-            GetResources::Node(args) => node::Node::get(&args.node_id(), &cli_args.output).await,
+            GetResources::Nodes(args) => node::Nodes::list(args, &cli_args.output).await,
+            GetResources::Node(args) => {
+                node::Node::get(&args.node_id(), args, &cli_args.output).await
+            }
             GetResources::BlockDevices(bdargs) => {
                 blockdevice::BlockDevice::get_blockdevices(
                     &bdargs.node_id(),

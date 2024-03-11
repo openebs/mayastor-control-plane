@@ -1,6 +1,6 @@
 use crate::resources::{
     blockdevice::BlockDeviceArgs,
-    node::{DrainNodeArgs, GetNodeArgs},
+    node::{DrainNodeArgs, GetNodeArgs, GetNodesArgs},
     snapshot::VolumeSnapshotArgs,
     volume::VolumesArgs,
 };
@@ -49,7 +49,7 @@ pub enum GetResources {
     /// Get pool with the given ID.
     Pool { id: PoolId },
     /// Get all nodes.
-    Nodes,
+    Nodes(GetNodesArgs),
     /// Get node with the given ID.
     Node(GetNodeArgs),
     /// Get BlockDevices present on the Node. Lists usable devices by default.
