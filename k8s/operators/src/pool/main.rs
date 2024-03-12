@@ -246,7 +246,8 @@ async fn main() -> anyhow::Result<()> {
         .arg(
             Arg::new("ansi-colors")
                 .long("ansi-colors")
-                .action(clap::ArgAction::SetTrue)
+                .default_value("true")
+                .value_parser(clap::value_parser!(bool))
                 .help("Enable ansi color for logs"),
         )
         .get_matches();
@@ -266,7 +267,7 @@ async fn main() -> anyhow::Result<()> {
         .with_colours(ansi_colors)
         .with_jaeger(matches.get_one::<String>("jaeger").cloned())
         .with_tracing_tags(tags)
-        .init("agent-ha-node");
+        .init("dsp-operator");
 
     pool_controller(matches).await?;
     utils::tracing_telemetry::flush_traces();

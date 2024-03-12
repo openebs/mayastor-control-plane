@@ -113,7 +113,8 @@ async fn main() -> anyhow::Result<()> {
         .arg(
         Arg::new("ansi-colors")
             .long("ansi-colors")
-            .action(clap::ArgAction::SetTrue)
+            .default_value("true")
+            .value_parser(clap::value_parser!(bool))
             .help("Enable ansi color for logs")
     )
         .get_matches();

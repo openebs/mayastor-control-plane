@@ -199,8 +199,9 @@ pub(super) async fn main() -> anyhow::Result<()> {
         .arg(
             Arg::new("ansi-colors")
                 .long("ansi-colors")
-                .action(clap::ArgAction::SetTrue)
-                .help("Enable ANSI color for logs")
+                .default_value("true")
+                .value_parser(clap::value_parser!(bool))
+                .help("Enable ansi color for logs")
         )
         .subcommand(
             clap::Command::new("fs-freeze")

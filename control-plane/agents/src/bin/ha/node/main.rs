@@ -84,7 +84,7 @@ struct Cli {
     fmt_style: FmtStyle,
 
     /// Enable ansi colors for logs.
-    #[clap(long)]
+    #[clap(long, default_value_t = true, action = clap::ArgAction::Set)]
     ansi_colors: bool,
 }
 
