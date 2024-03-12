@@ -55,8 +55,8 @@ struct Cli {
     #[clap(default_value = FmtStyle::Pretty.as_ref(), short, long)]
     fmt_style: FmtStyle,
 
-    /// If set, configures the output to be in ansi color format.
-    #[clap(long)]
+    /// Enable ansi colors for logs.
+    #[clap(long, default_value_t = true, action = clap::ArgAction::Set)]
     ansi_colors: bool,
 }
 

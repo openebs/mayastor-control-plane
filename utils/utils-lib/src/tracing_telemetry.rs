@@ -119,7 +119,9 @@ impl TracingTelemetry {
 
     /// Initialize the telemetry instance.
     pub fn init(self, service_name: &str) {
-        let stdout = tracing_subscriber::fmt::layer().with_writer(std::io::stdout);
+        let stdout = tracing_subscriber::fmt::layer()
+            .with_writer(std::io::stdout)
+            .with_ansi(self.colours);
         let stderr = tracing_subscriber::fmt::layer()
             .with_writer(std::io::stderr)
             .with_ansi(self.colours);
