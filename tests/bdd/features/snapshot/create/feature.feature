@@ -29,10 +29,16 @@ Feature: Volume Snapshot Creation
     Then the snapshot creation should fail with preconditions failed
     And the snapshot should not be listed
 
-  Scenario: Snapshot creation for multi-replica volume is not supported
+  Scenario: Snapshot creation for multi-replica volume
     Given we have a multi-replica volume
     When we try to create a snapshot for the volume
-    Then the snapshot creation should be fail with invalid arguments
+    Then the snapshot creation should be successful
+    And the snapshot status ready as source should be false
+    And the snapshot source size should be equal to the volume size
+    And the snapshot size should be equal to the volume size
+    And the snapshot timestamp should be in the RFC 3339 format
+    And the snapshot timestamp should be within 1 minute of creation (UTC)
+    And the volume snapshot state has multiple online replica snapshots
 
   Scenario Outline: Existence of snapshot after node restart
     Given we have a single replica volume
@@ -80,3 +86,12 @@ Feature: Volume Snapshot Creation
     And a successfully created snapshot
     When we retry the same snapshot creation
     Then the snapshot creation should be fail with already exists
+
+  Scenario: Multi-replica snapshot with one node down
+    Given we have a multi-replica volume
+    And the node A is paused
+    When we try to create a snapshot for the volume
+    Then the snapshot creation should fail
+    When the node A is brought back
+    And we try to create a snapshot for the volume
+    Then the snapshot creation should be successful

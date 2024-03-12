@@ -94,11 +94,9 @@ def test_snapshot_creation_for_a_single_replica_volume_fails_when_the_replica_is
     """Snapshot creation for a single replica volume fails when the replica is offline."""
 
 
-@scenario(
-    "feature.feature", "Snapshot creation for multi-replica volume is not supported"
-)
-def test_snapshot_creation_for_multireplica_volume_is_not_supported():
-    """Snapshot creation for multi-replica volume is not supported."""
+@scenario("feature.feature", "Snapshot creation for multi-replica volume")
+def test_snapshot_creation_for_multireplica_volume():
+    """Snapshot creation for multi-replica volume."""
 
 
 @scenario("feature.feature", "Snapshot creation of a single replica volume")
@@ -117,6 +115,11 @@ def test_snapshot_creation_of_a_single_replica_volume_after_its_source_is_delete
 @scenario("feature.feature", "Subsequent creation with same snapshot id should fail")
 def test_subsequent_creation_with_same_snapshot_id_should_fail():
     """Subsequent creation with same snapshot id should fail."""
+
+
+@scenario("feature.feature", "Multi-replica snapshot with one node down")
+def test_multi_replica_snapshot_with_one_node_down():
+    """Multi-replica snapshot with one node down."""
 
 
 @given("a deployer cluster")
@@ -140,7 +143,7 @@ def the_node_a_is_paused(node_a):
 
 @then("the node A is stopped")
 def the_node_a_is_stopped(node_a):
-    """the node A is paused."""
+    """the node A is stopped."""
     Docker.stop_container(node_a)
 
 
@@ -397,6 +400,16 @@ def the_volume_snapshot_state_has_a_single_online_replica_snapshot(snapshot):
     """the volume snapshot state has a single online replica snapshot."""
     assert len(snapshot.state.replica_snapshots) == 1
     replica_snapshot = snapshot.state.replica_snapshots[0]
+    assert hasattr(replica_snapshot, "online")
+
+
+@then("the volume snapshot state has multiple online replica snapshots")
+def the_volume_snapshot_state_has_multiple_online_replica_snapshots(snapshot):
+    """the volume snapshot state has multiple online replica snapshots."""
+    assert len(snapshot.state.replica_snapshots) == 2
+    replica_snapshot = snapshot.state.replica_snapshots[0]
+    assert hasattr(replica_snapshot, "online")
+    replica_snapshot = snapshot.state.replica_snapshots[1]
     assert hasattr(replica_snapshot, "online")
 
 

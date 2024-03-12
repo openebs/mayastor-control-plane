@@ -51,9 +51,11 @@ def test_capacity_smaller_than_the_snapshot():
     """Capacity smaller than the snapshot."""
 
 
-@scenario("create_parameters.feature", "Multi-replica restore")
-def test_multireplica_restore():
-    """Multi-replica restore."""
+@scenario(
+    "create_parameters.feature", "Multi-replica restore from single replica snapshot"
+)
+def test_multireplica_restore_from_single_replica_snapshot():
+    """Multi-replica restore from single replica snapshot."""
 
 
 @scenario("create_parameters.feature", "Thick provisioning")
@@ -124,6 +126,12 @@ def the_requested_capacity_is_smaller_than_the_snapshot(base_request):
     """the requested capacity is smaller than the snapshot."""
     base_request.size = base_request.size - 512
     yield base_request
+
+
+@then("the request should fail with PreconditionFailed")
+def the_request_should_fail_with_preconditionfailed(request):
+    """the request should fail with PreconditionFailed."""
+    restore_expect(request, http.HTTPStatus.PRECONDITION_FAILED, "FailedPrecondition")
 
 
 @then("the request should fail with InvalidArguments")

@@ -27,15 +27,21 @@ def snapshot_uuids():
 
 @pytest.fixture(scope="module")
 def disks():
-    yield Deployer.create_disks(1)
-    Deployer.delete_disks(1)
+    yield Deployer.create_disks(3)
+    Deployer.delete_disks(3)
 
 
 @pytest.fixture(scope="module")
 def deployer_cluster(disks):
-    Deployer.start(1, fio_spdk=True, cache_period="100ms", reconcile_period="150ms")
+    Deployer.start(3, fio_spdk=True, cache_period="100ms", reconcile_period="150ms")
     ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(0), "pool", CreatePoolBody([disks[0]])
+        Deployer.node_name(0), "pool-0", CreatePoolBody([disks[0]])
+    )
+    ApiClient.pools_api().put_node_pool(
+        Deployer.node_name(1), "pool-1", CreatePoolBody([disks[1]])
+    )
+    ApiClient.pools_api().put_node_pool(
+        Deployer.node_name(2), "pool-2", CreatePoolBody([disks[2]])
     )
     yield
     Deployer.stop()
@@ -71,14 +77,14 @@ def a_deployer_cluster(deployer_cluster):
     """a deployer cluster."""
 
 
-@given("a valid snapshot of a single replica volume")
-def a_valid_snapshot_of_a_single_replica_volume(volume_uuids, snapshot_uuids):
-    """a valid snapshot of a single replica volume."""
+@given("a valid snapshot of a multi replica volume")
+def a_valid_snapshot_of_a_multi_replica_volume(volume_uuids, snapshot_uuids):
+    """a valid snapshot of a multi replica volume."""
     ApiClient.volumes_api().put_volume(
         volume_uuids[0],
         CreateVolumeBody(
             VolumePolicy(True),
-            replicas=1,
+            replicas=3,
             size=20 * 1024 * 1024,
             thin=False,
         ),
@@ -118,20 +124,24 @@ def we_attempt_to_create_4_new_volumes_with_the_snapshot_as_their_source(
 
 
 @when(
-    "we create a new volume with the snapshot as its source",
+    parsers.parse(
+        "we create a new volume with {repl_count:d} replicas using snapshot as its source"
+    ),
     target_fixture="restored_volume",
 )
 @given(
-    "we create a new volume with the snapshot as its source",
+    parsers.parse(
+        "we create a new volume with {repl_count:d} replicas using snapshot as its source"
+    ),
     target_fixture="restored_volume",
 )
-def we_create_a_new_volume_with_the_snapshot_as_its_source(
-    volume_uuids, snapshot_uuids
+def we_create_a_new_volume_with_repl_count_replicas_using_snapshot_as_its_source(
+    volume_uuids, snapshot_uuids, repl_count
 ):
-    """we create a new volume with the snapshot as its source."""
+    """we create a new volume with <repl_count> replicas using snapshot as its source."""
     body = CreateVolumeBody(
         VolumePolicy(True),
-        replicas=1,
+        replicas=repl_count,
         size=20 * 1024 * 1024,
         thin=True,
     )
@@ -153,12 +163,14 @@ def we_create_a_snapshot_from_volume_restore_index(volume_uuids, snapshot_uuids,
     ApiClient.snapshots_api().del_snapshot(snapshot_uuids[index])
 
 
-@then("a new replica will be created for the new volume")
-def a_new_replica_will_be_created_for_the_new_volume(volume_uuids, restored_volume):
+@then(parsers.parse("a new {repl_count:d} replicas will be created for the new volume"))
+def a_new_replica_will_be_created_for_the_new_volume(
+    volume_uuids, restored_volume, repl_count
+):
     """a new replica will be created for the new volume."""
     # check volume has a replica in the topology
     assert restored_volume.spec.uuid == volume_uuids[1]
-    assert restored_volume.spec.num_replicas == 1
+    assert restored_volume.spec.num_replicas == repl_count
     assert restored_volume.spec.status == SpecStatus("Created")
 
 
@@ -176,14 +188,17 @@ def all_requests_should_succeed(snaprestore_attempts):
     yield created
 
 
-@then("the replica's capacity will be same as the snapshot")
-def the_replicas_capacity_will_be_same_as_the_snapshot(restored_volume):
+@then(
+    parsers.parse("all replicas {repl_count:d} capacity will be same as the snapshot")
+)
+def the_replicas_capacity_will_be_same_as_the_snapshot(restored_volume, repl_count):
     """the replica's capacity will be same as the snapshot."""
     replicas = list(restored_volume.state.replica_topology.values())
-    assert len(replicas) == 1
-    assert replicas[0].usage.capacity == restored_volume.spec.size
-    assert replicas[0].usage.allocated == 0
-    assert replicas[0].usage.allocated_snapshots == 0
+    assert len(replicas) == repl_count
+    for replica in replicas:
+        assert replica.usage.capacity == restored_volume.spec.size
+        assert replica.usage.allocated == 0
+        assert replica.usage.allocated_snapshots == 0
 
 
 @then(
