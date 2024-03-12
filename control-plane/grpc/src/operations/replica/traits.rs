@@ -70,6 +70,7 @@ impl From<Replica> for replica::Replica {
             node_id: replica.node.into(),
             name: replica.name.into(),
             replica_id: Some(replica.uuid.into()),
+            entity_id: replica.entity_id.into_opt(),
             pool_id: replica.pool_id.into(),
             pool_uuid: replica.pool_uuid.into_opt(),
             thin: replica.thin,
@@ -122,6 +123,19 @@ impl TryFrom<replica::Replica> for Replica {
             node: replica.node_id.into(),
             name: replica.name.into(),
             uuid: ReplicaId::try_from(StringValue(replica.replica_id))?,
+            entity_id: match replica.entity_id {
+                Some(id) => match VolumeId::try_from(id) {
+                    Ok(uuid) => Some(uuid),
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Replica,
+                            "replica.entity_id",
+                            err.to_string(),
+                        ))
+                    }
+                },
+                None => None,
+            },
             pool_id: replica.pool_id.into(),
             pool_uuid: match replica.pool_uuid {
                 Some(uuid) => Some(match PoolUuid::try_from(uuid) {
@@ -293,6 +307,9 @@ pub trait CreateReplicaInfo: Send + Sync + std::fmt::Debug {
     fn name(&self) -> Option<ReplicaName>;
     /// Uuid of the replica
     fn uuid(&self) -> ReplicaId;
+    /// Entity id of the replica, If set.
+    fn entity_id(&self) -> Option<VolumeId>;
+
     /// Id of the pool
     fn pool_id(&self) -> PoolId;
     /// Uuid of the pool
@@ -322,6 +339,10 @@ impl CreateReplicaInfo for CreateReplica {
 
     fn uuid(&self) -> ReplicaId {
         self.uuid.clone()
+    }
+
+    fn entity_id(&self) -> Option<VolumeId> {
+        self.entity_id.clone()
     }
 
     fn pool_id(&self) -> PoolId {
@@ -366,6 +387,7 @@ pub struct ValidatedCreateReplicaRequest {
     owners: ReplicaOwners,
     pool_uuid: Option<PoolUuid>,
     allowed_hosts: Vec<HostNqn>,
+    entity_id: Option<VolumeId>,
 }
 
 impl CreateReplicaInfo for ValidatedCreateReplicaRequest {
@@ -379,6 +401,10 @@ impl CreateReplicaInfo for ValidatedCreateReplicaRequest {
 
     fn uuid(&self) -> ReplicaId {
         self.uuid.clone()
+    }
+
+    fn entity_id(&self) -> Option<VolumeId> {
+        self.entity_id.clone()
     }
 
     fn pool_id(&self) -> PoolId {
@@ -456,6 +482,19 @@ impl ValidateRequestTypes for CreateReplicaRequest {
                 .iter()
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()?,
+            entity_id: match self.entity_id.clone() {
+                Some(id) => Some(match VolumeId::try_from(id) {
+                    Ok(uuid) => uuid,
+                    Err(err) => {
+                        return Err(ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "entity_id",
+                            err.to_string(),
+                        ))
+                    }
+                }),
+                None => None,
+            },
             inner: self,
         })
     }
@@ -874,6 +913,7 @@ impl From<&dyn CreateReplicaInfo> for CreateReplicaRequest {
         Self {
             node_id: data.node().to_string(),
             pool_id: data.pool_id().to_string(),
+            entity_id: data.entity_id().map(|id| id.to_string()),
             pool_uuid: data.pool_uuid().map(|uuid| uuid.into()),
             name: data.name().map(|name| name.to_string()),
             replica_id: Some(data.uuid().to_string()),
@@ -893,6 +933,7 @@ impl From<&dyn CreateReplicaInfo> for CreateReplica {
             node: data.node(),
             name: data.name(),
             uuid: data.uuid(),
+            entity_id: data.entity_id(),
             pool_id: data.pool_id(),
             pool_uuid: data.pool_uuid(),
             size: data.size(),

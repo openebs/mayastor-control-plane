@@ -68,6 +68,8 @@ pub struct Replica {
     pub name: ReplicaName,
     /// UUID of the replica.
     pub uuid: ReplicaId,
+    /// Entity Id (volume_id) of the replica.
+    pub entity_id: Option<VolumeId>,
     /// Id of the pool.
     pub pool_id: PoolId,
     /// UUID of the pool.
@@ -418,6 +420,8 @@ pub struct CreateReplica {
     pub name: Option<ReplicaName>,
     /// UUID of the replica.
     pub uuid: ReplicaId,
+    /// Entity Id of the replica.
+    pub entity_id: Option<VolumeId>,
     /// Id of the pool.
     pub pool_id: PoolId,
     /// UUID of the pool.
@@ -553,6 +557,40 @@ impl From<ReplicaOwners> for models::ReplicaSpecOwners {
                 .collect(),
             volume: src.volume.into_opt(),
         }
+    }
+}
+
+/// Request struct to set replica entity id.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+pub struct SetReplicaEntityId {
+    uuid: ReplicaId,
+    entity_id: VolumeId,
+    node_id: NodeId,
+}
+
+impl SetReplicaEntityId {
+    /// Creates a new instance of SetReplicaEntityId.
+    pub fn new(uuid: ReplicaId, entity_id: VolumeId, node_id: NodeId) -> Self {
+        Self {
+            uuid,
+            entity_id,
+            node_id,
+        }
+    }
+
+    /// Returns uuid of the replica.
+    pub fn uuid(&self) -> &ReplicaId {
+        &self.uuid
+    }
+
+    /// Returns entity id of the replica.
+    pub fn entity_id(&self) -> &VolumeId {
+        &self.entity_id
+    }
+
+    /// Returns node id of the replica.
+    pub fn node_id(&self) -> &NodeId {
+        &self.node_id
     }
 }
 

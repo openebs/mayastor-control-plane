@@ -104,6 +104,7 @@ impl TryIoEngineToAgent for v0::ReplicaV2 {
                 uuid: self.uuid.to_owned(),
                 kind: ResourceKind::Replica,
             })?,
+            entity_id: None,
             pool_id: self.pool.clone().into(),
             pool_uuid: None,
             thin: self.thin,

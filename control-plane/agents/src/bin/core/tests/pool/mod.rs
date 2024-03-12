@@ -81,6 +81,7 @@ async fn pool() {
             &CreateReplica {
                 node: io_engine.clone(),
                 uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
+                entity_id: None,
                 pool_id: "pooloop".into(),
                 pool_uuid: None,
                 size: 12582912, /* actual size will be a multiple of 4MB so just
@@ -106,6 +107,7 @@ async fn pool() {
             node: io_engine.clone(),
             name: ReplicaName::from("cf36a440-74c6-4042-b16c-4f7eddfc24da"),
             uuid: ReplicaId::try_from("cf36a440-74c6-4042-b16c-4f7eddfc24da").unwrap(),
+            entity_id: None,
             pool_id: "pooloop".into(),
             pool_uuid: replica.pool_uuid.clone(),
             thin: true,

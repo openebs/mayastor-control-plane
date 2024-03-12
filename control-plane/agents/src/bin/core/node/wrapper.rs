@@ -30,8 +30,8 @@ use stor_port::{
             NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, NodeId,
             NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register, RemoveNexusChild,
             Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ResizeNexus, ResizeReplica,
-            ShareNexus, ShareReplica, ShutdownNexus, SnapshotId, UnshareNexus, UnshareReplica,
-            VolumeId,
+            SetReplicaEntityId, ShareNexus, ShareReplica, ShutdownNexus, SnapshotId, UnshareNexus,
+            UnshareReplica, VolumeId,
         },
     },
 };
@@ -1283,6 +1283,14 @@ impl ReplicaApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
 
                 Ok(replica)
             }
+            Err(SvcError::GrpcRequestError { source, .. })
+                if source.code() == tonic::Code::DataLoss =>
+            {
+                Err(SvcError::ReplicaSetPropertyFailed {
+                    attribute: "entity_id".to_string(),
+                    replica: request.uuid.to_string(),
+                })
+            }
             Err(error) => {
                 let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
                 self.update_pool_replica_states(ctx.deref_mut()).await?;
@@ -1392,6 +1400,30 @@ impl ReplicaApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
         let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
         self.update_replica_states(ctx.deref_mut()).await?;
         Ok(local_uri)
+    }
+
+    /// Set entity id for a given replica via grpc.
+    async fn set_replica_entity_id(
+        &self,
+        request: &SetReplicaEntityId,
+    ) -> Result<Replica, SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        match dataplane.set_replica_entity_id(request).await {
+            Ok(replica) => {
+                self.update_replica_state(Either::Insert(replica.clone()))
+                    .await;
+                Ok(replica)
+            }
+            Err(SvcError::GrpcRequestError { source, .. })
+                if source.code() == tonic::Code::DataLoss =>
+            {
+                Err(SvcError::ReplicaSetPropertyFailed {
+                    attribute: "entity_id".to_string(),
+                    replica: request.uuid().to_string(),
+                })
+            }
+            Err(error) => Err(error),
+        }
     }
 }
 

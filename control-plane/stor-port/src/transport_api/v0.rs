@@ -41,6 +41,7 @@ impl_message!(GetReplicas);
 impl_message!(CreateReplica);
 impl_message!(DestroyReplica);
 impl_message!(ResizeReplica);
+impl_message!(SetReplicaEntityId);
 impl_message!(ShareReplica);
 impl_message!(UnshareReplica);
 impl_message!(CreateReplicaSnapshot);

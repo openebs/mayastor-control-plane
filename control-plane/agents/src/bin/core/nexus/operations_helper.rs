@@ -1,15 +1,13 @@
 use crate::controller::{
-    io_engine::NexusChildApi,
+    io_engine::{NexusChildApi, ReplicaApi},
     registry::Registry,
     resources::{
-        operations::ResourceOffspring,
+        operations::{ResourceOffspring, ResourceOwnerUpdate, ResourceSharing},
         operations_helper::{GuardedOperationsHelper, OperationSequenceGuard},
         OperationGuardArc,
     },
 };
 use agents::errors::SvcError;
-
-use crate::controller::resources::operations::{ResourceOwnerUpdate, ResourceSharing};
 use stor_port::types::v0::{
     store::{
         nexus::{NexusOperation, NexusSpec, ReplicaUri},
@@ -18,9 +16,11 @@ use stor_port::types::v0::{
     },
     transport::{
         AddNexusReplica, Child, ChildUri, Nexus, NodeId, RemoveNexusChild, RemoveNexusReplica,
-        Replica, ReplicaOwners, ShareReplica,
+        Replica, ReplicaOwners, SetReplicaEntityId, ShareReplica,
     },
 };
+
+use tracing::log::error;
 
 impl OperationGuardArc<NexusSpec> {
     /// Attach the specified replica to the volume nexus
@@ -133,9 +133,25 @@ impl OperationGuardArc<NexusSpec> {
         replica_state: &Replica,
         nexus_node: &NodeId,
     ) -> Result<ChildUri, SvcError> {
+        let mut replica = registry.specs().replica(&replica_state.uuid).await?;
+        if replica_state.entity_id.is_none() {
+            if let Some(vol) = replica.as_ref().owners.volume() {
+                let node = registry.node_wrapper(&replica_state.node).await?;
+                let set_entity_id = SetReplicaEntityId::new(
+                    replica_state.uuid.clone(),
+                    vol.clone(),
+                    replica_state.node.clone(),
+                );
+                if let Err(error) = node.set_replica_entity_id(&set_entity_id).await {
+                    error!(
+                        "Failed to set entity_id for the replica {}",
+                        error.to_string()
+                    );
+                }
+            }
+        }
         if nexus_node == &replica_state.node {
             // on the same node, so connect via the loopback bdev
-            let mut replica = registry.specs().replica(&replica_state.uuid).await?;
             match replica.unshare(registry, &replica_state.into()).await {
                 Ok(uri) => Ok(uri.into()),
                 Err(SvcError::NotShared { .. }) => Ok(replica_state.uri.clone().into()),
@@ -143,7 +159,6 @@ impl OperationGuardArc<NexusSpec> {
             }
         } else {
             // on a different node, so connect via an nvmf target
-            let mut replica = registry.specs().replica(&replica_state.uuid).await?;
             let allowed_hosts = registry.node_nqn(nexus_node).await?;
             let request = ShareReplica::from(replica_state).with_hosts(allowed_hosts);
             match replica.share(registry, &request).await {

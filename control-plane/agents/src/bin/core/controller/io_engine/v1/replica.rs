@@ -10,7 +10,7 @@ use stor_port::{
     types::v0::transport::{
         CreateReplica, CreateReplicaSnapshot, DestroyReplica, DestroyReplicaSnapshot,
         IoEngCreateSnapshotClone, ListReplicaSnapshots, ListSnapshotClones, Replica, ReplicaId,
-        ReplicaSnapshot, ResizeReplica, ShareReplica, UnshareReplica,
+        ReplicaSnapshot, ResizeReplica, SetReplicaEntityId, ShareReplica, UnshareReplica,
     },
 };
 
@@ -154,6 +154,22 @@ impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
             .into_inner()
             .uri;
         Ok(uri)
+    }
+
+    async fn set_replica_entity_id(
+        &self,
+        request: &SetReplicaEntityId,
+    ) -> Result<Replica, SvcError> {
+        let rpc_replica = self
+            .replica()
+            .set_replica_entity_id(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Replica,
+                request: "set_replica_entity_id",
+            })?;
+        let replica = rpc_replica_to_agent(&rpc_replica.into_inner(), request.node_id())?;
+        Ok(replica)
     }
 }
 
