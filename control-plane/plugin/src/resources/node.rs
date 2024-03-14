@@ -1,9 +1,8 @@
 use crate::{
-    operations::{Cordoning, Drain, Get, Label, List, PluginResult},
+    operations::{Cordoning, Drain, GetWithArgs, Label, ListWithArgs, PluginResult},
     resources::{
         error::Error,
-        utils,
-        utils::{print_table, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
+        utils::{self, print_table, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
         NodeId,
     },
     rest_wrapper::RestClient,
@@ -29,12 +28,34 @@ enum NodeCordonDrainState {
 pub struct GetNodeArgs {
     /// Id of the node
     node_id: NodeId,
+    /// Show the labels of the node
+    #[clap(long, default_value = "false")]
+    show_labels: bool,
 }
 
 impl GetNodeArgs {
     /// Return the node ID.
     pub fn node_id(&self) -> NodeId {
         self.node_id.clone()
+    }
+    /// Return whether to show the labels of the node.
+    pub fn show_labels(&self) -> bool {
+        self.show_labels
+    }
+}
+
+#[derive(Debug, Clone, clap::Args)]
+/// Arguments used when getting nodes.
+pub struct GetNodesArgs {
+    /// Show the labels of the nodes
+    #[clap(long, default_value = "false")]
+    show_labels: bool,
+}
+
+impl GetNodesArgs {
+    /// Return whether to show the labels of the nodes.
+    pub fn show_labels(&self) -> bool {
+        self.show_labels
     }
 }
 
@@ -90,12 +111,14 @@ impl GetHeaderRow for openapi::models::Node {
 }
 
 #[async_trait(?Send)]
-impl List for Nodes {
-    async fn list(output: &utils::OutputFormat) -> PluginResult {
+impl ListWithArgs for Nodes {
+    type Args = GetNodesArgs;
+    async fn list(args: &Self::Args, output: &utils::OutputFormat) -> PluginResult {
         match RestClient::client().nodes_api().get_nodes(None).await {
             Ok(nodes) => {
-                // Print table, json or yaml based on output format.
-                utils::print_table(output, nodes.into_body());
+                let node_display =
+                    NodeDisplayLabels::new_nodes(nodes.clone().into_body(), args.show_labels());
+                print_table(output, node_display);
             }
             Err(e) => {
                 return Err(Error::ListNodesError { source: e });
@@ -105,18 +128,95 @@ impl List for Nodes {
     }
 }
 
+/// The NodeDisplayLabels structure is responsible for controlling the display formatting of Node
+/// objects. `#[serde(flatten)]` and `#[serde(skip)]` attributes are used to ensure that when the
+/// object is serialised, only the `inner` object is represented.
+#[derive(Serialize, Debug)]
+pub struct NodeDisplayLabels {
+    #[serde(flatten)]
+    pub inner: Vec<openapi::models::Node>,
+    #[serde(skip)]
+    show_labels: bool,
+}
+
+impl NodeDisplayLabels {
+    /// Create a new `NodeDisplayLabels` instance.
+    pub(crate) fn new(node: openapi::models::Node, show_labels: bool) -> Self {
+        let vec: Vec<openapi::models::Node> = vec![node];
+        Self {
+            inner: vec,
+            show_labels,
+        }
+    }
+    /// Create a new `NodeDisplay` instance from a vector of nodes.
+    pub(crate) fn new_nodes(nodes: Vec<openapi::models::Node>, show_labels: bool) -> Self {
+        Self {
+            inner: nodes,
+            show_labels,
+        }
+    }
+
+    /// Get a list of node labels.
+    pub(crate) fn get_node_label_list(node: &openapi::models::Node) -> Vec<String> {
+        let mut node_labels: Vec<String> = vec![];
+
+        match &node.spec {
+            Some(ns) => match &ns.labels {
+                Some(ds) => {
+                    node_labels = ds
+                        .iter()
+                        .map(|(key, value)| format!("{}={}", key, value))
+                        .collect();
+                }
+                None => {}
+            },
+            None => {}
+        }
+        node_labels
+    }
+}
+
+// Create the header for a `NodeDisplayLabels` object.
+impl GetHeaderRow for NodeDisplayLabels {
+    fn get_header_row(&self) -> Row {
+        let mut header = (*utils::NODE_HEADERS).clone();
+        if self.show_labels {
+            header.extend(vec!["LABELS"]);
+        }
+        header
+    }
+}
+
+impl CreateRows for NodeDisplayLabels {
+    fn create_rows(&self) -> Vec<Row> {
+        let mut rows = vec![];
+        for node in self.inner.iter() {
+            let mut row = node.create_rows();
+            if self.show_labels {
+                let labelstring = NodeDisplayLabels::get_node_label_list(node).join(", ");
+                // Add the node labels to each row.
+                row[0].add_cell(Cell::new(&labelstring));
+            }
+            rows.push(row[0].clone());
+        }
+        rows
+    }
+}
+
 /// Node resource.
 #[derive(clap::Args, Debug)]
 pub struct Node {}
 
 #[async_trait(?Send)]
-impl Get for Node {
+impl GetWithArgs for Node {
     type ID = NodeId;
-    async fn get(id: &Self::ID, output: &utils::OutputFormat) -> PluginResult {
+    type Args = GetNodeArgs;
+    async fn get(id: &Self::ID, args: &Self::Args, output: &utils::OutputFormat) -> PluginResult {
         match RestClient::client().nodes_api().get_node(id).await {
             Ok(node) => {
-                // Print table, json or yaml based on output format.
-                utils::print_table(output, node.into_body());
+                let node_display =
+                    NodeDisplayLabels::new(node.clone().into_body(), args.show_labels());
+                print_table(output, node_display);
             }
             Err(e) => {
                 return Err(Error::GetNodeError {

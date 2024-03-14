@@ -74,12 +74,29 @@ pub trait ListExt {
     async fn list(output: &utils::OutputFormat, context: &Self::Context) -> PluginResult;
 }
 
+/// ListWithArgs trait.
+/// To be implemented by resources which support the 'list' operation with arguments.
+#[async_trait(?Send)]
+pub trait ListWithArgs {
+    type Args;
+    async fn list(args: &Self::Args, output: &utils::OutputFormat) -> PluginResult;
+}
+
 /// Get trait.
 /// To be implemented by resources which support the 'get' operation.
 #[async_trait(?Send)]
 pub trait Get {
     type ID;
     async fn get(id: &Self::ID, output: &utils::OutputFormat) -> PluginResult;
+}
+
+/// GetWithArgs trait.
+/// To be implemented by resources which support the 'get' operation with arguments.
+#[async_trait(?Send)]
+pub trait GetWithArgs {
+    type ID;
+    type Args;
+    async fn get(id: &Self::ID, args: &Self::Args, output: &utils::OutputFormat) -> PluginResult;
 }
 
 /// Scale trait.
