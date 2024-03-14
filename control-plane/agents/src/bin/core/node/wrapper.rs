@@ -1283,22 +1283,15 @@ impl ReplicaApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
 
                 Ok(replica)
             }
-            Err(SvcError::GrpcRequestError { source, .. })
-                if source.code() == tonic::Code::DataLoss =>
-            {
-                Err(SvcError::ReplicaSetPropertyFailed {
-                    attribute: "entity_id".to_string(),
-                    replica: request.uuid.to_string(),
-                })
-            }
             Err(error) => {
                 let mut ctx = dataplane.reconnect(GETS_TIMEOUT).await?;
                 self.update_pool_replica_states(ctx.deref_mut()).await?;
 
                 match self.read().await.replicas().into_iter().find(|replica| {
-                    replica.uuid == request.uuid
+                    (replica.uuid == request.uuid
                         || replica.name
-                            == ReplicaName::from_opt_uuid(request.name.as_ref(), &request.uuid)
+                            == ReplicaName::from_opt_uuid(request.name.as_ref(), &request.uuid))
+                        && replica.entity_id == request.entity_id
                 }) {
                     Some(replica) => Ok(replica),
                     None => Err(error),
@@ -1420,6 +1413,7 @@ impl ReplicaApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
                 Err(SvcError::ReplicaSetPropertyFailed {
                     attribute: "entity_id".to_string(),
                     replica: request.uuid().to_string(),
+                    source,
                 })
             }
             Err(error) => Err(error),

@@ -20,8 +20,6 @@ use stor_port::types::v0::{
     },
 };
 
-use tracing::log::error;
-
 impl OperationGuardArc<NexusSpec> {
     /// Attach the specified replica to the volume nexus
     /// The replica might need to be shared/unshared so it can be opened by the nexus
@@ -143,9 +141,10 @@ impl OperationGuardArc<NexusSpec> {
                     replica_state.node.clone(),
                 );
                 if let Err(error) = node.set_replica_entity_id(&set_entity_id).await {
-                    error!(
-                        "Failed to set entity_id for the replica {}",
-                        error.to_string()
+                    tracing::error!(
+                        replica.uuid = %replica_state.uuid,
+                        %error,
+                        "Failed to set entity_id",
                     );
                 }
             }

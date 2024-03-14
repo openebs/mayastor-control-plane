@@ -402,8 +402,12 @@ pub enum SvcError {
         replicas: u8,
         id: String,
     },
-    #[snafu(display("Cannot set '{attribute}' on Replica '{replica}'"))]
-    ReplicaSetPropertyFailed { attribute: String, replica: String },
+    #[snafu(display("Cannot set '{attribute}' on Replica '{replica}: {source}'"))]
+    ReplicaSetPropertyFailed {
+        attribute: String,
+        replica: String,
+        source: tonic::Status,
+    },
 }
 
 impl SvcError {
