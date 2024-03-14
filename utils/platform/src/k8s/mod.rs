@@ -19,10 +19,22 @@ impl K8s {
     /// Create new `Self` from a given `Client`.
     pub async fn from(client: Client) -> Result<Self, PlatformError> {
         let platform_uuid = Self::fetch_platform_uuid(client).await?;
+        // todo: should we use the default namespace from the client?
         let platform_ns = std::env::var("MY_POD_NAMESPACE").unwrap_or_else(|_| "default".into());
         Ok(Self {
             platform_uuid,
             platform_ns,
+        })
+    }
+    /// Create new `Self` from a given `Client` and namespace.
+    /// This may be necessary if we're running outside of the cluster itself, which
+    /// means that MY_POD_NAMESPACE itself is not available... Perhaps using a client
+    /// configured with the namespace as default would be better.
+    pub async fn from_custom(client: Client, namespace: &str) -> Result<Self, PlatformError> {
+        let platform_uuid = Self::fetch_platform_uuid(client).await?;
+        Ok(Self {
+            platform_uuid,
+            platform_ns: namespace.to_string(),
         })
     }
     async fn fetch_platform_uuid(client: Client) -> Result<PlatformUid, PlatformError> {
