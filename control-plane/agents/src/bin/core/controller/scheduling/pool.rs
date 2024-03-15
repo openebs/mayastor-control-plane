@@ -186,6 +186,10 @@ pub(crate) fn replica_rebuildable(
 /// Calculates the number of bytes required to rebuild this replica up to the given minimum.
 /// # Warning: valid only if the current blocks are exactly the same as the healthy replicas.
 pub(crate) fn rebuild_space_required(min_allocated_bytes: u64, replica: &Replica) -> u64 {
+    if !replica.thin {
+        return 0;
+    }
+
     let repl_allocated_bytes = replica
         .space
         .as_ref()
@@ -194,7 +198,7 @@ pub(crate) fn rebuild_space_required(min_allocated_bytes: u64, replica: &Replica
 
     // we've already allocated some bytes, so take those into account
     // did you read the warning above?
-    let bytes_needed = min_allocated_bytes - repl_allocated_bytes;
+    let bytes_needed = min_allocated_bytes - repl_allocated_bytes.min(min_allocated_bytes);
 
     // We need sufficient free space for at least the current allocation of other replicas, but
     // just this capacity may not be enough as applications may carry on issuing new writes.
