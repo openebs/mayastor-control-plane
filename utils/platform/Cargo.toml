@@ -9,6 +9,6 @@ description = "A library used to identify which platfrom we're running under."
 [dependencies]
 tokio = { version = "1.32.0", features = [ "full" ] }
 # Version 0.20.0 brings support for 1_28 but removes support from 1_20 and 1_21..
-k8s-openapi = { version = "0.19.0", features = ["v1_20"] }
+k8s-openapi = { version = "0.19.0", features = ["v1_25"] }
 kube = { version = "0.85.0", features = ["derive"] }
 tracing = "0.1.37"
