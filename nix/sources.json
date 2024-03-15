@@ -58,5 +58,17 @@
         "type": "tarball",
         "url": "https://github.com/oxalica/rust-overlay/archive/c0df7f2a856b5ff27a3ce314f6d7aacf5fda546f.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "nixpkgs-v1": {
+        "branch": "master",
+        "description": "A read-only mirror of NixOS/nixpkgs tracking the released channels. Send issues and PRs to",
+        "homepage": "https://github.com/NixOS/nixpkgs",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "3600a82711987ac1267a96fd97974437b69f6806",
+        "sha256": "0pyxcf2vb30maw1rnzw1y949q5mq304jbkgjj0rrkp4ibzzyglai",
+        "type": "tarball",
+        "url": "https://github.com/NixOS/nixpkgs/archive/3600a82711987ac1267a96fd97974437b69f6806.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     }
 }

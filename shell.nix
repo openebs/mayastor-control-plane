@@ -43,7 +43,7 @@ mkShell {
   ] ++ pkgs.lib.optional (!norust) rust
   ++ pkgs.lib.optionals (system != "aarch64-darwin") [
     e2fsprogs
-    xfsprogs_5_16
+    xfsprogs_5_11
     btrfs-progs
     nvme-cli
     # python3.9-pyopenssl-22.0.0 marked as broken but fixed on master..
