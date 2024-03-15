@@ -419,10 +419,11 @@ impl IoEngineToAgent for v1::nexus::Child {
 impl AgentToIoEngine for transport::CreateNexus {
     type IoEngineMessage = v1::nexus::CreateNexusRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
-        let nexus_config = self
-            .config
-            .clone()
-            .unwrap_or_else(|| NexusNvmfConfig::default().with_no_resv());
+        // let nexus_config = self
+        //     .config
+        //     .clone()
+        //     .unwrap_or_else(|| NexusNvmfConfig::default().with_no_resv());
+        let nexus_config = NexusNvmfConfig::default().with_no_resv();
         Self::IoEngineMessage {
             name: self.name(),
             uuid: self.uuid.clone().into(),
