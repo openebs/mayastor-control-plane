@@ -118,7 +118,14 @@ impl ListWithArgs for Nodes {
             Ok(nodes) => {
                 let node_display =
                     NodeDisplayLabels::new_nodes(nodes.clone().into_body(), args.show_labels());
-                print_table(output, node_display);
+                match output {
+                    OutputFormat::Yaml | OutputFormat::Json => {
+                        print_table(output, node_display.inner);
+                    }
+                    OutputFormat::None => {
+                        print_table(output, node_display);
+                    }
+                }
             }
             Err(e) => {
                 return Err(Error::ListNodesError { source: e });
@@ -216,7 +223,14 @@ impl GetWithArgs for Node {
             Ok(node) => {
                 let node_display =
                     NodeDisplayLabels::new(node.clone().into_body(), args.show_labels());
-                print_table(output, node_display);
+                match output {
+                    OutputFormat::Yaml | OutputFormat::Json => {
+                        print_table(output, node_display.inner);
+                    }
+                    OutputFormat::None => {
+                        print_table(output, node_display);
+                    }
+                }
             }
             Err(e) => {
                 return Err(Error::GetNodeError {
