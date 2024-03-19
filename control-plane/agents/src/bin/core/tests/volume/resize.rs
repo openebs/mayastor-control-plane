@@ -279,22 +279,38 @@ async fn resize_with_cluster_capacity_limit() {
 
     let vol_cli = cluster.grpc_client().volume();
 
-    // resize exceeding the capacity limit
+    // resize(shrink) within a valid capacity limit
+    grpc_resize_volume_with_limit(
+        &vol_cli,
+        Some(EXPANDED_SIZE),
+        Some(ReplyErrorKind::NotAcceptable {}),
+        false,
+    )
+    .await;
+    // resize(expand) exceeding the capacity limit
     grpc_resize_volume_with_limit(
         &vol_cli,
         Some(EXPANDED_SIZE - CAPACITY_LIMIT_DIFF),
         Some(ReplyErrorKind::CapacityLimitExceeded {}),
+        true,
     )
     .await;
 
-    // resize within the capacity limit
-    grpc_resize_volume_with_limit(&vol_cli, Some(EXPANDED_SIZE + CAPACITY_LIMIT_DIFF), None).await;
+    // resize(expand) within the capacity limit
+    grpc_resize_volume_with_limit(
+        &vol_cli,
+        Some(EXPANDED_SIZE + CAPACITY_LIMIT_DIFF),
+        None,
+        true,
+    )
+    .await;
     // resize a new volume, but reduce the limit set previously. The limit balance
     // calculations are expected to work based on reduced limit value now.
     grpc_resize_volume_with_limit(
         &vol_cli,
         Some(EXPANDED_SIZE + CAPACITY_LIMIT_DIFF / 2),
         None,
+        true,
     )
     .await;
 }
@@ -368,8 +384,13 @@ async fn grpc_resize_volume_with_limit(
     volume_client: &dyn VolumeOperations,
     capacity: Option<u64>,
     expected_error: Option<ReplyErrorKind>,
+    expand: bool,
 ) {
     let vol_uuid = Uuid::new_v4();
+    let new_size = match expand {
+        true => EXPANDED_SIZE,
+        false => SIZE / 2,
+    };
 
     let volume = volume_client
         .create(
@@ -389,7 +410,7 @@ async fn grpc_resize_volume_with_limit(
         .resize(
             &ResizeVolume {
                 uuid: volume.uuid().clone(),
-                requested_size: EXPANDED_SIZE,
+                requested_size: new_size,
                 cluster_capacity_limit: capacity,
             },
             None,

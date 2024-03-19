@@ -608,7 +608,12 @@ impl Service {
             return volume.resize(&self.registry, request).await;
         };
 
-        let required = request.requested_size - volume.as_ref().size;
+        // If requested size is less than volume's current size(attempt to shrink volume),
+        // then required becomes zero because we won't need to borrow anything from capacity_limit.
+        let required = request
+            .requested_size
+            .checked_sub(volume.as_ref().size)
+            .unwrap_or_default();
         *self.capacity_limit_borrow.write() += required;
         // If there is a defined system wide capacity limit, ensure we don't breach that.
         let current = *self.capacity_limit_borrow.read();
