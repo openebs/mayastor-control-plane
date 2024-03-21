@@ -220,18 +220,17 @@ impl GetWithArgs for Node {
     type Args = GetNodeArgs;
     async fn get(id: &Self::ID, args: &Self::Args, output: &utils::OutputFormat) -> PluginResult {
         match RestClient::client().nodes_api().get_node(id).await {
-            Ok(node) => {
-                let node_display =
-                    NodeDisplayLabels::new(node.clone().into_body(), args.show_labels());
-                match output {
-                    OutputFormat::Yaml | OutputFormat::Json => {
-                        print_table(output, node_display.inner);
-                    }
-                    OutputFormat::None => {
-                        print_table(output, node_display);
-                    }
+            Ok(node) => match output {
+                OutputFormat::Yaml | OutputFormat::Json => {
+                    print_table(output, node.clone().into_body());
                 }
-            }
+                OutputFormat::None => {
+                    print_table(
+                        output,
+                        NodeDisplayLabels::new(node.into_body(), args.show_labels()),
+                    );
+                }
+            },
             Err(e) => {
                 return Err(Error::GetNodeError {
                     id: id.to_string(),
