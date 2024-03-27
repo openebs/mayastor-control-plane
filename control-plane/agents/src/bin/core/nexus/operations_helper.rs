@@ -141,11 +141,13 @@ impl OperationGuardArc<NexusSpec> {
                     replica_state.node.clone(),
                 );
                 if let Err(error) = node.set_replica_entity_id(&set_entity_id).await {
-                    tracing::error!(
-                        replica.uuid = %replica_state.uuid,
-                        %error,
-                        "Failed to set entity_id",
-                    );
+                    if error.tonic_code() != tonic::Code::Unimplemented {
+                        tracing::error!(
+                            replica.uuid = %replica_state.uuid,
+                            %error,
+                            "Failed to set entity_id",
+                        );
+                    }
                 }
             }
         }
