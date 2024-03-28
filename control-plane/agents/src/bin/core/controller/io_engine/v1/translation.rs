@@ -78,6 +78,8 @@ impl IoEngineToAgent for v1::host::BlockDevice {
                 .as_ref()
                 .map(|filesystem| filesystem.to_agent()),
             available: self.available,
+            connection_type: self.connection_type.clone(),
+            is_rotational: self.is_rotational,
         }
     }
 }
