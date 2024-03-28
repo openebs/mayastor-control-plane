@@ -324,10 +324,10 @@ impl AgentToIoEngine for transport::DestroyPool {
 impl AgentToIoEngine for transport::CreateNexus {
     type IoEngineMessage = v0::CreateNexusV2Request;
     fn to_rpc(&self) -> Self::IoEngineMessage {
-        let nexus_config = self
-            .config
-            .clone()
-            .unwrap_or_else(|| NexusNvmfConfig::default().with_no_resv());
+        let nexus_config = match self.config.as_ref() {
+            Some(config) if config != &NexusNvmfConfig::default().with_no_resv() => config.clone(),
+            _ => NexusNvmfConfig::default().with_no_resv_v0(),
+        };
         Self::IoEngineMessage {
             name: self.name(),
             uuid: self.uuid.clone().into(),
