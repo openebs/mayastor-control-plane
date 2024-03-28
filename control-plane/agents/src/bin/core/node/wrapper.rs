@@ -96,6 +96,8 @@ pub(crate) struct NodeWrapper {
     states: ResourceStatesLocked,
     /// The number of rebuilds in progress on the node.
     num_rebuilds: Arc<RwLock<NumRebuilds>>,
+    /// If HA is disabled, don't use reservations when creating nexuses.
+    disable_ha: bool,
 }
 
 impl NodeWrapper {
@@ -104,6 +106,7 @@ impl NodeWrapper {
         node: &NodeState,
         deadline: std::time::Duration,
         comms_timeouts: NodeCommsTimeout,
+        disable_ha: bool,
     ) -> Self {
         tracing::debug!("Creating new node {:?}", node);
         Self {
@@ -114,6 +117,7 @@ impl NodeWrapper {
             comms_timeouts,
             states: ResourceStatesLocked::new(),
             num_rebuilds: Arc::new(RwLock::new(0)),
+            disable_ha,
         }
     }
 
@@ -132,6 +136,7 @@ impl NodeWrapper {
             ),
             states: ResourceStatesLocked::new(),
             num_rebuilds: Arc::new(RwLock::new(0)),
+            disable_ha: false,
         }
     }
 
@@ -590,6 +595,7 @@ impl NodeWrapper {
         tracing::info!(
             node.id = %self.id(),
             node.endpoint = self.endpoint_str(),
+            api.versions = ?self.node_state.api_versions,
             startup,
             "Preloading node"
         );
@@ -1368,7 +1374,16 @@ impl NexusApi<()> for Arc<tokio::sync::RwLock<NodeWrapper>> {
             });
         }
         let dataplane = self.grpc_client_locked(request.id()).await?;
-        match dataplane.create_nexus(request).await {
+        let disable_resv = self.read().await.disable_ha;
+        let result = if disable_resv {
+            let mut request = request.clone();
+            request.config = None;
+            dataplane.create_nexus(&request).await
+        } else {
+            dataplane.create_nexus(request).await
+        };
+
+        match result {
             Ok(nexus) => {
                 self.update_nexus_state(Either::Insert(nexus.clone())).await;
                 Ok(nexus)
