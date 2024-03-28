@@ -231,8 +231,13 @@ impl Service {
         let node = nodes.write().await.get_mut(&node_state.id).cloned();
         let send_event = match node {
             None => {
-                let mut node =
-                    NodeWrapper::new(&node_state, self.deadline, self.comms_timeouts.clone());
+                let ha_disabled = self.registry.ha_disabled();
+                let mut node = NodeWrapper::new(
+                    &node_state,
+                    self.deadline,
+                    self.comms_timeouts.clone(),
+                    ha_disabled,
+                );
 
                 // On startup api version is not known, thus probe all apiversions
                 let result = match startup {
