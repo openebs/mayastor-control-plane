@@ -503,6 +503,13 @@ impl NexusNvmfConfig {
         self.reservation_type = NvmeReservation::Reserved;
         self
     }
+    /// On v0 reservations are mostly disabled, simply set key to 1 to avoid failure.
+    pub fn with_no_resv_v0(mut self) -> Self {
+        self.reservation_key = 1;
+        self.preempt_policy = NexusNvmePreemption::ArgKey(None);
+        self.reservation_type = NvmeReservation::Reserved;
+        self
+    }
 }
 
 impl Default for NexusNvmfConfig {
