@@ -432,10 +432,23 @@ impl ParsedUri {
 
 impl EventWithMeta for NodeAgentSvc {
     fn event(&self, event_action: EventAction, meta: EventMeta) -> EventMessage {
+        let volume_id = meta
+            .source
+            .clone()
+            .unwrap_or_default()
+            .event_details
+            .unwrap_or_default()
+            .nvme_path_details
+            .unwrap_or_default()
+            .nqn
+            .split(':')
+            .last()
+            .unwrap_or_default()
+            .to_string();
         EventMessage {
             category: EventCategory::NvmePath as i32,
             action: event_action as i32,
-            target: "".to_string(),
+            target: volume_id,
             metadata: Some(meta),
         }
     }
