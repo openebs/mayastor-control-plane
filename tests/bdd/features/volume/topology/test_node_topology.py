@@ -222,10 +222,7 @@ NODE_LABELS = [
 ]
 
 
-# This fixture will be automatically used by all tests.
-# It starts the deployer which launches all the necessary containers.
-# A pool is created for convenience such that it is available for use by the tests.
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="module")
 def init():
     Deployer.start(NUM_IO_ENGINES)
     # Create the nodes with labels.
@@ -273,7 +270,7 @@ def test_suitable_nodes_which_contain_volume_node_topology_keys_only():
 
 
 @given("a control plane, four Io-Engine instances, twelve pools")
-def a_control_plane_four_ioengine_instances_twelve_pools():
+def a_control_plane_four_ioengine_instances_twelve_pools(init):
     """a control plane, four Io-Engine instances, twelve pools."""
     docker_client = docker.from_env()
 
@@ -311,6 +308,8 @@ def a_control_plane_four_ioengine_instances_twelve_pools():
         "zone-ap": "ap-south-1",
         "zone-eu": "eu-west-3",
     }
+    yield
+    Cluster.cleanup(pools=False)
 
 
 @given(
@@ -353,19 +352,14 @@ def the_desired_number_of_replica_of_volume_ie_replica_here_is_expression_number
     create_request, replica, expression, volume_node_topology_inclusion_label
 ):
     """the desired number of replica of volume i.e. <replica> here; is <expression> number of the nodes containing the label <volume_node_topology_inclusion_label>."""
+    no_of_eligible_nodes = no_of_suitable_nodes(
+        create_request[CREATE_REQUEST_KEY]["topology"]["node_topology"]["labelled"][
+            "inclusion"
+        ],
+    )
     if expression == "<=":
-        no_of_eligible_nodes = no_of_suitable_nodes(
-            create_request[CREATE_REQUEST_KEY]["topology"]["node_topology"]["labelled"][
-                "inclusion"
-            ],
-        )
         assert int(replica) <= no_of_eligible_nodes
     elif expression == ">":
-        no_of_eligible_nodes = no_of_suitable_nodes(
-            create_request[CREATE_REQUEST_KEY]["topology"]["node_topology"]["labelled"][
-                "inclusion"
-            ],
-        )
         assert int(replica) > no_of_eligible_nodes
 
 
@@ -425,7 +419,6 @@ def get_node_names_with_given_labels(node_label):
                     qualified_nodes.append(pool_id)
     else:
         node_key = node_label
-        node_value = ""
         for pool_id, pool_labels in node_with_node_labels.items():
             for key, value in pool_labels.items():
                 if key == node_key:
