@@ -35,10 +35,11 @@ use stor_port::{
             volume::{PublishOperation, RepublishOperation, VolumeOperation, VolumeSpec},
         },
         transport::{
-            CreateVolume, DestroyNexus, DestroyReplica, DestroyShutdownTargets, DestroyVolume,
-            Protocol, PublishVolume, Replica, ReplicaId, ReplicaOwners, RepublishVolume,
-            ResizeVolume, SetVolumeProperty, SetVolumeReplica, ShareNexus, ShareVolume,
-            ShutdownNexus, UnpublishVolume, UnshareNexus, UnshareVolume, Volume,
+            CreateReplica, CreateVolume, DestroyNexus, DestroyReplica, DestroyShutdownTargets,
+            DestroyVolume, NodeTopology, Protocol, PublishVolume, Replica, ReplicaId,
+            ReplicaOwners, RepublishVolume, ResizeVolume, SetVolumeProperty, SetVolumeReplica,
+            ShareNexus, ShareVolume, ShutdownNexus, UnpublishVolume, UnshareNexus, UnshareVolume,
+            Volume,
         },
     },
 };
@@ -995,8 +996,18 @@ impl CreateVolumeExe for CreateVolume {
         for replica in candidates.candidates() {
             if replicas.len() >= self.replicas as usize {
                 break;
-            } else if replicas.iter().any(|r| r.node == replica.node) {
-                // don't reuse the same node
+            } else if replicas.iter().any(|r| {
+                r.node == replica.node
+                    || spread_label_is_same(r, replica, context).unwrap_or_else(|error| {
+                        context.volume.error(&format!(
+                            "Failed to create replica {:?} for volume, error: {}",
+                            replica,
+                            error.full_string()
+                        ));
+                        false
+                    })
+            }) {
+                // don't re-use the same node or same exclusion labels
                 continue;
             }
             let replica = if replicas.is_empty() {
@@ -1053,4 +1064,53 @@ impl CreateVolumeExeVal for CreateVolumeSource<'_> {
             CreateVolumeSource::Snapshot(params) => params.pre_flight_check(),
         }
     }
+}
+
+// spread_label_is_same checks if the node labels is same as that of all existing replicas.
+fn spread_label_is_same(
+    replica: &Replica,
+    replica_candidate: &CreateReplica,
+    context: &Context,
+) -> Result<bool, SvcError> {
+    let Some(ref topology) = context.volume.as_ref().topology else {
+        return Ok(false);
+    };
+
+    let Some(node_topology) = topology.node.as_ref() else {
+        return Ok(false);
+    };
+    let node_exclusion_label_match = match node_topology {
+        NodeTopology::Explicit(_) => true,
+        NodeTopology::Labelled(labelled_topology) => {
+            // If the NodeSpreadTopologyKey is present in the Volume Node Topology, then
+            // get the node details from replica candidate and
+            // check if the node labels is same as that of all existing replicas.
+            // If its same then don't consider the pool for replica creation
+            let mut exclusion_label_match = false;
+            if !labelled_topology.exclusion.is_empty() {
+                let candidate_node = context
+                    .registry
+                    .specs()
+                    .node(&replica_candidate.node.clone())?
+                    .labels()
+                    .clone();
+
+                let replica_node = context
+                    .registry
+                    .specs()
+                    .node(&replica.node.clone())?
+                    .labels()
+                    .clone();
+
+                for (key, _) in labelled_topology.exclusion.iter() {
+                    if candidate_node[key] == replica_node[key] {
+                        exclusion_label_match = true;
+                        break;
+                    }
+                }
+            }
+            exclusion_label_match
+        }
+    };
+    Ok(node_exclusion_label_match)
 }
