@@ -112,8 +112,8 @@ pub(crate) trait FileSystemOps: Send + Sync {
 #[async_trait]
 impl FileSystemOps for Ext4Fs {
     async fn create(&self, device: &str) -> Result<(), Error> {
-        let binary = format!("mkfs.{}", "ext4");
-        let output = Command::new(&binary)
+        let binary = "mkfs.ext4";
+        let output = Command::new(binary)
             .arg(device)
             .output()
             .await
@@ -209,8 +209,16 @@ impl FileSystemOps for Ext4Fs {
 #[async_trait]
 impl FileSystemOps for XFs {
     async fn create(&self, device: &str) -> Result<(), Error> {
-        let binary = format!("mkfs.{}", "xfs");
-        let output = Command::new(&binary)
+        let binary = "mkfs.xfs";
+        let args = match std::env::var("MKFS_XFS_ARGS") {
+            Ok(args) => args
+                .split_whitespace()
+                .map(str::to_string)
+                .collect::<Vec<_>>(),
+            _ => vec![],
+        };
+        let output = Command::new(binary)
+            .args(args)
             .arg(device)
             .output()
             .await
@@ -297,8 +305,8 @@ impl FileSystemOps for XFs {
 #[async_trait]
 impl FileSystemOps for BtrFs {
     async fn create(&self, device: &str) -> Result<(), Error> {
-        let binary = format!("mkfs.{}", "btrfs");
-        let output = Command::new(&binary)
+        let binary = "mkfs.btrfs";
+        let output = Command::new(binary)
             .arg(device)
             .output()
             .await
@@ -393,7 +401,7 @@ impl FileSystemOps for BtrFs {
 }
 
 // Acknowledge the output from Command.
-fn ack_command_output(output: Output, binary: String) -> Result<(), Error> {
+fn ack_command_output(output: Output, binary: &str) -> Result<(), Error> {
     trace!(
         "Output from {} command: {}, status code: {:?}",
         binary,
