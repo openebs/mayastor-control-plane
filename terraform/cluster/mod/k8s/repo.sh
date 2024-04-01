@@ -43,9 +43,11 @@ elif [ "$RUNTIME" = "containerd" ]; then
   sudo add-apt-repository --yes "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 fi
 
-curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+sudo mkdir -p /etc/apt/keyrings/
+KUBE_APT_V=$(echo "${kube_version}" | awk -F. '{ sub(/-.*/, ""); print "v" $1 "." $2 }')
+curl -fsSL https://pkgs.k8s.io/core:/stable:/$KUBE_APT_V/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 cat <<EOF | sudo tee /etc/apt/sources.list.d/kubernetes.list
-deb https://apt.kubernetes.io/ kubernetes-xenial main
+deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/$KUBE_APT_V/deb/ /
 EOF
 
 sudo apt-get update
