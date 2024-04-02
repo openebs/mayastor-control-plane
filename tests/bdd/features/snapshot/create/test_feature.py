@@ -28,6 +28,7 @@ SNAP_UUID = "107ec5c6-879d-4ca5-bc8c-c1948b454ac0"
 NODE_NAME = "io-engine-1"
 REMOTE_NODE_NAME = "io-engine-2"
 VOLUME_CTX_KEY = "volume"
+REMOTE_POOL_NAME = "remote_pool_1"
 VOLUME_SIZE = 12582912
 POOL_SIZE = 200 * 1024 * 1024
 
@@ -94,11 +95,9 @@ def test_snapshot_creation_for_a_single_replica_volume_fails_when_the_replica_is
     """Snapshot creation for a single replica volume fails when the replica is offline."""
 
 
-@scenario(
-    "feature.feature", "Snapshot creation for multi-replica volume is not supported"
-)
-def test_snapshot_creation_for_multireplica_volume_is_not_supported():
-    """Snapshot creation for multi-replica volume is not supported."""
+@scenario("feature.feature", "Snapshot creation for multi-replica volume")
+def test_snapshot_creation_for_multireplica_volume():
+    """Snapshot creation for multi-replica volume."""
 
 
 @scenario("feature.feature", "Snapshot creation of a single replica volume")
@@ -117,6 +116,11 @@ def test_snapshot_creation_of_a_single_replica_volume_after_its_source_is_delete
 @scenario("feature.feature", "Subsequent creation with same snapshot id should fail")
 def test_subsequent_creation_with_same_snapshot_id_should_fail():
     """Subsequent creation with same snapshot id should fail."""
+
+
+@scenario("feature.feature", "Multi-replica snapshot with one node down")
+def test_multi_replica_snapshot_with_one_node_down():
+    """Multi-replica snapshot with one node down."""
 
 
 @given("a deployer cluster")
@@ -140,7 +144,7 @@ def the_node_a_is_paused(node_a):
 
 @then("the node A is stopped")
 def the_node_a_is_stopped(node_a):
-    """the node A is paused."""
+    """the node A is stopped."""
     Docker.stop_container(node_a)
 
 
@@ -166,11 +170,12 @@ def the_volume_is_published_on_node_a(node_a, volume):
 def we_have_a_multireplica_volume(disks):
     """we have a multi-replica volume."""
     ApiClient.pools_api().put_node_pool(
-        REMOTE_NODE_NAME, "pool-2", CreatePoolBody([disks[1]])
+        REMOTE_NODE_NAME, REMOTE_POOL_NAME, CreatePoolBody([disks[1]])
     )
     put_volume(2)
     yield
     del_volume()
+    del_remote_pool()
 
 
 @given(
@@ -400,6 +405,16 @@ def the_volume_snapshot_state_has_a_single_online_replica_snapshot(snapshot):
     assert hasattr(replica_snapshot, "online")
 
 
+@then("the volume snapshot state has multiple online replica snapshots")
+def the_volume_snapshot_state_has_multiple_online_replica_snapshots(snapshot):
+    """the volume snapshot state has multiple online replica snapshots."""
+    assert len(snapshot.state.replica_snapshots) == 2
+    replica_snapshot = snapshot.state.replica_snapshots[0]
+    assert hasattr(replica_snapshot, "online")
+    replica_snapshot = snapshot.state.replica_snapshots[1]
+    assert hasattr(replica_snapshot, "online")
+
+
 ###
 
 
@@ -421,6 +436,13 @@ def volume():
 def del_volume():
     try:
         ApiClient.volumes_api().del_volume(VOLUME_UUID)
+    except NotFoundException:
+        pass
+
+
+def del_remote_pool():
+    try:
+        ApiClient.pools_api().del_pool(REMOTE_POOL_NAME)
     except NotFoundException:
         pass
 
