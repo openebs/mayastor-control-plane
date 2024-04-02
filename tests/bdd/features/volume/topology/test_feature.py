@@ -14,6 +14,7 @@ from pytest_bdd import (
 from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
+from common.operations import Cluster
 
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.create_pool_body import CreatePoolBody
@@ -39,10 +40,7 @@ REPLICA_CONTEXT_KEY = "replica"
 REPLICA_ERROR = "replica_error"
 
 
-# This fixture will be automatically used by all tests.
-# It starts the deployer which launches all the necessary containers.
-# A pool is created for convenience such that it is available for use by the tests.
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="module")
 def init():
     Deployer.start(NUM_IO_ENGINES)
     ApiClient.pools_api().put_node_pool(
@@ -129,7 +127,7 @@ def test_sufficient_suitable_pools_which_do_not_contain_volume_topology_labels()
 
 
 @given("a control plane, two Io-Engine instances, two pools")
-def a_control_plane_two_io_engine_instances_two_pools():
+def a_control_plane_two_io_engine_instances_two_pools(init):
     """a control plane, two Io-Engine instances, two pools."""
     docker_client = docker.from_env()
 
@@ -152,6 +150,7 @@ def a_control_plane_two_io_engine_instances_two_pools():
     # Check for a pools
     pools = ApiClient.pools_api().get_pools()
     assert len(pools) == 2
+    Cluster.cleanup(pools=False)
 
 
 @given("a request for a volume with topology different from pools")

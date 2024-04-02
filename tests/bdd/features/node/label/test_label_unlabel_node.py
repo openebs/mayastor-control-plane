@@ -9,6 +9,8 @@ from pytest_bdd import given, scenario, then, when
 from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
+from common.etcd import Etcd
+from common.operations import Cluster, wait_node_online
 from openapi.model.node import Node
 from openapi.exceptions import ApiException
 
@@ -24,9 +26,9 @@ NODE_ID_1 = "io-engine-1"
 
 
 # Fixtures
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="module")
 def init():
-    Deployer.start(NUM_IO_ENGINES)
+    Deployer.start(NUM_IO_ENGINES, io_engine_env="MAYASTOR_HB_INTERVAL_SEC=0")
     yield
     Deployer.stop()
 
@@ -72,7 +74,7 @@ def test_unlabel_a_node_when_the_label_key_is_not_present():
 
 
 @given("a control plane, two Io-Engine instances, two pools")
-def a_control_plane_two_ioengine_instances_two_pools():
+def a_control_plane_two_ioengine_instances_two_pools(init):
     """a control plane, two Io-Engine instances, two pools."""
     docker_client = docker.from_env()
 
@@ -95,6 +97,11 @@ def a_control_plane_two_ioengine_instances_two_pools():
     # Check for a nodes
     nodes = ApiClient.nodes_api().get_nodes()
     assert len(nodes) == 2
+    yield
+    for node in ApiClient.nodes_api().get_nodes():
+        if hasattr(node.spec, "labels"):
+            for label in node.spec.labels.keys():
+                ApiClient.nodes_api().delete_node_label(node.id, label)
 
 
 @given("an unlabeled node")

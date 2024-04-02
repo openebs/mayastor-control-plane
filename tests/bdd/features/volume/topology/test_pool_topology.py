@@ -180,10 +180,7 @@ POOL_CONFIGURATIONS = [
 ]
 
 
-# This fixture will be automatically used by all tests.
-# It starts the deployer which launches all the necessary containers.
-# A pool is created for convenience such that it is available for use by the tests.
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="module")
 def init():
     Deployer.start(NUM_IO_ENGINES)
 
@@ -226,7 +223,7 @@ def test_suitable_pools_which_contain_volume_topology_keys_only():
 
 
 @given("a control plane, three Io-Engine instances, nine pools")
-def a_control_plane_three_ioengine_instances_nine_pools():
+def a_control_plane_three_ioengine_instances_nine_pools(init):
     """a control plane, three Io-Engine instances, nine pools."""
     docker_client = docker.from_env()
 
@@ -249,6 +246,8 @@ def a_control_plane_three_ioengine_instances_nine_pools():
     # Check for a pools
     pools = ApiClient.pools_api().get_pools()
     assert len(pools) == 9
+    yield
+    Cluster.cleanup(pools=False)
 
 
 @given(
@@ -291,19 +290,14 @@ def the_desired_number_of_replica_of_volume_ie_replica_here_is_expression_number
     create_request, replica, expression, volume_pool_topology_inclusion_label
 ):
     """the desired number of replica of volume i.e. <replica> here; is <expression> number of the pools containing the label <volume_pool_topology_inclusion_label>."""
+    no_of_eligible_pools = no_of_suitable_pools(
+        create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
+            "inclusion"
+        ],
+    )
     if expression == "<=":
-        no_of_eligible_pools = no_of_suitable_pools(
-            create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
-                "inclusion"
-            ],
-        )
         assert int(replica) <= no_of_eligible_pools
     elif expression == ">":
-        no_of_eligible_pools = no_of_suitable_pools(
-            create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
-                "inclusion"
-            ],
-        )
         assert int(replica) > no_of_eligible_pools
 
 
@@ -362,7 +356,6 @@ def get_pool_names_with_given_labels(pool_label):
                     qualified_pools.append(pool_id)
     else:
         pool_key = pool_label
-        pool_value = ""
         for pool_id, pool_labels in pool_with_labels.items():
             for key, value in pool_labels.items():
                 if key == pool_key:
