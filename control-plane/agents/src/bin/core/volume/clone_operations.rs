@@ -100,11 +100,6 @@ impl CreateVolumeExeVal for SnapshotCloneOp<'_> {
     fn pre_flight_check(&self) -> Result<(), SvcError> {
         let new_volume = self.0.params();
         let snapshot = self.1.as_ref();
-        // todo: to be removed, when multi-replica restore is enabled.
-        snafu::ensure!(
-            new_volume.replicas == 1,
-            errors::NReplSnapshotCloneCreationNotAllowed {}
-        );
         snafu::ensure!(
             new_volume.allowed_nodes().is_empty()
                 || new_volume.allowed_nodes().len() >= new_volume.replicas as usize,
@@ -112,11 +107,6 @@ impl CreateVolumeExeVal for SnapshotCloneOp<'_> {
         );
         snafu::ensure!(new_volume.thin, errors::ClonedSnapshotVolumeThin {});
         snafu::ensure!(snapshot.status().created(), errors::SnapshotNotCreated {});
-        // todo: to be removed, when multi-replica restore is enabled.
-        snafu::ensure!(
-            snapshot.metadata().replica_snapshots().map(|s| s.len()) == Some(1),
-            errors::ClonedSnapshotVolumeRepl {}
-        );
         snafu::ensure!(
             new_volume.size == snapshot.metadata().spec_size(),
             errors::ClonedSnapshotVolumeSize {}
@@ -196,11 +186,6 @@ impl SnapshotCloneOp<'_> {
             }),
         }?;
 
-        // todo: to be removed, when multi-replica restore is enabled.
-        if snapshots.len() > 1 {
-            return Err(SvcError::NReplSnapshotCloneCreationNotAllowed {});
-        }
-
         let mut pools = CloneVolumeSnapshot::builder_with_defaults(registry, new_volume, snapshots)
             .await
             .collect();
@@ -208,11 +193,6 @@ impl SnapshotCloneOp<'_> {
             return Err(SvcError::NoSnapshotPools {
                 id: snapshot.spec().uuid().to_string(),
             });
-        }
-
-        // todo: to be removed, when multi-replica restore is enabled.
-        if pools.len() > 1 {
-            return Err(SvcError::NReplSnapshotCloneCreationNotAllowed {});
         }
 
         let mut clone_spec_params = vec![];
