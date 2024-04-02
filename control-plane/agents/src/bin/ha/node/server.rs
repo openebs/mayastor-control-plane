@@ -4,10 +4,7 @@ use crate::{
     path_provider::get_nvme_path_entry,
     Cli,
 };
-use agents::{
-    errors::{SvcError, SvcError::SubsystemNotFound},
-    eventing::EventWithMeta,
-};
+use agents::errors::{SvcError, SvcError::SubsystemNotFound};
 use events_api::event::{EventAction, EventCategory, EventMessage, EventMeta, EventSource};
 use grpc::{
     common::MapWrapper,
@@ -243,7 +240,7 @@ impl NodeAgentSvc {
                 }
                 "live" => {
                     tracing::info!(new_path, "New NVMe path is ready to serve I/O");
-                    self.event(EventAction::NvmePathFix, event_meta(&nqn, &new_path))
+                    self.event(EventAction::NvmePathFix, &nqn, event_meta(&nqn, &new_path))
                         .generate();
                     break;
                 }
@@ -430,12 +427,19 @@ impl ParsedUri {
     }
 }
 
+/// Event trait definition for creating events and adding meta data for NvmePath events.
+trait EventWithMeta {
+    /// Create event message with meta data.
+    fn event(&self, action: EventAction, nqn: &str, meta: EventMeta) -> EventMessage;
+}
+
 impl EventWithMeta for NodeAgentSvc {
-    fn event(&self, event_action: EventAction, meta: EventMeta) -> EventMessage {
+    fn event(&self, event_action: EventAction, nqn: &str, meta: EventMeta) -> EventMessage {
+        let volume_id = nqn.split(':').last().unwrap_or_default().to_string();
         EventMessage {
             category: EventCategory::NvmePath as i32,
             action: event_action as i32,
-            target: "".to_string(),
+            target: volume_id,
             metadata: Some(meta),
         }
     }
