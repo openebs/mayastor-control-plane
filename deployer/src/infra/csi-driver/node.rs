@@ -38,7 +38,12 @@ impl ComponentAction for CsiNode {
             }
 
             for i in 0 .. options.app_nodes() {
-                cfg = CsiNode::with_app_node(i, cfg, options.enable_app_node_registration)?;
+                cfg = CsiNode::with_app_node(
+                    i,
+                    cfg,
+                    options.enable_app_node_registration,
+                    options.io_engine_cores,
+                )?;
             }
             cfg
         })
@@ -106,6 +111,7 @@ impl CsiNode {
         index: u32,
         cfg: Builder,
         enable_registration: bool,
+        io_queues: u32,
     ) -> Result<Builder, Error> {
         let container_name = Self::container_name(index);
         let node_name = Self::name(index);
@@ -117,6 +123,7 @@ impl CsiNode {
             &socket,
             cfg,
             enable_registration,
+            io_queues,
         )
     }
     fn with_local_node(index: u32, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
@@ -130,6 +137,7 @@ impl CsiNode {
             &socket,
             cfg,
             options.enable_app_node_registration,
+            options.io_engine_cores,
         )
     }
     fn with_node(
@@ -138,9 +146,11 @@ impl CsiNode {
         socket: &str,
         cfg: Builder,
         enable_registation: bool,
+        io_queues: u32,
     ) -> Result<Builder, Error> {
+        let io_queues = io_queues.max(1);
         let mut binary = Binary::from_dbg(CSI_NODE)
-            .with_args(vec!["--nvme-nr-io-queues", "1"])
+            .with_args(vec!["--nvme-nr-io-queues", &io_queues.to_string()])
             .with_args(vec!["--node-name", node_name])
             // Make sure that CSI socket is always under shared directory
             // regardless of what its default value is.
@@ -165,6 +175,7 @@ impl CsiNode {
             ContainerSpec::from_binary(container_name, binary)
                 .with_bypass_default_mounts(true)
                 .with_bind("/var/tmp", "/var/tmp")
+                .with_bind("/tmp", "/host/tmp")
                 .with_bind("/dev", "/dev:ro")
                 .with_bind("/run/udev", "/run/udev:ro")
                 .with_env("PATH", path.as_str())

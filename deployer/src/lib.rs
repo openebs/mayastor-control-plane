@@ -460,6 +460,16 @@ impl StartOptions {
         self
     }
     #[must_use]
+    pub fn with_io_engine_bin(mut self, binary: &str) -> Self {
+        self.io_engine_bin = Some(binary.to_string());
+        self
+    }
+    #[must_use]
+    pub fn with_io_engine_img(mut self, image: &str) -> Self {
+        self.io_engine_image = image.to_string();
+        self
+    }
+    #[must_use]
     pub fn with_io_engine_devices(mut self, devices: Vec<&str>) -> Self {
         self.io_engine_devices = devices.into_iter().map(Into::into).collect();
         self
