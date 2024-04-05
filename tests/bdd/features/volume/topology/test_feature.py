@@ -164,7 +164,7 @@ def a_request_for_a_volume_with_topology_different_from_pools(create_request):
         topology=Topology(
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(
-                    exclusion={}, inclusion={"fake-label-key": "fake-label-value"}
+                    exclusion={}, inclusion={"fake-label-key": "fake-label-value"},
                 )
             )
         ),
