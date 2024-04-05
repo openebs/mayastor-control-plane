@@ -46,6 +46,7 @@ async fn volume() {
         .with_io_engines(3)
         .with_tmpfs_pool(100 * 1024 * 1024)
         .with_cache_period("1s")
+        .with_options(|o| o.with_isolated_io_engine(true))
         // don't let the reconcile interfere with the tests
         .with_reconcile_period(Duration::from_secs(1000), Duration::from_secs(1000))
         .build()
