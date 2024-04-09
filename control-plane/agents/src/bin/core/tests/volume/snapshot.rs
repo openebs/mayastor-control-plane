@@ -332,8 +332,7 @@ async fn snapshot_timeout() {
     cluster.composer().pause("core").await.unwrap();
     cluster.composer().thaw(&cluster.node(1)).await.unwrap();
     tokio::time::sleep(req_timeout - grpc_timeout).await;
-    cluster.composer().restart("core").await.unwrap();
-    cluster.volume_service_liveness(None).await.unwrap();
+    cluster.restart_core_with_liveness(None).await.unwrap();
 
     let snapshots = vol_cli
         .get_snapshots(Filter::Snapshot(snapshot_id.clone()), false, None, None)
@@ -355,7 +354,7 @@ async fn snapshot_timeout() {
         .create_snapshot(&CreateVolumeSnapshot::new(volume.uuid(), snapshot_id), None)
         .await
         .unwrap();
-    tracing::info!("Replica Snapshot: {replica_snapshot:?}");
+    tracing::info!("Volume Snapshot: {snapshot:?}");
 
     assert_eq!(snapshot.meta().txn_id().as_str(), "2");
     assert_eq!(snapshot.meta().transactions().len(), 2);
@@ -402,6 +401,7 @@ async fn snapshot_timeout() {
         .await
         .unwrap();
     let snapshot = &snapshots.entries[0];
+    tracing::info!("Snapshot: {snapshot:?}");
 
     assert_eq!(snapshot.meta().txn_id().as_str(), "1");
     assert!(snapshot.meta().transactions().is_empty());
