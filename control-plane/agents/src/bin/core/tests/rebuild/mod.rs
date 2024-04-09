@@ -44,14 +44,14 @@ async fn build_cluster(num_ioe: u32, pool_size: u64) -> Cluster {
 // gets and validates rebuild history response from rest api.
 #[tokio::test]
 async fn rebuild_history_for_full_rebuild() {
-    let cluster = build_cluster(4, 52428800).await;
+    let cluster = build_cluster(3, 52428800).await;
 
     let vol_target = cluster.node(0).to_string();
     let api_client = cluster.rest_v00();
     let volume_api = api_client.volumes_api();
     let nexus_client = cluster.grpc_client().nexus();
 
-    let body = CreateVolumeBody::new(VolumePolicy::new(true), 3, 10485760u64, false);
+    let body = CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false);
     let volid = VolumeId::new();
     let volume = volume_api.put_volume(&volid, body).await.unwrap();
     let volume = volume_api
@@ -92,7 +92,7 @@ async fn rebuild_history_for_full_rebuild() {
     let volume_state = volume.state.clone();
     assert_eq!(volume_state.status, VolumeStatus::Online);
     let nexus = volume_state.target.unwrap();
-    assert_eq!(nexus.children.len(), 3);
+    assert_eq!(nexus.children.len(), 2);
     nexus
         .children
         .iter()
@@ -173,16 +173,15 @@ async fn rebuild_history_for_full_rebuild() {
 // validates that rebuild type is Partial rebuild,
 // validates that previously faulted child is not removed from nexus,
 // gets and validates rebuild history response from rest api.
-
 #[tokio::test]
 async fn rebuild_history_for_partial_rebuild() {
-    let cluster = build_cluster(4, 52428800).await;
+    let cluster = build_cluster(3, 52428800).await;
 
     let vol_target = cluster.node(0).to_string();
     let api_client = cluster.rest_v00();
     let volume_api = api_client.volumes_api();
     let nexus_client = cluster.grpc_client().nexus();
-    let body = CreateVolumeBody::new(VolumePolicy::new(true), 3, 10485760u64, false);
+    let body = CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false);
     let volid = VolumeId::new();
     let volume = volume_api.put_volume(&volid, body).await.unwrap();
     let volume = volume_api
@@ -220,7 +219,7 @@ async fn rebuild_history_for_partial_rebuild() {
         history.records.len(),
         "Number of rebuild record should be 0"
     );
-    assert_eq!(nexus.children.len(), 3);
+    assert_eq!(nexus.children.len(), 2);
     nexus
         .children
         .iter()
