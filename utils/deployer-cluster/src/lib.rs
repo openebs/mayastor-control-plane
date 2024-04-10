@@ -654,6 +654,17 @@ impl ClusterBuilder {
         self.opts = set(self.opts);
         self
     }
+    /// Update the start options, if enabled.
+    #[must_use]
+    pub fn with_options_en<F>(mut self, enabled: bool, set: F) -> Self
+    where
+        F: Fn(StartOptions) -> StartOptions,
+    {
+        if enabled {
+            self.opts = set(self.opts);
+        }
+        self
+    }
     /// Enable/Disable the default tokio tracing setup.
     #[must_use]
     pub fn with_default_tracing(self) -> Self {
