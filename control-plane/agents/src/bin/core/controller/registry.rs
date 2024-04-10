@@ -86,6 +86,8 @@ pub(crate) struct RegistryInner<S: Store> {
     /// The duration for which the reconciler waits for the replica to
     /// to be healthy again before attempting to online the faulted child.
     faulted_child_wait_period: Option<std::time::Duration>,
+    /// Disable partial rebuild for volume targets.
+    disable_partial_rebuild: bool,
     reconciler: ReconcilerControl,
     config: parking_lot::RwLock<CoreRegistryConfig>,
     /// system-wide maximum number of concurrent rebuilds allowed.
@@ -118,6 +120,7 @@ impl Registry {
         reconcile_period: std::time::Duration,
         reconcile_idle_period: std::time::Duration,
         faulted_child_wait_period: Option<std::time::Duration>,
+        disable_partial_rebuild: bool,
         max_rebuilds: Option<NumRebuilds>,
         create_volume_limit: usize,
         host_acl: Vec<HostAccessControl>,
@@ -159,6 +162,7 @@ impl Registry {
                 reconcile_period,
                 reconcile_idle_period,
                 faulted_child_wait_period,
+                disable_partial_rebuild,
                 reconciler: ReconcilerControl::new(),
                 config: parking_lot::RwLock::new(
                     Self::get_config(&mut store, legacy_prefix_present)
@@ -201,9 +205,14 @@ impl Registry {
         Ok(registry)
     }
 
-    /// Check if the HA feature is enabled.
+    /// Check if the HA feature is disabled.
     pub(crate) fn ha_disabled(&self) -> bool {
         self.ha_disabled
+    }
+
+    /// Check if the partial rebuilds are disabled.
+    pub(crate) fn partial_rebuild_disabled(&self) -> bool {
+        self.disable_partial_rebuild
     }
 
     /// Formats the store endpoint with a default port if one isn't supplied.

@@ -17,7 +17,7 @@ use stor_port::types::v0::{
 const REBUILD_WAIT_TIME: u64 = 12;
 const CHILD_WAIT: u64 = 5;
 
-async fn build_cluster(num_ioe: u32, pool_size: u64) -> Cluster {
+async fn build_cluster(num_ioe: u32, pool_size: u64, partial_disable: bool) -> Cluster {
     let reconcile_period = Duration::from_millis(300);
     let child_twait = Duration::from_secs(CHILD_WAIT);
     ClusterBuilder::builder()
@@ -28,6 +28,9 @@ async fn build_cluster(num_ioe: u32, pool_size: u64) -> Cluster {
         .with_cache_period("250ms")
         .with_tmpfs_pool(pool_size)
         .with_options(|b| b.with_isolated_io_engine(true))
+        .with_options_en(partial_disable, |b| {
+            b.with_agents_env("DISABLE_PARTIAL_REBUILD", "true")
+        })
         .with_eventing(true)
         .build()
         .await
@@ -44,7 +47,7 @@ async fn build_cluster(num_ioe: u32, pool_size: u64) -> Cluster {
 // gets and validates rebuild history response from rest api.
 #[tokio::test]
 async fn rebuild_history_for_full_rebuild() {
-    let cluster = build_cluster(3, 52428800).await;
+    let cluster = build_cluster(3, 52428800, false).await;
 
     let vol_target = cluster.node(0).to_string();
     let api_client = cluster.rest_v00();
@@ -175,7 +178,7 @@ async fn rebuild_history_for_full_rebuild() {
 // gets and validates rebuild history response from rest api.
 #[tokio::test]
 async fn rebuild_history_for_partial_rebuild() {
-    let cluster = build_cluster(3, 52428800).await;
+    let cluster = build_cluster(3, 52428800, false).await;
 
     let vol_target = cluster.node(0).to_string();
     let api_client = cluster.rest_v00();
@@ -333,6 +336,120 @@ async fn rebuild_history_for_partial_rebuild() {
         "Can't match nexus id in rebuild history in rest"
     );
     assert_eq!(2, history.records.len());
+}
+
+#[tokio::test]
+async fn rebuild_partial_disabled() {
+    let cluster = build_cluster(2, 52428800, true).await;
+
+    let vol_target = cluster.node(0).to_string();
+    let api_client = cluster.rest_v00();
+    let volume_api = api_client.volumes_api();
+    let nexus_client = cluster.grpc_client().nexus();
+    let body = CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false);
+    let volid = VolumeId::new();
+    let volume = volume_api.put_volume(&volid, body).await.unwrap();
+    let volume = volume_api
+        .put_volume_target(
+            &volume.spec.uuid,
+            PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                vol_target.clone().to_string(),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+                cluster.csi_node(0),
+            ),
+        )
+        .await
+        .unwrap();
+
+    let volume_state = volume.state.clone();
+    assert!(volume_state.status == VolumeStatus::Online);
+    let nexus = volume_state.target.unwrap();
+    let nexus_id = NexusId::from(nexus.uuid);
+    sleep(Duration::from_millis(500));
+    // Before triggering rebuild, we expect rebuild history record to be available for the nexus
+    // without any history of rebuild.
+    let history = nexus_client
+        .get_rebuild_history(&GetRebuildRecord::new(nexus_id.clone()), None)
+        .await
+        .expect("Failed to get rebuild record");
+    assert_eq!(
+        nexus_id, history.uuid,
+        "Can't match nexus id in rebuild history"
+    );
+    assert!(
+        history.records.is_empty(),
+        "Number of rebuild record should be 0"
+    );
+    assert_eq!(nexus.children.len(), 2);
+    nexus
+        .children
+        .iter()
+        .for_each(|c| assert_eq!(c.state, ChildState::Online));
+
+    // Check where the replicas are, apart from vol target node.
+    let replicas = api_client.replicas_api().get_replicas().await.unwrap();
+    let testrep = replicas.iter().find(|r| r.node != vol_target).unwrap();
+    tracing::info!(
+        "Restarting node {} having replica {}",
+        testrep.node,
+        testrep.uri.clone()
+    );
+
+    cluster
+        .composer()
+        .restart(&testrep.node)
+        .await
+        .expect("container stop failure");
+
+    let nexus_client = cluster.grpc_client().nexus();
+    let history = poll_rebuild_history(&nexus_client, nexus_id.clone())
+        .await
+        .expect("Failed to get rebuild record");
+    assert_eq!(
+        nexus_id, history.uuid,
+        "Cant match nexus id in rebuild history"
+    );
+    assert_eq!(
+        1,
+        history.records.len(),
+        "Number of rebuild history is not equal to 1"
+    );
+
+    assert!(
+        !history.records.get(0).unwrap().is_partial,
+        "Rebuild type is not Full rebuild"
+    );
+
+    // Get the volume again for validations.
+    let vol = volume_api.get_volume(volid.uuid()).await.unwrap();
+    let volume_state = vol.state;
+    let nexus = volume_state.target.unwrap();
+    // The child must not be in the nexus anymore.
+    let is_removed = !nexus.children.iter().any(|c| c.uri == testrep.uri);
+    assert!(is_removed);
+    let history = api_client
+        .volumes_api()
+        .get_rebuild_history(&vol.spec.uuid)
+        .await
+        .expect("could not find rebuild history in rest");
+    assert_eq!(
+        nexus_id.to_string(),
+        history.target_uuid.to_string(),
+        "Cant match nexus id in rebuild history in rest"
+    );
+    assert_eq!(
+        1,
+        history.records.len(),
+        "Number of rebuild history is not equal to 1 in rest"
+    );
+
+    assert!(
+        !history.records.get(0).unwrap().is_partial,
+        "Rebuild type is not Full rebuild in rest"
+    );
 }
 
 /// Checks if node is online, returns true if yes.

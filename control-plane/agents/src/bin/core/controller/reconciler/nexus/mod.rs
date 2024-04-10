@@ -141,7 +141,7 @@ async fn nexus_reconciler(
 
 /// Checks if nexus is Degraded and any child is Faulted. If yes, Depending on rebuild policy for
 /// child it performs rebuild operation.
-#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), nexus.node = %nexus.as_ref().node, request.reconcile = true))]
+#[tracing::instrument(skip(nexus, volume, context), level = "trace", fields(volume = ?volume.as_ref().map(|v| v.as_ref()), nexus.uuid = %nexus.uuid(), nexus.node = %nexus.as_ref().node, request.reconcile = true))]
 pub(super) async fn handle_faulted_children(
     nexus: &mut OperationGuardArc<NexusSpec>,
     volume: &mut Option<&mut OperationGuardArc<VolumeSpec>>,
@@ -179,6 +179,12 @@ async fn handle_faulted_child(
         tracing::warn!(%child.uri, "Unknown Child found, a full rebuild is required");
         return faulted_children_remover(nexus_spec, volume, child, context).await;
     };
+
+    if context.registry().partial_rebuild_disabled() {
+        tracing::warn!(%child.uri, child.uuid=%child_uuid, ?child.state_reason, "Partial rebuild disabled, a full rebuild is required");
+        return faulted_children_remover(nexus_spec, volume, child, context).await;
+    }
+
     let Some(faulted_at) = child.faulted_at else {
         tracing::warn!(%child.uri, child.uuid=%child_uuid, "Child faulted without a timestamp set, a full rebuild required");
         return faulted_children_remover(nexus_spec, volume, child, context).await;
