@@ -1926,7 +1926,9 @@ name = "io-engine-tests"
 version = "1.0.0"
 dependencies = [
  "deployer-cluster",
+ "glob",
  "grpc",
+ "nvmeadm",
  "openapi",
  "rpc",
  "stor-port",

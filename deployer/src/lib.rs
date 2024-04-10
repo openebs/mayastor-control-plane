@@ -445,6 +445,13 @@ impl StartOptions {
         self
     }
     #[must_use]
+    pub fn with_agents_env(mut self, key: &str, val: &str) -> Self {
+        let mut env = self.agents_env.unwrap_or_default();
+        env.push(KeyValue::new(key.to_string(), val.to_string()));
+        self.agents_env = Some(env);
+        self
+    }
+    #[must_use]
     pub fn with_isolated_io_engine(mut self, isolate: bool) -> Self {
         self.io_engine_isolate = isolate;
         self
@@ -457,6 +464,16 @@ impl StartOptions {
     #[must_use]
     pub fn with_io_engine_cores(mut self, cores: u32) -> Self {
         self.io_engine_cores = cores;
+        self
+    }
+    #[must_use]
+    pub fn with_io_engine_bin(mut self, binary: &str) -> Self {
+        self.io_engine_bin = Some(binary.to_string());
+        self
+    }
+    #[must_use]
+    pub fn with_io_engine_img(mut self, image: &str) -> Self {
+        self.io_engine_image = image.to_string();
         self
     }
     #[must_use]

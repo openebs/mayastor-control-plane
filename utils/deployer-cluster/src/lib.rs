@@ -8,7 +8,6 @@ use deployer_lib::{
 };
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 
-use openapi::apis::Uuid;
 use stor_port::{transport_api::TimeoutOptions, types::v0::transport};
 
 use clap::Parser;
@@ -82,7 +81,11 @@ pub fn default_options() -> StartOptions {
         .with_env_tags(vec!["CARGO_PKG_NAME"])
 }
 
-struct ComposeTestNt {
+/// A wrapper over the composer utility meant to ensure termination in the
+/// correct order.
+/// todo: I suspect this is not working because composer itself is being created
+///  with cleaning enabled, so this won't actually work as expected!
+pub struct ComposeTestNt {
     logs_on_panic: bool,
     clean: bool,
     allow_clean_on_panic: bool,
@@ -156,7 +159,7 @@ impl Drop for ComposeTestNt {
 /// Cluster with the composer, the rest client and the jaeger pipeline
 #[allow(unused)]
 pub struct Cluster {
-    composer: ComposeTestNt,
+    composer: Arc<ComposeTestNt>,
     rest_client: rest_client::RestClient,
     grpc_client: Option<CoreClient>,
     trace_guard: Arc<tracing::subscriber::DefaultGuard>,
@@ -164,8 +167,13 @@ pub struct Cluster {
 }
 
 impl Cluster {
-    /// compose utility
+    /// A reference to the compose test utility.
     pub fn composer(&self) -> &ComposeTest {
+        &self.composer
+    }
+    /// A reference to our wrapper over the compose utility.
+    /// This can be safely sent across threads.
+    pub fn composer_nt(&self) -> &Arc<ComposeTestNt> {
         &self.composer
     }
 
@@ -455,7 +463,7 @@ impl Cluster {
         };
 
         let cluster = Cluster {
-            composer,
+            composer: Arc::new(composer),
             rest_client,
             grpc_client,
             trace_guard,
@@ -646,6 +654,17 @@ impl ClusterBuilder {
         self.opts = set(self.opts);
         self
     }
+    /// Update the start options, if enabled.
+    #[must_use]
+    pub fn with_options_en<F>(mut self, enabled: bool, set: F) -> Self
+    where
+        F: Fn(StartOptions) -> StartOptions,
+    {
+        if enabled {
+            self.opts = set(self.opts);
+        }
+        self
+    }
     /// Enable/Disable the default tokio tracing setup.
     #[must_use]
     pub fn with_default_tracing(self) -> Self {
@@ -732,7 +751,11 @@ impl ClusterBuilder {
     /// Add a tmpfs img pool with `disk` to the indexed io-engine node with the specified `size`.
     #[must_use]
     pub fn with_tmpfs_pool_ix(mut self, node: u32, size: u64) -> Self {
-        let disk = TmpDiskFile::new(&Uuid::new_v4().to_string(), size);
+        // If we use a new file everytime it can also pollute the workspace when
+        // we don't clean up properly...
+        // Let's try to reuse the same disk for now and see how it goes..
+        let name = format!("index-{index}-node-{node}", index = self.pools.len());
+        let disk = TmpDiskFile::new(&name, size);
         if let Some(pools) = self.pools.get_mut(&node) {
             pools.push(PoolDisk::Tmp(disk));
         } else {
