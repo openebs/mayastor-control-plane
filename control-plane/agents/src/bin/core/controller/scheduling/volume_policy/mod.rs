@@ -70,7 +70,7 @@ impl DefaultBasePolicy {
 
 /// Return true if all the keys present in volume's pool/node inclusion matches with the pool/node
 /// labels otherwise returns false.
-pub(crate) fn qualifies_inclusion_labels(
+pub(crate) fn qualifies_label_criteria(
     vol_pool_inc_labels: HashMap<String, String>,
     pool_labels: &HashMap<String, String>,
 ) -> bool {
