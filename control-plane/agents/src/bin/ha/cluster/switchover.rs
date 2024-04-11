@@ -35,6 +35,8 @@ fn client() -> impl VolumeOperations {
     core_grpc().volume()
 }
 
+const REPLACE_PATH_DEADLINE_RETRIES: u64 = 3;
+
 /// Stage represents the steps for switchover request.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Copy, Clone, Ord, PartialOrd)]
 pub(crate) enum Stage {
@@ -406,50 +408,57 @@ impl SwitchOverRequest {
         info!(volume.uuid=%self.volume_id, "Sending new volume target to node agent");
         let uri = self.build_node_uri()?;
         info!(%uri, "Creating node agent client using callback uri");
-        if let Some(new_path) = self.new_path.clone() {
-            let replace_request = ReplacePath::new(
-                self.existing_nqn.clone(),
-                new_path.clone(),
-                self.publish_context.clone(),
-            );
-            let client = NodeAgentClient::new(uri, None).await;
 
-            match client.replace_path(&replace_request, None).await {
-                Ok(_) => Ok(()),
-                Err(error) if error.kind == ReplyErrorKind::FailedPrecondition => {
-                    warn!(path=%self.existing_nqn, "HA Node agent could not find failed Nvme path");
-                    // otherwise this means we were able to reconnect even before we got called!
-                    if !self.reuse_existing {
-                        info!(volume.uuid=%self.volume_id, "Moving Switchover request to Errored state");
-                        self.set_stage(Stage::Errored);
-                        Err(anyhow!("HA Node agent could not lookup old Nvme path"))
-                    } else {
-                        Ok(())
+        let Some(new_path) = self.new_path.clone() else {
+            return Err(anyhow!("Could not to get new nexus target for the volume"));
+        };
+
+        let replace_request = ReplacePath::new(
+            self.existing_nqn.clone(),
+            new_path,
+            self.publish_context.clone(),
+        );
+        let client = NodeAgentClient::new(uri, None).await;
+        match client.replace_path(&replace_request, None).await {
+            Ok(_) => Ok(()),
+            Err(error) if error.kind == ReplyErrorKind::FailedPrecondition => {
+                warn!(path=%self.existing_nqn, "HA Node agent could not find failed Nvme path");
+                // otherwise this means we were able to reconnect even before we got called!
+                if !self.reuse_existing {
+                    info!(volume.uuid=%self.volume_id, "Moving Switchover request to Errored state");
+                    self.set_stage(Stage::Errored);
+                    Err(anyhow!("HA Node agent could not lookup old Nvme path"))
+                } else {
+                    Ok(())
+                }
+            }
+            Err(error)
+                if matches!(
+                    error.kind,
+                    ReplyErrorKind::Aborted
+                        | ReplyErrorKind::Timeout
+                        | ReplyErrorKind::NotFound
+                        | ReplyErrorKind::DeadlineExceeded
+                ) =>
+            {
+                if !matches!(error.kind, ReplyErrorKind::NotFound) {
+                    warn!(path=%self.existing_nqn, "HA Node agent failed to replace path within timeout");
+                    if self.retry_count < REPLACE_PATH_DEADLINE_RETRIES {
+                        return Err(anyhow!("Nvme path deadline exceeded"));
                     }
                 }
-                Err(error)
-                    if matches!(
-                        error.kind,
-                        ReplyErrorKind::Aborted
-                            | ReplyErrorKind::Timeout
-                            | ReplyErrorKind::NotFound
-                    ) =>
-                {
-                    info!(volume.uuid=%self.volume_id, "Retrying Republish without older target reuse");
-                    self.set_reuse_existing(false);
-                    self.set_stage(Stage::RepublishVolume);
-                    return Err(anyhow!("Nvme path replacement failed with older target"));
-                }
-                Err(error) => Err(anyhow!("Nvme path replacement failed: {error}")),
-            }?;
+                info!(volume.uuid=%self.volume_id, "Retrying Republish without older target reuse");
+                self.set_reuse_existing(false);
+                self.set_stage(Stage::RepublishVolume);
+                Err(anyhow!("Nvme path replacement failed with older target"))
+            }
+            Err(error) => Err(anyhow!("Nvme path replacement failed: {error}")),
+        }?;
 
-            nodes.remove_failed_path(&self.existing_nqn).await;
-            self.complete_op(true, "".to_string(), etcd).await?;
-            self.update_next_stage();
-            Ok(())
-        } else {
-            Err(anyhow!("Could not to get new nexus target for the volume"))
-        }
+        nodes.remove_failed_path(&self.existing_nqn).await;
+        self.complete_op(true, "".to_string(), etcd).await?;
+        self.update_next_stage();
+        Ok(())
     }
 }
 

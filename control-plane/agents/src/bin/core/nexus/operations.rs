@@ -315,6 +315,10 @@ impl ResourceShutdownOperations for OperationGuardArc<NexusSpec> {
         registry: &Registry,
         request: &Self::Shutdown,
     ) -> Result<(), SvcError> {
+        if self.as_ref().is_shutdown() {
+            return Ok(());
+        }
+
         let node_id = self.as_ref().node.clone();
         let node = match registry.node_wrapper(&node_id).await {
             Err(error) if !request.lazy() => Err(error),
