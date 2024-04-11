@@ -106,11 +106,6 @@ pub(crate) async fn snapshoteable_replica(
         });
     }
 
-    //todo: Remove this check once we support snapshotting with n-replicas.
-    if volume.num_replicas != 1 || children.candidates().len() != 1 {
-        return Err(SvcError::NReplSnapshotNotAllowed {});
-    }
-
     volume.trace(&format!("Snapshoteable replicas for volume: {children:?}"));
 
     if children.candidates().is_empty() {

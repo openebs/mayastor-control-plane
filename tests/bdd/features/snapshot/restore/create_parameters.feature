@@ -19,6 +19,6 @@ Feature: Create Volume From Snapshot - Parameter Validation
     Then the request should fail with InvalidArguments
 
   # This may be allowed in the future by setting the volume replica count and performing a rebuild
-  Scenario: Multi-replica restore
+  Scenario: Multi-replica restore from single replica snapshot
     When the request is for a multi-replica volume
-    Then the request should fail with InvalidArguments
+    Then the request should fail with PreconditionFailed
