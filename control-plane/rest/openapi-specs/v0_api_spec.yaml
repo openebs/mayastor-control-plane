@@ -2210,6 +2210,9 @@ components:
             identifies if device is available for use (ie. is not "currently" in
              use)
           type: boolean
+        connection_type:
+          description: the type of bus through which the device is connected to the system
+          type: string
         devlinks:
           description: list of udev generated symlinks by which device may be identified
           type: array
@@ -2258,6 +2261,9 @@ components:
             - label
             - mountpoint
             - uuid
+        is_rotational:
+          description: indicates whether the device is rotational or non-rotational
+          type: boolean
         model:
           description: device model - useful for identifying devices
           type: string
@@ -2298,6 +2304,7 @@ components:
           minimum: 0
       required:
         - available
+        - connection_type
         - devlinks
         - devmajor
         - devminor
