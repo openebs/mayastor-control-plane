@@ -74,6 +74,9 @@ let
     doCheck = false;
   };
   release_build = { "release" = true; "debug" = false; };
+  cargoDeps = rustPlatform.importCargoLock {
+    lockFile = ../../../Cargo.lock;
+  };
 in
 let
   build_with_naersk = { buildType, cargoBuildFlags }:
@@ -104,7 +107,7 @@ let
   builder = if incremental then build_with_naersk else build_with_default;
 in
 {
-  inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE version src;
+  inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE version src cargoDeps;
 
   build = { buildType, cargoBuildFlags ? [ ] }:
     if allInOne then
