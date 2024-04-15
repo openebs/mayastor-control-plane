@@ -94,7 +94,10 @@ impl NodeAgentSvc {
 }
 
 /// Disconnect cached NVMe controller.
-async fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Result<(), SvcError> {
+async fn disconnect_controller(
+    ctrlr: &NvmeController,
+    new_path: String,
+) -> Result<Option<Subsystem>, SvcError> {
     let new_path_uri = parse_uri(new_path.as_str())?;
     let path = &ctrlr.path;
     match get_nvme_path_entry(path) {
@@ -118,16 +121,23 @@ async fn disconnect_controller(ctrlr: &NvmeController, new_path: String) -> Resu
                 .match_host_port(new_path_uri.host(), &new_path_uri.port().to_string())
             {
                 tracing::info!(path, "Not disconnecting same NVMe controller");
-                Ok(())
+                Ok(None)
             } else {
                 tracing::info!(path, "Disconnecting NVMe controller");
 
+                let path = path.to_owned();
+                let subsystem_cln = subsystem.clone();
                 // clarification: we're not disconnecting the subsystem, but rather the controller
-                tokio::task::block_in_place(move || subsystem.disconnect()).map_err(|error| {
-                    SvcError::Internal {
-                        details: format!("Failed to disconnect NVMe controller {path}: {error:?}"),
+                tokio::task::spawn_blocking(move || match subsystem_cln.disconnect() {
+                    Ok(_) => {
+                        tracing::info!(path, "Disconnected NVMe controller");
                     }
-                })
+                    Err(error) => {
+                        tracing::error!(path, %error, "Failed to disconnect NVMe controller");
+                    }
+                });
+
+                Ok(Some(subsystem))
             }
         }
         None => {
@@ -324,7 +334,9 @@ impl NodeAgentOperations for NodeAgentSvc {
         request: &dyn ReplacePathInfo,
         _context: Option<Context>,
     ) -> Result<(), ReplyError> {
-        tracing::info!("Replacing failed NVMe path: {request:?}");
+        let deadline = std::time::Duration::from_secs(50);
+        let start = std::time::Instant::now();
+        tracing::info!(?request, "Replacing failed NVMe path");
         // Lookup NVMe controller whose path has failed.
         let ctrlrs = self
             .path_cache
@@ -353,13 +365,44 @@ impl NodeAgentOperations for NodeAgentSvc {
         // path has been successfully created, so having the first failed path in addition
         // to the second healthy one is OK: just display a warning and proceed as if
         // the call has completed successfully.
+        let mut subsystems = Vec::with_capacity(ctrlrs.len());
+        let mut disc_error = None;
         for ctrl in ctrlrs {
-            if let Err(error) = disconnect_controller(&ctrl, request.new_path()).await {
-                tracing::warn!(
-                    uri=%request.new_path(),
-                    %error,
-                    "Failed to disconnect failed path"
-                );
+            match disconnect_controller(&ctrl, request.new_path()).await {
+                Ok(subsystem) => subsystems.push(subsystem.map(|s| (ctrl, s))),
+                Err(error) => {
+                    tracing::warn!(
+                        uri=%request.new_path(),
+                        %error,
+                        "Failed to disconnect failed path"
+                    );
+                    disc_error = Some(error);
+                }
+            }
+        }
+        if let Some(error) = disc_error {
+            return Err(error.into());
+        }
+        for (ctrl, mut subsystem) in subsystems.into_iter().flatten() {
+            loop {
+                if subsystem.sync().is_err() {
+                    tracing::info!(path = ctrl.path, "Path has been removed");
+                    break;
+                }
+                tracing::info!(path = ctrl.path, state = %subsystem.state, "Path state sync");
+                if subsystem.state.starts_with("deleting") {
+                    break;
+                }
+
+                if start.elapsed() >= deadline {
+                    return Err(ReplyError::deadline_exceeded(
+                        ResourceKind::NvmePath,
+                        HA_AGENT_ERR_SOURCE.to_string(),
+                        "Failed to wait for previous path to transition to deleted/deleting"
+                            .to_string(),
+                    ));
+                }
+                sleep(self.subsys_refresh_period).await;
             }
         }
 

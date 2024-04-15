@@ -18,6 +18,7 @@ enum PathState {
     Good,
     Suspected,
     Failed,
+    Removing,
 }
 
 impl std::fmt::Display for PathState {
@@ -43,21 +44,28 @@ impl PathRecords {
             paths: HashMap::from([(path, record)]),
         }
     }
-    fn report_connecting(&mut self, ctrlr: &NvmePath, epoch: u64, reporter: &Rc<PathReporter>) {
+    fn gen_report(
+        &mut self,
+        ctrlr: &NvmePath,
+        epoch: u64,
+        reporter: &Rc<PathReporter>,
+    ) -> &mut PathRecord {
         let path = ctrlr.path().to_string_lossy().to_string();
-        let record = self.paths.entry(path.clone()).or_insert_with(|| {
-            PathRecord::new(ctrlr.nqn().to_owned(), epoch, path, reporter.clone())
-        });
-        record.report_connecting();
-        record.set_epoch(epoch);
+        self.paths
+            .entry(path.clone())
+            .or_insert_with(|| {
+                PathRecord::new(ctrlr.nqn().to_owned(), epoch, path, reporter.clone())
+            })
+            .with_epoch(epoch)
+    }
+    fn report_connecting(&mut self, ctrlr: &NvmePath, epoch: u64, reporter: &Rc<PathReporter>) {
+        self.gen_report(ctrlr, epoch, reporter).report_connecting();
     }
     fn report_live(&mut self, ctrlr: &NvmePath, epoch: u64, reporter: &Rc<PathReporter>) {
-        let path = ctrlr.path().to_string_lossy().to_string();
-        let record = self.paths.entry(path.clone()).or_insert_with(|| {
-            PathRecord::new(ctrlr.nqn().to_owned(), epoch, path, reporter.clone())
-        });
-        record.report_live();
-        record.set_epoch(epoch);
+        self.gen_report(ctrlr, epoch, reporter).report_live();
+    }
+    fn report_deleting(&mut self, ctrlr: &NvmePath, epoch: u64, reporter: &Rc<PathReporter>) {
+        self.gen_report(ctrlr, epoch, reporter).report_deleting();
     }
     fn has_broken_paths(&self) -> bool {
         !self.paths().is_empty() && self.paths().iter().any(|(_, r)| r.state != PathState::Good)
@@ -97,14 +105,13 @@ impl PathRecord {
         &self.nqn
     }
 
-    #[inline]
     fn get_epoch(&self) -> u64 {
         self.epoch
     }
 
-    #[inline]
-    fn set_epoch(&mut self, epoch: u64) {
+    fn with_epoch(&mut self, epoch: u64) -> &mut Self {
         self.epoch = epoch;
+        self
     }
 
     /// Trigger state transition based on 'connecting' state of the underlying NVMe controller.
@@ -132,6 +139,7 @@ impl PathRecord {
                 self.event(EventAction::NvmePathFail).generate();
             }
             PathState::Failed => {} // Multiple failures don't cause any state transitions.
+            PathState::Removing => {}
         }
     }
 
@@ -146,6 +154,22 @@ impl PathRecord {
             );
         }
         self.state = PathState::Good;
+    }
+
+    fn report_deleting(&mut self) {
+        let to = PathState::Removing;
+        if self.state == to {
+            return;
+        }
+        tracing::info!(
+            from=%self.state,
+            %to,
+            target=self.nqn,
+            path=self.path,
+            "Target path is deleting",
+        );
+        self.event(EventAction::NvmePathDeleting).generate();
+        self.state = to;
     }
 }
 
@@ -211,6 +235,7 @@ type NvmeCacheMessage = (NvmePathCacheCommand, Sender<NvmePathCacheCommandRespon
 ///  Good - path is fully functional.
 ///  Suspected - path experiences connectivity problems for the first time.
 ///  Failed - path has experienced connectivity problems two times in a row.
+///  Removing - Failed path is being removed.
 /// Once a path is classified as Failed, it's reported to PathReporter and gets sent to
 /// HA Cluster agent.
 #[derive(Debug)]
@@ -276,6 +301,11 @@ impl PathFailureDetector {
                     "live" => {
                         if let Some(rec) = self.suspected_paths.get_mut(&subsystem.nqn) {
                             rec.report_live(ctrlr, self.epoch, &self.reporter);
+                        }
+                    }
+                    "deleting" | "deleting (no IO)" => {
+                        if let Some(rec) = self.suspected_paths.get_mut(&subsystem.nqn) {
+                            rec.report_deleting(ctrlr, self.epoch, &self.reporter);
                         }
                     }
                     _ => {}
