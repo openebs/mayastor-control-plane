@@ -33,7 +33,7 @@ impl ComponentAction for CsiController {
                 .with_args(vec!["--csi-socket", CSI_SOCKET]);
 
             if cfg.container_exists("jaeger") {
-                let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
+                let jaeger_config = format!("jaeger.{}", cfg.get_name());
                 binary = binary.with_args(vec!["--jaeger", &jaeger_config])
             };
 

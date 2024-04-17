@@ -66,6 +66,15 @@ async fn client() {
     for auth in &[false, true] {
         let cluster = test_setup(auth).await;
         client_test(&cluster, auth).await;
+        // Seems that with otlp we can't simply reinstall a new tracer if running on the same
+        // thread. todo: handle this within Cluster build.
+        // https://github.com/open-telemetry/opentelemetry-rust/issues/868
+        let _ = tokio::time::timeout(
+            Duration::from_secs(1),
+            tokio::task::spawn_blocking(utils::tracing_telemetry::flush_traces),
+        )
+        .await
+        .expect("Failed to wait for flush");
     }
 }
 

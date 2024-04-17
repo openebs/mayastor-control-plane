@@ -6,7 +6,8 @@ use deployer_lib::{
     infra::{Components, Error, IoEngine},
     StartOptions,
 };
-use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
+use opentelemetry::{global, KeyValue};
+use opentelemetry_sdk::{propagation::TraceContextPropagator, trace as sdktrace};
 
 use stor_port::{transport_api::TimeoutOptions, types::v0::transport};
 
@@ -25,6 +26,8 @@ use grpc::{
     },
 };
 use openapi::models::Volume;
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::Resource;
 use rpc::{
     csi::{CreateSnapshotResponse, NodeStageVolumeResponse, NodeUnstageVolumeResponse},
     io_engine::RpcHandle,
@@ -966,13 +969,21 @@ impl ClusterBuilder {
                     env!("CARGO_PKG_VERSION"),
                 ));
                 tracing_tags.dedup();
+                tracing_tags.push(KeyValue::new(
+                    opentelemetry_semantic_conventions::resource::SERVICE_NAME,
+                    "cluster-client".to_owned(),
+                ));
 
                 global::set_text_map_propagator(TraceContextPropagator::new());
-                let tracer = opentelemetry_jaeger::new_agent_pipeline()
-                    .with_service_name("cluster-client")
+                let tracer = opentelemetry_otlp::new_pipeline()
+                    .tracing()
+                    .with_exporter(
+                        opentelemetry_otlp::new_exporter()
+                            .tonic()
+                            .with_endpoint("http://127.0.0.1:4317"),
+                    )
                     .with_trace_config(
-                        opentelemetry::sdk::trace::Config::default()
-                            .with_resource(opentelemetry::sdk::Resource::new(tracing_tags)),
+                        sdktrace::config().with_resource(Resource::new(tracing_tags)),
                     )
                     .install_simple()
                     .expect("Should be able to initialise the exporter");

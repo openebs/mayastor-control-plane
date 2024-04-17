@@ -348,6 +348,21 @@ impl KeyValues {
             None
         }
     }
+    /// Convert to otel resource attributes.
+    pub(crate) fn into_otel_attrs(self) -> Option<String> {
+        if !self.inner.is_empty() {
+            let mut arg_start = "processors:\n  resource:\n    attributes:\n".to_string();
+            self.inner.into_iter().for_each(|(k, v)| {
+                let _ = write!(
+                    arg_start,
+                    "      - key: {k}\n        value: {v}\n        action: insert\n"
+                );
+            });
+            Some(arg_start)
+        } else {
+            None
+        }
+    }
 }
 
 impl StartOptions {

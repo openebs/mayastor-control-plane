@@ -112,7 +112,7 @@ tmpd=$(mktemp -d /tmp/openapi-gen-XXXXXXX)
 
 # Generate a new openapi crate
 openapi-generator-cli generate -i "$SPEC" -g rust-mayastor -o "$tmpd"
-( cd "$tmpd"; rm -rf api; rm -rf .* 2>/dev/null || true )
+( cd "$tmpd"; rm -rf api; rm -rf examples; rm -rf .* 2>/dev/null || true )
 
 if [[ $default_toml = "no" ]]; then
   cp "$CARGO_TOML" "$tmpd"
