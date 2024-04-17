@@ -567,6 +567,7 @@ def create_volume_body(
                 inclusion={
                     **inclusion_labels,
                 },
+                affinitykey=[],
             )
         )
     )
