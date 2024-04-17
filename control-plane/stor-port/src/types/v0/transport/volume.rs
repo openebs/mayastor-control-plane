@@ -255,6 +255,9 @@ pub struct LabelledTopology {
     /// Inclusive labels.
     #[serde(default)]
     pub inclusion: HashMap<String, String>,
+    /// Affinity labels.
+    #[serde(default)]
+    pub affinity: Vec<String>,
 }
 
 impl From<models::LabelledTopology> for LabelledTopology {
@@ -262,12 +265,13 @@ impl From<models::LabelledTopology> for LabelledTopology {
         Self {
             exclusion: src.exclusion,
             inclusion: src.inclusion,
+            affinity: src.affinitykey,
         }
     }
 }
 impl From<LabelledTopology> for models::LabelledTopology {
     fn from(src: LabelledTopology) -> Self {
-        Self::new(src.exclusion, src.inclusion)
+        Self::new(src.exclusion, src.inclusion, src.affinity)
     }
 }
 

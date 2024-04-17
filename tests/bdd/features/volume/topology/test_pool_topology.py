@@ -5,6 +5,7 @@ from pytest_bdd import given, scenario, then, when, parsers
 import pytest
 import docker
 import requests
+import time
 
 from common.deployer import Deployer
 from common.apiclient import ApiClient
@@ -184,6 +185,7 @@ POOL_CONFIGURATIONS = [
 def init():
     Deployer.start(NUM_IO_ENGINES)
 
+    time.sleep(10)
     # Create the pools.
     for config in POOL_CONFIGURATIONS:
         ApiClient.pools_api().put_node_pool(
@@ -375,6 +377,7 @@ def create_volume_body(replica, volume_pool_topology_inclusion_label):
                     key.strip(): value.strip(),
                     "openebs.io/created-by": "operator-diskpool",
                 },
+                affinitykey=[],
             )
         )
     )

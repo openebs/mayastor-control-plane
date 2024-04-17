@@ -42,7 +42,11 @@ def a_published_selfhealing_volume():
         False,
         topology=Topology(
             pool_topology=PoolTopology(
-                labelled=LabelledTopology(exclusion={}, inclusion={"node": IO_ENGINE_2})
+                labelled=LabelledTopology(
+                    exclusion={},
+                    inclusion={"node": IO_ENGINE_2},
+                    affinitykey=[],
+                )
             )
         ),
     )

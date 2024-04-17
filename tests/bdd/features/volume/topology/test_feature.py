@@ -164,7 +164,9 @@ def a_request_for_a_volume_with_topology_different_from_pools(create_request):
         topology=Topology(
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(
-                    exclusion={}, inclusion={"fake-label-key": "fake-label-value"}
+                    exclusion={},
+                    inclusion={"fake-label-key": "fake-label-value"},
+                    affinitykey=[],
                 )
             )
         ),
@@ -185,6 +187,7 @@ def a_request_for_a_volume_with_topology_same_as_pool_labels(create_request):
                 labelled=LabelledTopology(
                     exclusion={},
                     inclusion={"openebs.io/created-by": "operator-diskpool"},
+                    affinitykey=[],
                 )
             )
         ),
@@ -246,6 +249,7 @@ def an_existing_published_volume_with_a_topology_matching_pool_labels():
                     labelled=LabelledTopology(
                         exclusion={},
                         inclusion={"openebs.io/created-by": "operator-diskpool"},
+                        affinitykey=[],
                     )
                 )
             ),
@@ -273,6 +277,7 @@ def an_existing_published_volume_with_a_topology_not_matching_pool_labels():
                     labelled=LabelledTopology(
                         exclusion={},
                         inclusion={"pool1-specific-key": "pool1-specific-value"},
+                        affinitykey=[],
                     )
                 )
             ),
@@ -479,6 +484,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object_with_topology(
                 labelled=LabelledTopology(
                     exclusion={},
                     inclusion={"openebs.io/created-by": "operator-diskpool"},
+                    affinitykey=[],
                 )
             )
         ),
