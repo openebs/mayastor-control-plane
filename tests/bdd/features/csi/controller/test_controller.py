@@ -19,6 +19,7 @@ import json
 from common.apiclient import ApiClient
 from common.csi import CsiHandle
 from common.deployer import Deployer
+from common.nvme import nvme_bin
 from common.operations import Cluster
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.exceptions import NotFoundException
@@ -743,7 +744,9 @@ def check_nvmf_target(uri):
     nqn = u.path[1:]
     hostnqn = parse_qs(u.query)["hostnqn"][0]
 
-    command = f"sudo nvme discover -t tcp -s {port} -a {host} -q {hostnqn} -o json"
+    command = (
+        f"sudo {nvme_bin} discover -t tcp -s {port} -a {host} -q {hostnqn} -o json"
+    )
     status = subprocess.run(
         command, shell=True, check=True, text=True, capture_output=True
     )

@@ -5,6 +5,8 @@ from urllib.parse import parse_qs, ParseResult
 import os
 import subprocess
 
+fio_bin = shutil.which("fio")
+
 
 class Fio(object):
     def __init__(
@@ -71,7 +73,7 @@ class Fio(object):
         filename = ":".join(map(str, devs))
 
         command = (
-            f"sudo fio --ioengine=linuxaio --filename={filename} "
+            f"sudo {fio_bin} --ioengine=linuxaio --filename={filename} "
             f"--numjobs=1 --thread=1 {args} "
         )
 
