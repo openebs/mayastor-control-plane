@@ -63,7 +63,16 @@ def nvme_connect(uri):
 
     command = f"sudo {nvme_bin} connect -t tcp -s {port} -a {host} -n {nqn}{hostnqn}"
     print(command)
-    subprocess.run(command, check=True, shell=True, capture_output=False)
+    try:
+        subprocess.run(
+            command, check=True, shell=True, capture_output=True, encoding="utf-8"
+        )
+    except subprocess.CalledProcessError as e:
+        # todo: handle this better!
+        if e.stderr == "already connected\n":
+            pass
+        else:
+            raise e
 
     return wait_nvme_find_device(uri)
 
