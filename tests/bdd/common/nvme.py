@@ -10,6 +10,16 @@ import json
 nvme_bin = which("nvme")
 
 
+def product_uuid():
+    command = "sudo -E cat /sys/class/dmi/id/product_uuid"
+    return subprocess.run(
+        command, check=True, shell=True, capture_output=True, encoding="utf-8"
+    ).stdout.rstrip()
+
+
+hostid = product_uuid()
+
+
 async def nvme_remote_connect(remote, uri):
     """Connect to the remote nvmf target on this host."""
     u = urlparse(uri)
@@ -18,7 +28,7 @@ async def nvme_remote_connect(remote, uri):
     nqn = u.path[1:]
     hostnqn = nvme_hostnqn_arg(u)
 
-    command = f"sudo {nvme_bin} connect -t tcp -s {port} -a {host} -n {nqn} {hostnqn}"
+    command = f"sudo {nvme_bin} connect -t tcp -s {port} -a {host} -n {nqn} -I {hostid} {hostnqn}"
 
     await run_cmd_async_at(remote, command)
     return wait_nvme_find_device(uri)
@@ -40,7 +50,9 @@ async def nvme_remote_discover(remote, uri):
     host = u.hostname
     hostnqn = nvme_hostnqn_arg(u)
 
-    command = f"sudo {nvme_bin} discover -t tcp -s {port} -a {host} {hostnqn}"
+    command = (
+        f"sudo {nvme_bin} discover -t tcp -s {port} -a {host} -I {hostid} {hostnqn}"
+    )
     output = await run_cmd_async_at(remote, command).stdout
     if not u.path[1:] in str(output.stdout):
         raise ValueError("uri {} is not discovered".format(u.path[1:]))
@@ -61,7 +73,7 @@ def nvme_connect(uri):
     nqn = u.path[1:]
     hostnqn = nvme_hostnqn_arg(u)
 
-    command = f"sudo {nvme_bin} connect -t tcp -s {port} -a {host} -n {nqn}{hostnqn}"
+    command = f"sudo {nvme_bin} connect -t tcp -s {port} -a {host} -I {hostid} -n {nqn}{hostnqn}"
     print(command)
     try:
         subprocess.run(
@@ -79,7 +91,7 @@ def nvme_connect(uri):
 
 def nvme_id_ctrl(device):
     """Identify controller."""
-    command = f"sudo {nvme_bin} id-ctrl {device} -o json"
+    command = f"sudo {nvme_bin} id-ctrl {device} -I {hostid} -o json"
     id_ctrl = json.loads(
         subprocess.run(
             command, shell=True, check=True, text=True, capture_output=True
@@ -91,7 +103,7 @@ def nvme_id_ctrl(device):
 
 def nvme_resv_report(device):
     """Reservation report."""
-    command = f"sudo {nvme_bin} resv-report {device} -c 1 -o json"
+    command = f"sudo {nvme_bin} resv-report {device} -c 1 -I {hostid} -o json"
     resv_report = json.loads(
         subprocess.run(
             command, shell=True, check=True, text=True, capture_output=True
@@ -108,7 +120,9 @@ def nvme_discover(uri):
     host = u.hostname
     hostnqn = nvme_hostnqn_arg(u)
 
-    command = f"sudo {nvme_bin} discover -t tcp -s {port} -a {host} {hostnqn}"
+    command = (
+        f"sudo {nvme_bin} discover -t tcp -s {port} -a {host} -I {hostid} {hostnqn}"
+    )
     output = subprocess.run(
         command, check=True, shell=True, capture_output=True, encoding="utf-8"
     )

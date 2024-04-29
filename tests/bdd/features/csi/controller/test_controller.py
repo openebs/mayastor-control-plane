@@ -743,10 +743,9 @@ def check_nvmf_target(uri):
     host = u.hostname
     nqn = u.path[1:]
     hostnqn = parse_qs(u.query)["hostnqn"][0]
+    hostid = "b7097711-a6d7-425f-a76a-9cfcf83f31ba"
 
-    command = (
-        f"sudo {nvme_bin} discover -t tcp -s {port} -a {host} -q {hostnqn} -o json"
-    )
+    command = f"sudo {nvme_bin} discover -t tcp -s {port} -a {host} -I {hostid} -q {hostnqn} -o json"
     status = subprocess.run(
         command, shell=True, check=True, text=True, capture_output=True
     )

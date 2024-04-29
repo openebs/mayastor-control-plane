@@ -52,6 +52,7 @@ VOLUME_SIZE = 52428800  # 50MiB
 VOLUME_NEW_SIZE = 83886080  # 80MiB
 VOLUME_SHRINK_SIZE = 41943040  # 40MiB
 
+
 # utility helper functions - BEGIN
 def cordon_node(node_name, label):
     ApiClient.nodes_api().put_node_cordon(node_name, label)
@@ -202,6 +203,7 @@ def disks(tmp_files):
 
 
 # Fixtures - END
+
 
 # This fixture will be automatically used by all tests.
 # It starts the deployer which launches all the necessary containers.

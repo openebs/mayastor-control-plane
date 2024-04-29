@@ -58,6 +58,7 @@ VOLUME_SIZE = 104857600  # 100MiB
 VOLUME_NEW_SIZE = 209715200  # 200MiB
 VOLUME_SHRINK_SIZE = 52428800  # 50MiB
 
+
 # fixtures - BEGIN
 @pytest.fixture(scope="module")
 def tmp_files():
@@ -136,6 +137,7 @@ def test_volume_factory():
 
 
 # fixtures - END
+
 
 # utility helper functions - BEGIN
 def cordon_node(node_name, label):
