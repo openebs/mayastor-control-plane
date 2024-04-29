@@ -15,9 +15,10 @@ use crate::{
     node::wrapper::NodeWrapper,
 };
 use agents::errors::{NotEnough, SvcError};
+use std::collections::HashMap;
 use stor_port::types::v0::{
     store::{nexus::NexusSpec, volume::VolumeSpec},
-    transport::{NodeId, Replica, VolumeState},
+    transport::{NodeId, NodeTopology, PoolTopology, Replica, VolumeState},
 };
 
 /// Return a list of pre sorted pools to be used by a volume.
@@ -31,6 +32,99 @@ pub(crate) async fn volume_pool_candidates(
         .into_iter()
         .map(|e| e.collect())
         .collect()
+}
+
+/// Return a list of pre sorted pools in case of affinity.
+pub(crate) fn second_pass_filter(
+    pools: Vec<PoolWrapper>,
+    suitable_pools: GetSuitablePools,
+    registry: &Registry,
+) -> Vec<PoolWrapper> {
+    let mut map: HashMap<String, Vec<PoolWrapper>> = HashMap::new();
+    for pool in pools.iter() {
+        let id = pool.state().id.clone();
+        let spec = registry.specs().pool(&id).unwrap_or_default();
+        let pool_labels = spec.labels.clone().unwrap_or_default();
+        let pool_affinity = match &suitable_pools.spec().topology.as_ref().unwrap().pool {
+            Some(pool_topology) => match pool_topology {
+                PoolTopology::Labelled(label) => label.affinity.clone(),
+            },
+            None => HashMap::new(),
+        };
+
+        // performance: gold and zone: us-west , then the map key is "performancegoldzoneus-west"
+        // and the vallues are the vec of pool wrappers that have these labels
+        for (pool_affinity_key, _) in pool_affinity.iter() {
+            let mut result = String::new();
+            if let Some(value) = pool_labels.get(pool_affinity_key) {
+                result.push_str(pool_affinity_key);
+                result.push_str(value);
+            }
+            if let Some(pools) = map.get_mut(&result) {
+                pools.push(pool.clone());
+            } else {
+                map.insert(result, vec![pool.clone()]);
+            }
+        }
+    }
+
+    // Initialize variables to keep track of the key with the maximum size of values
+    let mut max_key = String::new();
+    let mut max_size = 0;
+
+    for (key, list_of_pools) in map.iter() {
+        if list_of_pools.len() >= suitable_pools.spec().desired_num_replicas() as usize
+            && list_of_pools.len() > max_size
+        {
+            max_key = key.clone(); // Update the key with the maximum size
+            max_size = list_of_pools.len(); // Update the maximum size
+        }
+    }
+
+    let final_pools = match map.get(&max_key) {
+        Some(pools) => pools.clone(),
+        None => Vec::new(),
+    };
+    final_pools
+}
+
+pub(crate) fn is_affinity_requested(suitable_pools: GetSuitablePools) -> bool {
+    match suitable_pools.spec().topology.as_ref() {
+        Some(topology) => {
+            let node_affinity = match &topology.node {
+                Some(node_topology) => match node_topology {
+                    NodeTopology::Labelled(label) => {
+                        let mut matching_key = false;
+                        for key in label.affinity.keys() {
+                            if label.inclusion.contains_key(key) {
+                                matching_key = true;
+                            }
+                        }
+                        !matching_key && !label.affinity.is_empty()
+                    }
+
+                    NodeTopology::Explicit(_) => false,
+                },
+                None => false,
+            };
+            let pool_affinity = match &topology.pool {
+                Some(pool_topology) => match pool_topology {
+                    PoolTopology::Labelled(label) => {
+                        let mut matching_key = false;
+                        for key in label.affinity.keys() {
+                            if label.inclusion.contains_key(key) {
+                                matching_key = true;
+                            }
+                        }
+                        !matching_key && !label.affinity.is_empty()
+                    }
+                },
+                None => false,
+            };
+            node_affinity || pool_affinity
+        }
+        None => false,
+    }
 }
 
 /// Return a volume child candidate to be removed from a volume.

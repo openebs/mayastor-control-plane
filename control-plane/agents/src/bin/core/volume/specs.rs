@@ -18,6 +18,7 @@ use crate::{
             ResourceFilter,
         },
     },
+    pool::wrapper::PoolWrapper,
     volume::{operations::CreateVolumeSource, scheduling},
 };
 use agents::{
@@ -180,18 +181,18 @@ pub(crate) async fn volume_replica_candidates(
     volume_spec: &VolumeSpec,
 ) -> Result<Vec<CreateReplica>, SvcError> {
     let request = GetSuitablePools::new(volume_spec, None);
-    let pools = scheduling::volume_pool_candidates(request.clone(), registry).await;
-
+    let mut pools: Vec<PoolWrapper>;
+    pools = scheduling::volume_pool_candidates(request.clone(), registry).await;
     if pools.is_empty() {
         return Err(SvcError::NotEnoughResources {
             source: NotEnough::OfPools { have: 0, need: 1 },
         });
     }
 
-    volume_spec.trace(&format!(
-        "Creation pool candidates for volume: {:?}",
-        pools.iter().map(|p| p.state()).collect::<Vec<_>>()
-    ));
+    let is_affinity = scheduling::is_affinity_requested(request.clone());
+    if is_affinity {
+        pools = scheduling::second_pass_filter(pools, request.clone(), registry);
+    }
 
     Ok(pools
         .iter()
