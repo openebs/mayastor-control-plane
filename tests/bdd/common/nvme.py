@@ -1,3 +1,4 @@
+from shutil import which
 from urllib.parse import urlparse, parse_qs, ParseResult
 from retrying import retry
 from common.command import run_cmd_async_at
@@ -5,6 +6,18 @@ from common.command import run_cmd_async_at
 import subprocess
 import time
 import json
+
+nvme_bin = which("nvme")
+
+
+def product_uuid():
+    command = "sudo -E cat /sys/class/dmi/id/product_uuid"
+    return subprocess.run(
+        command, check=True, shell=True, capture_output=True, encoding="utf-8"
+    ).stdout.rstrip()
+
+
+hostid = product_uuid()
 
 
 async def nvme_remote_connect(remote, uri):
@@ -15,7 +28,7 @@ async def nvme_remote_connect(remote, uri):
     nqn = u.path[1:]
     hostnqn = nvme_hostnqn_arg(u)
 
-    command = f"sudo nvme connect -t tcp -s {port} -a {host} -n {nqn} {hostnqn}"
+    command = f"sudo {nvme_bin} connect -t tcp -s {port} -a {host} -n {nqn} -I {hostid} {hostnqn}"
 
     await run_cmd_async_at(remote, command)
     return wait_nvme_find_device(uri)
@@ -26,7 +39,7 @@ async def nvme_remote_disconnect(remote, uri):
     u = urlparse(uri)
     nqn = u.path[1:]
 
-    command = "sudo nvme disconnect -n {0}".format(nqn)
+    command = f"sudo {nvme_bin} disconnect -n {nqn}"
     await run_cmd_async_at(remote, command)
 
 
@@ -37,7 +50,9 @@ async def nvme_remote_discover(remote, uri):
     host = u.hostname
     hostnqn = nvme_hostnqn_arg(u)
 
-    command = f"sudo nvme discover -t tcp -s {port} -a {host} {hostnqn}"
+    command = (
+        f"sudo {nvme_bin} discover -t tcp -s {port} -a {host} -I {hostid} {hostnqn}"
+    )
     output = await run_cmd_async_at(remote, command).stdout
     if not u.path[1:] in str(output.stdout):
         raise ValueError("uri {} is not discovered".format(u.path[1:]))
@@ -46,7 +61,7 @@ async def nvme_remote_discover(remote, uri):
 def nvme_hostnqn_arg(uri: ParseResult):
     uri_query = parse_qs(uri.query)
     if uri_query.keys().__contains__("hostnqn"):
-        return "-q {}".format(uri_query["hostnqn"][0])
+        return " -q {}".format(uri_query["hostnqn"][0])
     else:
         return ""
 
@@ -58,16 +73,25 @@ def nvme_connect(uri):
     nqn = u.path[1:]
     hostnqn = nvme_hostnqn_arg(u)
 
-    command = f"sudo nvme connect -t tcp -s {port} -a {host} -n {nqn} {hostnqn}"
+    command = f"sudo {nvme_bin} connect -t tcp -s {port} -a {host} -I {hostid} -n {nqn}{hostnqn}"
     print(command)
-    subprocess.run(command, check=True, shell=True, capture_output=False)
+    try:
+        subprocess.run(
+            command, check=True, shell=True, capture_output=True, encoding="utf-8"
+        )
+    except subprocess.CalledProcessError as e:
+        # todo: handle this better!
+        if e.stderr == "already connected\n":
+            pass
+        else:
+            raise e
 
     return wait_nvme_find_device(uri)
 
 
 def nvme_id_ctrl(device):
     """Identify controller."""
-    command = "sudo nvme id-ctrl {0} -o json".format(device)
+    command = f"sudo {nvme_bin} id-ctrl {device} -I {hostid} -o json"
     id_ctrl = json.loads(
         subprocess.run(
             command, shell=True, check=True, text=True, capture_output=True
@@ -79,7 +103,7 @@ def nvme_id_ctrl(device):
 
 def nvme_resv_report(device):
     """Reservation report."""
-    command = "sudo nvme resv-report {0} -c 1 -o json".format(device)
+    command = f"sudo {nvme_bin} resv-report {device} -c 1 -I {hostid} -o json"
     resv_report = json.loads(
         subprocess.run(
             command, shell=True, check=True, text=True, capture_output=True
@@ -96,7 +120,9 @@ def nvme_discover(uri):
     host = u.hostname
     hostnqn = nvme_hostnqn_arg(u)
 
-    command = f"sudo nvme discover -t tcp -s {port} -a {host} {hostnqn}"
+    command = (
+        f"sudo {nvme_bin} discover -t tcp -s {port} -a {host} -I {hostid} {hostnqn}"
+    )
     output = subprocess.run(
         command, check=True, shell=True, capture_output=True, encoding="utf-8"
     )
@@ -108,7 +134,7 @@ def nvme_find_device(uri):
     u = urlparse(uri)
     nqn = u.path[1:]
 
-    command = "sudo nvme list -v -o json"
+    command = f"sudo {nvme_bin} list -v -o json"
     discover = json.loads(
         subprocess.run(
             command, shell=True, check=True, text=True, capture_output=True
@@ -135,7 +161,7 @@ def nvme_find_device_path(uri):
     u = urlparse(uri)
     nqn = u.path[1:]
 
-    command = "sudo nvme list -v -o json"
+    command = f"sudo {nvme_bin} list -v -o json"
     discover = json.loads(
         subprocess.run(
             command, shell=True, check=True, text=True, capture_output=True
@@ -167,25 +193,25 @@ def nvme_disconnect(uri):
     u = urlparse(uri)
     nqn = u.path[1:]
 
-    command = "sudo nvme disconnect -n {0}".format(nqn)
+    command = f"sudo {nvme_bin} disconnect -n {nqn}"
     subprocess.run(command, check=True, shell=True, capture_output=True)
 
 
 def nvme_disconnect_all():
     """Disconnect from all connected nvme subsystems"""
-    command = "sudo nvme disconnect-all"
+    command = f"sudo {nvme_bin} disconnect-all"
     subprocess.run(command, check=True, shell=True, capture_output=True)
 
 
 def nvme_disconnect_controller(name):
     """Disconnect the given NVMe controller on this host."""
-    command = "sudo nvme disconnect -d {0}".format(name)
+    command = f"sudo {nvme_bin} disconnect -d {name}"
     subprocess.run(command, check=True, shell=True, capture_output=True)
 
 
 def nvme_list_subsystems(device):
     """Retrieve information for NVMe subsystems"""
-    command = "sudo nvme list-subsys {} -o json".format(device)
+    command = f"sudo {nvme_bin} list-subsys {device} -o json"
     subsystems = json.loads(
         subprocess.run(
             command, check=True, shell=True, capture_output=True, encoding="utf-8"
@@ -199,7 +225,7 @@ NS_PROPS = ["nguid", "eui64"]
 
 def identify_namespace(device):
     """Get properties of a namespace on this host"""
-    command = "sudo nvme id-ns {}".format(device)
+    command = f"sudo {nvme_bin} id-ns {device}"
     output = subprocess.run(
         command, check=True, shell=True, capture_output=True, encoding="utf-8"
     )
@@ -216,7 +242,7 @@ def nvme_set_reconnect_delay(uri, delay=10):
     u = urlparse(uri)
     nqn = u.path[1:]
 
-    command = "sudo nvme list -v -o json"
+    command = f"sudo {nvme_bin} list -v -o json"
     discover = json.loads(
         subprocess.run(
             command, shell=True, check=True, text=True, capture_output=True

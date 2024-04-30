@@ -48,7 +48,6 @@ async def run_cmd_async_at(host, cmd):
             output_message += f"\nstderr:\n{result.stderr}"
 
         if result.exit_status != 0:
-
             output_message += f"\nReturned error code: {result.exit_status}"
 
             if result.stderr != "":

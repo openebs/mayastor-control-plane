@@ -73,10 +73,11 @@ def init_scenario(init, disks):
             node, name, CreatePoolBody([disks[disk_index]])
         )
     yield
-    Docker.restart_container("agent-ha-node")
-    ETCD_CLIENT.del_switchover(VOLUME_UUID)
-    Docker.restart_container("agent-ha-cluster")
-    Cluster.cleanup()
+    if Cluster.fixture_cleanup():
+        Docker.restart_container("agent-ha-node")
+        ETCD_CLIENT.del_switchover(VOLUME_UUID)
+        Docker.restart_container("agent-ha-cluster")
+        Cluster.cleanup()
 
 
 @scenario("robustness.feature", "reconnecting the new target times out")

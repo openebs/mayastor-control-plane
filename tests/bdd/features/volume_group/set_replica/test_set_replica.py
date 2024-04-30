@@ -230,6 +230,7 @@ def the_scale_down_operation_should_fail():
 
 # HELPER METHODS
 
+
 # Creates the pools based on given nodes and counts.
 def create_node_pools(node_pool_map: Dict[str, int]):
     pool_index = 1
