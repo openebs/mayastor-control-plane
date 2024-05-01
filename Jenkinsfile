@@ -138,6 +138,7 @@ pipeline {
             }
             sh 'printenv'
             sh 'nix-shell --run "cargo build --bins"'
+            sh 'nix-shell --run "deployer start --image-pull-policy always -w 60s && deployer stop"'
             // builds the tests
             sh 'nix-shell --run "./scripts/rust/test.sh --no-run"'
             sh 'nix-shell --run "./scripts/rust/test.sh"'
@@ -174,6 +175,7 @@ pipeline {
           }
           agent { label 'nixos-mayastor' }
           steps {
+            sh 'printenv'
             sh './scripts/nix/git-submodule-init.sh --force'
             sh './scripts/release.sh --skip-publish --debug --build-bins'
           }
