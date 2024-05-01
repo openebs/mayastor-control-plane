@@ -20,6 +20,8 @@ fn main() -> BuildResult {
         }
     }
 
+    println!("cargo:rerun-if-env-changed=TARGET_REGISTRY");
+
     add_git_head("../..");
     if let Ok(ext) = std::env::var("EXTENSIONS_SRC") {
         add_git_head(&ext);
