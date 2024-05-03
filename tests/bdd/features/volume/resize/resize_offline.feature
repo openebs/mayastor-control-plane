@@ -53,22 +53,20 @@ Feature: Volume resize
         Given an unpublished volume with more than one replica and all are healthy
         When we issue a volume expand request
         Then the request should succeed
-        Then all the replicas of volume should be resized to new capacity
-        And the volume target should get resized to new capacity
-        And the volume should be expanded to the new capacity
+        Then all the replicas of the volume should be resized to the new capacity
         When we take a snapshot of expanded volume
         Then the snapshot should be successfully created
-        And the new capacity should be available for the application
 
 
     Scenario: Take a snapshot and expand the volume
         Given a successful snapshot is created for an unpublished volume
         When we issue a volume expand request
         Then the request should succeed
-        Then all the replicas of volume should be resized to new capacity
-        And the volume target should get resized to new capacity
-        And the volume should be expanded to the new capacity
-        And the new capacity should be available for the application
+        Then all the replicas of the volume should be resized to the new capacity
+        When the volume is published
+        Then the volume should get published with expanded capacity
+        And we take a snapshot of expanded volume again
+        And the new capacity should be available for the application to use
 
 
     Scenario: Expand a new volume created as a snapshot restore
@@ -79,9 +77,9 @@ Feature: Volume resize
         And the new volume is published
         When we issue a volume expand request
         Then the request should succeed
-        Then all the replicas of volume should be resized to new capacity
-        And the volume should be expanded to the new capacity
-        And IO on the new volume runs without error for the complete volume size
+        Then all the replicas of the volume should be resized to the new capacity
+        When the volume is published
+        Then the new capacity should be available for the application to use
 
 
     # Volume shrink/downsize isn't supported by csi.

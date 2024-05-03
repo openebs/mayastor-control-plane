@@ -70,6 +70,7 @@ Feature: Volume resize
         Then all the replicas of volume should be resized to new capacity
         And the volume target should get resized to new capacity
         And the volume should be expanded to the new capacity
+        And we take a snapshot of expanded volume again
         And the new capacity should be available for the application
 
 
