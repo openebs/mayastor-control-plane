@@ -44,6 +44,9 @@ pub enum GetResources {
     VolumeReplicaTopology { id: VolumeId },
     /// Get volume snapshots based on input args.
     VolumeSnapshots(VolumeSnapshotArgs),
+
+    /// Get volume snapshot topology based on input args.
+    VolumeSnapshotTopology(VolumeSnapshotArgs),
     /// Get all pools.
     Pools,
     /// Get pool with the given ID.

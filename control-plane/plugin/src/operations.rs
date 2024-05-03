@@ -170,6 +170,21 @@ pub trait GetSnapshots {
     ) -> PluginResult;
 }
 
+/// GetSnapshotTopology trait.
+/// To be implemented by resources which support the 'get snapshot topology' operation.
+#[async_trait(?Send)]
+pub trait GetSnapshotTopology {
+    // Representing a volume or replica for example.
+    type SourceID;
+    // Representing the actual resource i.e. snapshot.
+    type ResourceID;
+    async fn get_snapshot_topology(
+        volid: &Self::SourceID,
+        snapid: &Self::ResourceID,
+        output: &utils::OutputFormat,
+    ) -> PluginResult;
+}
+
 /// Cordon trait.
 /// To be implemented by resources which support cordoning.
 #[async_trait(?Send)]
