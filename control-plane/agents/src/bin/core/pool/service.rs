@@ -27,7 +27,7 @@ use stor_port::{
         store::{pool::PoolSpec, replica::ReplicaSpec},
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas,
-            NodeId, Pool, PoolId, Replica, ResizeReplica, ShareReplica, UnshareReplica,
+            Labels, NodeId, Pool, PoolId, Replica, ResizeReplica, ShareReplica, UnshareReplica,
         },
     },
 };
@@ -150,16 +150,17 @@ impl Service {
     pub(super) async fn get_pools(&self, request: &GetPools) -> Result<Pools, SvcError> {
         let filter = request.filter.clone();
         match filter {
-            Filter::None => self.node_pools(None, None).await,
-            Filter::Node(node_id) => self.node_pools(Some(node_id), None).await,
+            Filter::None => self.node_pools(None, None, None).await,
+            Filter::Node(node_id) => self.node_pools(Some(node_id), None, None).await,
             Filter::NodePool(node_id, pool_id) => {
                 tracing::Span::current().record("pool.id", pool_id.as_str());
-                self.node_pools(Some(node_id), Some(pool_id)).await
+                self.node_pools(Some(node_id), Some(pool_id), None).await
             }
             Filter::Pool(pool_id) => {
                 tracing::Span::current().record("pool.id", pool_id.as_str());
-                self.node_pools(None, Some(pool_id)).await
+                self.node_pools(None, Some(pool_id), None).await
             }
+            Filter::Labels(labels) => self.node_pools(None, None, Some(labels)).await,
             _ => Err(SvcError::InvalidFilter { filter }),
         }
     }
@@ -169,6 +170,7 @@ impl Service {
         &self,
         node_id: Option<NodeId>,
         pool_id: Option<PoolId>,
+        labels: Option<Labels>,
     ) -> Result<Pools, SvcError> {
         let pools = match pool_id {
             Some(id) if node_id.is_none() => {
@@ -182,7 +184,10 @@ impl Service {
                 }
                 pools
             }
-            None => self.registry.get_node_opt_pools(node_id).await?,
+            None => match node_id {
+                Some(id) => self.registry.get_node_opt_pools(Some(id)).await?,
+                None => self.registry.get_label_opts_pools(labels).await?,
+            },
         };
         Ok(Pools(pools))
     }

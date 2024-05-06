@@ -408,6 +408,11 @@ pub enum SvcError {
         replica: String,
         source: tonic::Status,
     },
+    #[snafu(display(
+        "the supported formats are: \
+        key1=value1,key2=value2"
+    ))]
+    LabelNodeFilter {},
 }
 
 impl SvcError {
@@ -1086,6 +1091,12 @@ impl From<SvcError> for ReplyError {
             SvcError::ReplicaSetPropertyFailed { .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPersist,
                 resource: ResourceKind::Replica,
+                source,
+                extra,
+            },
+            SvcError::LabelNodeFilter {} => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::Pool,
                 source,
                 extra,
             },

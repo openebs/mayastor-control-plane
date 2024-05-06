@@ -3,10 +3,58 @@ use crate::controller::{
     wrapper::{GetterOps, *},
 };
 use agents::errors::{SvcError, SvcError::PoolNotFound};
-use stor_port::types::v0::transport::{CtrlPoolState, NodeId, Pool, PoolId, Replica, ReplicaId};
+use std::collections::HashMap;
+use stor_port::types::v0::transport::{
+    CtrlPoolState, Labels, NodeId, Pool, PoolId, Replica, ReplicaId,
+};
 
 /// Pool helpers
 impl Registry {
+    pub(crate) async fn get_label_opts_pools(
+        &self,
+        labels: Option<Labels>,
+    ) -> Result<Vec<Pool>, SvcError> {
+        let pools = self.get_node_opt_pools(None).await?;
+        let pools_after_label_filtering = match labels {
+            Some(label) => {
+                let mut filtered_pool: Vec<Pool> = vec![];
+                for pool in pools.iter() {
+                    match pool.spec() {
+                        Some(spec) => match spec.labels {
+                            Some(pool_labels) => {
+                                let pool_label_match =
+                                    Self::labels_matched(pool_labels, label.clone())?;
+                                if pool_label_match {
+                                    filtered_pool.push(pool.clone());
+                                }
+                            }
+                            None => continue,
+                        },
+                        None => continue,
+                    }
+                }
+                return Ok(filtered_pool);
+            }
+            None => pools,
+        };
+        Ok(pools_after_label_filtering)
+    }
+
+    pub(crate) fn labels_matched(
+        pool_labels: HashMap<String, String>,
+        labels: Labels,
+    ) -> Result<bool, SvcError> {
+        for label in labels.split(',') {
+            let [key, value] = label.split('=').collect::<Vec<_>>()[..] else {
+                return Err(SvcError::LabelNodeFilter {});
+            };
+            if pool_labels.get(key) != Some(&value.to_string()) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
     /// Get all pools from node `node_id` or from all nodes.
     pub(crate) async fn get_node_opt_pools(
         &self,
