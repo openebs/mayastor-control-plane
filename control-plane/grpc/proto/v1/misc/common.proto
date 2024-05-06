@@ -164,6 +164,11 @@ message NodePoolFilter {
   string pool_id = 2;
 }
 
+// Filter by Tooplogy labels
+message NodePoolLabelFilter {
+  string labels = 1;
+}
+
 // Filter by Nexus Id
 message NexusFilter {
   string nexus_id = 1;

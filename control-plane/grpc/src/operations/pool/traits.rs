@@ -215,6 +215,9 @@ impl From<get_pools_request::Filter> for Filter {
             get_pools_request::Filter::Pool(pool_filter) => {
                 Filter::Pool(pool_filter.pool_id.into())
             }
+            get_pools_request::Filter::Labels(label_filter) => {
+                Filter::Labels(label_filter.labels.into())
+            }
         }
     }
 }
