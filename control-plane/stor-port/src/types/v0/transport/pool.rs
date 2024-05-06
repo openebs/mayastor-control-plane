@@ -117,6 +117,7 @@ impl From<CtrlPoolState> for models::PoolState {
 
 rpc_impl_string_id!(PoolId, "ID of a pool");
 rpc_impl_string_uuid!(PoolUuid, "UUID of a pool");
+rpc_impl_string_id!(Labels, "Labels of a pool");
 
 // online > degraded > unknown/faulted
 impl PartialOrd for PoolStatus {

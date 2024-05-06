@@ -37,7 +37,6 @@ pub enum Filter {
     /// Filter by Replica id.
     Replica(ReplicaId),
     /// Volume filters.
-    ///
     /// Filter by Node and Nexus.
     NodeNexus(NodeId, NexusId),
     /// Filter by Nexus.
@@ -48,6 +47,8 @@ pub enum Filter {
     Snapshot(SnapshotId),
     /// Filter by Volume and Snapshot.
     VolumeSnapshot(VolumeId, SnapshotId),
+    /// Filter by Labels.
+    Labels(Labels),
 }
 impl Default for Filter {
     fn default() -> Self {
