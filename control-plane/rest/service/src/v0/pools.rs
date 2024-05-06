@@ -83,8 +83,17 @@ impl apis::actix_server::Pools for RestApi {
         Ok(pool.into())
     }
 
-    async fn get_pools() -> Result<Vec<models::Pool>, RestError<RestJsonError>> {
-        let pools = client().get(Filter::None, None).await?;
+    async fn get_pools(
+        Query(topology_label): Query<Option<String>>,
+    ) -> Result<Vec<models::Pool>, RestError<RestJsonError>> {
+        let pools = match topology_label {
+            Some(label) => {
+                client()
+                    .get(Filter::Labels(label.clone().into()), None)
+                    .await?
+            }
+            None => client().get(Filter::None, None).await?,
+        };
         Ok(pools.into_inner().into_iter().map(From::from).collect())
     }
 

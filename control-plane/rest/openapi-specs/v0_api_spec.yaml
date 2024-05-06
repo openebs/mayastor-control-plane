@@ -1131,6 +1131,12 @@ paths:
       tags:
         - Pools
       operationId: get_pools
+      parameters:
+        - in: query
+          name: topology_label
+          required: false
+          schema:
+            $ref: '#/components/schemas/TopologyLabel'
       responses:
         '200':
           description: OK
@@ -2195,6 +2201,10 @@ components:
     PoolId:
       description: storage pool identifier
       example: pool-1
+      type: string
+    TopologyLabel:
+      description: topology labels of pool
+      example: 'storage=hhd,storage=ssd'
       type: string
     PoolUuid:
       description: storage pool unique identifier
