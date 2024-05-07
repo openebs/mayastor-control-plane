@@ -59,6 +59,15 @@ lazy_static! {
         "REASON",
         "REBUILD"
     ];
+    pub static ref SNAPSHOT_TOPOLOGY_PREFIX: Row = row!["SNAPSHOT-ID"];
+    pub static ref SNAPSHOT_TOPOLOGY_HEADERS: Row = row![
+        "ID",
+        "POOL",
+        "SNAPSHOT_STATUS",
+        "SIZE",
+        "ALLOCATED_SIZE",
+        "SOURCE"
+    ];
     pub static ref REBUILD_HISTORY_HEADER: Row = row![
         "DST",
         "SRC",
