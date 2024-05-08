@@ -63,7 +63,7 @@ impl GetHeaderRow for openapi::models::Pool {
 #[async_trait(?Send)]
 impl List for Pools {
     async fn list(output: &utils::OutputFormat) -> PluginResult {
-        match RestClient::client().pools_api().get_pools().await {
+        match RestClient::client().pools_api().get_pools(None).await {
             Ok(pools) => {
                 // Print table, json or yaml based on output format.
                 utils::print_table(output, pools.into_body());

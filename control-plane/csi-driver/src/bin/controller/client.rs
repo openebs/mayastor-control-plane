@@ -180,7 +180,7 @@ impl RestApiClient {
 
     /// List all pools available in IoEngine cluster.
     pub(crate) async fn list_pools(&self) -> Result<Vec<Pool>, ApiClientError> {
-        let response = self.rest_client.pools_api().get_pools().await?;
+        let response = self.rest_client.pools_api().get_pools(None).await?;
         Ok(response.into_body())
     }
 
