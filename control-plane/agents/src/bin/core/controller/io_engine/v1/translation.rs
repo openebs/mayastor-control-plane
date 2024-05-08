@@ -831,3 +831,29 @@ impl AgentToIoEngine for transport::ListSnapshotClones {
         }
     }
 }
+
+impl TryFrom<v1::snapshot_rebuild::SnapshotRebuild> for super::super::types::SnapshotRebuild {
+    type Error = SvcError;
+
+    fn try_from(value: v1::snapshot_rebuild::SnapshotRebuild) -> Result<Self, Self::Error> {
+        let uuid = value.uuid.as_str();
+        Ok(Self {
+            uuid: uuid.try_into().map_err(|_| SvcError::InvalidUuid {
+                uuid: value.uuid.to_owned(),
+                kind: ResourceKind::Replica,
+            })?,
+            status: value.status(),
+            source_uri: value.source_uri,
+            total: value.total,
+            rebuilt: value.rebuilt,
+            remaining: value.remaining,
+            persisted_checkpoint: value.persisted_checkpoint,
+            start_timestamp: value
+                .start_timestamp
+                .map(|t| t.try_into().unwrap_or(UNIX_EPOCH)),
+            end_timestamp: value
+                .end_timestamp
+                .map(|t| t.try_into().unwrap_or(UNIX_EPOCH)),
+        })
+    }
+}

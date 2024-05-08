@@ -2,6 +2,7 @@ mod host;
 mod nexus;
 mod pool;
 mod replica;
+mod snap_rebuild;
 mod translation;
 
 use crate::controller::io_engine::{ApiVersion, GrpcContext};
@@ -20,6 +21,9 @@ type NexusClient = rpc::v1::nexus::nexus_rpc_client::NexusRpcClient<Channel>;
 type PoolClient = rpc::v1::pool::pool_rpc_client::PoolRpcClient<Channel>;
 /// The V1 SnapshotClient.
 type SnapshotClient = rpc::v1::snapshot::snapshot_rpc_client::SnapshotRpcClient<Channel>;
+/// The V1 SnapshotRebuildClient.
+type SnapshotRebuildClient =
+    rpc::v1::snapshot_rebuild::snapshot_rebuild_rpc_client::SnapshotRebuildRpcClient<Channel>;
 
 /// A collection of all clients for the Io-Engine V1 services.
 #[derive(Clone, Debug)]
@@ -29,6 +33,7 @@ pub(crate) struct RpcClient {
     nexus: NexusClient,
     pool: PoolClient,
     snapshot: SnapshotClient,
+    snapshot_rebuild: SnapshotRebuildClient,
     context: GrpcContext,
 }
 
@@ -49,7 +54,8 @@ impl RpcClient {
             replica: ReplicaClient::new(channel.clone()),
             nexus: NexusClient::new(channel.clone()),
             pool: PoolClient::new(channel.clone()),
-            snapshot: SnapshotClient::new(channel),
+            snapshot: SnapshotClient::new(channel.clone()),
+            snapshot_rebuild: SnapshotRebuildClient::new(channel),
             context: context.clone(),
         })
     }
@@ -72,6 +78,10 @@ impl RpcClient {
     /// Get the v1 snapshot client.
     fn snapshot(&self) -> SnapshotClient {
         self.snapshot.clone()
+    }
+    /// Get the v1 snapshot rebuild client.
+    fn snap_rebuild(&self) -> SnapshotRebuildClient {
+        self.snapshot_rebuild.clone()
     }
 
     async fn fetcher_client(&self) -> Result<Self, SvcError> {
