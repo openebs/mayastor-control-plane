@@ -56,7 +56,7 @@ impl Deref for VolumeClient {
 /// This converts the client side data into a RPC request.
 #[tonic::async_trait]
 impl VolumeOperations for VolumeClient {
-    #[tracing::instrument(name = "VolumeClient::create", level = "debug", skip(self), err)]
+    #[tracing::instrument(name = "VolumeClient::create", level = "info", skip(self), err)]
     async fn create(
         &self,
         request: &dyn CreateVolumeInfo,
@@ -106,7 +106,7 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
-    #[tracing::instrument(name = "VolumeClient::destroy", level = "debug", skip(self), err)]
+    #[tracing::instrument(name = "VolumeClient::destroy", level = "info", skip(self), err)]
     async fn destroy(
         &self,
         request: &dyn DestroyVolumeInfo,
@@ -120,6 +120,7 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
+    #[tracing::instrument(name = "VolumeClient::resize", level = "info", skip(self), err)]
     async fn resize(
         &self,
         request: &dyn ResizeVolumeInfo,
@@ -167,7 +168,7 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
-    #[tracing::instrument(name = "VolumeClient::publish", level = "debug", skip(self), err)]
+    #[tracing::instrument(name = "VolumeClient::publish", level = "info", skip(self), err)]
     async fn publish(
         &self,
         request: &dyn PublishVolumeInfo,
@@ -184,7 +185,7 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
-    #[tracing::instrument(name = "VolumeClient::republish", level = "debug", skip(self), err)]
+    #[tracing::instrument(name = "VolumeClient::republish", level = "info", skip(self), err)]
     async fn republish(
         &self,
         request: &dyn RepublishVolumeInfo,
@@ -218,7 +219,7 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
-    #[tracing::instrument(name = "VolumeClient::set_replica", level = "debug", skip(self), err)]
+    #[tracing::instrument(name = "VolumeClient::set_replica", level = "info", skip(self), err)]
     async fn set_replica(
         &self,
         request: &dyn SetVolumeReplicaInfo,
@@ -234,7 +235,7 @@ impl VolumeOperations for VolumeClient {
             None => Err(ReplyError::invalid_response(ResourceKind::Volume)),
         }
     }
-    #[tracing::instrument(name = "VolumeClient::set_property", level = "debug", skip(self), err)]
+    #[tracing::instrument(name = "VolumeClient::set_property", level = "info", skip(self), err)]
     async fn set_property(
         &self,
         req: &dyn SetVolumePropertyInfo,
@@ -258,6 +259,11 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
+    #[tracing::instrument(
+        name = "VolumeClient::destroy_shutdown_target",
+        level = "info",
+        skip(self)
+    )]
     async fn destroy_shutdown_target(
         &self,
         request: &dyn DestroyShutdownTargetsInfo,
@@ -275,7 +281,7 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
-    #[tracing::instrument(name = "VolumeClient::create_snapshot", level = "debug", skip(self))]
+    #[tracing::instrument(name = "VolumeClient::create_snapshot", level = "info", skip(self))]
     async fn create_snapshot(
         &self,
         request: &dyn CreateVolumeSnapshotInfo,
@@ -292,7 +298,7 @@ impl VolumeOperations for VolumeClient {
         }
     }
 
-    #[tracing::instrument(name = "VolumeClient::delete_snapshot", level = "debug", skip(self))]
+    #[tracing::instrument(name = "VolumeClient::destroy_snapshot", level = "info", skip(self))]
     async fn destroy_snapshot(
         &self,
         request: &dyn DestroyVolumeSnapshotInfo,
@@ -360,7 +366,7 @@ impl VolumeOperations for VolumeClient {
 
     #[tracing::instrument(
         name = "VolumeClient::create_snapshot_volume",
-        level = "debug",
+        level = "info",
         skip(self),
         err
     )]

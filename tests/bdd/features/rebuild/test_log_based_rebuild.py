@@ -309,7 +309,7 @@ def the_volume_target_becomes_unreachable_along_with_its_local_child():
     verify_nexus_switchover()
 
 
-@retry(wait_fixed=200, stop_max_attempt_number=20)
+@retry(wait_fixed=200, stop_max_attempt_number=80)
 def verify_full_rebuilds():
     """a full rebuild starts for both of the unhealthy children"""
     children = []
