@@ -1,6 +1,7 @@
 use crate::resources::{
     blockdevice::BlockDeviceArgs,
     node::{DrainNodeArgs, GetNodeArgs, GetNodesArgs},
+    pool::GetPoolsArgs,
     snapshot::VolumeSnapshotArgs,
     volume::VolumesArgs,
 };
@@ -48,7 +49,7 @@ pub enum GetResources {
     /// Get volume snapshot topology based on input args.
     VolumeSnapshotTopology(VolumeSnapshotArgs),
     /// Get all pools.
-    Pools,
+    Pools(GetPoolsArgs),
     /// Get pool with the given ID.
     Pool { id: PoolId },
     /// Get all nodes.

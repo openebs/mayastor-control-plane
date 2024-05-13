@@ -1,15 +1,16 @@
 use crate::{
-    operations::{Get, List, PluginResult},
+    operations::{Get, ListWithArgs, PluginResult},
     resources::{
         error::Error,
         utils,
         utils::{CreateRow, GetHeaderRow},
-        PoolId,
+        NodeId, PoolId,
     },
     rest_wrapper::RestClient,
 };
 use async_trait::async_trait;
 use prettytable::Row;
+use std::collections::HashMap;
 
 /// Pools resource.
 #[derive(clap::Args, Debug)]
@@ -60,18 +61,62 @@ impl GetHeaderRow for openapi::models::Pool {
     }
 }
 
+/// Arguments used when getting pools.
+#[derive(Debug, Clone, clap::Args)]
+pub struct GetPoolsArgs {
+    /// Gets Pools from this node only.
+    #[clap(long)]
+    node_id: Option<NodeId>,
+
+    /// Selector (label query) to filter on, supports '=' only.
+    /// (e.g. -l key1=value1,key2=value2).
+    /// Pools must satisfy all of the specified label constraints.
+    #[clap(short = 'l', long)]
+    selector: Option<String>,
+}
+
+impl GetPoolsArgs {
+    /// Return the node ID.
+    pub fn node_id(&self) -> &Option<NodeId> {
+        &self.node_id
+    }
+    /// Select the pools based on labels.
+    pub fn selector(&self) -> &Option<String> {
+        &self.selector
+    }
+}
+
 #[async_trait(?Send)]
-impl List for Pools {
-    async fn list(output: &utils::OutputFormat) -> PluginResult {
-        match RestClient::client().pools_api().get_pools().await {
-            Ok(pools) => {
-                // Print table, json or yaml based on output format.
-                utils::print_table(output, pools.into_body());
-            }
-            Err(e) => {
-                return Err(Error::ListPoolsError { source: e });
-            }
-        }
+impl ListWithArgs for Pools {
+    type Args = GetPoolsArgs;
+    async fn list(args: &Self::Args, output: &utils::OutputFormat) -> PluginResult {
+        let mut pools = match args.node_id() {
+            Some(node_id) => RestClient::client()
+                .pools_api()
+                .get_node_pools(node_id)
+                .await
+                .map(|pools| pools.into_body())
+                .map_err(|e| Error::ListPoolsError { source: e }),
+            None => RestClient::client()
+                .pools_api()
+                .get_pools()
+                .await
+                .map(|pools| pools.into_body())
+                .map_err(|e| Error::ListPoolsError { source: e }),
+        }?;
+
+        pools.retain(|pool| match &pool.spec {
+            Some(spec) => match &spec.labels {
+                Some(pool_labels) => {
+                    let pool_label_match =
+                        labels_matched(pool_labels, args.selector()).unwrap_or(false);
+                    pool_label_match
+                }
+                None => true,
+            },
+            None => true,
+        });
+        utils::print_table(output, pools);
         Ok(())
     }
 }
@@ -98,4 +143,27 @@ impl Get for Pool {
         }
         Ok(())
     }
+}
+
+/// Check if the labels match the pool labels.
+pub(crate) fn labels_matched(
+    pool_labels: &HashMap<String, String>,
+    labels: &Option<String>,
+) -> Result<bool, Error> {
+    match labels {
+        Some(filter_labels) => {
+            for label in filter_labels.split(',') {
+                let [key, value] = label.split('=').collect::<Vec<_>>()[..] else {
+                    return Err(Error::LabelNodeFilter {
+                        labels: filter_labels.to_string(),
+                    });
+                };
+                if pool_labels.get(key) != Some(&value.to_string()) {
+                    return Ok(false);
+                }
+            }
+        }
+        None => return Ok(true),
+    }
+    Ok(true)
 }

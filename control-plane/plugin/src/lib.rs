@@ -147,7 +147,7 @@ impl ExecuteOperation for GetResources {
             GetResources::VolumeReplicaTopology { id } => {
                 volume::Volume::topology(id, &cli_args.output).await
             }
-            GetResources::Pools => pool::Pools::list(&cli_args.output).await,
+            GetResources::Pools(args) => pool::Pools::list(args, &cli_args.output).await,
             GetResources::Pool { id } => pool::Pool::get(id, &cli_args.output).await,
             GetResources::Nodes(args) => node::Nodes::list(args, &cli_args.output).await,
             GetResources::Node(args) => {
