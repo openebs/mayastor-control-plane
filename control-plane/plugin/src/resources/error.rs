@@ -91,4 +91,11 @@ pub enum Error {
     ListSnapshotsError {
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
+    /// Error when get pool request fails.
+    #[snafu(display(
+        "Error while parsing labels `{labels}`. \
+        The supported formats for labels is: \
+        key1=value1,key2=value2"
+    ))]
+    LabelNodeFilter { labels: String },
 }
