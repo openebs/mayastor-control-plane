@@ -3,11 +3,15 @@ use grpc::operations::{
     nexus::traits::NexusOperations, pool::traits::PoolOperations,
     replica::traits::ReplicaOperations,
 };
-use std::convert::{From, TryInto};
+use openapi::clients::tower::hyper::http::uri;
+use std::{
+    convert::{From, TryFrom, TryInto},
+    str::FromStr,
+};
 use stor_port::types::v0::{
     store::{nexus::ReplicaUri, nexus_child::NexusChild},
     transport as v0,
-    transport::{Filter, NexusNvmePreemption, NvmeReservation, ShareReplica},
+    transport::{Filter, NexusNvmePreemption, NvmeNqn, NvmeReservation, ShareReplica},
 };
 
 #[tokio::test]
@@ -153,11 +157,12 @@ async fn reservation() {
         .await
         .unwrap();
     let share = v0::ShareNexus::new(&nexus1, v0::NexusShareProtocol::Nvmf, vec![]);
-    let _nexus1_uri = nexus_client.share(&share, None).await.unwrap();
-
+    let nexus1_uri = nexus_client.share(&share, None).await.unwrap();
+    let nexus1_url = uri::Uri::from_str(&nexus1_uri).unwrap();
+    let nqn = NvmeNqn::try_from(nexus1_url).unwrap().nqn_prefix().unwrap();
     let nexus_1_ip = cluster.composer().container_ip(cluster.node(0).as_str());
-    let fio_builder = |ip: &str, uuid: &str| {
-        let nqn = format!("nqn.2019-05.io.openebs\\:{uuid}");
+    let fio_builder = |nqn: &str, ip: &str, uuid: &str| {
+        let nqn = format!("{nqn}\\:{uuid}");
         let filename =
             format!("--filename=trtype=tcp adrfam=IPv4 traddr={ip} trsvcid=8420 subnqn={nqn} ns=1");
         tracing::debug!("Filename: {filename}");
@@ -179,7 +184,7 @@ async fn reservation() {
         .map(ToString::to_string)
         .collect::<Vec<_>>()
     };
-    let fio_cmd = fio_builder(&nexus_1_ip, nexus1.uuid.as_str());
+    let fio_cmd = fio_builder(&nqn, &nexus_1_ip, nexus1.uuid.as_str());
     let (code, out) = cluster.composer().exec("fio-spdk", fio_cmd).await.unwrap();
     tracing::info!("{}", out);
     assert_eq!(code, Some(0));
@@ -208,12 +213,12 @@ async fn reservation() {
     let _nexus2_uri = nexus_client.share(&share, None).await.unwrap();
 
     let nexus_2_ip = cluster.composer().container_ip(cluster.node(1).as_str());
-    let fio_cmd = fio_builder(&nexus_2_ip, nexus2.uuid.as_str());
+    let fio_cmd = fio_builder(&nqn, &nexus_2_ip, nexus2.uuid.as_str());
     let (code, out) = cluster.composer().exec("fio-spdk", fio_cmd).await.unwrap();
     tracing::info!("{}", out);
     assert_eq!(code, Some(0));
 
-    let fio_cmd = fio_builder(&nexus_1_ip, nexus1.uuid.as_str());
+    let fio_cmd = fio_builder(&nqn, &nexus_1_ip, nexus1.uuid.as_str());
     let (code, out) = cluster.composer().exec("fio-spdk", fio_cmd).await.unwrap();
     assert_eq!(code, Some(1), "{out}");
 }

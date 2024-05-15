@@ -3,6 +3,9 @@ import re
 import time
 
 
+nvme_nqn_prefix = "nqn.2019-05.io.openebs"
+
+
 # Converts humantime to float seconds
 # Example: 100ms -> 0.1
 def human_time_to_float(human_time) -> float:

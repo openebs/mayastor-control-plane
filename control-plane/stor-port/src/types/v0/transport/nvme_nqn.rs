@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
     str::FromStr,
 };
+use tonic::transport::Uri;
 
 const NVME_NQN_UUID_PRE: &str = "nqn.2014-08.org.nvmexpress:uuid:";
 const NVME_NQN_MIN_LEN: usize = 11;
@@ -98,9 +99,26 @@ impl NvmeNqn {
     /// Generate a product type name.
     pub fn from_nodename(name: &String) -> Self {
         Self::Org {
-            date: "2019-05".to_string(),
-            domain: "io.openebs".to_string(),
-            name: format!("node-name:{name}"),
+            date: utils::constants::NVME_NQN_DATE.to_string(),
+            domain: utils::constants::NVME_NQN_ORG.to_string(),
+            name: format!("{}:{name}", utils::constants::NVME_HOST_NQN),
+        }
+    }
+    /// Get the org name, if the nqn is in the Org format.
+    pub fn org_name(&self) -> Option<&String> {
+        match self {
+            NvmeNqn::Org { name, .. } => Some(name),
+            NvmeNqn::Unique { .. } => None,
+            NvmeNqn::Invalid { .. } => None,
+        }
+    }
+    pub fn nqn_prefix(&self) -> Option<String> {
+        match self {
+            NvmeNqn::Org { date, domain, .. } => Some(format!("nqn.{date}.{domain}")),
+            NvmeNqn::Unique { .. } => {
+                Some(NVME_NQN_UUID_PRE[.. NVME_NQN_UUID_PRE.len()].to_string())
+            }
+            NvmeNqn::Invalid { .. } => None,
         }
     }
     fn parse_nqn_date(date: &str) -> Result<String, NvmeNqnParseError> {
@@ -176,6 +194,17 @@ impl TryFrom<&String> for NvmeNqn {
 
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         Self::try_from(value.as_str())
+    }
+}
+impl TryFrom<Uri> for NvmeNqn {
+    type Error = NvmeNqnParseError;
+
+    fn try_from(value: Uri) -> Result<Self, Self::Error> {
+        let mut path = value.path();
+        if path.starts_with('/') {
+            path = &path[1 ..];
+        }
+        Self::try_from(path)
     }
 }
 impl TryFrom<&str> for NvmeNqn {

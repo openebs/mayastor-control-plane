@@ -1934,6 +1934,7 @@ dependencies = [
  "stor-port",
  "tokio",
  "tracing",
+ "utils",
 ]
 
 [[package]]
@@ -3807,6 +3808,7 @@ dependencies = [
  "tonic",
  "tracing",
  "url",
+ "utils",
  "uuid",
 ]
 

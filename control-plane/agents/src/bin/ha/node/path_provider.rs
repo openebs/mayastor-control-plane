@@ -1,6 +1,6 @@
 use nvmeadm::nvmf_subsystem::{NvmeSubsystems, Subsystem};
 use stor_port::platform::{current_platform_type, PlatformType};
-use utils::NVME_TARGET_NQN_PREFIX;
+use utils::nvme_target_nqn_prefix;
 
 #[cfg(target_os = "linux")]
 use std::convert::TryInto;
@@ -52,7 +52,8 @@ pub fn get_nvme_path_entry(path: &String) -> Option<NvmePath> {
     Path::new(path).canonicalize().ok().and_then(|pb| {
         Subsystem::new(pb.as_path()).ok().and_then(|s| {
             // Check NQN of the subsystem to make sure it belongs to the product.
-            if s.nqn.starts_with(NVME_TARGET_NQN_PREFIX) {
+            // todo: this won't work for nqn prefix upgrades
+            if s.nqn.starts_with(&nvme_target_nqn_prefix()) {
                 Some(NvmePath::new(pb, s.nqn))
             } else {
                 None

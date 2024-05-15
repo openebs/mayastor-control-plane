@@ -28,3 +28,4 @@ prost-types = "0.12.1"
 openapi = { path = "../../openapi", features = [ "actix-server", "tower-client", "tower-trace" ] }
 platform = { path = "../../utils/platform" }
 pstor = { path = "../../utils/pstor" }
+utils = { path = "../../utils/utils-lib" }

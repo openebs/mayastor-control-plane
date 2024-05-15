@@ -155,15 +155,15 @@ fn test_deserialization_v1_to_v2() {
             }),
         },
         TestEntry {
-            json_str: r#"{"uuid":"d6ccbb97-d13e-4ffb-91a0-c7607bb01f8f","name":"456122b1-7e19-4148-a890-579ca785a119","node":"mayastor-node4","children":[{"Replica":{"uuid":"82779efa-a0c7-4652-a37b-83eefd894714","share_uri":"bdev:///82779efa-a0c7-4652-a37b-83eefd894714?uuid=82779efa-a0c7-4652-a37b-83eefd894714"}},{"Replica":{"uuid":"2d98fa96-ac12-40be-acdc-e3559c0b1530","share_uri":"nvmf://136.144.51.237:8420/nqn.2019-05.io.openebs:2d98fa96-ac12-40be-acdc-e3559c0b1530?uuid=2d98fa96-ac12-40be-acdc-e3559c0b1530"}},{"Replica":{"uuid":"620ff519-419a-48d6-97a8-c1ba3260d87e","share_uri":"nvmf://136.144.51.239:8420/nqn.2019-05.io.openebs:620ff519-419a-48d6-97a8-c1ba3260d87e?uuid=620ff519-419a-48d6-97a8-c1ba3260d87e"}}],"size":2147483648,"spec_status":{"Created":"Online"},"share":"nvmf","managed":true,"owner":"456122b1-7e19-4148-a890-579ca785a119","operation":null}"#,
+            json_str: r#"{"uuid":"d6ccbb97-d13e-4ffb-91a0-c7607bb01f8f","name":"456122b1-7e19-4148-a890-579ca785a119","node":"mayastor-node4","children":[{"Replica":{"uuid":"82779efa-a0c7-4652-a37b-83eefd894714","share_uri":"bdev:///82779efa-a0c7-4652-a37b-83eefd894714?uuid=82779efa-a0c7-4652-a37b-83eefd894714"}},{"Replica":{"uuid":"2d98fa96-ac12-40be-acdc-e3559c0b1530","share_uri":"nvmf://136.144.51.237:8420/nqn.2019-05.com.org:2d98fa96-ac12-40be-acdc-e3559c0b1530?uuid=2d98fa96-ac12-40be-acdc-e3559c0b1530"}},{"Replica":{"uuid":"620ff519-419a-48d6-97a8-c1ba3260d87e","share_uri":"nvmf://136.144.51.239:8420/nqn.2019-05.com.org:620ff519-419a-48d6-97a8-c1ba3260d87e?uuid=620ff519-419a-48d6-97a8-c1ba3260d87e"}}],"size":2147483648,"spec_status":{"Created":"Online"},"share":"nvmf","managed":true,"owner":"456122b1-7e19-4148-a890-579ca785a119","operation":null}"#,
             expected: Expected::NexusSpec(NexusSpec {
                 uuid: NexusId::try_from("d6ccbb97-d13e-4ffb-91a0-c7607bb01f8f").unwrap(),
                 name: "456122b1-7e19-4148-a890-579ca785a119".to_string(),
                 node: "mayastor-node4".into(),
                 children: vec![
                     NexusChild::Replica(ReplicaUri::new(&ReplicaId::try_from("82779efa-a0c7-4652-a37b-83eefd894714").unwrap(), &ChildUri::try_from("bdev:///82779efa-a0c7-4652-a37b-83eefd894714?uuid=82779efa-a0c7-4652-a37b-83eefd894714").unwrap())),
-                    NexusChild::Replica(ReplicaUri::new(&ReplicaId::try_from("2d98fa96-ac12-40be-acdc-e3559c0b1530").unwrap(), &ChildUri::try_from("nvmf://136.144.51.237:8420/nqn.2019-05.io.openebs:2d98fa96-ac12-40be-acdc-e3559c0b1530?uuid=2d98fa96-ac12-40be-acdc-e3559c0b1530").unwrap())),
-                    NexusChild::Replica(ReplicaUri::new(&ReplicaId::try_from("620ff519-419a-48d6-97a8-c1ba3260d87e").unwrap(), &ChildUri::try_from("nvmf://136.144.51.239:8420/nqn.2019-05.io.openebs:620ff519-419a-48d6-97a8-c1ba3260d87e?uuid=620ff519-419a-48d6-97a8-c1ba3260d87e").unwrap()))
+                    NexusChild::Replica(ReplicaUri::new(&ReplicaId::try_from("2d98fa96-ac12-40be-acdc-e3559c0b1530").unwrap(), &ChildUri::try_from("nvmf://136.144.51.237:8420/nqn.2019-05.com.org:2d98fa96-ac12-40be-acdc-e3559c0b1530?uuid=2d98fa96-ac12-40be-acdc-e3559c0b1530").unwrap())),
+                    NexusChild::Replica(ReplicaUri::new(&ReplicaId::try_from("620ff519-419a-48d6-97a8-c1ba3260d87e").unwrap(), &ChildUri::try_from("nvmf://136.144.51.239:8420/nqn.2019-05.com.org:620ff519-419a-48d6-97a8-c1ba3260d87e?uuid=620ff519-419a-48d6-97a8-c1ba3260d87e").unwrap()))
                 ],
                 size: 2147483648,
                 spec_status: NexusSpecStatus::Created(NexusStatus::Online),

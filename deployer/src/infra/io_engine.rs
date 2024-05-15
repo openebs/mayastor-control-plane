@@ -135,8 +135,8 @@ impl IoEngine {
     }
     pub fn nqn(i: u32, options: &StartOptions) -> String {
         format!(
-            "{}{}",
-            utils::constants::NVME_INITIATOR_NQN_PREFIX,
+            "{}:{}",
+            utils::constants::nvme_initiator_nqn_prefix(),
             Self::name(i, options)
         )
     }

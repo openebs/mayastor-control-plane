@@ -287,7 +287,8 @@ struct NvmeSubsystem {
 }
 impl NvmeSubsystem {
     fn lookup(uuid: &str) -> Result<Self, ()> {
-        let expected_nqn = format!("nqn.2019-05.io.openebs:{uuid}");
+        use utils::constants::nvme_target_nqn_prefix;
+        let expected_nqn = format!("{}:{uuid}", nvme_target_nqn_prefix());
         let paths = glob::glob("/sys/class/nvme-subsystem/nvme-subsys*").unwrap();
         for path in paths {
             let sysfs_path = path.unwrap();

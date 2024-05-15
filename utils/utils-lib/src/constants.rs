@@ -95,10 +95,21 @@ pub const DEFAULT_REST_MAX_WORKER_THREADS: &str = "8";
 
 /// The default kubernetes namespace for this project.
 pub const DEFAULT_NAMESPACE: &str = "mayastor";
+
+/// NVMe NQN DATE used by the product.
+pub const NVME_NQN_DATE: &str = "2019-05";
+/// NVMe NQN ORG used by the product.
+pub const NVME_NQN_ORG: &str = "io.openebs";
 /// NQN prefix for NVMe targets created by the product.
-pub const NVME_TARGET_NQN_PREFIX: &str = "nqn.2019-05.io.openebs:";
+pub fn nvme_target_nqn_prefix() -> String {
+    format!("nqn.{NVME_NQN_DATE}.{NVME_NQN_ORG}")
+}
+/// NVMe HOST NQN prefix used by the product.
+pub const NVME_HOST_NQN: &str = "node-name";
 /// NQN prefix for NVMe HOSTNQN used by the product.
-pub const NVME_INITIATOR_NQN_PREFIX: &str = "nqn.2019-05.io.openebs:node-name:";
+pub fn nvme_initiator_nqn_prefix() -> String {
+    format!("nqn.{NVME_NQN_DATE}.{NVME_NQN_ORG}:{NVME_HOST_NQN}")
+}
 
 /// NVMe path check period.
 pub const NVME_PATH_CHECK_PERIOD: &str = "3s";
