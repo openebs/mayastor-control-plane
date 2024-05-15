@@ -447,8 +447,8 @@ impl SwitchOverRequest {
                         return Err(anyhow!("Nvme path deadline exceeded"));
                     }
                 }
-                info!(volume.uuid=%self.volume_id, "Retrying Republish without older target reuse");
-                self.set_reuse_existing(false);
+                self.set_reuse_existing(!self.reuse_existing);
+                info!(volume.uuid=%self.volume_id, reuse_existing=self.reuse_existing, "Retrying Republish");
                 self.set_stage(Stage::RepublishVolume);
                 Err(anyhow!("Nvme path replacement failed with older target"))
             }

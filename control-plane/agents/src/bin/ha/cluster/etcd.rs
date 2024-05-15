@@ -96,8 +96,11 @@ impl EtcdStore {
 
         let entries = store_entries
             .into_iter()
-            .map(|(_, v)| v)
-            .map(serde_json::from_value)
+            .map(|(_, v)| {
+                let mut spec: SwitchOverSpec = serde_json::from_value(v)?;
+                spec.reuse_existing = true;
+                Ok(spec)
+            })
             .collect::<Result<Vec<SwitchOverSpec>, serde_json::Error>>()?;
 
         Ok(entries.iter().map(Into::into).collect())
