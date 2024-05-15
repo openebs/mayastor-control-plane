@@ -3,7 +3,10 @@ import re
 import time
 
 
-nvme_nqn_prefix = "nqn.2019-05.io.openebs"
+prod_domain_name = "openebs.io"
+prod_rev_domain_name = "io.openebs"
+prod_name = "mayastor"
+nvme_nqn_prefix = f"nqn.2019-05.{prod_rev_domain_name}"
 
 
 # Converts humantime to float seconds

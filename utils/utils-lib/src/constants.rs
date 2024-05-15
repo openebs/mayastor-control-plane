@@ -99,7 +99,7 @@ pub const DEFAULT_NAMESPACE: &str = "mayastor";
 /// NVMe NQN DATE used by the product.
 pub const NVME_NQN_DATE: &str = "2019-05";
 /// NVMe NQN ORG used by the product.
-pub const NVME_NQN_ORG: &str = "io.openebs";
+pub const NVME_NQN_ORG: &str = PRODUCT_REV_DOMAIN_NAME;
 /// NQN prefix for NVMe targets created by the product.
 pub fn nvme_target_nqn_prefix() -> String {
     format!("nqn.{NVME_NQN_DATE}.{NVME_NQN_ORG}")
@@ -141,7 +141,16 @@ pub const SNAPSHOT_TRANSACTION_PRUNE_LIMIT: usize = 10;
 pub const SNAPSHOT_MAX_TRANSACTION_LIMIT: usize = 5;
 
 /// Label for the csi-node nvme ana multi-path.
-pub const CSI_NODE_NVME_ANA: &str = "openebs.io/csi-node.nvme-ana";
+pub fn csi_node_nvme_ana() -> String {
+    format!("{PRODUCT_DOMAIN_NAME}/csi-node.nvme-ana")
+}
+/// Domain name for the product.
+pub const PRODUCT_DOMAIN_NAME: &str = "openebs.io";
+/// Reverse domain name for the product.
+pub const PRODUCT_REV_DOMAIN_NAME: &str = "io.openebs";
+
+/// Name of the product.
+pub const PRODUCT_NAME: &str = "mayastor";
 
 /// Max limit for etcd pagination.
 pub const ETCD_MAX_PAGE_LIMIT: &str = "500";
