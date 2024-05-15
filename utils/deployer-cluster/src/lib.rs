@@ -376,6 +376,13 @@ impl Cluster {
         self.composer.container_ip(name.as_str())
     }
 
+    /// Get the node socket.
+    pub fn node_socket(&self, index: u32) -> SocketAddr {
+        let name = self.node(index);
+        let ip = self.composer.container_ip(name.as_str());
+        format!("{ip}:10124").parse::<SocketAddr>().unwrap()
+    }
+
     /// pool id for `pool` index on `node` index
     pub fn pool(&self, node: u32, pool: u32) -> transport::PoolId {
         format!("{}-pool-{}", self.node(node), pool + 1).into()

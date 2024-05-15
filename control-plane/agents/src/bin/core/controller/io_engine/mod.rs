@@ -8,7 +8,8 @@ pub(crate) mod v1;
 pub(crate) use client::*;
 
 use crate::controller::io_engine::types::{
-    CreateNexusSnapshot, CreateNexusSnapshotResp, RebuildHistoryResp,
+    CreateNexusSnapshot, CreateNexusSnapshotResp, CreateSnapRebuild, DestroySnapRebuild,
+    ListSnapRebuild, ListSnapRebuildRsp, RebuildHistoryResp, SnapshotRebuild,
 };
 use agents::errors::SvcError;
 use stor_port::{
@@ -42,6 +43,7 @@ pub(crate) trait NodeApi:
     + NexusSnapshotApi
     + NexusChildRebuildApi
     + ReplicaSnapshotApi
+    + SnapshotRebuildApi
     + Sync
     + Send
     + Clone
@@ -219,4 +221,21 @@ pub(crate) trait HostApi {
     async fn liveness_probe(&self) -> Result<Register, SvcError>;
     /// List blockdevices based on api versions.
     async fn list_blockdevices(&self, request: &GetBlockDevices) -> Result<BlockDevices, SvcError>;
+}
+
+/// Interface for snapshot rebuilding operations.
+#[async_trait]
+pub(crate) trait SnapshotRebuildApi {
+    /// Create a new snapshot rebuild.
+    async fn create_snap_rebuild(
+        &self,
+        request: &CreateSnapRebuild,
+    ) -> Result<SnapshotRebuild, SvcError>;
+    /// List all or a specific snapshot rebuild.
+    async fn list_snap_rebuild(
+        &self,
+        request: &ListSnapRebuild,
+    ) -> Result<ListSnapRebuildRsp, SvcError>;
+    /// Destroy the given snapshot rebuild.
+    async fn destroy_snap_rebuild(&self, request: &DestroySnapRebuild) -> Result<(), SvcError>;
 }

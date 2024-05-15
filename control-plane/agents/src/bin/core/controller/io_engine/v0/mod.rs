@@ -2,6 +2,7 @@ mod host;
 mod nexus;
 mod pool;
 mod replica;
+mod snap_rebuild;
 mod translation;
 
 use crate::controller::io_engine::{

@@ -56,6 +56,7 @@ fn main() {
                 "protobuf/v1/pool.proto",
                 "protobuf/v1/json.proto",
                 "protobuf/v1/snapshot.proto",
+                "protobuf/v1/snapshot-rebuild.proto",
                 "protobuf/v1/stats.proto",
             ]
             .prefixed(io_api),
