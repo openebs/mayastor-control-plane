@@ -25,6 +25,7 @@ use std::{
     time::Duration,
 };
 use tracing::{debug, error, info};
+use utils::dsp_created_by_key;
 
 const WHO_AM_I: &str = "DiskPool Operator";
 const WHO_AM_I_SHORT: &str = "dsp-operator";
@@ -253,10 +254,7 @@ impl ResourceContext {
     #[tracing::instrument(fields(name = ?self.name_any(), status = ?self.status) skip(self))]
     pub(crate) async fn create_or_import(self) -> Result<Action, Error> {
         let mut labels: HashMap<String, String> = HashMap::new();
-        labels.insert(
-            String::from(utils::CREATED_BY_KEY),
-            String::from(utils::DSP_OPERATOR),
-        );
+        labels.insert(dsp_created_by_key(), String::from(utils::DSP_OPERATOR));
         if let Some(topology) = self.spec.topology() {
             for (label_key, label_value) in topology.labelled.iter() {
                 labels.insert(label_key.to_string(), label_value.to_string());
@@ -574,7 +572,7 @@ impl ResourceContext {
     pub(crate) async fn finalizer(&self) -> Result<Action, Error> {
         let _ = finalizer(
             &self.api(),
-            "openebs.io/diskpool-protection",
+            &utils::constants::dsp_finalizer(),
             self.inner(),
             |event| async move {
                 match event {

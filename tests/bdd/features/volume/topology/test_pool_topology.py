@@ -7,6 +7,7 @@ import docker
 import requests
 import time
 
+from common import prod_domain_name, disk_pool_label_key, disk_pool_label_val
 from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
@@ -40,6 +41,8 @@ NODE_3_POOL_3_UUID = "node3pool3"
 CREATE_REQUEST_KEY = "create_request"
 VOLUME_SIZE = 10485761
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1441"
+DISKPOOL_LABEL_KEY = disk_pool_label_key
+DISKPOOL_LABEL_VAL = disk_pool_label_val
 
 
 # The labels to be applied to the pools.
@@ -68,7 +71,7 @@ POOL_CONFIGURATIONS = [
         "pool_body": CreatePoolBody(
             ["malloc:///disk1?size_mb=50"],
             labels={
-                "openebs.io/created-by": "operator-diskpool",
+                DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-1",
                 "zone-us": "us-west-1",
             },
@@ -81,7 +84,7 @@ POOL_CONFIGURATIONS = [
         "pool_body": CreatePoolBody(
             ["malloc:///disk1?size_mb=50"],
             labels={
-                "openebs.io/created-by": "operator-diskpool",
+                DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-2",
                 "zone-us": "us-west-1",
             },
@@ -94,7 +97,7 @@ POOL_CONFIGURATIONS = [
         "pool_body": CreatePoolBody(
             ["malloc:///disk1?size_mb=50"],
             labels={
-                "openebs.io/created-by": "operator-diskpool",
+                DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-3",
                 "zone-us": "us-west-1",
             },
@@ -107,7 +110,7 @@ POOL_CONFIGURATIONS = [
         "pool_body": CreatePoolBody(
             ["malloc:///disk2?size_mb=50"],
             labels={
-                "openebs.io/created-by": "operator-diskpool",
+                DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-1",
                 "zone-ap": "ap-south-1",
             },
@@ -120,7 +123,7 @@ POOL_CONFIGURATIONS = [
         "pool_body": CreatePoolBody(
             ["malloc:///disk2?size_mb=50"],
             labels={
-                "openebs.io/created-by": "operator-diskpool",
+                DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-2",
                 "zone-ap": "ap-south-1",
             },
@@ -133,7 +136,7 @@ POOL_CONFIGURATIONS = [
         "pool_body": CreatePoolBody(
             ["malloc:///disk2?size_mb=50"],
             labels={
-                "openebs.io/created-by": "operator-diskpool",
+                DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-3",
                 "zone-ap": "ap-south-1",
             },
@@ -146,7 +149,7 @@ POOL_CONFIGURATIONS = [
         "pool_body": CreatePoolBody(
             ["malloc:///disk3?size_mb=50"],
             labels={
-                "openebs.io/created-by": "operator-diskpool",
+                DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-1",
                 "zone-eu": "eu-west-3",
             },
@@ -159,7 +162,7 @@ POOL_CONFIGURATIONS = [
         "pool_body": CreatePoolBody(
             ["malloc:///disk3?size_mb=50"],
             labels={
-                "openebs.io/created-by": "operator-diskpool",
+                DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-2",
                 "zone-eu": "eu-west-3",
             },
@@ -172,7 +175,7 @@ POOL_CONFIGURATIONS = [
         "pool_body": CreatePoolBody(
             ["malloc:///disk3?size_mb=50"],
             labels={
-                "openebs.io/created-by": "operator-diskpool",
+                DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-3",
                 "zone-eu": "eu-west-3",
             },
@@ -375,7 +378,7 @@ def create_volume_body(replica, volume_pool_topology_inclusion_label):
                 exclusion={},
                 inclusion={
                     key.strip(): value.strip(),
-                    "openebs.io/created-by": "operator-diskpool",
+                    DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 },
                 affinitykey=[],
             )

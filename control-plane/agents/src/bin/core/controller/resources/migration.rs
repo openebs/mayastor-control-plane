@@ -7,7 +7,7 @@ use stor_port::{
     },
 };
 use tracing::{info, warn};
-use utils::{CREATED_BY_KEY, DSP_OPERATOR};
+use utils::{dsp_created_by_key, DSP_OPERATOR};
 
 /// The value to mark the creation source of a pool to be msp operator in labels.
 pub const MSP_OPERATOR: &str = "msp-operator";
@@ -60,11 +60,11 @@ fn migrate_volume_labels(mut value: Value) -> Result<Value, StoreError> {
         if let Some(ref mut pool_topology) = topology.pool {
             match pool_topology {
                 PoolTopology::Labelled(labels) => {
-                    if let Some(value) = labels.inclusion.get_mut(CREATED_BY_KEY) {
+                    if let Some(value) = labels.inclusion.get_mut(&dsp_created_by_key()) {
                         if value == MSP_OPERATOR {
                             labels
                                 .inclusion
-                                .insert(CREATED_BY_KEY.to_string(), DSP_OPERATOR.to_string());
+                                .insert(dsp_created_by_key(), DSP_OPERATOR.to_string());
                         }
                     }
                 }
@@ -82,9 +82,9 @@ fn migrate_pool_labels(mut value: Value) -> Result<Value, StoreError> {
             source: error,
         })?;
     if let Some(ref mut labels) = &mut spec.labels {
-        if let Some(value) = labels.get_mut(CREATED_BY_KEY) {
+        if let Some(value) = labels.get_mut(&dsp_created_by_key()) {
             if value == MSP_OPERATOR {
-                labels.insert(CREATED_BY_KEY.to_string(), DSP_OPERATOR.to_string());
+                labels.insert(dsp_created_by_key(), DSP_OPERATOR.to_string());
             }
         }
     }

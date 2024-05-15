@@ -11,6 +11,7 @@ from pytest_bdd import (
     when,
 )
 
+from common import disk_pool_label
 from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
@@ -50,8 +51,8 @@ def init():
             ["malloc:///disk?size_mb=50"],
             labels={
                 "pool1-specific-key": "pool1-specific-value",
-                "openebs.io/created-by": "operator-diskpool",
-            },
+            }
+            | disk_pool_label,
         ),
     )
     ApiClient.pools_api().put_node_pool(
@@ -61,8 +62,8 @@ def init():
             ["malloc:///disk?size_mb=50"],
             labels={
                 "pool2-specific-key": "pool2-specific-value",
-                "openebs.io/created-by": "operator-diskpool",
-            },
+            }
+            | disk_pool_label,
         ),
     )
     yield
@@ -186,7 +187,7 @@ def a_request_for_a_volume_with_topology_same_as_pool_labels(create_request):
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(
                     exclusion={},
-                    inclusion={"openebs.io/created-by": "operator-diskpool"},
+                    inclusion=disk_pool_label,
                     affinitykey=[],
                 )
             )
@@ -248,7 +249,7 @@ def an_existing_published_volume_with_a_topology_matching_pool_labels():
                 pool_topology=PoolTopology(
                     labelled=LabelledTopology(
                         exclusion={},
-                        inclusion={"openebs.io/created-by": "operator-diskpool"},
+                        inclusion=disk_pool_label,
                         affinitykey=[],
                     )
                 )
@@ -483,7 +484,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object_with_topology(
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(
                     exclusion={},
-                    inclusion={"openebs.io/created-by": "operator-diskpool"},
+                    inclusion=disk_pool_label,
                     affinitykey=[],
                 )
             )

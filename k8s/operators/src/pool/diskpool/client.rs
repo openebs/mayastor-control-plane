@@ -1,5 +1,5 @@
 use super::crd::v1beta2::{DiskPool, DiskPoolSpec};
-use crate::{error::Error, ApiVersion};
+use crate::{diskpool::crd::diskpools_name, error::Error, ApiVersion};
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::{
     api::{ListParams, Patch, PatchParams, PostParams},
@@ -158,7 +158,7 @@ pub(crate) async fn list_existing_cr(
 /// Return the api_version of the present crd if any, otherwise retuen None.
 pub(crate) async fn get_api_version(k8s: Client) -> Option<ApiVersion> {
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s);
-    if let Ok(crd) = crd_api.get_status("diskpools.openebs.io").await {
+    if let Ok(crd) = crd_api.get_status(&diskpools_name()).await {
         if let Some(status) = crd.status {
             if status.stored_versions == Some(vec!["v1alpha1".to_string()]) {
                 return Some(ApiVersion::V1Alpha1);

@@ -16,7 +16,7 @@ import subprocess
 from urllib.parse import urlparse, parse_qs
 import json
 
-from common import csi_topology_key
+from common import csi_topology_key, disk_pool_label
 from common.apiclient import ApiClient
 from common.csi import CsiHandle
 from common.deployer import Deployer
@@ -51,7 +51,7 @@ def setup():
     Deployer.start(2, csi_controller=True)
 
     # Create 2 pools.
-    pool_labels = {"openebs.io/created-by": "operator-diskpool"}
+    pool_labels = disk_pool_label
     pool_api = ApiClient.pools_api()
     pool_api.put_node_pool(
         NODE1,

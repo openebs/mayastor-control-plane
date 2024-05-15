@@ -6,6 +6,7 @@ import subprocess
 
 import grpc
 import csi_pb2 as pb
+from common import disk_pool_label
 
 from common.apiclient import ApiClient
 from common.csi import CsiHandle
@@ -94,7 +95,7 @@ def setup():
     Deployer.start(1, csi_node=True)
 
     # Create 2 pools.
-    pool_labels = {"openebs.io/created-by": "operator-diskpool"}
+    pool_labels = disk_pool_label
     pool_api = ApiClient.pools_api()
     pool_api.put_node_pool(
         NODE1,

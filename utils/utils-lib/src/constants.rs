@@ -24,12 +24,15 @@ fn target_tag() -> String {
 
 /// Fio Spdk image.
 pub fn fio_spdk_image() -> String {
-    format!("{TARGET_REGISTRY}/mayastor-fio-spdk:{}", target_tag())
+    format!("{TARGET_REGISTRY}/{PRODUCT_NAME}-fio-spdk:{}", target_tag())
 }
 
 /// Io-Engine container image used for testing.
 pub fn io_engine_image() -> String {
-    format!("{TARGET_REGISTRY}/mayastor-io-engine:{}", target_tag())
+    format!(
+        "{TARGET_REGISTRY}/{PRODUCT_NAME}-io-engine:{}",
+        target_tag()
+    )
 }
 
 /// Environment variable that points to an io-engine binary.
@@ -39,8 +42,19 @@ pub const DATA_PLANE_BINARY: &str = "IO_ENGINE_BIN";
 /// The period at which a component updates its resource cache.
 pub const CACHE_POLL_PERIOD: &str = "30s";
 
+/// The diskpool api name.
+/// Note, the CRDs are defined inline and use literal string so that must
+/// be changed as well.
+pub const DSP_API_NAME: &str = PRODUCT_DOMAIN_NAME;
+
 /// The key to mark the creation source of a pool in labels.
-pub const CREATED_BY_KEY: &str = "openebs.io/created-by";
+pub fn dsp_created_by_key() -> String {
+    format!("{DSP_API_NAME}/created-by")
+}
+/// The key to protect diskpool from deletion.
+pub fn dsp_finalizer() -> String {
+    format!("{DSP_API_NAME}/diskpool-protection")
+}
 
 /// The value to mark the creation source of a pool to be disk pool operator in labels.
 pub const DSP_OPERATOR: &str = "operator-diskpool";
@@ -94,7 +108,7 @@ pub const DEFAULT_NODE_AGENT_SERVER_ADDR: &str = "0.0.0.0:11600";
 pub const DEFAULT_REST_MAX_WORKER_THREADS: &str = "8";
 
 /// The default kubernetes namespace for this project.
-pub const DEFAULT_NAMESPACE: &str = "mayastor";
+pub const DEFAULT_NAMESPACE: &str = PRODUCT_NAME;
 
 /// NVMe NQN DATE used by the product.
 pub const NVME_NQN_DATE: &str = "2019-05";

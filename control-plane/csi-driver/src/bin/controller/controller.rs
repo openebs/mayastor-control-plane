@@ -14,7 +14,7 @@ use stor_port::types::v0::openapi::{
         SpecStatus, Volume, VolumeShareProtocol,
     },
 };
-use utils::{CREATED_BY_KEY, DSP_OPERATOR};
+use utils::{dsp_created_by_key, DSP_OPERATOR};
 
 use regex::Regex;
 use std::{collections::HashMap, str::FromStr};
@@ -1069,7 +1069,7 @@ fn context_into_topology(context: &CreateParams) -> CreateVolumeTopology {
     let mut node_exclusive_label_topology: HashMap<String, String> = HashMap::new();
     let mut pool_affinity_label_topology: Vec<String> = Vec::<String>::new();
     let mut node_affinity_label_topology: Vec<String> = Vec::<String>::new();
-    pool_inclusive_label_topology.insert(String::from(CREATED_BY_KEY), String::from(DSP_OPERATOR));
+    pool_inclusive_label_topology.insert(dsp_created_by_key(), String::from(DSP_OPERATOR));
     pool_inclusive_label_topology.extend(
         context
             .publish_params()
