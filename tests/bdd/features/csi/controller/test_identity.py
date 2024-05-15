@@ -10,6 +10,7 @@ import pytest
 import docker
 import subprocess
 import csi_pb2 as pb
+from common import csi_plugin_name
 
 from common.csi import CsiHandle
 from common.deployer import Deployer
@@ -107,7 +108,7 @@ def plugin_information_info_request(csi_instance):
 
 @then("CSI controller should report its name and version")
 def check_csi_controller_info(info_request):
-    assert info_request.name == "io.openebs.csi-mayastor"
+    assert info_request.name == csi_plugin_name
     assert info_request.vendor_version == "1.0.0"
 
 

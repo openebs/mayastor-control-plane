@@ -5,6 +5,7 @@ import time
 
 import grpc
 import csi_pb2 as pb
+from common import csi_plugin_name
 
 from common.apiclient import ApiClient
 from common.csi import CsiHandle
@@ -59,7 +60,7 @@ def csi_instance(setup, fix_socket_permissions):
 
 def test_plugin_info(csi_instance):
     info = csi_instance.identity.GetPluginInfo(pb.GetPluginInfoRequest())
-    assert info.name == "io.openebs.csi-mayastor"
+    assert info.name == csi_plugin_name
     assert info.vendor_version == "1.0.0"
 
 

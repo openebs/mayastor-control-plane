@@ -23,7 +23,6 @@ use tracing::{debug, error, instrument, trace, warn};
 use uuid::Uuid;
 use volume_capability::AccessType;
 
-const OPENEBS_TOPOLOGY_KEY: &str = "openebs.io/nodename";
 const VOLUME_NAME_PATTERN: &str =
     r"pvc-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
 const SNAPSHOT_NAME_PATTERN: &str =
@@ -733,7 +732,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         // Determine target node, if requested.
         let node: Option<&String> = if let Some(topology) = args.accessible_topology.as_ref() {
-            topology.segments.get(OPENEBS_TOPOLOGY_KEY)
+            topology.segments.get(&csi_driver::node_name_topology_key())
         } else {
             None
         };

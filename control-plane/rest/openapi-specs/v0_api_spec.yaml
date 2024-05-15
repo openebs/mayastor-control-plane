@@ -4098,8 +4098,8 @@ components:
       example:
         endpoint: '10.1.0.5:50055'
         labels:
-          openebs.io/csi-node.nvme-ana: true,
-          openebs.io/zone: us-east-1a
+          org.io/csi-node.nvme-ana: true,
+          org.io/zone: us-east-1a
       type: object
       properties:
         endpoint:

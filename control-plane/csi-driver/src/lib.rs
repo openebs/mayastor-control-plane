@@ -1,9 +1,9 @@
 /// The CSI plugin's name.
-pub const CSI_PLUGIN_NAME: &str = "io.openebs.csi-mayastor";
+pub use utils::csi_plugin_name;
 
 /// The topology label used to identify a node as a csi-node.
 pub fn csi_node_selector() -> String {
-    format!("{CSI_NODE_TOPOLOGY_KEY}={CSI_NODE_TOPOLOGY_VAL}")
+    format!("{}={}", csi_node_topology_key(), csi_node_topology_val())
 }
 
 type Selector = std::collections::HashMap<String, String>;
@@ -30,20 +30,28 @@ pub fn csi_node_selector_parse<'a, I: Iterator<Item = &'a str>>(
             Ok(selector)
         }
         None => Ok(Selector::from([(
-            CSI_NODE_TOPOLOGY_KEY.to_string(),
-            CSI_NODE_TOPOLOGY_VAL.to_string(),
+            csi_node_topology_key().to_string(),
+            csi_node_topology_val().to_string(),
         )])),
     }
 }
 /// The topology key added by the csi-node plugin.
-pub const CSI_NODE_TOPOLOGY_KEY: &str = "openebs.io/csi-node";
+pub fn csi_node_topology_key() -> String {
+    use utils::constants::PRODUCT_DOMAIN_NAME;
+    format!("{PRODUCT_DOMAIN_NAME}/csi-node")
+}
 /// The topology value added by the csi-node plugin.
-pub const CSI_NODE_TOPOLOGY_VAL: &str = "mayastor";
+pub fn csi_node_topology_val() -> &'static str {
+    utils::constants::PRODUCT_NAME
+}
 
 /// The topology label used to uniquely identify a node.
 /// The csi-driver (node,controller) and the io-engine must pick the same value.
 /// The nodename key assigned to each node.
-pub const NODE_NAME_TOPOLOGY_KEY: &str = "openebs.io/nodename";
+pub fn node_name_topology_key() -> String {
+    use utils::constants::PRODUCT_DOMAIN_NAME;
+    format!("{PRODUCT_DOMAIN_NAME}/nodename")
+}
 
 /// Volume Parameters parsed from context.
 pub use context::{CreateParams, Parameters, PublishParams};

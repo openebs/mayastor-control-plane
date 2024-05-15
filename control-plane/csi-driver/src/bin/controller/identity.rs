@@ -1,5 +1,5 @@
 use crate::{ApiClientError, RestApiClient};
-use csi_driver::{plugin_capabilities::plugin_capabilities, CSI_PLUGIN_NAME};
+use csi_driver::{csi_plugin_name, plugin_capabilities::plugin_capabilities};
 use rpc::csi::{
     GetPluginCapabilitiesRequest, GetPluginCapabilitiesResponse, GetPluginInfoRequest,
     GetPluginInfoResponse, ProbeRequest, ProbeResponse,
@@ -23,10 +23,11 @@ impl rpc::csi::identity_server::Identity for CsiIdentitySvc {
     ) -> Result<Response<GetPluginInfoResponse>, Status> {
         debug!(
             "Request to get CSI plugin info, plugin: {}:{}",
-            CSI_PLUGIN_NAME, CSI_PLUGIN_VERSION,
+            csi_plugin_name(),
+            CSI_PLUGIN_VERSION,
         );
         Ok(Response::new(GetPluginInfoResponse {
-            name: CSI_PLUGIN_NAME.to_string(),
+            name: csi_plugin_name(),
             vendor_version: CSI_PLUGIN_VERSION.to_string(),
             // Optional manifest is empty.
             manifest: HashMap::new(),

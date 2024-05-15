@@ -16,6 +16,7 @@ import subprocess
 from urllib.parse import urlparse, parse_qs
 import json
 
+from common import csi_topology_key
 from common.apiclient import ApiClient
 from common.csi import CsiHandle
 from common.deployer import Deployer
@@ -42,7 +43,7 @@ VOLUME1_SIZE = 1024 * 1024 * 32
 VOLUME2_SIZE = 1024 * 1024 * 22
 VOLUME3_SIZE = 1024 * 1024 * 28
 VOLUME4_SIZE = 1024 * 1024 * 32
-OPENEBS_TOPOLOGY_KEY = "openebs.io/nodename"
+OPENEBS_TOPOLOGY_KEY = csi_topology_key
 
 
 @pytest.fixture(scope="module")

@@ -7,6 +7,8 @@ prod_domain_name = "openebs.io"
 prod_rev_domain_name = "io.openebs"
 prod_name = "mayastor"
 nvme_nqn_prefix = f"nqn.2019-05.{prod_rev_domain_name}"
+csi_plugin_name = f"{prod_rev_domain_name}.csi-{prod_name}"
+csi_topology_key = f"{prod_domain_name}/nodename"
 
 
 # Converts humantime to float seconds

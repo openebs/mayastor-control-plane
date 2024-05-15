@@ -1,6 +1,6 @@
 //! Implementation of gRPC methods from CSI Identity gRPC service.
 
-use csi_driver::{csi::*, plugin_capabilities::plugin_capabilities, CSI_PLUGIN_NAME};
+use csi_driver::{csi::*, csi_plugin_name, plugin_capabilities::plugin_capabilities};
 
 use std::{boxed::Box, collections::HashMap};
 use tonic::{Request, Response, Status};
@@ -21,11 +21,12 @@ impl identity_server::Identity for Identity {
     ) -> Result<Response<GetPluginInfoResponse>, Status> {
         debug!(
             "GetPluginInfo request ({}:{})",
-            CSI_PLUGIN_NAME, PLUGIN_VERSION
+            csi_plugin_name(),
+            PLUGIN_VERSION
         );
 
         Ok(Response::new(GetPluginInfoResponse {
-            name: CSI_PLUGIN_NAME.to_owned(),
+            name: csi_plugin_name(),
             vendor_version: PLUGIN_VERSION.to_owned(),
             manifest: HashMap::new(),
         }))

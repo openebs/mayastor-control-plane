@@ -144,6 +144,11 @@ pub const SNAPSHOT_MAX_TRANSACTION_LIMIT: usize = 5;
 pub fn csi_node_nvme_ana() -> String {
     format!("{PRODUCT_DOMAIN_NAME}/csi-node.nvme-ana")
 }
+/// The CSI plugin's name.
+pub fn csi_plugin_name() -> String {
+    format!("{PRODUCT_REV_DOMAIN_NAME}.csi-{PRODUCT_NAME}")
+}
+
 /// Domain name for the product.
 pub const PRODUCT_DOMAIN_NAME: &str = "openebs.io";
 /// Reverse domain name for the product.

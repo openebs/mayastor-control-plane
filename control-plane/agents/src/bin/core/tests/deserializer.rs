@@ -67,7 +67,7 @@ fn validate_deserialization(entries: &[TestEntry]) {
 fn test_deserialization_v1_to_v2() {
     let test_entries = vec![
         TestEntry {
-            json_str: r#"{"uuid":"456122b1-7e19-4148-a890-579ca785a119","size":2147483648,"labels":{"local":"true"},"num_replicas":3,"status":{"Created":"Online"},"target":{"node":"mayastor-node4","nexus":"d6ccbb97-d13e-4ffb-91a0-c7607bb01f8f","protocol":"nvmf"},"policy":{"self_heal":true},"topology":{"node":{"Explicit":{"allowed_nodes":["mayastor-node2","mayastor-master","mayastor-node3","mayastor-node1","mayastor-node4"],"preferred_nodes":["mayastor-node2","mayastor-node3","mayastor-node4","mayastor-master","mayastor-node1"]}},"pool":{"Labelled":{"exclusion":{},"inclusion":{"openebs.io/created-by":"msp-operator"}}}},"last_nexus_id":"d6ccbb97-d13e-4ffb-91a0-c7607bb01f8f","operation":null}"#,
+            json_str: r#"{"uuid":"456122b1-7e19-4148-a890-579ca785a119","size":2147483648,"labels":{"local":"true"},"num_replicas":3,"status":{"Created":"Online"},"target":{"node":"mayastor-node4","nexus":"d6ccbb97-d13e-4ffb-91a0-c7607bb01f8f","protocol":"nvmf"},"policy":{"self_heal":true},"topology":{"node":{"Explicit":{"allowed_nodes":["mayastor-node2","mayastor-master","mayastor-node3","mayastor-node1","mayastor-node4"],"preferred_nodes":["mayastor-node2","mayastor-node3","mayastor-node4","mayastor-master","mayastor-node1"]}},"pool":{"Labelled":{"exclusion":{},"inclusion":{"org.com/created-by":"msp-operator"}}}},"last_nexus_id":"d6ccbb97-d13e-4ffb-91a0-c7607bb01f8f","operation":null}"#,
             expected: Expected::VolumeSpec(VolumeSpec {
                 uuid: VolumeId::try_from("456122b1-7e19-4148-a890-579ca785a119").unwrap(),
                 size: 2147483648,
@@ -107,7 +107,7 @@ fn test_deserialization_v1_to_v2() {
                         inclusion: {
                             let mut labels = HashMap::new();
                             labels.insert(
-                                "openebs.io/created-by".to_string(),
+                                "org.com/created-by".to_string(),
                                 "msp-operator".to_string(),
                             );
                             labels
@@ -136,7 +136,7 @@ fn test_deserialization_v1_to_v2() {
             }),
         },
         TestEntry {
-            json_str: r#"{"node":"mayastor-node1","id":"pool-1-on-mayastor-node1","disks":["/dev/sdb"],"status":{"Created":"Online"},"labels":{"openebs.io/created-by":"msp-operator"},"operation":null}"#,
+            json_str: r#"{"node":"mayastor-node1","id":"pool-1-on-mayastor-node1","disks":["/dev/sdb"],"status":{"Created":"Online"},"labels":{"org.com/created-by":"msp-operator"},"operation":null}"#,
             expected: Expected::PoolSpec(PoolSpec {
                 node: "mayastor-node1".into(),
                 id: "pool-1-on-mayastor-node1".into(),
@@ -145,7 +145,7 @@ fn test_deserialization_v1_to_v2() {
                 labels: {
                     let mut labels = HashMap::new();
                     labels.insert(
-                        "openebs.io/created-by".to_string(),
+                        "org.com/created-by".to_string(),
                         "msp-operator".to_string(),
                     );
                     Some(labels)

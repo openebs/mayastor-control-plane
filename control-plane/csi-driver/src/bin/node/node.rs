@@ -59,10 +59,7 @@ impl Node {
     }
     /// Get the node_name label segment.
     fn node_name_segment(&self) -> (String, String) {
-        (
-            csi_driver::NODE_NAME_TOPOLOGY_KEY.to_string(),
-            self.node_name.clone(),
-        )
+        (csi_driver::node_name_topology_key(), self.node_name.clone())
     }
     /// Get the node selector label segment.
     fn node_selector_segment(&self) -> HashMap<String, String> {
