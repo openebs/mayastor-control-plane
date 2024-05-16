@@ -16,3 +16,4 @@ event-publisher = { path = "../dependencies/event-publisher" }
 tracing-filter = { path = "../dependencies/tracing-filter" }
 strum = "0.25.0"
 strum_macros = "0.25.2"
+heck = "0.4.1"

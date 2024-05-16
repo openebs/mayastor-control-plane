@@ -63,7 +63,9 @@ pub(super) fn match_iscsi_device(device: &Device) -> Option<(&str, &str)> {
 }
 
 pub(super) fn match_nvmf_device<'a>(device: &'a Device, key: &str) -> Option<&'a str> {
-    require!("Mayastor NVMe controller" == device.property_value("ID_MODEL"));
+    let model_id = utils::nvme_controller_model_id();
+
+    require!(model_id == device.property_value("ID_MODEL"));
     require!(key == device.property_value("ID_WWN"));
 
     require!(let devname = device.property_value("DEVNAME"));

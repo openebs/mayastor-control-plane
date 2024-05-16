@@ -3,6 +3,7 @@
 /// Branch specific image tag to test against.
 /// Example, used to test against a particular branch of the dataplane.
 use crate::test_constants::{TARGET_BRANCH, TARGET_REGISTRY};
+use heck::ToTrainCase;
 
 /// Default request timeout for any NATS or GRPC request.
 pub const DEFAULT_REQ_TIMEOUT: &str = "5s";
@@ -170,6 +171,11 @@ pub const PRODUCT_REV_DOMAIN_NAME: &str = "io.openebs";
 
 /// Name of the product.
 pub const PRODUCT_NAME: &str = "mayastor";
+
+/// Data plane's NVMe controller model ID.
+pub fn nvme_controller_model_id() -> String {
+    format!("{} NVMe controller", PRODUCT_NAME.to_train_case())
+}
 
 /// Max limit for etcd pagination.
 pub const ETCD_MAX_PAGE_LIMIT: &str = "500";

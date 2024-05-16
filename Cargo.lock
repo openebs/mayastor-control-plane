@@ -4515,6 +4515,7 @@ version = "0.1.0"
 dependencies = [
  "event-publisher",
  "git-version-macro",
+ "heck",
  "opentelemetry",
  "opentelemetry-jaeger",
  "strum",
