@@ -12,6 +12,7 @@ import csi_pb2 as pb
 import grpc
 
 import openapi.exceptions
+from common import disk_pool_label
 from common.apiclient import ApiClient
 from common.operations import Snapshot, Volume, Cluster
 from openapi.model.create_pool_body import CreatePoolBody
@@ -33,7 +34,7 @@ SNAP1_UUID = SNAP1_NAME.strip("snapshot-")
 @pytest.fixture(scope="module")
 def setup():
     Deployer.start(1, csi_controller=True)
-    pool_labels = {"openebs.io/created-by": "operator-diskpool"}
+    pool_labels = disk_pool_label
     pool_api = ApiClient.pools_api()
     pool_api.put_node_pool(
         NODE1,

@@ -80,7 +80,7 @@ pub(crate) async fn ensure_crd(
                 PatchParams::apply("merge_v1beta1_v1beta2").force()
             };
             crd_api
-                .patch("diskpools.openebs.io", &param, &Patch::Apply(&new_crd))
+                .patch(&super::diskpools_name(), &param, &Patch::Apply(&new_crd))
                 .await
         }
         Err(err) => return Err(Error::Kube { source: err }),

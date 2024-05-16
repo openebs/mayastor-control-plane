@@ -4,8 +4,6 @@
 
 use crate::{api::ObjectKey, common::ApiVersion};
 
-/// Prefix for all keys stored in the persistent store.
-const ETCD_KEY_PREFIX: &str = "/openebs.io/mayastor";
 /// The api version.
 pub const API_VERSION: ApiVersion = ApiVersion::V0;
 
@@ -21,8 +19,9 @@ pub fn build_key_prefix(
     api_version: ApiVersion,
 ) -> String {
     format!(
-        "{}/apis/{}/clusters/{}/namespaces/{}",
-        ETCD_KEY_PREFIX,
+        "/{}/{}/apis/{}/clusters/{}/namespaces/{}",
+        utils::PRODUCT_DOMAIN_NAME,
+        utils::PRODUCT_NAME,
         api_version,
         cluster_uid.uid(),
         cluster_uid.namespace()

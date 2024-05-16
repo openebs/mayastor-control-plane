@@ -18,6 +18,7 @@ deployer-cluster = { path = "../../utils/deployer-cluster" }
 stor-port = { path = "../../control-plane/stor-port" }
 rpc = { path = "../../rpc" }
 grpc = { path = "../../control-plane/grpc" }
+utils = { path = "../../utils/utils-lib" }
 nvmeadm = { path = "../../utils/dependencies/nvmeadm" }
 tracing = "0.1.37"
 glob = "0.3.1"

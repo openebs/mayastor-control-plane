@@ -4,7 +4,7 @@ pub use constants::*;
 
 pub mod tracing_telemetry;
 
-pub(crate) mod test_constants;
+pub mod test_constants;
 
 pub mod version;
 

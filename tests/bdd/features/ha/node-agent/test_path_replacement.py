@@ -9,6 +9,7 @@ import pytest
 import subprocess
 from time import sleep
 
+from common import nvme_nqn_prefix
 from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
@@ -33,7 +34,7 @@ POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444456"
 POOL_NODE = "io-engine-3"
 TARGET_NODE_1 = "io-engine-1"
 TARGET_NODE_2 = "io-engine-2"
-NEXUS_NQN = "nqn.2019-05.io.openebs:%s" % VOLUME_UUID
+NEXUS_NQN = f"{nvme_nqn_prefix}:{VOLUME_UUID}"
 # Interval to wait before HA Node agent classifies broken path as failed
 PATH_DETECTION_TIME = 2
 # FIO should be active long enough to outlive the detection interval.

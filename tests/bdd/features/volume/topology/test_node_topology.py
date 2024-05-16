@@ -7,6 +7,7 @@ import docker
 import requests
 import time
 
+from common import disk_pool_label
 from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
@@ -83,8 +84,8 @@ POOL_CONFIGURATIONS = [
         "pool_uuid": NODE_1_POOL_1_UUID,
         "pool_body": CreatePoolBody(
             ["malloc:///node1pool1?size_mb=50"],
-            labels={
-                "openebs.io/created-by": "operator-diskpool",
+            labels=disk_pool_label
+            | {
                 "node": "io-engine-1",
             },
         ),
@@ -95,8 +96,8 @@ POOL_CONFIGURATIONS = [
         "pool_uuid": NODE_2_POOL_1_UUID,
         "pool_body": CreatePoolBody(
             ["malloc:///node2pool1?size_mb=50"],
-            labels={
-                "openebs.io/created-by": "operator-diskpool",
+            labels=disk_pool_label
+            | {
                 "node": "io-engine-2",
             },
         ),
@@ -107,8 +108,8 @@ POOL_CONFIGURATIONS = [
         "pool_uuid": NODE_3_POOL_1_UUID,
         "pool_body": CreatePoolBody(
             ["malloc:///node3pool1?size_mb=50"],
-            labels={
-                "openebs.io/created-by": "operator-diskpool",
+            labels=disk_pool_label
+            | {
                 "node": "io-engine-3",
             },
         ),
@@ -119,8 +120,8 @@ POOL_CONFIGURATIONS = [
         "pool_uuid": NODE_4_POOL_1_UUID,
         "pool_body": CreatePoolBody(
             ["malloc:///node4pool1?size_mb=50"],
-            labels={
-                "openebs.io/created-by": "operator-diskpool",
+            labels=disk_pool_label
+            | {
                 "node": "io-engine-4",
             },
         ),
@@ -131,8 +132,8 @@ POOL_CONFIGURATIONS = [
         "pool_uuid": NODE_5_POOL_1_UUID,
         "pool_body": CreatePoolBody(
             ["malloc:///node5pool1?size_mb=50"],
-            labels={
-                "openebs.io/created-by": "operator-diskpool",
+            labels=disk_pool_label
+            | {
                 "node": "io-engine-5",
             },
         ),
@@ -143,8 +144,8 @@ POOL_CONFIGURATIONS = [
         "pool_uuid": NODE_1_POOL_2_UUID,
         "pool_body": CreatePoolBody(
             ["malloc:///node1pool2?size_mb=50"],
-            labels={
-                "openebs.io/created-by": "operator-diskpool",
+            labels=disk_pool_label
+            | {
                 "node": "io-engine-1",
             },
         ),
@@ -155,8 +156,8 @@ POOL_CONFIGURATIONS = [
         "pool_uuid": NODE_2_POOL_2_UUID,
         "pool_body": CreatePoolBody(
             ["malloc:///node2pool2?size_mb=50"],
-            labels={
-                "openebs.io/created-by": "operator-diskpool",
+            labels=disk_pool_label
+            | {
                 "node": "io-engine-2",
             },
         ),
@@ -167,8 +168,8 @@ POOL_CONFIGURATIONS = [
         "pool_uuid": NODE_3_POOL_2_UUID,
         "pool_body": CreatePoolBody(
             ["malloc:///node3pool2?size_mb=50"],
-            labels={
-                "openebs.io/created-by": "operator-diskpool",
+            labels=disk_pool_label
+            | {
                 "node": "io-engine-3",
             },
         ),
@@ -179,8 +180,8 @@ POOL_CONFIGURATIONS = [
         "pool_uuid": NODE_4_POOL_2_UUID,
         "pool_body": CreatePoolBody(
             ["malloc:///node4pool2?size_mb=50"],
-            labels={
-                "openebs.io/created-by": "operator-diskpool",
+            labels=disk_pool_label
+            | {
                 "node": "io-engine-4",
             },
         ),
@@ -191,8 +192,8 @@ POOL_CONFIGURATIONS = [
         "pool_uuid": NODE_5_POOL_2_UUID,
         "pool_body": CreatePoolBody(
             ["malloc:///node5pool2?size_mb=50"],
-            labels={
-                "openebs.io/created-by": "operator-diskpool",
+            labels=disk_pool_label
+            | {
                 "node": "io-engine-5",
             },
         ),
@@ -203,8 +204,8 @@ POOL_CONFIGURATIONS = [
         "pool_uuid": NODE_1_POOL_3_UUID,
         "pool_body": CreatePoolBody(
             ["malloc:///node1pool3?size_mb=50"],
-            labels={
-                "openebs.io/created-by": "operator-diskpool",
+            labels=disk_pool_label
+            | {
                 "node": "io-engine-1",
             },
         ),
@@ -215,8 +216,8 @@ POOL_CONFIGURATIONS = [
         "pool_uuid": NODE_2_POOL_3_UUID,
         "pool_body": CreatePoolBody(
             ["malloc:///node2pool3?size_mb=50"],
-            labels={
-                "openebs.io/created-by": "operator-diskpool",
+            labels=disk_pool_label
+            | {
                 "node": "io-engine-2",
             },
         ),
@@ -227,8 +228,8 @@ POOL_CONFIGURATIONS = [
         "pool_uuid": NODE_3_POOL_3_UUID,
         "pool_body": CreatePoolBody(
             ["malloc:///node3pool3?size_mb=50"],
-            labels={
-                "openebs.io/created-by": "operator-diskpool",
+            labels=disk_pool_label
+            | {
                 "node": "io-engine-3",
             },
         ),
@@ -239,8 +240,8 @@ POOL_CONFIGURATIONS = [
         "pool_uuid": NODE_4_POOL_3_UUID,
         "pool_body": CreatePoolBody(
             ["malloc:///node4pool3?size_mb=50"],
-            labels={
-                "openebs.io/created-by": "operator-diskpool",
+            labels=disk_pool_label
+            | {
                 "node": "io-engine-4",
             },
         ),
@@ -251,8 +252,8 @@ POOL_CONFIGURATIONS = [
         "pool_uuid": NODE_5_POOL_3_UUID,
         "pool_body": CreatePoolBody(
             ["malloc:///node5pool3?size_mb=50"],
-            labels={
-                "openebs.io/created-by": "operator-diskpool",
+            labels=disk_pool_label
+            | {
                 "node": "io-engine-5",
             },
         ),

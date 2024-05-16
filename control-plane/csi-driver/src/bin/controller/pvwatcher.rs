@@ -50,7 +50,7 @@ impl PvGarbageCollector {
 
         let pv_spec = pv.spec?;
         let volume = pv_spec.csi?;
-        if volume.driver != csi_driver::CSI_PLUGIN_NAME {
+        if volume.driver != csi_driver::csi_plugin_name() {
             return None;
         }
         let volume_uuid = uuid::Uuid::parse_str(&volume.volume_handle).ok()?;

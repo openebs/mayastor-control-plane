@@ -300,7 +300,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
     // Check for nvme ana multipath support and generate labels.
     let mut csi_labels = HashMap::new();
     let nvme_enabled = utils::check_nvme_core_ana().unwrap_or_default().to_string();
-    csi_labels.insert(utils::CSI_NODE_NVME_ANA.to_string(), nvme_enabled.clone());
+    csi_labels.insert(utils::csi_node_nvme_ana(), nvme_enabled.clone());
 
     // If running in k8s, label the nodes with generated labels.
     let node_name = matches.get_one::<String>("node-name").unwrap();
@@ -417,7 +417,7 @@ async fn check_ana_and_label_node(
         "kind": "Node",
         "metadata": {
             "labels": {
-                utils::CSI_NODE_NVME_ANA: nvme_enabled,
+                utils::csi_node_nvme_ana(): nvme_enabled,
             },
         },
     });

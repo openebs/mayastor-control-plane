@@ -5,6 +5,7 @@ import time
 
 import grpc
 import csi_pb2 as pb
+from common import csi_plugin_name, disk_pool_label
 
 from common.apiclient import ApiClient
 from common.csi import CsiHandle
@@ -32,7 +33,7 @@ def setup():
     Deployer.start(1, csi_node=True)
 
     # Create 2 pools.
-    pool_labels = {"openebs.io/created-by": "operator-diskpool"}
+    pool_labels = disk_pool_label
     pool_api = ApiClient.pools_api()
     pool_api.put_node_pool(
         NODE1,
@@ -59,7 +60,7 @@ def csi_instance(setup, fix_socket_permissions):
 
 def test_plugin_info(csi_instance):
     info = csi_instance.identity.GetPluginInfo(pb.GetPluginInfoRequest())
-    assert info.name == "io.openebs.csi-mayastor"
+    assert info.name == csi_plugin_name
     assert info.vendor_version == "1.0.0"
 
 

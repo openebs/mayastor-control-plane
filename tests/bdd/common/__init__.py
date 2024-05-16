@@ -2,6 +2,17 @@ import os
 import re
 import time
 
+prod_domain_name = "openebs.io"
+prod_rev_domain_name = "io.openebs"
+prod_name = "mayastor"
+nvme_nqn_prefix = f"nqn.2019-05.{prod_rev_domain_name}"
+csi_plugin_name = f"{prod_rev_domain_name}.csi-{prod_name}"
+csi_topology_key = f"{prod_domain_name}/nodename"
+disk_pool_api_name = prod_domain_name
+disk_pool_label_key = f"{disk_pool_api_name}/created-by"
+disk_pool_label_val = "operator-diskpool"
+disk_pool_label = {f"{disk_pool_label_key}": f"{disk_pool_label_val}"}
+
 
 # Converts humantime to float seconds
 # Example: 100ms -> 0.1

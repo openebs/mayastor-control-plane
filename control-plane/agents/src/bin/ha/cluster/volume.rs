@@ -8,7 +8,7 @@ use stor_port::{
     transport_api::{ReplyError, ResourceKind},
     types::v0::transport::{NodeId, VolumeId},
 };
-use utils::NVME_TARGET_NQN_PREFIX;
+use utils::nvme_target_nqn_prefix;
 
 /// Defines spec for VolumeMover.
 #[derive(Debug, Clone)]
@@ -36,7 +36,9 @@ impl VolumeMover {
         uri: SocketAddr,
         nqn: String,
     ) -> Result<SwitchOverStage, ReplyError> {
-        let volume = nqn.strip_prefix(NVME_TARGET_NQN_PREFIX).ok_or_else(|| {
+        // todo: this won't work for nqn prefix upgrades
+        let prefix = format!("{}:", nvme_target_nqn_prefix());
+        let volume = nqn.strip_prefix(&prefix).ok_or_else(|| {
             ReplyError::invalid_argument(ResourceKind::NvmePath, "nqn", nqn.to_owned())
         })?;
 

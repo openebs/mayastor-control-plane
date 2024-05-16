@@ -14,7 +14,7 @@ use stor_port::types::v0::openapi::{
         SpecStatus, Volume, VolumeShareProtocol,
     },
 };
-use utils::{CREATED_BY_KEY, DSP_OPERATOR};
+use utils::{dsp_created_by_key, DSP_OPERATOR};
 
 use regex::Regex;
 use std::{collections::HashMap, str::FromStr};
@@ -23,7 +23,6 @@ use tracing::{debug, error, instrument, trace, warn};
 use uuid::Uuid;
 use volume_capability::AccessType;
 
-const OPENEBS_TOPOLOGY_KEY: &str = "openebs.io/nodename";
 const VOLUME_NAME_PATTERN: &str =
     r"pvc-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
 const SNAPSHOT_NAME_PATTERN: &str =
@@ -733,7 +732,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         // Determine target node, if requested.
         let node: Option<&String> = if let Some(topology) = args.accessible_topology.as_ref() {
-            topology.segments.get(OPENEBS_TOPOLOGY_KEY)
+            topology.segments.get(&csi_driver::node_name_topology_key())
         } else {
             None
         };
@@ -1070,7 +1069,7 @@ fn context_into_topology(context: &CreateParams) -> CreateVolumeTopology {
     let mut node_exclusive_label_topology: HashMap<String, String> = HashMap::new();
     let mut pool_affinity_label_topology: Vec<String> = Vec::<String>::new();
     let mut node_affinity_label_topology: Vec<String> = Vec::<String>::new();
-    pool_inclusive_label_topology.insert(String::from(CREATED_BY_KEY), String::from(DSP_OPERATOR));
+    pool_inclusive_label_topology.insert(dsp_created_by_key(), String::from(DSP_OPERATOR));
     pool_inclusive_label_topology.extend(
         context
             .publish_params()

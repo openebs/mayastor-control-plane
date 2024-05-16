@@ -68,9 +68,6 @@ impl<F: TryInto<T>, T> TryIntoOption<T> for Option<F> {
     }
 }
 
-/// Prefix for all keys stored in the persistent store (ETCD).
-pub const ETCD_KEY_PREFIX: &str = "/openebs.io/mayastor";
-
 /// Enum defining the host access control kind.
 #[derive(Debug, Copy, Clone, strum_macros::Display, strum_macros::EnumString, Eq, PartialEq)]
 #[strum(serialize_all = "lowercase")]

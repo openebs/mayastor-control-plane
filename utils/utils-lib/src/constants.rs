@@ -24,12 +24,15 @@ fn target_tag() -> String {
 
 /// Fio Spdk image.
 pub fn fio_spdk_image() -> String {
-    format!("{TARGET_REGISTRY}/mayastor-fio-spdk:{}", target_tag())
+    format!("{TARGET_REGISTRY}/{PRODUCT_NAME}-fio-spdk:{}", target_tag())
 }
 
 /// Io-Engine container image used for testing.
 pub fn io_engine_image() -> String {
-    format!("{TARGET_REGISTRY}/mayastor-io-engine:{}", target_tag())
+    format!(
+        "{TARGET_REGISTRY}/{PRODUCT_NAME}-io-engine:{}",
+        target_tag()
+    )
 }
 
 /// Environment variable that points to an io-engine binary.
@@ -39,8 +42,19 @@ pub const DATA_PLANE_BINARY: &str = "IO_ENGINE_BIN";
 /// The period at which a component updates its resource cache.
 pub const CACHE_POLL_PERIOD: &str = "30s";
 
+/// The diskpool api name.
+/// Note, the CRDs are defined inline and use literal string so that must
+/// be changed as well.
+pub const DSP_API_NAME: &str = PRODUCT_DOMAIN_NAME;
+
 /// The key to mark the creation source of a pool in labels.
-pub const CREATED_BY_KEY: &str = "openebs.io/created-by";
+pub fn dsp_created_by_key() -> String {
+    format!("{DSP_API_NAME}/created-by")
+}
+/// The key to protect diskpool from deletion.
+pub fn dsp_finalizer() -> String {
+    format!("{DSP_API_NAME}/diskpool-protection")
+}
 
 /// The value to mark the creation source of a pool to be disk pool operator in labels.
 pub const DSP_OPERATOR: &str = "operator-diskpool";
@@ -94,11 +108,22 @@ pub const DEFAULT_NODE_AGENT_SERVER_ADDR: &str = "0.0.0.0:11600";
 pub const DEFAULT_REST_MAX_WORKER_THREADS: &str = "8";
 
 /// The default kubernetes namespace for this project.
-pub const DEFAULT_NAMESPACE: &str = "mayastor";
+pub const DEFAULT_NAMESPACE: &str = PRODUCT_NAME;
+
+/// NVMe NQN DATE used by the product.
+pub const NVME_NQN_DATE: &str = "2019-05";
+/// NVMe NQN ORG used by the product.
+pub const NVME_NQN_ORG: &str = PRODUCT_REV_DOMAIN_NAME;
 /// NQN prefix for NVMe targets created by the product.
-pub const NVME_TARGET_NQN_PREFIX: &str = "nqn.2019-05.io.openebs:";
+pub fn nvme_target_nqn_prefix() -> String {
+    format!("nqn.{NVME_NQN_DATE}.{NVME_NQN_ORG}")
+}
+/// NVMe HOST NQN prefix used by the product.
+pub const NVME_HOST_NQN: &str = "node-name";
 /// NQN prefix for NVMe HOSTNQN used by the product.
-pub const NVME_INITIATOR_NQN_PREFIX: &str = "nqn.2019-05.io.openebs:node-name:";
+pub fn nvme_initiator_nqn_prefix() -> String {
+    format!("nqn.{NVME_NQN_DATE}.{NVME_NQN_ORG}:{NVME_HOST_NQN}")
+}
 
 /// NVMe path check period.
 pub const NVME_PATH_CHECK_PERIOD: &str = "3s";
@@ -130,7 +155,21 @@ pub const SNAPSHOT_TRANSACTION_PRUNE_LIMIT: usize = 10;
 pub const SNAPSHOT_MAX_TRANSACTION_LIMIT: usize = 5;
 
 /// Label for the csi-node nvme ana multi-path.
-pub const CSI_NODE_NVME_ANA: &str = "openebs.io/csi-node.nvme-ana";
+pub fn csi_node_nvme_ana() -> String {
+    format!("{PRODUCT_DOMAIN_NAME}/csi-node.nvme-ana")
+}
+/// The CSI plugin's name.
+pub fn csi_plugin_name() -> String {
+    format!("{PRODUCT_REV_DOMAIN_NAME}.csi-{PRODUCT_NAME}")
+}
+
+/// Domain name for the product.
+pub const PRODUCT_DOMAIN_NAME: &str = "openebs.io";
+/// Reverse domain name for the product.
+pub const PRODUCT_REV_DOMAIN_NAME: &str = "io.openebs";
+
+/// Name of the product.
+pub const PRODUCT_NAME: &str = "mayastor";
 
 /// Max limit for etcd pagination.
 pub const ETCD_MAX_PAGE_LIMIT: &str = "500";

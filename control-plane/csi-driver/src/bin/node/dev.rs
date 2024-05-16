@@ -7,7 +7,7 @@
 //!
 //! Attaching a device is performed as follows:
 //! ```ignore
-//!     let uri = "iscsi://192.168.0.20:3260/iqn.2019-05.io.openebs:nexus-11111111-0000-0000-0000-000000000000/0";
+//!     let uri = "iscsi://192.168.0.20:3260/iqn.2019-05.com.org:11111111-0000-0000-0000-000000000000/0";
 //!     let device = Device::parse(uri)?;
 //!     if let Some(path) = device.find().await? {
 //!         // device already attached
@@ -43,7 +43,7 @@ mod nbd;
 pub(crate) mod nvmf;
 mod util;
 
-const NVME_NQN_PREFIX: &str = "nqn.2019-05.io.openebs";
+use utils::constants::nvme_target_nqn_prefix;
 
 pub(crate) use crate::error::DeviceError;
 use crate::match_dev;
@@ -110,9 +110,9 @@ impl Device {
 
             if let Some(devname) = match_dev::match_nvmf_device(&device, &nvmf_key) {
                 let nqn = if std::env::var("MOAC").is_ok() {
-                    format!("{NVME_NQN_PREFIX}:nexus-{uuid}")
+                    format!("{}:nexus-{uuid}", nvme_target_nqn_prefix())
                 } else {
-                    format!("{NVME_NQN_PREFIX}:{uuid}")
+                    format!("{}:{uuid}", nvme_target_nqn_prefix())
                 };
                 return Ok(Some(Box::new(nvmf::NvmfDetach::new(
                     devname.to_string(),

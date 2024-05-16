@@ -27,7 +27,7 @@ use http::Uri;
 use nvmeadm::nvmf_subsystem::Subsystem;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Instant};
 use tokio::time::{sleep, Duration};
-use utils::NVME_TARGET_NQN_PREFIX;
+use utils::nvme_target_nqn_prefix;
 
 /// Common error source name for all gRPC errors in HA Node agent.
 const HA_AGENT_ERR_SOURCE: &str = "HA Node agent gRPC server";
@@ -161,7 +161,8 @@ impl NodeAgentSvc {
         publish_context: Option<HashMap<String, String>>,
     ) -> Result<(), SvcError> {
         let parsed_uri = parse_uri(new_path.as_str())?;
-        if !parsed_uri.nqn().starts_with(NVME_TARGET_NQN_PREFIX) {
+        // todo: this won't work for nqn prefix upgrades
+        if !parsed_uri.nqn().starts_with(&nvme_target_nqn_prefix()) {
             return Err(SvcError::InvalidArguments {});
         }
 
