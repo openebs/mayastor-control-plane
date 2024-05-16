@@ -3,10 +3,35 @@ use crate::controller::{
     wrapper::{GetterOps, *},
 };
 use agents::errors::{SvcError, SvcError::PoolNotFound};
-use stor_port::types::v0::transport::{CtrlPoolState, NodeId, Pool, PoolId, Replica, ReplicaId};
+use stor_port::types::v0::transport::{
+    CtrlPoolState, NodeId, Pool, PoolId, Replica, ReplicaId, VolumeId,
+};
 
-/// Pool helpers
+/// Pool helpers.
 impl Registry {
+    /// Get all pools where the replica of volumes are placed.
+    pub(crate) async fn get_volume_opts_pools(
+        &self,
+        volume_uuid: VolumeId,
+    ) -> Result<Vec<Pool>, SvcError> {
+        let used_pools_ids = self
+            .specs()
+            .read()
+            .replicas
+            .values()
+            .filter(|r| r.lock().owners.owned_by(&volume_uuid))
+            .map(|r| r.lock().pool.pool_name().clone())
+            .collect::<Vec<_>>();
+
+        let mut pools = Vec::<Pool>::with_capacity(used_pools_ids.len());
+        for id in used_pools_ids {
+            if let Ok(pool) = self.ctrl_pool(&id).await {
+                pools.push(pool);
+            }
+        }
+        Ok(pools)
+    }
+
     /// Get all pools from node `node_id` or from all nodes.
     pub(crate) async fn get_node_opt_pools(
         &self,

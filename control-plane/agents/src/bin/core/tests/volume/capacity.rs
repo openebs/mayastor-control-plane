@@ -65,7 +65,7 @@ async fn log_thin(cluster: &Cluster) {
         tracing::info!("VolumeStatus: {} => {target:#?}", volume.spec.uuid);
     }
 
-    let pools = pools_api.get_pools().await.unwrap();
+    let pools = pools_api.get_pools(None).await.unwrap();
     let pools = pools
         .into_iter()
         .map(|p| p.state.unwrap())
@@ -232,7 +232,7 @@ async fn common_enospc_builder(
     let uri = volume_2.state.target.as_ref().unwrap().device_uri.as_str();
     let _drop_target2 = DeviceDisconnect(nvmeadm::NvmeTarget::try_from(uri).unwrap());
 
-    let pools = pools_api.get_pools().await.unwrap();
+    let pools = pools_api.get_pools(None).await.unwrap();
     tracing::info!(?pools, "Here's the pools");
 
     let replicas = replica_api.get_replicas().await.unwrap();
