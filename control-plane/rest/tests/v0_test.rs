@@ -122,7 +122,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     };
     assert_eq!(listed_node.unwrap(), node);
 
-    let _ = client.pools_api().get_pools().await.unwrap();
+    let _ = client.pools_api().get_pools(None).await.unwrap();
     let pool = client
         .pools_api()
         .put_node_pool(
@@ -147,7 +147,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
 
     assert_eq!(
         Some(&pool),
-        client.pools_api().get_pools().await.unwrap().first()
+        client.pools_api().get_pools(None).await.unwrap().first()
     );
 
     let pool = client

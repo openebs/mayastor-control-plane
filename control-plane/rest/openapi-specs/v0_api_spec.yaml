@@ -1131,6 +1131,12 @@ paths:
       tags:
         - Pools
       operationId: get_pools
+      parameters:
+        - in: query
+          name: volume_id
+          required: false
+          schema:
+            $ref: '#/components/schemas/VolumeId'
       responses:
         '200':
           description: OK

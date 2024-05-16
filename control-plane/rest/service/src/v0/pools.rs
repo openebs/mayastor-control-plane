@@ -1,5 +1,6 @@
 use super::*;
 use grpc::operations::pool::traits::PoolOperations;
+use rest_client::versions::v0::apis::Uuid;
 use stor_port::types::v0::transport::{DestroyPool, Filter};
 use transport_api::{ReplyError, ReplyErrorKind, ResourceKind};
 
@@ -83,8 +84,13 @@ impl apis::actix_server::Pools for RestApi {
         Ok(pool.into())
     }
 
-    async fn get_pools() -> Result<Vec<models::Pool>, RestError<RestJsonError>> {
-        let pools = client().get(Filter::None, None).await?;
+    async fn get_pools(
+        Query(volume_id): Query<Option<Uuid>>,
+    ) -> Result<Vec<models::Pool>, RestError<RestJsonError>> {
+        let pools = match volume_id {
+            Some(vol_id) => client().get(Filter::Volume(vol_id.into()), None).await?,
+            None => client().get(Filter::None, None).await?,
+        };
         Ok(pools.into_inner().into_iter().map(From::from).collect())
     }
 
