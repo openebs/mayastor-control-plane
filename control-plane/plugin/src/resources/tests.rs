@@ -248,7 +248,7 @@ async fn get_pools() {
         .await
         .rest_v00()
         .pools_api()
-        .get_pools()
+        .get_pools(None)
         .await
         .unwrap();
     let pool_state = pools[0].state.as_ref().unwrap().clone();

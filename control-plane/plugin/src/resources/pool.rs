@@ -99,7 +99,7 @@ impl ListWithArgs for Pools {
                 .map_err(|e| Error::ListPoolsError { source: e }),
             None => RestClient::client()
                 .pools_api()
-                .get_pools()
+                .get_pools(None)
                 .await
                 .map(|pools| pools.into_body())
                 .map_err(|e| Error::ListPoolsError { source: e }),
