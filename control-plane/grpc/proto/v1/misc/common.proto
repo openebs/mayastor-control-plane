@@ -164,6 +164,11 @@ message NodePoolFilter {
   string pool_id = 2;
 }
 
+// Filter by common filters
+message CommonFilter {
+  string volume_id = 1;
+}
+
 // Filter by Nexus Id
 message NexusFilter {
   string nexus_id = 1;
