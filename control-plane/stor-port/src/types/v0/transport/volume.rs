@@ -257,21 +257,30 @@ pub struct LabelledTopology {
     pub inclusion: HashMap<String, String>,
     /// Affinity labels.
     #[serde(default)]
-    pub affinity: Vec<String>,
+    pub affinity: HashMap<String, String>,
 }
 
 impl From<models::LabelledTopology> for LabelledTopology {
     fn from(src: models::LabelledTopology) -> Self {
+        let mut affinity = HashMap::new();
+        for affintity in src.affinitykey.iter() {
+            affinity.insert(affintity.to_string(), "".to_string());
+        }
+
         Self {
             exclusion: src.exclusion,
             inclusion: src.inclusion,
-            affinity: src.affinitykey,
+            affinity,
         }
     }
 }
 impl From<LabelledTopology> for models::LabelledTopology {
     fn from(src: LabelledTopology) -> Self {
-        Self::new(src.exclusion, src.inclusion, src.affinity)
+        let mut affinity_key = vec![];
+        for (key, _) in src.affinity.iter() {
+            affinity_key.push(key.clone());
+        }
+        Self::new(src.exclusion, src.inclusion, affinity_key)
     }
 }
 

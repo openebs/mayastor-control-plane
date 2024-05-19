@@ -642,9 +642,10 @@ impl From<volume::LabelledTopology> for LabelledTopology {
                 Some(labels) => labels.value,
                 None => HashMap::new(),
             },
-            affinity: match labelled_topology_grpc_type.affinity_labels {
-                Some(labels) => labels.affinity,
-                None => Vec::new(),
+
+            affinity: match labelled_topology_grpc_type.affinity {
+                Some(labels) => labels.value,
+                None => HashMap::new(),
             },
         }
     }
@@ -659,8 +660,8 @@ impl From<LabelledTopology> for volume::LabelledTopology {
             inclusion: Some(crate::common::StringMapValue {
                 value: topo.inclusion,
             }),
-            affinity_labels: Some(volume::AffinityLabels {
-                affinity: topo.affinity,
+            affinity: Some(crate::common::StringMapValue {
+                value: topo.affinity,
             }),
         }
     }

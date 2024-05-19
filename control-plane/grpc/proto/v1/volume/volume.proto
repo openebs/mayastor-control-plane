@@ -158,13 +158,9 @@ message LabelledTopology {
   // inclusive labels
   common.StringMapValue inclusion = 2;
   // affinity labels
-  optional AffinityLabels affinity_labels = 3;
+  common.StringMapValue affinity = 3;
 }
 
-message AffinityLabels{
-  // affinity labels
-  repeated string affinity = 1;
-}
 
 message ExplicitNodeTopology {
   // replicas can only be placed on these nodes
