@@ -546,10 +546,10 @@ pub mod io_engine {
             version: IoEngineApiVersion,
             name: &str,
             endpoint: SocketAddr,
+            mut attempts: i32,
             sleep: S,
         ) -> Result<Self, String> {
             let endpoint_str = format!("http://{endpoint}");
-            let mut attempts = 20;
             let channel = loop {
                 match tonic::transport::Endpoint::new(endpoint_str.clone())
                     .map_err(|e| e.to_string())?

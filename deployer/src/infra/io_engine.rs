@@ -107,6 +107,7 @@ impl ComponentAction for IoEngine {
                 options.latest_io_api_version(),
                 &name,
                 socket,
+                40,
                 tokio::time::sleep,
             )
             .await?;
