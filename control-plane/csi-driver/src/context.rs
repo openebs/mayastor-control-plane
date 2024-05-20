@@ -392,6 +392,10 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
             args.get(Parameters::NodeSpreadTopologyKey.as_ref()),
         )
         .map_err(|_| tonic::Status::invalid_argument("Invalid node_spread_topology_key"))?;
+
+        validate_topology_params(&node_affinity_topology_label, &node_spread_topology_key)?;
+        validate_topology_params(&node_has_topology_key, &node_spread_topology_key)?;
+
         Ok(Self {
             io_timeout,
             nvme_io_timeout,
@@ -408,6 +412,25 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
             node_spread_topology_key,
         })
     }
+}
+
+/// Validate the topology parameters.
+/// Errors out of nodeSpreadTopologyKey has same values as of
+/// node_has_topology_key/nodeAffinityTopologyLabel
+pub(crate) fn validate_topology_params(
+    map1: &Option<HashMap<String, String>>,
+    map2: &Option<HashMap<String, String>>,
+) -> Result<(), tonic::Status> {
+    if let (Some(map1), Some(map2)) = (map1, map2) {
+        let has_common_keys = map1.len() == map2.len() && map1.keys().any(|k| map2.contains_key(k));
+
+        if has_common_keys {
+            return Err(tonic::Status::invalid_argument(
+                "Invalid node topology. `nodeSpreadTopologyKey` can't have same values as `nodeHasTopologyKey` or `nodeAffinityTopologyLabel`",
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Volume Creation parameters.
