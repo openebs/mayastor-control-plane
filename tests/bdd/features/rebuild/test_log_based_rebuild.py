@@ -55,10 +55,10 @@ def init():
         node_agent=True,
         cluster_agent=True,
         csi_node=True,
-        wait="10s",
         reconcile_period="300ms",
         faulted_child_wait_period=f"{FAULTED_CHILD_WAIT_SECS}s",
         cache_period="200ms",
+        io_engine_coreisol=True,
     )
     yield
     Deployer.stop()
