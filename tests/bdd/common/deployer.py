@@ -151,7 +151,8 @@ class Deployer(object):
     @staticmethod
     def start_with_opts(options: StartOptions):
         deployer_path = os.environ["ROOT_DIR"] + "/target/debug/deployer"
-        subprocess.run([deployer_path, "start"] + options.args())
+        # todo: get logs out to specific location
+        subprocess.run([deployer_path, "start"] + options.args(), check=True)
 
     # Stop containers
     @staticmethod
