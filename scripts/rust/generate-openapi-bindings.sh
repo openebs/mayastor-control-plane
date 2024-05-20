@@ -7,6 +7,18 @@ die()
   exit "${_return}"
 }
 
+write_version()
+{
+  write_version="yes"
+  if [ -f "$VERSION_FILE" ] && [ "$(which openapi-generator-cli)" = "$(cat "$VERSION_FILE")" ]; then
+    write_version=
+  fi
+
+  if [ -n "$write_version" ]; then
+    which openapi-generator-cli > "$VERSION_FILE"
+  fi
+}
+
 set -e
 
 SCRIPTDIR=$(dirname "$0")
@@ -116,6 +128,8 @@ if [ -f "$RUST_FMT" ]; then
   ( cd "$tmpd"; rm Cargo.lock || true; rm "$(basename "$RUST_FMT")" )
 fi
 
+write_version
+
 if [[ "$skip_if_md5_same" = "yes" ]]; then
   source_md5sum=$(cd "$tmpd"; find . -type f -exec md5sum {} \; | md5sum)
   target_md5sum=$(cd "$TARGET"; find . -type f \( ! -name "version.txt" ! -name "build.rs" \) -exec md5sum {} \; | md5sum)
@@ -128,17 +142,6 @@ fi
 
 mv "$tmpd"/* "$TARGET"/
 rm -rf "$tmpd"
-
-write_version="yes"
-if [[ "$skip_if_md5_same" = "yes" ]]; then
-  if [ -f "$VERSION_FILE" ] && [ "$(which openapi-generator-cli)" = "$(cat "$VERSION_FILE")" ]; then
-    write_version=
-  fi
-fi
-
-if [ -n "$write_version" ]; then
-  which openapi-generator-cli > "$VERSION_FILE"
-fi
 
 # If the openapi bindings were modified then fail the check
 if [[ "$skip_git_diff" = "no" ]]; then
