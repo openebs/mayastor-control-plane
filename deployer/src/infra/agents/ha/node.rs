@@ -33,7 +33,7 @@ impl ComponentAction for HaNodeAgent {
             }
         }
         if cfg.container_exists("jaeger") {
-            let jaeger_config = format!("jaeger.{}:6831", cfg.get_name());
+            let jaeger_config = format!("jaeger.{}", cfg.get_name());
             spec = spec.with_args(vec!["--jaeger", &jaeger_config])
         };
         if options.eventing {

@@ -53,7 +53,7 @@ futures-util = { version = "0.3.28" }
 crossbeam-queue = "0.3.8"
 tower = { version = "0.4.13", features = [ "timeout", "util" ] }
 hyper = { version = "0.14.27", features = [ "client", "http1", "http2", "tcp", "stream" ] }
-opentelemetry = { version = "0.20.0", features = ["rt-tokio-current-thread"] }
+opentelemetry = { version = "0.22.0" }
 tracing = "0.1.37"
 nix = { version = "0.27.1", default-features = false }
 prost-types = "0.12.1"

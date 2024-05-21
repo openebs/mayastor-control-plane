@@ -1,8 +1,11 @@
-/// OpenTelemetry KeyVal for Processor Tags
-pub use opentelemetry::{global, trace, Context, KeyValue};
-
 use event_publisher::event_handler::EventHandle;
-use opentelemetry::sdk::{propagation::TraceContextPropagator, trace::Tracer, Resource};
+pub use opentelemetry::trace;
+/// OpenTelemetry KeyVal for Processor Tags
+pub use opentelemetry::{global, Context, KeyValue};
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::{
+    propagation::TraceContextPropagator, trace as sdktrace, trace::Tracer, Resource,
+};
 use tracing::Level;
 use tracing_subscriber::{filter, layer::SubscriberExt, util::SubscriberInitExt, Layer, Registry};
 
@@ -125,26 +128,43 @@ impl TracingTelemetry {
         let stderr = tracing_subscriber::fmt::layer()
             .with_writer(std::io::stderr)
             .with_ansi(self.colours);
-        let tracer: Option<Tracer> = self.jaeger.map(|jaeger| {
-            let tracing_tags =
-                self.tracing_tags
-                    .into_iter()
-                    .fold(Vec::<KeyValue>::new(), |mut acc, kv| {
-                        if !acc.iter().any(|acc| acc.key == kv.key) {
-                            acc.push(kv);
-                        }
-                        acc
-                    });
+        let tracer: Option<Tracer> = self.jaeger.map(|mut jaeger| {
+            let svc_name = vec![KeyValue::new(
+                opentelemetry_semantic_conventions::resource::SERVICE_NAME,
+                service_name.to_owned(),
+            )];
+            let tracing_tags = self.tracing_tags.into_iter().fold(svc_name, |mut acc, kv| {
+                if !acc.iter().any(|acc| acc.key == kv.key) {
+                    acc.push(kv);
+                }
+                acc
+            });
+
+            if !jaeger.starts_with("http") {
+                jaeger = format!("http://{jaeger}");
+            }
+            // todo: init should return an error
+            let jaeger = match url::Url::parse(&jaeger).ok() {
+                Some(mut url) => {
+                    if url.port().is_none() {
+                        url.set_port(Some(4317)).ok();
+                    }
+                    url.to_string()
+                }
+                None => jaeger,
+            };
+
             set_jaeger_env();
             global::set_text_map_propagator(TraceContextPropagator::new());
-            opentelemetry_jaeger::new_agent_pipeline()
-                .with_endpoint(jaeger)
-                .with_service_name(service_name)
-                .with_trace_config(
-                    opentelemetry::sdk::trace::Config::default()
-                        .with_resource(Resource::new(tracing_tags)),
+            opentelemetry_otlp::new_pipeline()
+                .tracing()
+                .with_exporter(
+                    opentelemetry_otlp::new_exporter()
+                        .tonic()
+                        .with_endpoint(jaeger),
                 )
-                .install_batch(opentelemetry::runtime::TokioCurrentThread)
+                .with_trace_config(sdktrace::config().with_resource(Resource::new(tracing_tags)))
+                .install_batch(opentelemetry_sdk::runtime::TokioCurrentThread)
                 .expect("Should be able to initialise the exporter")
         });
 

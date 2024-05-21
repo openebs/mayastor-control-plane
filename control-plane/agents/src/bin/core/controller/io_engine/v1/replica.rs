@@ -88,7 +88,7 @@ impl crate::controller::io_engine::ReplicaListApi for super::RpcClient {
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
-    #[tracing::instrument(name = "rpc::v1::replica::create", level = "debug", skip(self))]
+    #[tracing::instrument(name = "rpc::v1::replica::create", level = "info", skip(self))]
     async fn create_replica(&self, request: &CreateReplica) -> Result<Replica, SvcError> {
         let rpc_replica = self
             .replica()
@@ -102,7 +102,7 @@ impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
         Ok(replica)
     }
 
-    #[tracing::instrument(name = "rpc::v1::replica::destroy", level = "debug", skip(self), err)]
+    #[tracing::instrument(name = "rpc::v1::replica::destroy", level = "info", skip(self), err)]
     async fn destroy_replica(&self, request: &DestroyReplica) -> Result<(), SvcError> {
         let _ = self
             .replica()
@@ -115,7 +115,7 @@ impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
         Ok(())
     }
 
-    #[tracing::instrument(name = "rpc::v1::replica::resize", level = "debug", skip(self), err)]
+    #[tracing::instrument(name = "rpc::v1::replica::resize", level = "info", skip(self), err)]
     async fn resize_replica(&self, request: &ResizeReplica) -> Result<Replica, SvcError> {
         let rpc_replica = self
             .replica()
@@ -177,7 +177,7 @@ impl crate::controller::io_engine::ReplicaApi for super::RpcClient {
 
 #[async_trait::async_trait]
 impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
-    #[tracing::instrument(name = "rpc::v1::replica::snapshot", level = "debug", skip(self))]
+    #[tracing::instrument(name = "rpc::v1::replica::snapshot", level = "info", skip(self))]
     async fn create_repl_snapshot(
         &self,
         request: &CreateReplicaSnapshot,
@@ -193,6 +193,11 @@ impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
         response.into_inner().try_to_agent()
     }
 
+    #[tracing::instrument(
+        name = "rpc::v1::replica::destroy_repl_snapshot",
+        level = "info",
+        skip(self)
+    )]
     async fn destroy_repl_snapshot(
         &self,
         request: &DestroyReplicaSnapshot,
@@ -230,6 +235,7 @@ impl crate::controller::io_engine::ReplicaSnapshotApi for super::RpcClient {
         ret.snapshots.iter().map(|s| s.try_to_agent()).collect()
     }
 
+    #[tracing::instrument(name = "rpc::v1::replica::snapshot::clone", level = "info", skip(self))]
     async fn create_snapshot_clone(
         &self,
         request: &IoEngCreateSnapshotClone,

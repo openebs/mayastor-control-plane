@@ -133,6 +133,7 @@ impl CreateReplicaSnapshot {
 }
 
 /// The request type to delete a replica's snapshot.
+#[derive(Debug)]
 pub struct DestroyReplicaSnapshot {
     /// Id of the snapshot to be deleted.
     pub snap_id: SnapshotId,

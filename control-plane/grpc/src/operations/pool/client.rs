@@ -38,7 +38,7 @@ impl PoolClient {
 /// This converts the client side data into a RPC request.
 #[tonic::async_trait]
 impl PoolOperations for PoolClient {
-    #[tracing::instrument(name = "PoolClient::create", level = "debug", skip(self), err)]
+    #[tracing::instrument(name = "PoolClient::create", level = "info", skip(self), err)]
     async fn create(
         &self,
         request: &dyn CreatePoolInfo,
@@ -55,7 +55,7 @@ impl PoolOperations for PoolClient {
         }
     }
 
-    #[tracing::instrument(name = "PoolClient::destroy", level = "debug", skip(self), err)]
+    #[tracing::instrument(name = "PoolClient::destroy", level = "info", skip(self), err)]
     async fn destroy(
         &self,
         request: &dyn DestroyPoolInfo,

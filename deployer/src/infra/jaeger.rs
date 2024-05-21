@@ -16,53 +16,38 @@ impl ComponentAction for Jaeger {
             if let Ok(stage) = std::env::var("STAGE_NAME") {
                 tags.add(crate::KeyValue::new("run.stage", stage));
             }
-            let own_collector = format!("jaeger.{}", cfg.get_name());
-            let mut image = match &options.external_jaeger {
-                Some(collector) if collector.starts_with(&own_collector) => {
-                    // local debug trick, use collector on the same jaeger container
+            let mut image = match options.external_jaeger.clone() {
+                // uses the otel collector as a kind of jaeger agent
+                Some(mut collector) if !collector.is_empty() => {
+                    if !collector.contains(':') {
+                        collector.push_str(":4317");
+                    }
                     let mut image =
-                        ContainerSpec::from_image("jaeger", "jaegertracing/all-in-one:latest")
-                            .with_portmap("16686", "16686")
-                            .with_portmap("6831/udp", "6831/udp")
-                            .with_portmap("6832/udp", "6832/udp");
-                    if let Some(args) = tags.into_args() {
-                        image = image.with_arg(&format!("--collector.tags={args}"));
+                        ContainerSpec::from_image("jaeger", "otel/opentelemetry-collector:latest")
+                            .with_arg("--config=./deployer/misc/otel_agent_config.yaml")
+                            .with_arg(&format!("--set=exporters.otlp.endpoint={collector}"));
+                    if let Some(args) = tags.into_otel_attrs() {
+                        image = image
+                            .with_arg("--config=env:PROCESSOR_TAGS")
+                            .with_env("PROCESSOR_TAGS", &args)
+                            .with_arg("--set=service.pipelines.traces.processors=[resource,batch]")
                     }
-                    if collector.contains(':') {
-                        image.with_args(vec!["--reporter.grpc.host-port", collector])
-                    } else {
-                        image.with_arg(&format!("--reporter.grpc.host-port={collector}:14250"))
-                    }
-                }
-                Some(collector) if !collector.is_empty() => {
-                    // add a local jaeger agent which will export to the external jaeger collector
-                    let mut image =
-                        ContainerSpec::from_image("jaeger", "jaegertracing/jaeger-agent:latest")
-                            .with_portmap("6831/udp", "6831/udp")
-                            .with_portmap("6832/udp", "6832/udp");
-                    if let Some(args) = tags.into_args() {
-                        image = image.with_arg(&format!("--agent.tags={args}"));
-                    }
-                    if collector.contains(':') {
-                        image.with_args(vec!["--reporter.grpc.host-port", collector])
-                    } else {
-                        image.with_arg(&format!("--reporter.grpc.host-port={collector}:14250"))
-                    }
+                    image
                 }
                 _ => {
                     // the all-in-one container which contains all components in a single container
                     let image =
                         ContainerSpec::from_image("jaeger", "jaegertracing/all-in-one:latest")
-                            .with_portmap("16686", "16686")
-                            .with_portmap("6831/udp", "6831/udp")
-                            .with_portmap("6832/udp", "6832/udp");
+                            .with_portmap("16686", "16686");
                     if let Some(args) = tags.into_args() {
                         image.with_arg(&format!("--collector.tags={args}"))
                     } else {
                         image
                     }
                 }
-            };
+            }
+            .with_portmap("4317", "4317")
+            .with_env("COLLECTOR_OTLP_ENABLED", "true");
 
             if cfg.container_exists("elastic") {
                 image = image
