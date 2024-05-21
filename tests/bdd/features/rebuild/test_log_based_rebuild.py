@@ -54,6 +54,8 @@ def init():
         io_engines=4,
         node_agent=True,
         cluster_agent=True,
+        cluster_agent_fast="100ms",
+        agents_env="DETECTION_PERIOD=100ms,SUBSYS_REFRESH_PERIOD=100ms",
         csi_node=True,
         reconcile_period="300ms",
         faulted_child_wait_period=f"{FAULTED_CHILD_WAIT_SECS}s",
@@ -290,18 +292,10 @@ def the_node_hosting_rebuilding_replica_crashes():
     Docker.kill_container(NODE_2_NAME)
 
 
-@retry(wait_fixed=200, stop_max_attempt_number=20)
 @then("a full rebuild starts for both of the unhealthy children")
 def a_full_rebuild_starts_for_both_of_the_unhealthy_children():
     """a full rebuild starts for both of the unhealthy children"""
-    children = []
-    new_nexus = ApiClient.volumes_api().get_volume(VOLUME_UUID).state.target
-    for child in new_nexus["children"]:
-        children.append(child["uri"])
-    assert pytest.nexus_local_child not in children
-    assert pytest.faulted_child_uri not in children
-    childs = new_nexus["children"]
-    print(f"child list during full rebuild: {childs}")
+    verify_full_rebuilds()
 
 
 @then("the volume target becomes unreachable along with its local child")
@@ -315,7 +309,29 @@ def the_volume_target_becomes_unreachable_along_with_its_local_child():
     verify_nexus_switchover()
 
 
-@retry(wait_fixed=500, stop_max_attempt_number=30)
+@retry(wait_fixed=200, stop_max_attempt_number=20)
+def verify_full_rebuilds():
+    """a full rebuild starts for both of the unhealthy children"""
+    children = []
+    new_nexus = ApiClient.volumes_api().get_volume(VOLUME_UUID).state.target
+    for child in new_nexus["children"]:
+        children.append(child["uri"])
+    assert pytest.nexus_local_child not in children
+
+    rebuild_hist = ApiClient.volumes_api().get_rebuild_history(VOLUME_UUID)
+    record = list(
+        filter(
+            lambda record: record.child_uri == pytest.faulted_child_uri,
+            rebuild_hist.records,
+        )
+    )
+
+    assert pytest.faulted_child_uri not in children or record[0].is_partial == False
+    childs = new_nexus["children"]
+    print(f"child list during full rebuild: {childs}")
+
+
+@retry(wait_fixed=200, stop_max_attempt_number=60)
 def verify_nexus_switchover():
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     new_target = vol["state"].get("target", None)
@@ -325,7 +341,7 @@ def verify_nexus_switchover():
         assert False, "target not yet failed over"
 
 
-@retry(wait_fixed=500, stop_max_attempt_number=20)
+@retry(wait_fixed=200, stop_max_attempt_number=40)
 def check_child_removal():
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     child_list = vol.state.target["children"]
