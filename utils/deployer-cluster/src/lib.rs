@@ -259,6 +259,7 @@ impl Cluster {
                 format!("{}:10124", container.1 .1)
                     .parse::<SocketAddr>()
                     .unwrap(),
+                20,
                 tokio::time::sleep,
             )
             .await?),
