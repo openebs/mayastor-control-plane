@@ -46,7 +46,8 @@ POOL3_UUID = "93a60318-bcfe-4e36-92cb-ddc7abf212ea"
 POOL4_UUID = "94a60318-bcfe-4e36-92cb-ddc7abf212ea"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 RESTORE_VOLUME_UUID = "6cd5378e-3f05-47f1-a830-a0f5873a1449"
-SNAP_UUID = "7cd5378e-3f05-47f1-a830-a0f5873a1449"
+SNAP_UUID_1 = "7cd5378e-3f05-47f1-a830-a0f5873a1449"
+SNAP_UUID_2 = "8cd5378e-3f05-47f1-a830-a0f5873a1449"
 DEFAULT_REPLICA_CNT = 3
 DEFAULT_POOL_SIZE = 419430400  # 400MiB
 NODE1_NAME = "io-engine-1"
@@ -201,10 +202,8 @@ def create_and_publish_volume(uuid, size, rcount, publish_on):
     return volume
 
 
-def create_volume_snapshot(volume):
-    snapshot = ApiClient.snapshots_api().put_volume_snapshot(
-        volume.spec.uuid, SNAP_UUID
-    )
+def create_volume_snapshot(volume, snapid):
+    snapshot = ApiClient.snapshots_api().put_volume_snapshot(volume.spec.uuid, snapid)
     return snapshot
 
 
@@ -246,21 +245,19 @@ def test_shrink_a_volume():
     """Shrink a volume."""
 
 
-## Below Snapshot tests need to be enabled after some feature issues with snapshot and
-## resize compatibility are fixed.
-
-# @scenario("resize_online.feature", "Expand a volume and take a snapshot")
-# def test_expand_a_volume_and_take_a_snapshot():
-#    """Expand a volume and take a snapshot."""
-
-# @scenario("resize_online.feature", "Take a snapshot and expand the volume")
-# def test_take_a_snapshot_and_expand_the_volume():
-#    """Take a snapshot and expand the volume."""
+@scenario("resize_online.feature", "Expand a volume and take a snapshot")
+def test_expand_a_volume_and_take_a_snapshot():
+    """Expand a volume and take a snapshot."""
 
 
-# @scenario('resize_online.feature', 'Expand a new volume created as a snapshot restore')
-# def test_expand_a_new_volume_created_as_a_snapshot_restore():
-#   """Expand a new volume created as a snapshot restore."""
+@scenario("resize_online.feature", "Take a snapshot and expand the volume")
+def test_take_a_snapshot_and_expand_the_volume():
+    """Take a snapshot and expand the volume."""
+
+
+@scenario("resize_online.feature", "Expand a new volume created as a snapshot restore")
+def test_expand_a_new_volume_created_as_a_snapshot_restore():
+    """Expand a new volume created as a snapshot restore."""
 
 
 @given(
@@ -307,11 +304,11 @@ def a_successful_snapshot_is_created_for_a_published_volume(
     """a successful snapshot is created for a published volume."""
     assert pytest.volume is not None
     test_volume = test_volume_factory()
-    create_volume_snapshot(test_volume)
+    create_volume_snapshot(test_volume, SNAP_UUID_1)
     the_snapshot_should_be_successfully_created(test_volume_factory)
     yield test_volume
     Volume.cleanup(test_volume)
-    Snapshot.cleanup(SNAP_UUID)
+    Snapshot.cleanup(SNAP_UUID_1)
 
 
 @given("one of the replica is not in online state")
@@ -368,7 +365,7 @@ def a_new_volume_is_created_with_the_snapshot_as_its_source():
         thin=True,
     )
     volume = ApiClient.volumes_api().put_snapshot_volume(
-        SNAP_UUID, RESTORE_VOLUME_UUID, body
+        SNAP_UUID_1, RESTORE_VOLUME_UUID, body
     )
     pytest.volume = volume
     yield volume
@@ -406,9 +403,18 @@ def we_issue_a_volume_shrink_request():
 def we_take_a_snapshot_of_expanded_volume(test_volume_factory):
     """we take a snapshot of expanded volume."""
     test_volume = test_volume_factory()
-    create_volume_snapshot(test_volume)
+    create_volume_snapshot(test_volume, SNAP_UUID_1)
     yield
-    Snapshot.cleanup(SNAP_UUID)
+    Snapshot.cleanup(SNAP_UUID_1)
+
+
+@then("we take a snapshot of expanded volume again")
+def we_take_a_snapshot_of_expanded_volume_again(test_volume_factory):
+    """we take a snapshot of expanded volume again."""
+    test_volume = test_volume_factory()
+    create_volume_snapshot(test_volume, SNAP_UUID_2)
+    yield
+    Snapshot.cleanup(SNAP_UUID_2)
 
 
 @then("IO on the new volume runs without error for the complete volume size")
@@ -432,9 +438,13 @@ def io_on_the_new_volume_runs_without_error_for_the_complete_volume_size(
 
 
 @then("a new replica will be created for the new volume")
-def a_new_replica_will_be_created_for_the_new_volume():
+def a_new_replica_will_be_created_for_the_new_volume(test_volume_factory):
     """a new replica will be created for the new volume."""
-    pass
+    # check volume has a replica in the topology
+    restored_volume = test_volume_factory()
+    assert restored_volume.spec.uuid == RESTORE_VOLUME_UUID
+    assert restored_volume.spec.num_replicas == 1
+    assert restored_volume.spec.status == SpecStatus("Created")
 
 
 @then("all the replicas of volume should be resized to new capacity")
@@ -517,7 +527,7 @@ def the_snapshot_should_be_successfully_created(test_volume_factory):
         volume_id=test_volume.spec.uuid, max_entries=0
     )
     assert len(snapshots.entries) == 1
-    assert snapshots.entries[0].state.uuid == SNAP_UUID
+    assert snapshots.entries[0].state.uuid == SNAP_UUID_1
     assert snapshots.entries[0].state.source_volume == VOLUME_UUID
 
 

@@ -19,7 +19,7 @@ from retrying import retry
 from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
-from common.operations import Volume
+from common.operations import Snapshot, Volume
 from time import sleep
 
 import openapi.exceptions
@@ -31,6 +31,7 @@ from openapi.model.pool_status import PoolStatus
 from openapi.model.protocol import Protocol
 from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.replica_state import ReplicaState
+from openapi.model.spec_status import SpecStatus
 from openapi.model.resize_volume_body import ResizeVolumeBody
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.volume_status import VolumeStatus
@@ -41,6 +42,9 @@ POOL2_UUID = "92a60318-bcfe-4e36-92cb-ddc7abf212ea"
 POOL3_UUID = "93a60318-bcfe-4e36-92cb-ddc7abf212ea"
 POOL4_UUID = "94a60318-bcfe-4e36-92cb-ddc7abf212ea"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
+RESTORE_VOLUME_UUID = "6cd5378e-3f05-47f1-a830-a0f5873a1449"
+SNAP_UUID_1 = "7cd5378e-3f05-47f1-a830-a0f5873a1449"
+SNAP_UUID_2 = "8cd5378e-3f05-47f1-a830-a0f5873a1449"
 DEFAULT_REPLICA_CNT = 3
 DEFAULT_POOL_SIZE = 209715200
 NODE1_NAME = "io-engine-1"
@@ -119,6 +123,11 @@ def create_and_publish_volume(uuid, size, rcount, publish_on):
     return volume
 
 
+def create_volume_snapshot(volume, snapid):
+    snapshot = ApiClient.snapshots_api().put_volume_snapshot(volume.spec.uuid, snapid)
+    return snapshot
+
+
 # utility helper functions - END
 
 
@@ -154,22 +163,19 @@ def test_shrink_an_unpublished_volume():
     """Shrink an unpublished volume."""
 
 
-## Below Snapshot tests need to be enabled after some feature issues with snapshot and
-## resize compatibility are fixed.
-
-# @scenario('resize/resize_offline.feature', 'Expand a volume and take a snapshot')
-# def test_expand_a_volume_and_take_a_snapshot():
-#    """Expand a volume and take a snapshot."""
+@scenario("resize_offline.feature", "Expand a volume and take a snapshot")
+def test_expand_a_volume_and_take_a_snapshot():
+    """Expand a volume and take a snapshot."""
 
 
-# @scenario('resize/resize_offline.feature', 'Expand a new volume created as a snapshot restore')
-# def test_expand_a_new_volume_created_as_a_snapshot_restore():
-#    """Expand a new volume created as a snapshot restore."""
+@scenario("resize_offline.feature", "Expand a new volume created as a snapshot restore")
+def test_expand_a_new_volume_created_as_a_snapshot_restore():
+    """Expand a new volume created as a snapshot restore."""
 
 
-# @scenario('resize/resize_offline.feature', 'Take a snapshot and expand the volume')
-# def test_take_a_snapshot_and_expand_the_volume():
-#    """Take a snapshot and expand the volume."""
+@scenario("resize_offline.feature", "Take a snapshot and expand the volume")
+def test_take_a_snapshot_and_expand_the_volume():
+    """Take a snapshot and expand the volume."""
 
 
 @given("a deployer cluster")
@@ -254,6 +260,18 @@ def a_published_volume_with_more_than_one_replica_and_all_are_healthy(create_vol
     """a published volume with more than one replica and all are healthy."""
     the_volume_is_published()
     pytest.exception = None
+
+
+@given("a successful snapshot is created for an unpublished volume")
+def a_successful_snapshot_is_created_for_an_unpublished_volume(create_volume):
+    """a successful snapshot is created for an unpublished volume."""
+    assert pytest.volume is not None
+    test_volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
+    create_volume_snapshot(test_volume, SNAP_UUID_1)
+    the_snapshot_should_be_successfully_created()
+    yield test_volume
+    Volume.cleanup(test_volume)
+    Snapshot.cleanup(SNAP_UUID_1)
 
 
 @given(
@@ -353,12 +371,59 @@ def the_volume_replica_count_is_increased_by_1():
     cordon_node(NODE4_NAME, "dont_place_anything_here")
 
 
+@when("a new volume is created with the snapshot as its source")
+def a_new_volume_is_created_with_the_snapshot_as_its_source():
+    """a new volume is created with the snapshot as its source."""
+    body = CreateVolumeBody(
+        VolumePolicy(True),
+        replicas=1,
+        size=VOLUME_SIZE,
+        thin=True,
+    )
+    volume = ApiClient.volumes_api().put_snapshot_volume(
+        SNAP_UUID_1, RESTORE_VOLUME_UUID, body
+    )
+    pytest.volume = volume
+    yield volume
+    Volume.cleanup(volume)
+
+
+@then("the new volume is published")
+def the_new_volume_is_published():
+    """the new volume is published."""
+    test_volume = pytest.volume
+    publish_volume(test_volume.spec.uuid, NODE2_NAME)
+
+
+@then("the replica's capacity will be same as the snapshot")
+def the_replicas_capacity_will_be_same_as_the_snapshot():
+    """the replica's capacity will be same as the snapshot."""
+    test_volume = pytest.volume
+    replicas = list(test_volume.state.replica_topology.values())
+    assert len(replicas) == 1
+    # Can't compare these size as the state and spec differ by about 2MiB additional
+    # padded by spdk.
+    # assert replicas[0].usage.capacity == test_volume.spec.size
+    assert replicas[0].usage.allocated == 0
+    assert replicas[0].usage.allocated_snapshots == 0
+
+
+@then("a new replica will be created for the new volume")
+def a_new_replica_will_be_created_for_the_new_volume():
+    """a new replica will be created for the new volume."""
+    # check volume has a replica in the topology
+    restored_volume = pytest.volume
+    assert restored_volume.spec.uuid == RESTORE_VOLUME_UUID
+    assert restored_volume.spec.num_replicas == 1
+    assert restored_volume.spec.status == SpecStatus("Created")
+
+
 @when("we issue a volume expand request")
 def we_issue_a_volume_expand_request():
     """we issue a volume expand request."""
     try:
         volume = ApiClient.volumes_api().put_volume_size(
-            VOLUME_UUID, ResizeVolumeBody(VOLUME_NEW_SIZE)
+            pytest.volume.spec.uuid, ResizeVolumeBody(VOLUME_NEW_SIZE)
         )
         pytest.exception = None
     except openapi.exceptions.ApiException as err:
@@ -379,10 +444,28 @@ def we_issue_a_volume_shrink_request():
         Volume.cleanup(volume)
 
 
+@when("we take a snapshot of expanded volume")
+def we_take_a_snapshot_of_expanded_volume():
+    """we take a snapshot of expanded volume."""
+    test_volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
+    create_volume_snapshot(test_volume, SNAP_UUID_1)
+    yield
+    Snapshot.cleanup(SNAP_UUID_1)
+
+
+@then("we take a snapshot of expanded volume again")
+def we_take_a_snapshot_of_expanded_volume_again():
+    """we take a snapshot of expanded volume again."""
+    test_volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
+    create_volume_snapshot(test_volume, SNAP_UUID_2)
+    yield
+    Snapshot.cleanup(SNAP_UUID_2)
+
+
 @then("all the replicas of the volume should be resized to the new capacity")
 def all_the_replicas_of_the_volume_should_be_resized_to_the_new_capacity():
     """all the replicas of the volume should be resized to the new capacity."""
-    volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
+    volume = ApiClient.volumes_api().get_volume(pytest.volume.spec.uuid)
     replicas = volume.state.replica_topology
     for replica_uuid in replicas:
         replica = ApiClient.replicas_api().get_replica(replica_uuid)
@@ -407,12 +490,11 @@ def the_failure_reason_should_be_volumeinuse_precondition():
 @then("the new capacity should be available for the application to use")
 def the_new_capacity_should_be_available_for_the_application_to_use():
     """the new capacity should be available for the application to use."""
-    volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
+    volume = ApiClient.volumes_api().get_volume(pytest.volume.spec.uuid)
     assert volume.state.target["size"] == VOLUME_NEW_SIZE
     # Run IO across expanded volume capacity
     uri = urlparse(volume.state.target["deviceUri"])
     fio = Fio(name="fio-post-resize", rw="write", uri=uri, size=VOLUME_NEW_SIZE)
-
     try:
         code = fio.run().returncode
         assert code == 0, "Fio is expected to execute successfully"
@@ -440,6 +522,18 @@ def the_onlined_replica_should_be_rebuilt():
 def the_request_should_succeed():
     """the request should succeed."""
     assert pytest.exception is None
+
+
+@then("the snapshot should be successfully created")
+def the_snapshot_should_be_successfully_created():
+    """the snapshot should be successfully created."""
+    test_volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
+    snapshots = ApiClient.snapshots_api().get_volumes_snapshots(
+        volume_id=test_volume.spec.uuid, max_entries=0
+    )
+    assert len(snapshots.entries) == 1
+    assert snapshots.entries[0].state.uuid == SNAP_UUID_1
+    assert snapshots.entries[0].state.source_volume == VOLUME_UUID
 
 
 @then("the volume expand status should be failure")
