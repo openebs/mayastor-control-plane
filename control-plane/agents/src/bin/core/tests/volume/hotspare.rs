@@ -23,7 +23,6 @@ use stor_port::{
 async fn hotspare() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
         .with_io_engines(3)
         .with_pools(2)
         .with_cache_period("1s")

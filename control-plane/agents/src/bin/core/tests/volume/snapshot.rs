@@ -22,7 +22,6 @@ use stor_port::{
 async fn snapshot() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
         .with_io_engines(1)
         .with_pools(1)
         .with_cache_period("1s")
@@ -298,7 +297,6 @@ async fn snapshot_timeout() {
 
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
         .with_io_engines(2)
         .with_tmpfs_pool_ix(1, 100 * 1024 * 1024)
         .with_cache_period("10s")
@@ -426,7 +424,6 @@ async fn snapshot_timeout() {
 async fn unknown_snapshot_garbage_collector() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
-        .with_agents(vec!["core"])
         .with_io_engines(1)
         .with_pools(1)
         .with_cache_period("50ms")
@@ -595,7 +592,6 @@ async fn snapshot_upgrade() {
     let gc_period = Duration::from_millis(200);
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
         .with_tmpfs_pool_ix(0, 100 * mb)
         .with_tmpfs_pool_ix(1, 100 * mb)
         .with_cache_period("200ms")
@@ -720,7 +716,6 @@ async fn nr_snapshot() {
     let gb = kb * 1024;
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
         .with_io_engines(3)
         .with_csi(true, true)
         .with_tmpfs_pool_ix(1, gb)

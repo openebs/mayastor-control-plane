@@ -10,7 +10,6 @@ use stor_port::{
 async fn snapshot_clone() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
         .with_io_engines(1)
         .with_pools(1)
         .with_cache_period("1s")

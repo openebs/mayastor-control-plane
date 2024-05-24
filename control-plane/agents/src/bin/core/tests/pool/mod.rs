@@ -34,7 +34,6 @@ use stor_port::{
 async fn pool() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
-        .with_agents(vec!["core"])
         .build()
         .await
         .unwrap();
@@ -292,7 +291,6 @@ async fn replica_transaction() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
         .with_pools(1)
-        .with_agents(vec!["core"])
         .with_req_timeouts(Duration::from_millis(250), Duration::from_millis(500))
         .with_grpc_timeouts(grpc_timeout_opts())
         .build()
@@ -485,7 +483,6 @@ async fn replica_transaction_store() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
         .with_pools(1)
-        .with_agents(vec!["core"])
         .with_req_timeouts(grpc_timeout, grpc_timeout)
         .with_reconcile_period(reconcile_period, reconcile_period)
         .with_store_timeout(store_timeout)
@@ -549,7 +546,6 @@ async fn reconciler_missing_pool_state() {
 
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
         .with_io_engines(1)
         .with_pool(0, disk.uri())
         .with_cache_period("1s")
@@ -674,7 +670,6 @@ async fn reconciler_deleting_pool_on_node_down() {
 
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
         .with_io_engines(2)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
@@ -774,7 +769,6 @@ async fn reconciler_deleting_dirty_pool() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
         .with_pools(1)
-        .with_agents(vec!["core"])
         .with_req_timeouts(req_timeout, req_timeout)
         .with_reconcile_period(reconcile_period, reconcile_period)
         .with_store_timeout(store_timeout)
@@ -853,7 +847,6 @@ async fn disown_unused_replicas() {
     let reconcile_period = Duration::from_millis(200);
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
         .with_io_engines(1)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
         .with_cache_period("1s")
@@ -920,7 +913,6 @@ async fn disown_unused_replicas() {
 async fn test_disown_missing_replica_owners() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
         .with_io_engines(1)
         .with_pools(1)
         .with_cache_period("1s")

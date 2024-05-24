@@ -21,7 +21,6 @@ use stor_port::types::v0::transport::{DeregisterAppNode, Filter, RegisterAppNode
 async fn app_node_registration() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
-        .with_agents(vec!["core"])
         .build()
         .await
         .unwrap();
