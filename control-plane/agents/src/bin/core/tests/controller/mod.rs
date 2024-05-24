@@ -20,7 +20,7 @@ async fn bootstrap_registry() {
         .with_rest(true)
         .with_pools(1)
         .with_replicas(1, size, transport::Protocol::None)
-        .with_agents(vec!["core"])
+        // .with_agents(vec!["core"])
         .build()
         .await
         .unwrap();
@@ -77,7 +77,7 @@ async fn store_lease_lock() {
         .with_rest(false)
         .with_jaeger(false)
         .with_io_engines(0)
-        .with_agents(vec![])
+        //  .with_agents(vec![])
         .build()
         .await
         .unwrap();
@@ -130,7 +130,7 @@ async fn core_agent_lease_lock() {
     let lease_ttl_wait = lease_ttl + std::time::Duration::from_secs(1);
     let cluster = ClusterBuilder::builder()
         .with_io_engines(1)
-        .with_agents(vec!["core"])
+        // .with_agents(vec!["core"])
         .with_store_lease_ttl(lease_ttl)
         .build()
         .await

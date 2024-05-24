@@ -26,7 +26,7 @@ async fn garbage_collection() {
     let reconcile_period = Duration::from_millis(500);
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
+        // .with_agents(vec!["core"])
         .with_io_engines(3)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
         .with_cache_period("1s")
@@ -506,7 +506,7 @@ const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
 async fn volume_nexus_reconcile() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
+        // .with_agents(vec!["core"])
         .with_io_engines(2)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
         .with_cache_period("1s")
@@ -530,7 +530,7 @@ async fn duplicate_nexus_missing_children() {
     let reconcile_period = Duration::from_millis(100);
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
+        //   .with_agents(vec!["core"])
         .with_io_engines(2)
         .with_pool(1, "malloc:///d?size_mb=100")
         .with_cache_period("100ms")

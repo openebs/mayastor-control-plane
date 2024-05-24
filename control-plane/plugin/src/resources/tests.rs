@@ -16,7 +16,7 @@ const VOLUME_UUID: &str = "1e3cf927-80c2-47a8-adf0-95c486bdd7b7";
 async fn setup() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
+        // .with_agents(vec!["core"])
         .with_io_engines(1)
         .with_pools(1)
         .build()

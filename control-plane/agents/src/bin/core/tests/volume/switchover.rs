@@ -31,7 +31,7 @@ async fn old_nexus_delete_after_vol_destroy() {
     let reconcile_period = Duration::from_millis(200);
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
+        //  .with_agents(vec!["core"])
         .with_io_engines(3)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
         .with_cache_period("100ms")
@@ -204,7 +204,7 @@ async fn lazy_delete_shutdown_targets() {
     const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
+        // .with_agents(vec!["core"])
         .with_io_engines(2)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
         .with_cache_period("1s")
@@ -333,7 +333,7 @@ const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
 async fn volume_republish_nexus_recreation() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
-        .with_agents(vec!["core"])
+        //  .with_agents(vec!["core"])
         .with_io_engines(2)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
         .build()
@@ -455,7 +455,7 @@ async fn pool_recreated(cluster: &Cluster, max_tries: i32) -> bool {
 #[tokio::test]
 async fn node_exhaustion() {
     let cluster = ClusterBuilder::builder()
-        .with_agents(vec!["core"])
+        //   .with_agents(vec!["core"])
         .with_io_engines(3)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
         .build()

@@ -42,7 +42,7 @@ use tokio::time::sleep;
 async fn volume() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
+        // .with_agents(vec!["core"])
         .with_io_engines(3)
         .with_tmpfs_pool(100 * 1024 * 1024)
         .with_cache_period("1s")
@@ -852,7 +852,7 @@ const VOLUME_2: &str = "359b7e1a-b724-443b-98b4-e6d97fabbb41";
 async fn volume_publish_target_decoupled() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
+        //  .with_agents(vec!["core"])
         .with_io_engines(2)
         .with_pools(2)
         .with_cache_period("1s")

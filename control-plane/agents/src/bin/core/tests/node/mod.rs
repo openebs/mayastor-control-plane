@@ -38,7 +38,7 @@ async fn node() {
 
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
-        .with_agents(vec!["core"])
+        //    .with_agents(vec!["core"])
         .with_node_deadline("2s")
         .with_req_timeouts(rpc_timeout.connect_timeout(), rpc_timeout.base_timeout())
         .build()
@@ -136,7 +136,7 @@ async fn large_cluster() {
     let expected_nodes = 2;
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
-        .with_agents(vec!["core"])
+        //   .with_agents(vec!["core"])
         .with_io_engines(expected_nodes as u32)
         .with_node_deadline("2s")
         .build()

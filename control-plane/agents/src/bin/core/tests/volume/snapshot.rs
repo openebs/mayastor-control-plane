@@ -18,7 +18,7 @@ use stor_port::{
 async fn snapshot() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
+        //   .with_agents(vec!["core"])
         .with_io_engines(1)
         .with_pools(1)
         .with_cache_period("1s")
@@ -294,7 +294,7 @@ async fn snapshot_timeout() {
 
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
+        //  .with_agents(vec!["core"])
         .with_io_engines(2)
         .with_tmpfs_pool_ix(1, 100 * 1024 * 1024)
         .with_cache_period("10s")
@@ -422,7 +422,7 @@ async fn snapshot_timeout() {
 async fn unknown_snapshot_garbage_collector() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
-        .with_agents(vec!["core"])
+        //  .with_agents(vec!["core"])
         .with_io_engines(1)
         .with_pools(1)
         .with_cache_period("50ms")

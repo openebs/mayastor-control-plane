@@ -58,7 +58,7 @@ async fn validate_resized_volume(
 async fn resize_unpublished_and_published() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
-        .with_agents(vec!["core"])
+        //   .with_agents(vec!["core"])
         .with_io_engines(3)
         .with_pool(0, "malloc:///p1?size_mb=200")
         .with_pool(1, "malloc:///p1?size_mb=200")
@@ -188,7 +188,7 @@ async fn resize_published(cluster: &Cluster) {
 async fn resize_on_no_capacity_pool() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
-        .with_agents(vec!["core"])
+        //   .with_agents(vec!["core"])
         .with_io_engines(3)
         .with_pool(0, "malloc:///p1?size_mb=200")
         .with_pool(1, "malloc:///p1?size_mb=200")
@@ -266,7 +266,7 @@ async fn resize_on_no_capacity_pool() {
 async fn resize_with_cluster_capacity_limit() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
-        .with_agents(vec!["core"])
+        //   .with_agents(vec!["core"])
         .with_io_engines(2)
         .with_pool(0, "malloc:///p1?size_mb=200")
         .with_pool(1, "malloc:///p1?size_mb=200")
@@ -323,7 +323,7 @@ async fn resize_with_cluster_capacity_limit() {
 async fn resize_with_cluster_capacity_limit_concurrent() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
-        .with_agents(vec!["core"])
+        // .with_agents(vec!["core"])
         .with_io_engines(2)
         .with_pool(0, "malloc:///p1?size_mb=600")
         .with_cache_period("1s")
@@ -483,7 +483,7 @@ async fn resize_replica_space_reclaim() {
     let vol_uuid = Uuid::new_v4();
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
-        .with_agents(vec!["core"])
+        //  .with_agents(vec!["core"])
         .with_io_engines(2)
         .with_pool(0, "malloc:///p1?size_mb=200")
         .with_pool(1, "malloc:///p1?size_mb=200")
