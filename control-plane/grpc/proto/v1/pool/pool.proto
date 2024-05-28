@@ -84,6 +84,7 @@ message GetPoolsRequest {
     common.NodeFilter node = 1;
     common.PoolFilter pool = 2;
     common.NodePoolFilter node_pool = 3;
+    common.CommonFilter common = 4;
   }
 }
 

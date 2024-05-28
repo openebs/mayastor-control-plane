@@ -1,5 +1,5 @@
 use crate::{
-    common::{NodeFilter, NodePoolFilter, PoolFilter},
+    common::{CommonFilter, NodeFilter, NodePoolFilter, PoolFilter},
     context::{Client, Context, TracedChannel},
     operations::pool::traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},
     pool::{
@@ -86,6 +86,11 @@ impl PoolOperations for PoolClient {
                 filter: Some(get_pools_request::Filter::NodePool(NodePoolFilter {
                     node_id: node_id.into(),
                     pool_id: pool_id.into(),
+                })),
+            },
+            Filter::Volume(volume_id) => GetPoolsRequest {
+                filter: Some(get_pools_request::Filter::Common(CommonFilter {
+                    volume_id: volume_id.into(),
                 })),
             },
             _ => GetPoolsRequest { filter: None },

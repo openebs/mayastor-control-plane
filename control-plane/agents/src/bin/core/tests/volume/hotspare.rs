@@ -267,7 +267,12 @@ async fn hotspare_replica_count_spread(cluster: &Cluster) {
         nodes.len() >= 3,
         "We need enough nodes to be able to add at least 2 replicas"
     );
-    let pools = cluster.rest_v00().pools_api().get_pools().await.unwrap();
+    let pools = cluster
+        .rest_v00()
+        .pools_api()
+        .get_pools(None)
+        .await
+        .unwrap();
     assert!(
         pools.len() >= nodes.len() * 2,
         "We need at least 2 pools per node to be able to test the failure case"

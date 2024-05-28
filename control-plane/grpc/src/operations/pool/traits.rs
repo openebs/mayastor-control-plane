@@ -1,6 +1,7 @@
 use crate::{
     common,
     context::Context,
+    misc::traits::StringValue,
     pool,
     pool::{get_pools_request, CreatePoolRequest, DestroyPoolRequest},
 };
@@ -12,7 +13,7 @@ use stor_port::{
         transport,
         transport::{
             CreatePool, CtrlPoolState, DestroyPool, Filter, NodeId, Pool, PoolDeviceUri, PoolId,
-            PoolState,
+            PoolState, VolumeId,
         },
     },
     IntoOption,
@@ -202,9 +203,13 @@ impl From<Pools> for pool::Pools {
     }
 }
 
-impl From<get_pools_request::Filter> for Filter {
-    fn from(filter: get_pools_request::Filter) -> Self {
-        match filter {
+impl TryFrom<get_pools_request::Filter> for Filter {
+    type Error = ReplyError;
+    fn try_from(filter: get_pools_request::Filter) -> Result<Self, Self::Error> {
+        Ok(match filter {
+            get_pools_request::Filter::Common(common_filter) => Filter::Volume(VolumeId::try_from(
+                StringValue(Some(common_filter.volume_id)),
+            )?),
             get_pools_request::Filter::Node(node_filter) => {
                 Filter::Node(node_filter.node_id.into())
             }
@@ -215,7 +220,7 @@ impl From<get_pools_request::Filter> for Filter {
             get_pools_request::Filter::Pool(pool_filter) => {
                 Filter::Pool(pool_filter.pool_id.into())
             }
-        }
+        })
     }
 }
 

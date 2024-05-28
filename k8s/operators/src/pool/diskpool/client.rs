@@ -77,7 +77,7 @@ pub(crate) async fn create_missing_cr(
     control_client: clients::tower::ApiClient,
     namespace: &str,
 ) -> Result<(), Error> {
-    if let Ok(pools) = control_client.pools_api().get_pools().await {
+    if let Ok(pools) = control_client.pools_api().get_pools(None).await {
         let pools_api: Api<DiskPool> = v1beta2_api(k8s, namespace);
         let param = PostParams::default();
         for pool in pools.into_body().iter_mut() {

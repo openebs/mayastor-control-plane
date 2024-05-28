@@ -27,7 +27,7 @@ use stor_port::{
         store::{pool::PoolSpec, replica::ReplicaSpec},
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas,
-            NodeId, Pool, PoolId, Replica, ResizeReplica, ShareReplica, UnshareReplica,
+            NodeId, Pool, PoolId, Replica, ResizeReplica, ShareReplica, UnshareReplica, VolumeId,
         },
     },
 };
@@ -160,8 +160,18 @@ impl Service {
                 tracing::Span::current().record("pool.id", pool_id.as_str());
                 self.node_pools(None, Some(pool_id)).await
             }
+            Filter::Volume(volume_id) => self.volume_pools(Some(volume_id)).await,
             _ => Err(SvcError::InvalidFilter { filter }),
         }
+    }
+
+    /// Get pools associated with the volume.
+    async fn volume_pools(&self, volume_id: Option<VolumeId>) -> Result<Pools, SvcError> {
+        let pools = match volume_id {
+            Some(vid) => self.registry.get_volume_opts_pools(vid).await?,
+            None => self.registry.get_node_opt_pools(None).await?,
+        };
+        Ok(Pools(pools))
     }
 
     /// Get pools from nodes.

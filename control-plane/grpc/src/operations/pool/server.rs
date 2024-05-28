@@ -8,6 +8,8 @@ use crate::{
         GetPoolsRequest,
     },
 };
+use stor_port::types::v0::transport::Filter;
+
 use std::sync::Arc;
 use tonic::{Request, Response};
 
@@ -64,7 +66,19 @@ impl PoolGrpc for PoolServer {
         request: Request<GetPoolsRequest>,
     ) -> Result<tonic::Response<pool::GetPoolsReply>, tonic::Status> {
         let req: GetPoolsRequest = request.into_inner();
-        let filter = req.filter.map(Into::into).unwrap_or_default();
+
+        let filter = match req.filter {
+            Some(filter) => match Filter::try_from(filter) {
+                Ok(filter) => filter,
+                Err(err) => {
+                    return Ok(Response::new(GetPoolsReply {
+                        reply: Some(get_pools_reply::Reply::Error(err.into())),
+                    }))
+                }
+            },
+            None => Filter::None,
+        };
+
         match self.service.get(filter, None).await {
             Ok(pools) => Ok(Response::new(GetPoolsReply {
                 reply: Some(get_pools_reply::Reply::Pools(pools.into())),
