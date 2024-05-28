@@ -88,6 +88,8 @@ pub(crate) struct RegistryInner<S: Store> {
     faulted_child_wait_period: Option<std::time::Duration>,
     /// Disable partial rebuild for volume targets.
     disable_partial_rebuild: bool,
+    /// Disable nvmf target access control gates.
+    disable_target_acc: bool,
     reconciler: ReconcilerControl,
     config: parking_lot::RwLock<CoreRegistryConfig>,
     /// system-wide maximum number of concurrent rebuilds allowed.
@@ -121,6 +123,7 @@ impl Registry {
         reconcile_idle_period: std::time::Duration,
         faulted_child_wait_period: Option<std::time::Duration>,
         disable_partial_rebuild: bool,
+        disable_target_acc: bool,
         max_rebuilds: Option<NumRebuilds>,
         create_volume_limit: usize,
         host_acl: Vec<HostAccessControl>,
@@ -163,6 +166,7 @@ impl Registry {
                 reconcile_idle_period,
                 faulted_child_wait_period,
                 disable_partial_rebuild,
+                disable_target_acc,
                 reconciler: ReconcilerControl::new(),
                 config: parking_lot::RwLock::new(
                     Self::get_config(&mut store, legacy_prefix_present)
@@ -213,6 +217,11 @@ impl Registry {
     /// Check if the partial rebuilds are disabled.
     pub(crate) fn partial_rebuild_disabled(&self) -> bool {
         self.disable_partial_rebuild
+    }
+
+    /// Check if the target acc is disabled.
+    pub(crate) fn target_acc_disabled(&self) -> bool {
+        self.disable_target_acc
     }
 
     /// Formats the store endpoint with a default port if one isn't supplied.
