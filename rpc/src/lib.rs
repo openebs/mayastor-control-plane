@@ -12,7 +12,13 @@ extern crate tonic;
 #[allow(clippy::upper_case_acronyms)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 pub mod io_engine {
-    use std::{future::Future, net::SocketAddr, str::FromStr, time::Duration};
+    use std::{
+        future::Future,
+        net::SocketAddr,
+        ops::{Deref, DerefMut},
+        str::FromStr,
+        time::Duration,
+    };
     use strum_macros::{Display, EnumString};
     use tonic::{transport::Channel, Status};
 
@@ -100,7 +106,7 @@ pub mod io_engine {
         }
     }
 
-    /// A versioned IoEngine client
+    /// A versioned IoEngine client.
     #[derive(Clone)]
     enum IoEngineClient {
         V0(IoEngineClientV0<Channel>),
@@ -116,16 +122,16 @@ pub mod io_engine {
         io_engine: IoEngineClient,
     }
 
-    trait Rpc: RpcHealth + RpcNexus + RpcReplica + RpcTest + RpcSnapshot + Send {}
+    pub trait Rpc: RpcHealth + RpcNexus + RpcReplica + RpcTest + RpcSnapshot + Send {}
     impl Rpc for IoEngineClientV0<Channel> {}
     impl Rpc for IoEngineClientV1<Channel> {}
     #[tonic::async_trait]
-    trait RpcHealth {
+    pub trait RpcHealth {
         /// Ping the Io Engine for responsiveness.
         async fn ping(&mut self) -> Result<(), tonic::Status>;
     }
     #[tonic::async_trait]
-    trait RpcNexus {
+    pub trait RpcNexus {
         /// List all Nexuses.
         async fn list_nexuses(&mut self) -> Result<String, tonic::Status>;
         /// Fault a Nexus Child.
@@ -145,7 +151,7 @@ pub mod io_engine {
         async fn resume_rebuild(&mut self, uuid: &str, uri: &str) -> Result<(), tonic::Status>;
     }
     #[tonic::async_trait]
-    trait RpcReplica {
+    pub trait RpcReplica {
         /// Share a pool replica.
         async fn share(
             &mut self,
@@ -154,7 +160,7 @@ pub mod io_engine {
         ) -> Result<String, tonic::Status>;
     }
     #[tonic::async_trait]
-    trait RpcSnapshot {
+    pub trait RpcSnapshot {
         /// Create a nexus snapshot.
         async fn create_nexus_snap(
             &mut self,
@@ -188,7 +194,7 @@ pub mod io_engine {
         }
     }
     #[tonic::async_trait]
-    trait RpcTest {
+    pub trait RpcTest {
         /// Ping the Io Engine for responsiveness.
         async fn checksum(&mut self, replica: &str) -> Result<u32, tonic::Status>;
     }
@@ -477,47 +483,26 @@ pub mod io_engine {
         }
     }
 
-    impl RpcHandle {
-        /// `Self` as an instance of `Rpc`.
-        fn as_rpc(&mut self) -> &mut dyn Rpc {
+    impl Deref for RpcHandle {
+        type Target = dyn Rpc;
+
+        fn deref(&self) -> &Self::Target {
+            match &self.io_engine {
+                IoEngineClient::V0(cli) => cli,
+                IoEngineClient::V1(cli) => cli,
+            }
+        }
+    }
+    impl DerefMut for RpcHandle {
+        fn deref_mut(&mut self) -> &mut Self::Target {
             match &mut self.io_engine {
                 IoEngineClient::V0(cli) => cli,
                 IoEngineClient::V1(cli) => cli,
             }
         }
-        /// Ping the Io Engine for responsiveness.
-        pub async fn ping(&mut self) -> Result<(), tonic::Status> {
-            self.as_rpc().ping().await
-        }
-        /// Pause a Rebuild.
-        pub async fn pause_rebuild(&mut self, uuid: &str, uri: &str) -> Result<(), tonic::Status> {
-            self.as_rpc().pause_rebuild(uuid, uri).await
-        }
-        /// Resume a Rebuild.
-        pub async fn resume_rebuild(&mut self, uuid: &str, uri: &str) -> Result<(), tonic::Status> {
-            self.as_rpc().resume_rebuild(uuid, uri).await
-        }
-        /// List all Nexuses.
-        pub async fn list_nexuses(&mut self) -> Result<String, tonic::Status> {
-            self.as_rpc().list_nexuses().await
-        }
-        /// Fault a Nexus Child.
-        pub async fn fault_child(&mut self, uuid: &str, uri: &str) -> Result<(), tonic::Status> {
-            self.as_rpc().fault_child(uuid, uri).await
-        }
-        /// Add a Nexus Child.
-        pub async fn add_child(
-            &mut self,
-            uuid: &str,
-            uri: &str,
-            norebuild: bool,
-        ) -> Result<String, tonic::Status> {
-            self.as_rpc().add_child(uuid, uri, norebuild).await
-        }
-        /// Remove a Nexus Child.
-        pub async fn remove_child(&mut self, uuid: &str, uri: &str) -> Result<(), tonic::Status> {
-            self.as_rpc().remove_child(uuid, uri).await
-        }
+    }
+
+    impl RpcHandle {
         /// Share a pool replica.
         pub async fn share_replica<T: AsRef<str>>(
             &mut self,
@@ -525,64 +510,7 @@ pub mod io_engine {
             allowed_hosts: Vec<T>,
         ) -> Result<String, tonic::Status> {
             let allowed_hosts = allowed_hosts.iter().map(AsRef::as_ref).collect();
-            self.as_rpc().share(uuid, allowed_hosts).await
-        }
-
-        /// Create a nexus snapshot.
-        pub async fn create_nexus_snap(
-            &mut self,
-            nexus_uuid: &str,
-            snapshot_name: &str,
-            entity_id: &str,
-            txn_id: &str,
-            replica_uuid: &str,
-            snapshot_uuid: &str,
-        ) -> Result<NexusCreateSnapshotResponse, tonic::Status> {
-            self.as_rpc()
-                .create_nexus_snap(
-                    nexus_uuid,
-                    snapshot_name,
-                    entity_id,
-                    txn_id,
-                    replica_uuid,
-                    snapshot_uuid,
-                )
-                .await
-        }
-
-        /// Create a replica snapshot.
-        pub async fn create_replica_snap(
-            &mut self,
-            snapshot_name: &str,
-            entity_id: &str,
-            txn_id: &str,
-            replica_uuid: &str,
-            snapshot_uuid: &str,
-        ) -> Result<CreateReplicaSnapshotResponse, tonic::Status> {
-            self.as_rpc()
-                .create_replica_snap(
-                    snapshot_name,
-                    entity_id,
-                    txn_id,
-                    replica_uuid,
-                    snapshot_uuid,
-                )
-                .await
-        }
-
-        /// List replica snapshots.
-        pub async fn list_replica_snaps(
-            &mut self,
-            source_uuid: Option<&str>,
-            snapshot_uuid: Option<&str>,
-        ) -> Result<ListSnapshotsResponse, tonic::Status> {
-            self.as_rpc()
-                .list_replica_snaps(source_uuid, snapshot_uuid)
-                .await
-        }
-        /// Get the replica's crc32 checksum.
-        pub async fn checksum(&mut self, replica: &str) -> Result<u32, tonic::Status> {
-            self.as_rpc().checksum(replica).await
+            self.share(uuid, allowed_hosts).await
         }
 
         /// Connect to the container and return a handle to `Self`
