@@ -1,16 +1,20 @@
 use crate::volume::helpers::wait_node_online;
-use deployer_cluster::{Cluster, ClusterBuilder};
+use deployer_cluster::{Cluster, ClusterBuilder, FindVolumeRequest};
 use grpc::operations::{
     pool::traits::PoolOperations,
     replica::traits::ReplicaOperations,
     volume::traits::{CreateVolumeSnapshot, DestroyVolumeSnapshot, VolumeOperations},
 };
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 use stor_port::{
     transport_api::{ReplyErrorKind, TimeoutOptions},
-    types::v0::transport::{
-        CreateReplica, CreateVolume, DestroyPool, DestroyReplica, DestroyVolume, Filter,
-        PublishVolume, ReplicaId, SnapshotId, Volume,
+    types::v0::{
+        openapi::models,
+        transport::{
+            CreateReplica, CreateVolume, DestroyPool, DestroyReplica, DestroyVolume, Filter,
+            PublishVolume, ReplicaId, SetVolumeReplica, SnapshotId, Volume, VolumeShareProtocol,
+            VolumeStatus,
+        },
     },
 };
 
@@ -464,6 +468,7 @@ async fn unknown_snapshot_garbage_collector() {
         .publish(
             &PublishVolume {
                 uuid: volume.uuid().clone(),
+                target_node: Some(cluster.node(0)),
                 ..Default::default()
             },
             None,
@@ -582,4 +587,222 @@ async fn unknown_snapshot_garbage_collector() {
         .await
         .expect("Should get replica snaps");
     assert_eq!(snaps.snapshots.len(), 3);
+}
+
+#[tokio::test]
+#[ignore]
+async fn nr_snapshot() {
+    let kb = 1024 * 1024;
+    let gb = kb * 1024;
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_io_engines(3)
+        .with_csi(true, true)
+        .with_tmpfs_pool_ix(1, gb)
+        .with_tmpfs_pool_ix(2, gb)
+        .with_cache_period("1s")
+        .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
+        .with_options(|b| {
+            b.with_isolated_io_engine(true)
+                .with_agents_env("DISABLE_TARGET_ACC", "true")
+        })
+        .build()
+        .await
+        .unwrap();
+
+    let vol_cli = cluster.grpc_client().volume();
+
+    let volume = vol_cli
+        .create(
+            &CreateVolume {
+                uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
+                size: 100 * kb,
+                replicas: 1,
+                thin: false,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert!(!volume.spec().thin);
+    assert!(!volume.spec().as_thin(), "Volume should not be thin!");
+
+    let volume = vol_cli
+        .publish(
+            &PublishVolume {
+                uuid: volume.uuid().clone(),
+                share: Some(VolumeShareProtocol::Nvmf),
+                target_node: Some(cluster.node(0)),
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let api = cluster.rest_v00();
+    let rest_cli = api.volumes_api();
+    let volume_grpc = volume;
+    let volume = rest_cli.get_volume(volume_grpc.uuid()).await.unwrap();
+
+    tracing::info!("Taking Snapshot");
+    let snapshot = vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume_grpc.uuid(), SnapshotId::new()),
+            None,
+        )
+        .await
+        .unwrap();
+    tracing::info!("Done");
+
+    let (s, r) = tokio::sync::oneshot::channel::<()>();
+    let task = run_fio_vol(&cluster, volume.clone(), r).await;
+    drop(s);
+
+    tracing::info!("Setting Replica Count");
+    vol_cli
+        .set_replica(
+            &SetVolumeReplica {
+                uuid: volume_grpc.uuid().clone(),
+                replicas: 2,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    task.await.ok();
+    tracing::info!("FIO COMPLETE");
+
+    let volumes = loop {
+        let volumes = vol_cli
+            .get(
+                Filter::Volume(volume_grpc.uuid().clone()),
+                false,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        let volume = &volumes.entries[0];
+        if volume.state().status == VolumeStatus::Online {
+            break volumes;
+        }
+
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    };
+
+    let volume = &volumes.entries[0];
+
+    tracing::info!("Volume Status: {}", volume.state().status);
+
+    let mut cksums = vec![];
+
+    let mut r1 = ReplicaId::new();
+    let mut r2 = ReplicaId::new();
+    for (id, topology) in volume.state().replica_topology {
+        let node_id = topology.node().as_ref().unwrap();
+
+        if node_id == &cluster.node(1) {
+            r1 = id.clone();
+        } else if node_id == &cluster.node(2) {
+            r2 = id.clone();
+        }
+
+        let mut node = cluster.grpc_handle(node_id.as_str()).await.unwrap();
+        let cksum = node.checksum(id.as_str()).await.unwrap();
+        cksums.push(cksum);
+    }
+    tracing::info!(
+        "\nsudo nvme connect -t tcp -s 8420 -a 10.1.0.7 -n nqn.2019-05.io.openebs:{r1}; \
+    sudo nvme connect -t tcp -s 8420 -a 10.1.0.8 -n nqn.2019-05.io.openebs:{r2}"
+    );
+
+    tracing::info!("CheckSums: {cksums:#?}");
+    assert_eq!(cksums.len(), 2, "Expected 2 replicas");
+    assert_eq!(cksums[0], cksums[1], "CheckSum Mismatch!! {:?}", cksums);
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    let snap_cli = api.snapshots_api();
+    snap_cli
+        .del_volume_snapshot(volume_grpc.uuid(), snapshot.state().uuid())
+        .await
+        .unwrap();
+    let v_api = api.volumes_api();
+    v_api.del_volume(volume_grpc.uuid()).await.unwrap();
+}
+
+async fn run_fio_vol(
+    cluster: &Cluster,
+    volume: models::Volume,
+    stop: tokio::sync::oneshot::Receiver<()>,
+) -> tokio::task::JoinHandle<Option<i64>> {
+    run_fio_vol_verify(cluster, volume, stop).await
+}
+async fn run_fio_vol_verify(
+    cluster: &Cluster,
+    volume: models::Volume,
+    mut stop: tokio::sync::oneshot::Receiver<()>,
+) -> tokio::task::JoinHandle<Option<i64>> {
+    let fio_builder = |device: &str| {
+        let filename = format!("--filename={device}");
+        vec![
+            "fio",
+            "--direct=1",
+            "--ioengine=libaio",
+            "--bs=4k",
+            "--iodepth=16",
+            "--loops=1",
+            "--numjobs=1",
+            "--name=fio",
+            "--readwrite=randwrite",
+            filename.as_str(),
+        ]
+        .into_iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+    };
+
+    let mut node = cluster.csi_node_client(0).await.unwrap();
+    node.node_stage_volume(&volume, HashMap::new())
+        .await
+        .unwrap();
+
+    let response = node
+        .internal()
+        .find_volume(FindVolumeRequest {
+            volume_id: volume.spec.uuid.to_string(),
+        })
+        .await
+        .unwrap();
+
+    let device_path = response.into_inner().device_path;
+    let device_path = device_path.trim_end();
+    let fio_cmd = fio_builder(device_path);
+    let fio_cmdline = fio_cmd
+        .iter()
+        .fold(String::new(), |acc, next| format!("{acc} {next}"));
+    let composer = cluster.composer().clone();
+
+    tokio::spawn(async move {
+        use tokio::sync::oneshot::error::TryRecvError;
+        let code = loop {
+            let (code, out) = composer.exec("csi-node-1", fio_cmd.clone()).await.unwrap();
+            tracing::info!("{}: {}, code: {:?}", fio_cmdline, out, code);
+            if code != Some(0) {
+                return code;
+            }
+            assert_eq!(code, Some(0));
+
+            if stop.try_recv().is_ok() || matches!(stop.try_recv(), Err(TryRecvError::Closed)) {
+                break code;
+            }
+        };
+
+        node.node_unstage_volume(&volume).await.unwrap();
+        code
+    })
 }

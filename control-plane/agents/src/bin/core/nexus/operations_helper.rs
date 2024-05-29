@@ -160,7 +160,11 @@ impl OperationGuardArc<NexusSpec> {
             }
         } else {
             // on a different node, so connect via an nvmf target
-            let allowed_hosts = registry.node_nqn(nexus_node).await?;
+            let allowed_hosts = if registry.target_acc_disabled() {
+                vec![]
+            } else {
+                registry.node_nqn(nexus_node).await?
+            };
             let request = ShareReplica::from(replica_state).with_hosts(allowed_hosts);
             match replica.share(registry, &request).await {
                 Ok(uri) => Ok(ChildUri::from(uri)),

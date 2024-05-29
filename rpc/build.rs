@@ -58,6 +58,7 @@ fn main() {
                 "protobuf/v1/snapshot.proto",
                 "protobuf/v1/snapshot-rebuild.proto",
                 "protobuf/v1/stats.proto",
+                "protobuf/v1/test.proto",
             ]
             .prefixed(io_api),
             &["protobuf/v1"].prefixed(io_api),

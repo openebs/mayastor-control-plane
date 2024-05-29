@@ -75,16 +75,22 @@ impl OperationGuardArc<VolumeSpec> {
                 }
             }
         };
+        let disable_acc = registry.target_acc_disabled();
         let host_acl = registry.host_acl_nodename(HostAccessControl::Nexuses, frontend_nodes);
         let frontend = FrontendConfig::from_acls(host_acl);
+        let mut config = NexusNvmfConfig::new(
+            range,
+            resv_key,
+            NvmeReservation::ExclusiveAccess,
+            NexusNvmePreemption::Holder,
+        );
+        if disable_acc {
+            config = config.with_no_resv();
+        }
+
         TargetConfig::new(
             VolumeTarget::new(node.clone(), nexus, *share),
-            NexusNvmfConfig::new(
-                range,
-                resv_key,
-                NvmeReservation::ExclusiveAccess,
-                NexusNvmePreemption::Holder,
-            ),
+            config,
             frontend,
         )
     }

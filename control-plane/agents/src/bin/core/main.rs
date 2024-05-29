@@ -51,6 +51,11 @@ pub(crate) struct CliArgs {
     #[clap(long, env = "DISABLE_PARTIAL_REBUILD")]
     pub(crate) disable_partial_rebuild: bool,
 
+    /// Disable the access control which is used to gate access to the replicas and nexuses,
+    /// namely the reservations and allow hosts.
+    #[clap(long, env = "DISABLE_TARGET_ACC")]
+    pub(crate) disable_target_acc: bool,
+
     /// Deadline for the io-engine instance keep alive registration.
     #[clap(long, short, default_value = "10s")]
     pub(crate) deadline: humantime::Duration,
@@ -190,6 +195,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         cli_args.reconcile_idle_period.into(),
         cli_args.faulted_child_wait_period.map(|t| t.into()),
         cli_args.disable_partial_rebuild,
+        cli_args.disable_target_acc,
         cli_args.max_rebuilds,
         cli_args.create_volume_limit,
         if cli_args.hosts_acl.contains(&HostAccessControl::None) {
