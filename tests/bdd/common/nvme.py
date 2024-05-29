@@ -81,12 +81,17 @@ def nvme_connect(uri):
         )
     except subprocess.CalledProcessError as e:
         # todo: handle this better!
-        if e.stderr == "already connected\n":
+        if "already connected\n" in e.stderr or "already connnected\n" in e.stderr:
             pass
         else:
             raise e
 
-    return wait_nvme_find_device(uri)
+    try:
+        return wait_nvme_find_device(uri)
+    except Exception as e:
+        print(f"Failed to wait for connected device {uri}, disconnecting...")
+        nvme_disconnect(uri)
+        raise e
 
 
 def nvme_id_ctrl(device):
@@ -150,6 +155,7 @@ def nvme_find_device(uri):
         )
     )
     # we should only have one connection
+    print(dev)
     assert len(dev) == 1
     assert len(dev[0].get("Subsystems")) == 1
     subsystem = dev[0].get("Subsystems")[0]
