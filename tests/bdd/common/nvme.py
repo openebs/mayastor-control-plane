@@ -28,7 +28,7 @@ async def nvme_remote_connect(remote, uri):
     nqn = u.path[1:]
     hostnqn = nvme_hostnqn_arg(u)
 
-    command = f"sudo {nvme_bin} connect -t tcp -s {port} -a {host} -n {nqn} -I {hostid} {hostnqn}"
+    command = f"sudo {nvme_bin} connect -t tcp -s {port} -a {host} -n {nqn} -I {hostid}{hostnqn}"
 
     await run_cmd_async_at(remote, command)
     return wait_nvme_find_device(uri)
@@ -51,7 +51,7 @@ async def nvme_remote_discover(remote, uri):
     hostnqn = nvme_hostnqn_arg(u)
 
     command = (
-        f"sudo {nvme_bin} discover -t tcp -s {port} -a {host} -I {hostid} {hostnqn}"
+        f"sudo {nvme_bin} discover -t tcp -s {port} -a {host} -I {hostid}{hostnqn}"
     )
     output = await run_cmd_async_at(remote, command).stdout
     if not u.path[1:] in str(output.stdout):
@@ -73,7 +73,7 @@ def nvme_connect(uri):
     nqn = u.path[1:]
     hostnqn = nvme_hostnqn_arg(u)
 
-    command = f"sudo {nvme_bin} connect -t tcp -s {port} -a {host} -I {hostid} -n {nqn}{hostnqn}"
+    command = f"sudo {nvme_bin} connect -t tcp -s {port} -a {host} -I {hostid}{hostnqn} -n {nqn}"
     print(command)
     try:
         subprocess.run(
@@ -82,6 +82,7 @@ def nvme_connect(uri):
     except subprocess.CalledProcessError as e:
         # todo: handle this better!
         if "already connected\n" in e.stderr or "already connnected\n" in e.stderr:
+            print(f"{uri} is already connected")
             pass
         else:
             raise e
@@ -126,7 +127,7 @@ def nvme_discover(uri):
     hostnqn = nvme_hostnqn_arg(u)
 
     command = (
-        f"sudo {nvme_bin} discover -t tcp -s {port} -a {host} -I {hostid} {hostnqn}"
+        f"sudo {nvme_bin} discover -t tcp -s {port} -a {host} -I {hostid}{hostnqn}"
     )
     output = subprocess.run(
         command, check=True, shell=True, capture_output=True, encoding="utf-8"
@@ -146,7 +147,7 @@ def nvme_find_device(uri):
         ).stdout
     )
 
-    dev = list(
+    devs = list(
         filter(
             lambda d: list(
                 filter(lambda dd: nqn in dd.get("SubsystemNQN"), d.get("Subsystems"))
@@ -154,13 +155,20 @@ def nvme_find_device(uri):
             discover.get("Devices"),
         )
     )
-    # we should only have one connection
-    print(dev)
-    assert len(dev) == 1
-    assert len(dev[0].get("Subsystems")) == 1
-    subsystem = dev[0].get("Subsystems")[0]
+    log = f"{uri}:\n{devs}"
 
-    return "/dev/{}".format(subsystem["Namespaces"][0].get("NameSpace"))
+    # we should only have one connection
+    assert len(devs) == 1, log
+    dev = devs[0]
+
+    subsystems = dev.get("Subsystems")
+    assert len(subsystems) == 1, log
+
+    subsystem = subsystems[0]
+    namespaces = subsystem["Namespaces"]
+    assert len(namespaces) == 1, log
+
+    return "/dev/{}".format(namespaces[0].get("NameSpace"))
 
 
 def nvme_find_device_path(uri):
@@ -174,7 +182,7 @@ def nvme_find_device_path(uri):
         ).stdout
     )
 
-    dev = list(
+    devs = list(
         filter(
             lambda d: list(
                 filter(lambda dd: nqn in dd.get("SubsystemNQN"), d.get("Subsystems"))
@@ -182,14 +190,23 @@ def nvme_find_device_path(uri):
             discover.get("Devices"),
         )
     )
+
+    log = f"{uri}:\n{devs}"
     # we should only have one connection
-    assert len(dev) == 1
-    assert len(dev[0].get("Subsystems")) == 1
-    subsystem = dev[0].get("Subsystems")[0]
-    assert len(subsystem["Controllers"]) == 1
-    controller = subsystem["Controllers"][0]
-    assert len(controller.get("Paths")) == 1
-    path = controller.get("Paths")[0]
+    assert len(devs) == 1, log
+    dev = devs[0]
+
+    subsystems = dev.get("Subsystems")
+    assert len(subsystems) == 1, log
+
+    subsystem = subsystems[0]
+    controllers = subsystem["Controllers"]
+    assert len(controllers) == 1, log
+    controller = controllers[0]
+
+    paths = controller.get("Paths")
+    assert len(paths) == 1, log
+    path = paths[0]
 
     return path.get("Path")
 
