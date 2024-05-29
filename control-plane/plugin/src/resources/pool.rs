@@ -12,6 +12,8 @@ use async_trait::async_trait;
 use prettytable::Row;
 use std::collections::HashMap;
 
+use super::VolumeId;
+
 /// Pools resource.
 #[derive(clap::Args, Debug)]
 pub struct Pools {}
@@ -66,7 +68,11 @@ impl GetHeaderRow for openapi::models::Pool {
 pub struct GetPoolsArgs {
     /// Gets Pools from this node only.
     #[clap(long)]
-    node_id: Option<NodeId>,
+    node: Option<NodeId>,
+
+    /// Gets Pools for the given volume.
+    #[clap(long)]
+    volume: Option<VolumeId>,
 
     /// Selector (label query) to filter on, supports '=' only.
     /// (e.g. -l key1=value1,key2=value2).
@@ -77,9 +83,15 @@ pub struct GetPoolsArgs {
 
 impl GetPoolsArgs {
     /// Return the node ID.
-    pub fn node_id(&self) -> &Option<NodeId> {
-        &self.node_id
+    pub fn node(&self) -> &Option<NodeId> {
+        &self.node
     }
+
+    /// Return the volume ID.
+    pub fn volume(&self) -> &Option<VolumeId> {
+        &self.volume
+    }
+
     /// Select the pools based on labels.
     pub fn selector(&self) -> &Option<String> {
         &self.selector
@@ -90,7 +102,7 @@ impl GetPoolsArgs {
 impl ListWithArgs for Pools {
     type Args = GetPoolsArgs;
     async fn list(args: &Self::Args, output: &utils::OutputFormat) -> PluginResult {
-        let mut pools = match args.node_id() {
+        let mut pools = match args.node() {
             Some(node_id) => RestClient::client()
                 .pools_api()
                 .get_node_pools(node_id)
@@ -99,7 +111,7 @@ impl ListWithArgs for Pools {
                 .map_err(|e| Error::ListPoolsError { source: e }),
             None => RestClient::client()
                 .pools_api()
-                .get_pools(None)
+                .get_pools(args.volume().as_ref())
                 .await
                 .map(|pools| pools.into_body())
                 .map_err(|e| Error::ListPoolsError { source: e }),
