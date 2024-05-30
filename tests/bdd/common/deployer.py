@@ -1,5 +1,7 @@
 import os
 import subprocess
+from datetime import datetime
+
 import pytest
 from dataclasses import dataclass
 
@@ -150,6 +152,7 @@ class Deployer(object):
     # Start containers with the provided options.
     @staticmethod
     def start_with_opts(options: StartOptions):
+        print(f"DeployerStart: {datetime.now()}")
         deployer_path = os.environ["ROOT_DIR"] + "/target/debug/deployer"
         # todo: get logs out to specific location
         subprocess.run([deployer_path, "start"] + options.args(), check=True)
@@ -157,6 +160,7 @@ class Deployer(object):
     # Stop containers
     @staticmethod
     def stop():
+        print(f"DeployerStop: {datetime.now()}")
         clean = os.getenv("CLEAN")
         if clean is not None and clean.lower() in ("no", "false", "f", "0"):
             return
