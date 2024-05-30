@@ -2,6 +2,8 @@ from datetime import datetime
 from shutil import which
 from urllib.parse import urlparse, parse_qs, ParseResult
 from retrying import retry
+
+import common
 from common.command import run_cmd_async_at
 
 import subprocess
@@ -138,25 +140,19 @@ def nvme_discover(uri):
         raise ValueError("uri {} is not discovered".format(u.path[1:]))
 
 
-def nvme_find_subsystem(uri):
-    u = urlparse(uri)
-    nqn = u.path[1:]
+@retry(wait_fixed=100, stop_max_attempt_number=50)
+def nvme_wait_allours_disconnected():
+    devs = nvme_find_subsystem_devices(common.nvme_nqn_prefix)
+    log = f"{datetime.now()} => Existing devices:\n{devs}"
+    assert len(devs) == 0, log
 
-    command = f"sudo {nvme_bin} list -v -o json"
-    discover = json.loads(
-        subprocess.run(
-            command, shell=True, check=True, text=True, capture_output=True
-        ).stdout
-    )
 
-    devs = list(
-        filter(
-            lambda d: list(
-                filter(lambda dd: nqn in dd.get("SubsystemNQN"), d.get("Subsystems"))
-            ),
-            discover.get("Devices"),
-        )
-    )
+def nvme_find_subsystem(uri, nqn=None):
+    if nqn is None:
+        u = urlparse(uri)
+        nqn = u.path[1:]
+
+    devs = nvme_find_subsystem_devices(nqn)
     log = f"{datetime.now()} => {uri}:\n{devs}"
 
     # we should only have one connection
@@ -167,6 +163,24 @@ def nvme_find_subsystem(uri):
     assert len(subsystems) == 1, log
 
     return subsystems[0]
+
+
+def nvme_find_subsystem_devices(nqn):
+    command = f"sudo {nvme_bin} list -v -o json"
+    discover = json.loads(
+        subprocess.run(
+            command, shell=True, check=True, text=True, capture_output=True
+        ).stdout
+    )
+
+    return list(
+        filter(
+            lambda d: list(
+                filter(lambda dd: nqn in dd.get("SubsystemNQN"), d.get("Subsystems"))
+            ),
+            discover.get("Devices"),
+        )
+    )
 
 
 def nvme_find_device(uri):
@@ -188,6 +202,11 @@ def nvme_find_controller(uri):
     return controllers[0]
 
 
+def nvme_find_controllers(nqn):
+    subsystem = nvme_find_subsystem(None, nqn)
+    return subsystem["Controllers"]
+
+
 def nvme_find_device_path(uri):
     controller = nvme_find_controller(uri)
     log = f"{datetime.now()} => {uri}:\n{controller}"
@@ -204,6 +223,10 @@ def nvme_disconnect(uri):
     u = urlparse(uri)
     nqn = u.path[1:]
 
+    nvme_disconnect_nqn(nqn)
+
+
+def nvme_disconnect_nqn(nqn):
     command = f"sudo {nvme_bin} disconnect -n {nqn}"
     subprocess.run(command, check=True, shell=True, capture_output=True)
 
@@ -212,6 +235,20 @@ def nvme_disconnect_all():
     """Disconnect from all connected nvme subsystems"""
     command = f"sudo {nvme_bin} disconnect-all"
     subprocess.run(command, check=True, shell=True, capture_output=True)
+
+
+def nvme_disconnect_allours():
+    devs = nvme_find_subsystem_devices(common.nvme_nqn_prefix)
+    for dev in devs:
+        for subsystem in dev.get("Subsystems"):
+            nqn = subsystem.get("SubsystemNQN")
+            nvme_set_reconnect_delay_all(nqn, delay=1)
+            nvme_disconnect_nqn(nqn)
+
+
+def nvme_disconnect_allours_wait():
+    nvme_disconnect_allours()
+    nvme_wait_allours_disconnected()
 
 
 def nvme_disconnect_controller(name):
@@ -249,9 +286,18 @@ def identify_namespace(device):
     return ns
 
 
-def nvme_set_reconnect_delay(uri, delay=10):
-    controller = nvme_find_controller(uri).get("Controller")
+def nvme_set_reconnect_delay_all(nqn, delay=10):
+    for controller in nvme_find_controllers(nqn):
+        nvme_controller_set_reconnect_delay(controller, delay)
 
+
+def nvme_set_reconnect_delay(uri, delay=10):
+    controller = nvme_find_controller(uri)
+    nvme_controller_set_reconnect_delay(controller, delay)
+
+
+def nvme_controller_set_reconnect_delay(controller, delay=10):
+    controller = controller.get("Controller")
     command = f"echo {delay} | sudo tee -a /sys/class/nvme/{controller}/reconnect_delay"
     subprocess.run(command, check=True, shell=True, capture_output=True)
 

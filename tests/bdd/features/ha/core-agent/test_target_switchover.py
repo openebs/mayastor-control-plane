@@ -71,7 +71,7 @@ def init():
         fio_spdk=True,
     )
     yield
-    Deployer.stop()
+    Deployer.stop(True)
 
 
 @scenario(
