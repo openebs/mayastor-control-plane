@@ -23,3 +23,7 @@ class Etcd(object):
     def del_switchover(self, volume_id):
         key = "{}/SwitchOver/{}".format(self.__ns_key(), volume_id)
         self.client.delete(key)
+
+    def del_all_switchover(self):
+        key_prefix = "{}/SwitchOver/".format(self.__ns_key())
+        self.client.delete_prefix(key_prefix)
