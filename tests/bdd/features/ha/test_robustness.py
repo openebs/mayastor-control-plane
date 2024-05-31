@@ -14,6 +14,7 @@ import subprocess
 
 from retrying import retry
 
+import common.nvme
 from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
@@ -60,7 +61,7 @@ def init():
         agents_env="DETECTION_PERIOD=100ms,SUBSYS_REFRESH_PERIOD=100ms",
     )
     yield
-    Deployer.stop()
+    Deployer.stop(True)
 
 
 @pytest.fixture(autouse=True)
@@ -111,6 +112,8 @@ def a_connected_nvme_initiator(connect_to_first_path):
 @given("a deployer cluster")
 def a_deployer_cluster(init):
     """a deployer cluster."""
+    yield
+    common.nvme.nvme_disconnect_allours_wait()
 
 
 @given("a reconnect_delay set to 15s")

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import common
 from common.docker import Docker
+from common.nvme import nvme_disconnect_allours_wait
 
 
 @dataclass
@@ -159,11 +160,13 @@ class Deployer(object):
 
     # Stop containers
     @staticmethod
-    def stop():
+    def stop(disconnect_nvme=False):
         print(f"DeployerStop: {datetime.now()}")
         clean = os.getenv("CLEAN")
         if clean is not None and clean.lower() in ("no", "false", "f", "0"):
             return
+        if disconnect_nvme:
+            nvme_disconnect_allours_wait()
         deployer_path = os.environ["ROOT_DIR"] + "/target/debug/deployer"
         subprocess.run([deployer_path, "stop"])
 
