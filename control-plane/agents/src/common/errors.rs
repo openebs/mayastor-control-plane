@@ -288,6 +288,8 @@ pub enum SvcError {
     InvalidApiVersion { api_version: Option<ApiVersion> },
     #[snafu(display("The subsystem with nqn: {} is not found, {}", nqn, details))]
     SubsystemNotFound { nqn: String, details: String },
+    #[snafu(display("Can't add new path to subsystem with nqn: {nqn} as it is not present"))]
+    ReplaceNqnNotFound { nqn: String },
     #[snafu(display(
         "The subsystem {} has unexpected Nqn ({}), expected ({})",
         path,
@@ -425,6 +427,7 @@ impl SvcError {
             Self::Unimplemented { .. } => tonic::Code::Unimplemented,
             Self::RestrictedReplicaCount { .. } => tonic::Code::FailedPrecondition,
             Self::ReplicaSetPropertyFailed { .. } => tonic::Code::DataLoss,
+            Self::ReplaceNqnNotFound { .. } => tonic::Code::FailedPrecondition,
             _ => tonic::Code::Internal,
         }
     }
@@ -875,6 +878,12 @@ impl From<SvcError> for ReplyError {
             SvcError::SubsystemNotFound { .. } => ReplyError {
                 kind: ReplyErrorKind::NotFound,
                 resource: ResourceKind::NvmeSubsystem,
+                source,
+                extra,
+            },
+            SvcError::ReplaceNqnNotFound { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::NvmePath,
                 source,
                 extra,
             },
