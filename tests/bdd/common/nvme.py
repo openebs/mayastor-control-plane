@@ -165,6 +165,16 @@ def nvme_find_subsystem(uri, nqn=None):
     return subsystems[0]
 
 
+def nvme_find_subsystem_devices_all():
+    command = f"sudo {nvme_bin} list -v -o json"
+    discover = json.loads(
+        subprocess.run(
+            command, shell=True, check=True, text=True, capture_output=True
+        ).stdout
+    )
+    return discover.get("Devices")
+
+
 def nvme_find_subsystem_devices(nqn):
     command = f"sudo {nvme_bin} list -v -o json"
     discover = json.loads(
@@ -173,14 +183,17 @@ def nvme_find_subsystem_devices(nqn):
         ).stdout
     )
 
-    return list(
-        filter(
-            lambda d: list(
-                filter(lambda dd: nqn in dd.get("SubsystemNQN"), d.get("Subsystems"))
-            ),
-            discover.get("Devices"),
-        )
-    )
+    devs = list()
+    for dev in discover.get("Devices"):
+        subsystems = list()
+        for subsystem in dev.get("Subsystems"):
+            if nqn in subsystem.get("SubsystemNQN"):
+                subsystems.append(subsystem)
+        if len(subsystems) > 0:
+            dev["Subsystems"] = subsystems
+            devs.append(dev)
+
+    return devs
 
 
 def nvme_find_device(uri):
@@ -228,6 +241,7 @@ def nvme_disconnect(uri):
 
 def nvme_disconnect_nqn(nqn):
     command = f"sudo {nvme_bin} disconnect -n {nqn}"
+    print(command)
     subprocess.run(command, check=True, shell=True, capture_output=True)
 
 
@@ -299,6 +313,7 @@ def nvme_set_reconnect_delay(uri, delay=10):
 def nvme_controller_set_reconnect_delay(controller, delay=10):
     controller = controller.get("Controller")
     command = f"echo {delay} | sudo tee -a /sys/class/nvme/{controller}/reconnect_delay"
+    print(command)
     subprocess.run(command, check=True, shell=True, capture_output=True)
 
 

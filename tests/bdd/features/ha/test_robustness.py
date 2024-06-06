@@ -24,6 +24,7 @@ from common.nvme import (
     nvme_disconnect,
     nvme_list_subsystems,
     nvme_set_reconnect_delay,
+    nvme_find_subsystem_devices_all,
 )
 from common.operations import Cluster
 
@@ -75,9 +76,12 @@ def init_scenario(init, disks):
         )
     yield
     if Cluster.fixture_cleanup():
-        Docker.restart_container("agent-ha-node")
-        ETCD_CLIENT.del_switchover(VOLUME_UUID)
+        Docker.kill_container("agent-ha-cluster")
+        Docker.kill_container("agent-ha-node")
+        ETCD_CLIENT.del_all_switchover()
+        common.nvme.nvme_disconnect_allours_wait()
         Docker.restart_container("agent-ha-cluster")
+        Docker.restart_container("agent-ha-node")
         Cluster.cleanup()
 
 
@@ -113,7 +117,6 @@ def a_connected_nvme_initiator(connect_to_first_path):
 def a_deployer_cluster(init):
     """a deployer cluster."""
     yield
-    common.nvme.nvme_disconnect_allours_wait()
 
 
 @given("a reconnect_delay set to 15s")

@@ -171,6 +171,11 @@ impl NodeAgentSvc {
 
         tracing::info!(new_path, "Connecting to NVMe target");
 
+        // Check to ensure Nqn is already connected
+        if Subsystem::try_from_nqn(&nqn).is_err() {
+            return Err(SvcError::ReplaceNqnNotFound { nqn });
+        }
+
         // Check if the NVMe subsystem already exists to not
         // delete it in case of unsuccessful path replacement.
         let preexisted_subsystem = Subsystem::get(
