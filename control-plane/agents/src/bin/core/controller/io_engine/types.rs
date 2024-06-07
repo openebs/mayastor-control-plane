@@ -45,12 +45,18 @@ pub(crate) type SnapshotRebuildStatus = rpc::v1::snapshot_rebuild::RebuildStatus
 #[derive(Debug)]
 #[allow(dead_code)]
 pub(crate) struct SnapshotRebuild {
-    /// The uuid of the rebuilding replica.
+    /// The uuid of the rebuild job.
     pub(crate) uuid: transport::ReplicaId,
+    /// The uuid of the rebuilding replica.
+    pub(crate) replica_uuid: transport::ReplicaId,
+    /// The uuid of the source snapshot.
+    pub(crate) snapshot_uuid: transport::SnapshotId,
     /// The nvmf URI of the source Snapshot from which we:
     /// 1. read allocated data bitmap
     /// 2. read data proper
-    pub(crate) source_uri: String,
+    pub(crate) snapshot_uri: String,
+    /// The nvmf URI of the destination Replica.
+    pub(crate) replica_uri: String,
     /// Current status of the rebuild.
     pub(crate) status: SnapshotRebuildStatus,
     /// Total bytes to rebuild.

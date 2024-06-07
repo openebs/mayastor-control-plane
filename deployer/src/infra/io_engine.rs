@@ -43,6 +43,7 @@ impl ComponentAction for IoEngine {
             .with_env("NEXUS_NVMF_RESV_ENABLE", "1")
             .with_env("NEXUS_NVMF_ANA_ENABLE", "1")
             .with_env("NVMF_TGT_CRDT", "0")
+            .with_env("ENABLE_SNAPSHOT_REBUILD", "true")
             .with_bind("/tmp", "/host/tmp")
             .with_bind("/var/run/dpdk", "/var/run/dpdk");
 

@@ -18,10 +18,14 @@ impl crate::controller::io_engine::SnapshotRebuildApi for super::RpcClient {
         let response = self
             .snap_rebuild()
             .create_snapshot_rebuild(CreateSnapshotRebuildRequest {
+                uuid: request.replica_uuid.to_string(),
                 replica_uuid: request.replica_uuid.to_string(),
-                source_uri: request.source_uri.to_string(),
+                snapshot_uuid: request.replica_uuid.to_string(),
+                snapshot_uri: request.source_uri.to_string(),
+                replica_uri: "".to_string(),
                 resume: false,
                 bitmap: None,
+                use_bitmap: false,
                 error_policy: None,
             })
             .await
@@ -39,7 +43,9 @@ impl crate::controller::io_engine::SnapshotRebuildApi for super::RpcClient {
         let response = self
             .snap_rebuild()
             .list_snapshot_rebuild(ListSnapshotRebuildRequest {
+                uuid: None,
                 replica_uuid: request.uuid.as_ref().map(ToString::to_string),
+                snapshot_uuid: None,
             })
             .await
             .context(GrpcRequestError {
@@ -58,7 +64,7 @@ impl crate::controller::io_engine::SnapshotRebuildApi for super::RpcClient {
         let _ = self
             .snap_rebuild()
             .destroy_snapshot_rebuild(DestroySnapshotRebuildRequest {
-                replica_uuid: request.uuid.to_string(),
+                uuid: request.uuid.to_string(),
             })
             .await
             .context(GrpcRequestError {
