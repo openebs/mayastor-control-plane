@@ -837,13 +837,25 @@ impl TryFrom<v1::snapshot_rebuild::SnapshotRebuild> for super::super::types::Sna
 
     fn try_from(value: v1::snapshot_rebuild::SnapshotRebuild) -> Result<Self, Self::Error> {
         let uuid = value.uuid.as_str();
+        let replica_id = value.replica_uuid.as_str();
+        let snap_id = value.snapshot_uuid.as_str();
+        let status = value.status();
         Ok(Self {
             uuid: uuid.try_into().map_err(|_| SvcError::InvalidUuid {
                 uuid: value.uuid.to_owned(),
                 kind: ResourceKind::Replica,
             })?,
-            status: value.status(),
-            source_uri: value.source_uri,
+            replica_uuid: replica_id.try_into().map_err(|_| SvcError::InvalidUuid {
+                uuid: value.uuid.to_owned(),
+                kind: ResourceKind::Replica,
+            })?,
+            snapshot_uuid: snap_id.try_into().map_err(|_| SvcError::InvalidUuid {
+                uuid: value.snapshot_uuid,
+                kind: ResourceKind::ReplicaSnapshot,
+            })?,
+            snapshot_uri: value.snapshot_uri,
+            replica_uri: value.replica_uri,
+            status,
             total: value.total,
             rebuilt: value.rebuilt,
             remaining: value.remaining,
