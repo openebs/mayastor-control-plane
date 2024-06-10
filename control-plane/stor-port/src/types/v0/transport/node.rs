@@ -22,6 +22,12 @@ pub struct Register {
     pub instance_uuid: Option<uuid::Uuid>,
     /// Used to identify dataplane nvme hostnqn.
     pub node_nqn: Option<HostNqn>,
+    /// Features exposed by the io-engine.
+    pub features: Option<NodeFeatures>,
+    /// BugFixes exposed by the io-engine.
+    pub bugfixes: Option<NodeBugFixes>,
+    /// Version of the io-engine.
+    pub version: Option<String>,
 }
 
 /// Deregister message payload
@@ -122,15 +128,48 @@ impl Default for NodeStatus {
     }
 }
 
-/// Node State information
+/// Node features as exposed by the node io-engine.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NodeFeatures {
+    /// NVMe ANA is enabled.
+    pub asymmetric_namespace_access: Option<bool>,
+    /// LVM backend is enabled.
+    pub logical_volume_manager: Option<bool>,
+    /// SnapshotRebuild is enabled.
+    pub snapshot_rebuild: Option<bool>,
+}
+
+/// Bug fixe in enum format
+pub enum NodeBugFix {
+    NexusRebuildReplicaAncestry,
+}
+
+/// Node bug-fixes as exposed by the node io-engine.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NodeBugFixes {
+    /// Nexus rebuilds both the clusters allocated to the replica and its ancestors clusters.
+    pub nexus_rebuild_replica_ancestry: bool,
+}
+impl NodeBugFixes {
+    /// Check if the given fix is present.
+    pub fn contains(&self, fix: &NodeBugFix) -> bool {
+        match fix {
+            NodeBugFix::NexusRebuildReplicaAncestry => self.nexus_rebuild_replica_ancestry,
+        }
+    }
+}
+
+/// Node State information.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeState {
     /// Node Id of the io-engine instance.
     pub id: NodeId,
-    /// Grpc endpoint of the io-engine instance
+    /// Grpc endpoint of the io-engine instance.
     pub grpc_endpoint: std::net::SocketAddr,
-    /// Deemed status of the node
+    /// Deemed status of the node.
     pub status: NodeStatus,
     /// Api versions supported by the dataplane.
     pub api_versions: Option<Vec<ApiVersion>>,
@@ -138,6 +177,12 @@ pub struct NodeState {
     instance_uuid: Option<uuid::Uuid>,
     /// Used to identify dataplane nvme hostnqn.
     pub node_nqn: Option<HostNqn>,
+    /// Features exposed by the io-engine.
+    pub features: Option<NodeFeatures>,
+    /// BugFixes exposed by the io-engine.
+    pub bugfixes: Option<NodeBugFixes>,
+    /// Version of the io-engine.
+    pub version: Option<String>,
 }
 
 impl NodeState {
@@ -156,6 +201,9 @@ impl NodeState {
             api_versions,
             instance_uuid: None,
             node_nqn,
+            features: None,
+            bugfixes: None,
+            version: None,
         }
     }
     /// Get the node identification.
@@ -169,6 +217,13 @@ impl NodeState {
     /// Get the instance uuid.
     pub fn instance_uuid(&self) -> &Option<uuid::Uuid> {
         &self.instance_uuid
+    }
+    /// Check if the nexus rebuild replica ancestry is fixed.
+    pub fn has_rebuild_ancestry_fix(&self) -> bool {
+        match &self.bugfixes {
+            None => false,
+            Some(fixes) => fixes.nexus_rebuild_replica_ancestry,
+        }
     }
 }
 impl From<&Register> for NodeState {
@@ -185,6 +240,9 @@ impl From<Register> for NodeState {
             api_versions: src.api_versions,
             instance_uuid: src.instance_uuid,
             node_nqn: src.node_nqn,
+            features: src.features,
+            bugfixes: src.bugfixes,
+            version: src.version,
         }
     }
 }

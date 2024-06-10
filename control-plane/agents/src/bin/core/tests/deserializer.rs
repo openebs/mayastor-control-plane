@@ -199,6 +199,9 @@ fn test_deserialization_v1_to_v2() {
                 Default::default(),
                 None,
                 None,
+                None,
+                None,
+                None
             )),
         },
         TestEntry {

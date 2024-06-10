@@ -6,7 +6,7 @@ use crate::{
             definitions::{ObjectKey, StorableObject, StorableObjectType},
             AsOperationSequencer, OperationSequence, SpecTransaction,
         },
-        transport::{self, HostNqn, NodeId, VolumeId},
+        transport::{self, HostNqn, NodeBugFix, NodeBugFixes, NodeFeatures, NodeId, VolumeId},
     },
     IntoOption,
 };
@@ -152,14 +152,15 @@ pub struct NodeSpec {
     /// Endpoint of the io-engine instance (gRPC).
     endpoint: std::net::SocketAddr,
     /// Node labels.
+    #[serde(skip_serializing_if = "NodeLabels::is_empty")]
+    #[serde(default)]
     labels: NodeLabels,
     /// Cordon/drain state.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)] // Ensure backwards compatibility in etcd when upgrading.
     cordon_drain_state: Option<CordonDrainState>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)] // Ensure backwards compatibility in etcd when upgrading.
     node_nqn: Option<HostNqn>,
+    #[serde(skip_serializing_if = "HashSet::is_empty")]
     #[serde(default)] // Ensure backwards compatibility.
     draining_volumes: HashSet<VolumeId>,
     #[serde(skip)] // Do not store.
@@ -168,18 +169,31 @@ pub struct NodeSpec {
     #[serde(skip)]
     sequencer: OperationSequence,
     /// Record of the operation in progress.
-    #[serde(default)] // Ensure backwards compatibility.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub operation: Option<NodeOperationState>,
+    /// Features exposed by the io-engine.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    features: Option<NodeFeatures>,
+    /// BugFixes exposed by the io-engine.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bugfixes: Option<NodeBugFixes>,
+    /// Version of the io-engine.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    version: Option<String>,
 }
 
 impl NodeSpec {
     /// Return a new `Self`.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: NodeId,
         endpoint: std::net::SocketAddr,
         labels: NodeLabels,
         cordon_drain_state: Option<CordonDrainState>,
         node_nqn: Option<HostNqn>,
+        features: Option<NodeFeatures>,
+        bugfixes: Option<NodeBugFixes>,
+        version: Option<String>,
     ) -> Self {
         Self {
             id,
@@ -191,6 +205,9 @@ impl NodeSpec {
             draining_timestamp: None,
             sequencer: OperationSequence::new(),
             operation: None,
+            features,
+            bugfixes,
+            version,
         }
     }
 
@@ -214,6 +231,18 @@ impl NodeSpec {
     pub fn cordon_drain_state(&self) -> &Option<CordonDrainState> {
         &self.cordon_drain_state
     }
+    /// Node features.
+    pub fn features(&self) -> &Option<NodeFeatures> {
+        &self.features
+    }
+    /// Node bugfixes.
+    pub fn bugfixes(&self) -> &Option<NodeBugFixes> {
+        &self.bugfixes
+    }
+    /// Node version.
+    pub fn version(&self) -> &Option<String> {
+        &self.version
+    }
 
     /// Node gRPC endpoint.
     pub fn set_nqn(&mut self, nqn: Option<HostNqn>) {
@@ -222,6 +251,18 @@ impl NodeSpec {
     /// Node gRPC endpoint.
     pub fn set_endpoint(&mut self, endpoint: std::net::SocketAddr) {
         self.endpoint = endpoint;
+    }
+    /// Set Node features.
+    pub fn set_features(&mut self, features: Option<NodeFeatures>) {
+        self.features = features;
+    }
+    /// Set Node bugfixes.
+    pub fn set_bugfixes(&mut self, bugfixes: Option<NodeBugFixes>) {
+        self.bugfixes = bugfixes;
+    }
+    /// Set Node version.
+    pub fn set_version(&mut self, version: Option<String>) {
+        self.version = version;
     }
 
     /// Ensure the state is consistent with the labels.
@@ -444,6 +485,14 @@ impl NodeSpec {
     /// Get the draining timestamp on this node.
     pub fn draining_timestamp(&self) -> Option<SystemTime> {
         self.draining_timestamp
+    }
+
+    /// Check if node has the given fix.
+    pub fn has_fix(&self, fix: &NodeBugFix) -> bool {
+        match &self.bugfixes {
+            None => false,
+            Some(bugfixes) => bugfixes.contains(fix),
+        }
     }
 }
 

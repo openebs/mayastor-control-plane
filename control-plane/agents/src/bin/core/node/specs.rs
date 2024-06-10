@@ -14,7 +14,7 @@ use stor_port::{
             node::{NodeLabelOp, NodeLabels, NodeOperation, NodeSpec, NodeUnLabelOp},
             SpecStatus, SpecTransaction,
         },
-        transport::{NodeId, Register},
+        transport::{NodeBugFix, NodeId, Register},
     },
 };
 
@@ -34,11 +34,20 @@ impl ResourceSpecsLocked {
             match specs.nodes.get(&node.id) {
                 Some(node_spec) => {
                     let mut node_spec = node_spec.lock();
+                    // todo: add custom PartialEq?
                     let changed = node_spec.endpoint() != node.grpc_endpoint
-                        || node_spec.node_nqn() != &node.node_nqn;
+                        || node_spec.node_nqn() != &node.node_nqn
+                        || node_spec.features() != &node.features
+                        || node_spec.bugfixes() != &node.bugfixes
+                        || node_spec.version() != &node.version;
 
-                    node_spec.set_endpoint(node.grpc_endpoint);
-                    node_spec.set_nqn(node.node_nqn.clone());
+                    if changed {
+                        node_spec.set_endpoint(node.grpc_endpoint);
+                        node_spec.set_nqn(node.node_nqn.clone());
+                        node_spec.set_features(node.features.clone());
+                        node_spec.set_bugfixes(node.bugfixes.clone());
+                        node_spec.set_version(node.version.clone());
+                    }
                     (changed, node_spec.clone())
                 }
                 None => {
@@ -48,6 +57,9 @@ impl ResourceSpecsLocked {
                         NodeLabels::new(),
                         None,
                         node.node_nqn.clone(),
+                        node.features.clone(),
+                        node.bugfixes.clone(),
+                        node.version.clone(),
                     );
                     specs.nodes.insert(node.clone());
                     (true, node)
@@ -88,6 +100,12 @@ impl ResourceSpecsLocked {
     /// Get all locked node specs
     fn nodes_rsc(&self) -> Vec<ResourceMutex<NodeSpec>> {
         self.read().nodes.to_vec()
+    }
+
+    /// Check if all nodes have the fix.
+    #[allow(dead_code)]
+    pub(crate) fn nodes_have_fix(&self, fix: NodeBugFix) -> bool {
+        self.read().nodes.values().any(|n| n.lock().has_fix(&fix))
     }
 
     /// Get all node specs cloned

@@ -185,6 +185,33 @@ impl NodeWrapper {
                         node_state.node_nqn
                     );
                 }
+
+                if self.node_state().features != node_state.features {
+                    tracing::warn!(
+                        node.id=%node_state.id,
+                        "Node features changed from {:?} to {:?}",
+                        self.node_state().features,
+                        node_state.features
+                    );
+                }
+
+                if self.node_state().bugfixes != node_state.bugfixes {
+                    tracing::warn!(
+                        node.id=%node_state.id,
+                        "Node bugfixes changed from {:?} to {:?}",
+                        self.node_state().bugfixes,
+                        node_state.bugfixes
+                    );
+                }
+
+                if self.node_state().version != node_state.version {
+                    tracing::warn!(
+                        node.id=%node_state.id,
+                        "Node version changed from {:?} to {:?}",
+                        self.node_state().version,
+                        node_state.version
+                    );
+                }
             }
             self.node_state = node_state;
             true

@@ -27,6 +27,9 @@ impl crate::controller::io_engine::HostApi for super::RpcClient {
             api_versions: Some(vec![ApiVersion::V0]),
             instance_uuid: None,
             node_nqn: None,
+            features: None,
+            bugfixes: None,
+            version: None,
         })
     }
 

@@ -23,6 +23,9 @@ fn new_node(
             NodeLabels::new(),
             None,
             node_nqn.clone(),
+            None,
+            None,
+            None,
         )),
         Some(NodeState::new(id, endpoint, status, api_versions, node_nqn)),
     )

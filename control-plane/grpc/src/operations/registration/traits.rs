@@ -7,7 +7,9 @@ use rpc::{
 use std::str::FromStr;
 use stor_port::{
     transport_api::{ReplyError, ResourceKind},
-    types::v0::transport::{node, Deregister, HostNqn, NodeId, Register},
+    types::v0::transport::{
+        node, Deregister, HostNqn, NodeBugFixes, NodeFeatures, NodeId, Register,
+    },
 };
 
 /// New type to wrap grpc ApiVersion type.
@@ -34,6 +36,12 @@ pub trait RegisterInfo: Send + Sync {
     fn instance_uuid(&self) -> Option<uuid::Uuid>;
     /// Used to identify dataplane nvme hostnqn.
     fn node_nqn(&self) -> Option<HostNqn>;
+    /// Features of the io-engine.
+    fn features(&self) -> Option<NodeFeatures>;
+    /// Bugs fixed in the io-engine.
+    fn bugfixes(&self) -> Option<NodeBugFixes>;
+    /// Version of the io-engine.
+    fn io_version(&self) -> Option<String>;
 }
 
 /// Trait to be implemented for Register operation.
@@ -61,6 +69,18 @@ impl RegisterInfo for Register {
 
     fn node_nqn(&self) -> Option<HostNqn> {
         self.node_nqn.clone()
+    }
+
+    fn features(&self) -> Option<NodeFeatures> {
+        self.features.clone()
+    }
+
+    fn bugfixes(&self) -> Option<NodeBugFixes> {
+        self.bugfixes.clone()
+    }
+
+    fn io_version(&self) -> Option<String> {
+        self.version.clone()
     }
 }
 
@@ -95,6 +115,24 @@ impl RegisterInfo for RegisterRequest {
     fn node_nqn(&self) -> Option<HostNqn> {
         self.hostnqn.as_ref().and_then(|h| h.try_into().ok())
     }
+
+    fn features(&self) -> Option<NodeFeatures> {
+        self.features.as_ref().map(|features| NodeFeatures {
+            asymmetric_namespace_access: Some(features.asymmetric_namespace_access),
+            logical_volume_manager: features.logical_volume_manager,
+            snapshot_rebuild: features.snapshot_rebuild,
+        })
+    }
+
+    fn bugfixes(&self) -> Option<NodeBugFixes> {
+        self.bugfixes.as_ref().map(|bugfixes| NodeBugFixes {
+            nexus_rebuild_replica_ancestry: bugfixes.nexus_rebuild_replica_ancestry,
+        })
+    }
+
+    fn io_version(&self) -> Option<String> {
+        self.version.clone()
+    }
 }
 
 impl RegisterInfo for V1AlphaRegisterRequest {
@@ -116,6 +154,18 @@ impl RegisterInfo for V1AlphaRegisterRequest {
     }
 
     fn node_nqn(&self) -> Option<HostNqn> {
+        None
+    }
+
+    fn features(&self) -> Option<NodeFeatures> {
+        None
+    }
+
+    fn bugfixes(&self) -> Option<NodeBugFixes> {
+        None
+    }
+
+    fn io_version(&self) -> Option<String> {
         None
     }
 }
@@ -155,6 +205,9 @@ impl TryFrom<&dyn RegisterInfo> for Register {
             api_versions: register.api_version(),
             instance_uuid: register.instance_uuid(),
             node_nqn: register.node_nqn(),
+            features: register.features(),
+            bugfixes: register.bugfixes(),
+            version: register.io_version(),
         })
     }
 }

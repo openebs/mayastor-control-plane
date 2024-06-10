@@ -1,6 +1,6 @@
 use crate::controller::io_engine::translation::IoEngineToAgent;
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
-use grpc::operations::registration;
+use grpc::operations::{registration, registration::traits::RegisterInfo};
 use rpc::v1::host::ListBlockDevicesRequest;
 use stor_port::{
     transport_api::{v0::BlockDevices, ResourceKind},
@@ -43,6 +43,9 @@ impl crate::controller::io_engine::HostApi for super::RpcClient {
         };
 
         Ok(Register {
+            version: registration_info.io_version(),
+            features: registration_info.features(),
+            bugfixes: registration_info.bugfixes(),
             id: registration_info.id.into(),
             grpc_endpoint: std::net::SocketAddr::from_str(&registration_info.grpc_endpoint)
                 .map_err(|error| SvcError::NodeGrpcEndpoint {

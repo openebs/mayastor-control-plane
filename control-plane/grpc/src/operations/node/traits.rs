@@ -94,6 +94,9 @@ impl TryFrom<node::Node> for Node {
                     None => None,
                 },
                 spec.node_nqn.try_into_opt()?,
+                None,
+                None,
+                None,
             )),
             None => None,
         };
