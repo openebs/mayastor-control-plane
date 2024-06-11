@@ -70,12 +70,14 @@ impl Registry {
     }
 
     /// Verify if all nodes have the rebuild ancestry fix and error out otherwise.
-    pub async fn verify_rebuild_ancestry_fix(&self) -> Result<(), SvcError> {
-        if !self
-            .specs()
-            .nodes_have_fix(NodeBugFix::NexusRebuildReplicaAncestry)
-        {
-            return Err(SvcError::UpgradeRequiredToRebuild {});
+    pub fn verify_nodes_fix<'a>(
+        &self,
+        nodes: impl Iterator<Item = &'a NodeId>,
+        fix: &NodeBugFix,
+    ) -> Result<(), SvcError> {
+        let specs = self.specs().read();
+        for node in nodes {
+            specs.node_has_fix(node, fix)?;
         }
         Ok(())
     }

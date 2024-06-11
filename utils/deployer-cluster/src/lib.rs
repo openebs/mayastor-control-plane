@@ -381,6 +381,16 @@ impl Cluster {
         self.volume_service_liveness(timeout_opts).await
     }
 
+    /// Replace the given old node with a new one from the idles.
+    pub async fn replace_node(&self, old: NodeId, new: NodeId) -> Result<(), ()> {
+        self.composer().stop(&old).await.unwrap();
+        self.wait_node_status(old, NodeStatus::Unknown)
+            .await
+            .unwrap();
+        self.composer().start(&new).await.unwrap();
+        Ok(())
+    }
+
     /// remove etcd store lock for `name` instance
     pub async fn remove_store_lock(&self, name: ControlPlaneService) {
         let mut store = etcd_client::Client::connect(["0.0.0.0:2379"], None)

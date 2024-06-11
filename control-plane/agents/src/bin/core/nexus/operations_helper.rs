@@ -15,8 +15,8 @@ use stor_port::types::v0::{
         volume::VolumeSpec,
     },
     transport::{
-        AddNexusReplica, Child, ChildUri, Nexus, NodeId, RemoveNexusChild, RemoveNexusReplica,
-        Replica, ReplicaOwners, SetReplicaEntityId, ShareReplica,
+        AddNexusReplica, Child, ChildUri, Nexus, NodeBugFix, NodeId, RemoveNexusChild,
+        RemoveNexusReplica, Replica, ReplicaOwners, SetReplicaEntityId, ShareReplica,
     },
 };
 
@@ -185,7 +185,11 @@ impl OperationGuardArc<NexusSpec> {
         let node = registry.node_wrapper(&request.node).await?;
 
         if request.snapshots_present {
-            registry.verify_rebuild_ancestry_fix().await?;
+            let replica_nodes = self.replica_nodes(registry);
+            registry.verify_nodes_fix(
+                replica_nodes.iter(),
+                &NodeBugFix::NexusRebuildReplicaAncestry,
+            )?;
         }
 
         let replica = registry.specs().replica(request.replica.uuid()).await?;
@@ -220,5 +224,12 @@ impl OperationGuardArc<NexusSpec> {
                 }
             }
         }
+    }
+
+    fn replica_nodes(&self, registry: &Registry) -> Vec<NodeId> {
+        self.as_ref()
+            .replica_ids()
+            .flat_map(|r| registry.specs().replica_id_node(r))
+            .collect::<Vec<_>>()
     }
 }

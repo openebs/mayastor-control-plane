@@ -12,8 +12,8 @@ use stor_port::{
         openapi::models,
         transport::{
             CreateReplica, CreateVolume, DestroyPool, DestroyReplica, DestroyVolume, Filter,
-            NodeStatus, PublishVolume, ReplicaId, SetVolumeReplica, SnapshotId, Volume,
-            VolumeShareProtocol, VolumeStatus,
+            PublishVolume, ReplicaId, SetVolumeReplica, SnapshotId, Volume, VolumeShareProtocol,
+            VolumeStatus,
         },
     },
 };
@@ -594,7 +594,7 @@ async fn snapshot_upgrade() {
     let mb = 1024 * 1024;
     let gc_period = Duration::from_millis(200);
     let cluster = ClusterBuilder::builder()
-        .with_rest(false)
+        .with_rest(true)
         .with_agents(vec!["core"])
         .with_tmpfs_pool_ix(0, 100 * mb)
         .with_tmpfs_pool_ix(1, 100 * mb)
@@ -602,7 +602,7 @@ async fn snapshot_upgrade() {
         .with_reconcile_period(gc_period, gc_period)
         .with_options(|b| {
             b.with_io_engines(2)
-                .with_idle_io_engines(1)
+                .with_idle_io_engines(2)
                 .with_io_engine_tag("v2.6.1")
                 // testing: remove me
                 .with_idle_io_engine_bin("~/git/mayastor/io-engine/target/debug/io-engine-fix")
@@ -682,17 +682,16 @@ async fn snapshot_upgrade() {
         .expect_err("No rebuild on older version!");
     assert_eq!(error.kind, ReplyErrorKind::FailedPrecondition);
 
-    cluster.composer().stop(&cluster.node(0)).await.unwrap();
     cluster
-        .wait_node_status(cluster.node(0), NodeStatus::Unknown)
-        .await
-        .unwrap();
-    cluster.composer().start(&cluster.node(2)).await.unwrap();
-    cluster
-        .wait_node_status(cluster.node(0), NodeStatus::Online)
+        .replace_node(cluster.node(0), cluster.node(2))
         .await
         .unwrap();
     cluster.wait_pool_online(cluster.pool(0, 0)).await.unwrap();
+    cluster
+        .replace_node(cluster.node(1), cluster.node(3))
+        .await
+        .unwrap();
+    cluster.wait_pool_online(cluster.pool(1, 0)).await.unwrap();
 
     tokio::time::sleep(gc_period * 5).await;
 

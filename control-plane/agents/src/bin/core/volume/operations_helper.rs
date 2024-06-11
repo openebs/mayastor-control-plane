@@ -33,8 +33,9 @@ use stor_port::{
         },
         transport::{
             CreateNexus, CreateReplica, Nexus, NexusId, NexusNvmePreemption, NexusNvmfConfig,
-            NodeId, NvmeReservation, NvmfControllerIdRange, Protocol, Replica, ReplicaId,
-            ReplicaOwners, ResizeNexus, ResizeReplica, Volume, VolumeShareProtocol, VolumeState,
+            NodeBugFix, NodeId, NvmeReservation, NvmfControllerIdRange, Protocol, Replica,
+            ReplicaId, ReplicaOwners, ResizeNexus, ResizeReplica, Volume, VolumeShareProtocol,
+            VolumeState,
         },
     },
     HostAccessControl,
@@ -340,15 +341,17 @@ impl OperationGuardArc<VolumeSpec> {
         registry: &Registry,
         nexus: &mut OperationGuardArc<NexusSpec>,
     ) -> Result<(), SvcError> {
-        let volume_children = registry
-            .specs()
-            .volume_replicas(self.uuid())
-            .len()
-            .min(self.as_ref().num_replicas as usize);
+        let (replicas, nodes) = {
+            let specs = registry.specs().read();
+            let replicas = specs.volume_replicas_it(self.uuid());
+            let nodes = specs.replica_nodes(replicas.clone());
+            (replicas.count(), nodes)
+        };
+        let volume_children = replicas.min(self.as_ref().num_replicas as usize);
         let mut nexus_children = nexus.as_ref().children.len();
 
         if self.has_snapshots() {
-            registry.verify_rebuild_ancestry_fix().await?;
+            registry.verify_nodes_fix(nodes.iter(), &NodeBugFix::NexusRebuildReplicaAncestry)?;
         }
         let replicas = nexus_attach_candidates(self.as_ref(), nexus.as_ref(), registry).await?;
 

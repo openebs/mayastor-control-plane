@@ -19,7 +19,7 @@ use stor_port::{
 };
 
 use crate::controller::resources::operations_helper::{
-    GuardedOperationsHelper, SpecOperationsHelper,
+    GuardedOperationsHelper, ResourceSpecs, SpecOperationsHelper,
 };
 
 impl ResourceSpecsLocked {
@@ -102,11 +102,6 @@ impl ResourceSpecsLocked {
         self.read().nodes.to_vec()
     }
 
-    /// Check if all nodes have the fix.
-    pub(crate) fn nodes_have_fix(&self, fix: NodeBugFix) -> bool {
-        self.read().nodes.values().any(|n| n.lock().has_fix(&fix))
-    }
-
     /// Get all node specs cloned
     pub(crate) fn nodes(&self) -> Vec<NodeSpec> {
         self.nodes_rsc()
@@ -129,6 +124,18 @@ impl ResourceSpecsLocked {
                 }
             })
             .collect()
+    }
+}
+
+impl ResourceSpecs {
+    /// Check if the given node has the given fix.
+    pub(crate) fn node_has_fix(&self, node_id: &NodeId, fix: &NodeBugFix) -> Result<(), SvcError> {
+        if let Some(node) = self.nodes.get(node_id) {
+            if !node.lock().has_fix(fix) {
+                return Err(SvcError::UpgradeRequiredToRebuild {});
+            }
+        }
+        Ok(())
     }
 }
 

@@ -15,13 +15,8 @@ impl ComponentAction for IoEngine {
             let io_engine_socket =
                 format!("{}:10124", cfg.next_ip_for_name(&Self::name(i, options))?);
             let name = Self::name(i, options);
-            let reg_name;
-            let reg_name = if options.idle_io_engines == 0 {
-                &name
-            } else {
-                reg_name = Self::name(i % (options.idle_io_engines + 1), options);
-                &reg_name
-            };
+            let reg_name = Self::idle_name(i, options);
+
             let ptpl_dir = format!("{}/{}", Self::ptpl().1, name);
 
             let bin = utils::DATA_PLANE_BINARY;
@@ -44,7 +39,7 @@ impl ComponentAction for IoEngine {
                 ContainerSpec::from_image(&name, image)
                     .with_pull_policy(options.image_pull_policy.clone())
             }
-            .with_args(vec!["-N", reg_name])
+            .with_args(vec!["-N", &reg_name])
             .with_args(vec!["-g", &io_engine_socket])
             .with_args(vec!["-R", DEFAULT_GRPC_CLIENT_ADDR])
             .with_args(vec![
@@ -148,6 +143,14 @@ impl IoEngine {
     /// Get the `IoEngine` container and node name.
     pub fn name(i: u32, _options: &StartOptions) -> String {
         format!("io-engine-{}", i + 1)
+    }
+    fn idle_name(i: u32, options: &StartOptions) -> String {
+        let index = if options.idle_io_engines == 0 {
+            i + 1
+        } else {
+            (i % options.idle_io_engines) + 1
+        };
+        format!("io-engine-{}", index)
     }
     pub fn nqn(i: u32, options: &StartOptions) -> String {
         format!(
