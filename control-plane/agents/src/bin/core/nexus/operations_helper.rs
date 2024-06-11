@@ -27,6 +27,7 @@ impl OperationGuardArc<NexusSpec> {
         &mut self,
         registry: &Registry,
         replica: &Replica,
+        snapshots_present: bool,
     ) -> Result<(), SvcError> {
         // Adding a replica to a nexus will initiate a rebuild.
         // First check that we are able to start a rebuild.
@@ -38,6 +39,7 @@ impl OperationGuardArc<NexusSpec> {
             nexus: self.as_ref().uuid.clone(),
             replica: ReplicaUri::new(&replica.uuid, &uri),
             auto_rebuild: true,
+            snapshots_present,
         };
         self.add_replica(registry, &request).await?;
         Ok(())
@@ -181,6 +183,11 @@ impl OperationGuardArc<NexusSpec> {
         request: &AddNexusReplica,
     ) -> Result<Child, SvcError> {
         let node = registry.node_wrapper(&request.node).await?;
+
+        if request.snapshots_present {
+            registry.verify_rebuild_ancestry_fix().await?;
+        }
+
         let replica = registry.specs().replica(request.replica.uuid()).await?;
         // we don't persist nexus owners to pstor anymore, instead we rebuild at startup
         replica.lock().owners.add_owner(&request.nexus);

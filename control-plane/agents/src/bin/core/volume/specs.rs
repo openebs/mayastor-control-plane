@@ -1060,6 +1060,8 @@ impl SpecOperationsHelper for VolumeSpec {
                             resource: ResourceKind::AffinityGroup,
                             count: *replica_count,
                         })
+                    } else if *replica_count > self.num_replicas && self.has_snapshots() {
+                        registry.verify_rebuild_ancestry_fix().await
                     } else {
                         Ok(())
                     }

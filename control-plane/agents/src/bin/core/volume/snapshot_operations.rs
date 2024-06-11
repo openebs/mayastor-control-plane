@@ -58,6 +58,10 @@ impl ResourceSnapshotting for OperationGuardArc<VolumeSpec> {
     ) -> Result<Self::CreateOutput, SvcError> {
         let state = registry.volume_state(request.source_id()).await?;
 
+        if self.as_ref().num_replicas > 1 {
+            registry.verify_rebuild_ancestry_fix().await?;
+        }
+
         let operation = VolumeOperation::CreateSnapshot(request.uuid().clone());
         let spec_clone = self.start_update(registry, &state, operation).await?;
 

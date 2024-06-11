@@ -275,7 +275,7 @@ impl Cluster {
         }
         Err(())
     }
-    /// Wait till the node is in the given status.
+    /// Wait till the pool is online.
     pub async fn wait_pool_online(&self, pool_id: PoolId) -> Result<(), ()> {
         let timeout = Duration::from_secs(2);
         let start = std::time::Instant::now();

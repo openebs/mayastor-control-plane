@@ -347,6 +347,9 @@ impl OperationGuardArc<VolumeSpec> {
             .min(self.as_ref().num_replicas as usize);
         let mut nexus_children = nexus.as_ref().children.len();
 
+        if self.has_snapshots() {
+            registry.verify_rebuild_ancestry_fix().await?;
+        }
         let replicas = nexus_attach_candidates(self.as_ref(), nexus.as_ref(), registry).await?;
 
         let mut result = Ok(());
@@ -374,7 +377,10 @@ impl OperationGuardArc<VolumeSpec> {
                 continue;
             }
 
-            match nexus.attach_replica(registry, replica.state()).await {
+            match nexus
+                .attach_replica(registry, replica.state(), self.has_snapshots())
+                .await
+            {
                 Ok(_) => {
                     nexus.info_span(|| {
                         let state = replica.state();
@@ -588,7 +594,9 @@ impl OperationGuardArc<VolumeSpec> {
     ) -> Result<(), SvcError> {
         if let Some(target) = &self.as_ref().target() {
             let mut nexus_guard = registry.specs().nexus(target.nexus()).await?;
-            nexus_guard.attach_replica(registry, &replica).await
+            nexus_guard
+                .attach_replica(registry, &replica, self.has_snapshots())
+                .await
         } else {
             Ok(())
         }
@@ -797,5 +805,9 @@ impl OperationGuardArc<VolumeSpec> {
         } else {
             Ok(false)
         }
+    }
+
+    pub fn has_snapshots(&self) -> bool {
+        self.as_ref().metadata.has_snapshots()
     }
 }

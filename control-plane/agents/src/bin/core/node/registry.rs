@@ -1,6 +1,6 @@
 use crate::controller::{registry::Registry, wrapper::NodeWrapper};
 use agents::errors::SvcError;
-use stor_port::types::v0::transport::{NodeId, NodeState, Register};
+use stor_port::types::v0::transport::{NodeBugFix, NodeId, NodeState, Register};
 
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -67,5 +67,16 @@ impl Registry {
         if automatic {
             self.specs().register_node(self, request).await.ok();
         }
+    }
+
+    /// Verify if all nodes have the rebuild ancestry fix and error out otherwise.
+    pub async fn verify_rebuild_ancestry_fix(&self) -> Result<(), SvcError> {
+        if !self
+            .specs()
+            .nodes_have_fix(NodeBugFix::NexusRebuildReplicaAncestry)
+        {
+            return Err(SvcError::UpgradeRequiredToRebuild {});
+        }
+        Ok(())
     }
 }

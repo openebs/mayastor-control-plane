@@ -869,15 +869,24 @@ pub struct AddNexusReplica {
     pub replica: ReplicaUri,
     /// Auto start rebuilding.
     pub auto_rebuild: bool,
+    /// Snapshots are present in the other replicas.
+    pub snapshots_present: bool,
 }
 impl AddNexusReplica {
     /// Return new `Self` from it's properties.
-    pub fn new(node: &NodeId, nexus: &NexusId, replica: &ReplicaUri, auto_rebuild: bool) -> Self {
+    pub fn new(
+        node: &NodeId,
+        nexus: &NexusId,
+        replica: &ReplicaUri,
+        auto_rebuild: bool,
+        snapshots_present: bool,
+    ) -> Self {
         Self {
             node: node.clone(),
             nexus: nexus.clone(),
             replica: replica.clone(),
             auto_rebuild,
+            snapshots_present,
         }
     }
 }

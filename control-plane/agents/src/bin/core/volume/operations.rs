@@ -655,7 +655,9 @@ impl ResourceReplicas for OperationGuardArc<VolumeSpec> {
             .and_then(|t| registry.specs().nexus_rsc(t.nexus()))
         {
             let mut guard = nexus_spec.operation_guard()?;
-            guard.attach_replica(registry, &new_replica).await?;
+            guard
+                .attach_replica(registry, &new_replica, self.has_snapshots())
+                .await?;
 
             if request.delete {
                 self.remove_child_replica(request.replica(), &mut guard, registry)

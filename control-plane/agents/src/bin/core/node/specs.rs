@@ -103,7 +103,6 @@ impl ResourceSpecsLocked {
     }
 
     /// Check if all nodes have the fix.
-    #[allow(dead_code)]
     pub(crate) fn nodes_have_fix(&self, fix: NodeBugFix) -> bool {
         self.read().nodes.values().any(|n| n.lock().has_fix(&fix))
     }

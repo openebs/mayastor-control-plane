@@ -16,10 +16,17 @@ pub enum NexusChild {
 }
 
 impl NexusChild {
-    /// Return Self as ReplicaUri
+    /// Return Self as ReplicaUri.
     pub fn as_replica(&self) -> Option<ReplicaUri> {
         match &self {
             NexusChild::Replica(replica) => Some(replica.clone()),
+            NexusChild::Uri(_) => None,
+        }
+    }
+    /// Return Self as ReplicaUri
+    pub fn as_replica_ref(&self) -> Option<&ReplicaUri> {
+        match &self {
+            NexusChild::Replica(replica) => Some(replica),
             NexusChild::Uri(_) => None,
         }
     }
