@@ -46,7 +46,7 @@ pub struct ListOptions {
     pub no_docker: bool,
 
     /// Format the docker output
-    #[clap(short, long, conflicts_with = "no-docker")]
+    #[clap(short, long, conflicts_with = "no_docker")]
     pub format: Option<String>,
 
     /// Label for the cluster
@@ -140,19 +140,41 @@ pub struct StartOptions {
     #[clap(long, default_value = "ifnotpresent")]
     pub image_pull_policy: composer::ImagePullPolicy,
 
-    /// Use `N` io_engine instances
+    /// Use `N` io_engine instances.
     /// Note: the io_engine containers have the host's /tmp directory mapped into the container
     /// as /host/tmp. This is useful to create pool's from file images.
     #[clap(short, long, default_value = "1")]
     pub io_engines: u32,
 
+    /// Use `N` idle io_engine instances, to replace `N` `io_engines`, in order!
+    /// These can be used to replace the `io_engines` which can be useful to simulate upgrades
+    /// for example.
+    /// # Warnings:
+    /// These engines share a lot of configuration with the regular `io_engines` (as intended),
+    /// and as such please ensure these are not active at the same time as its corresponding
+    /// `io_engine` container.
+    #[clap(long, default_value = "0")]
+    pub idle_io_engines: u32,
+
     /// Use the following docker image for the io_engine instances.
     #[clap(long, env = "IO_ENGINE_IMAGE", default_value = utils::io_engine_image())]
     pub io_engine_image: String,
 
+    /// Use the following docker image for the io_engine instances.
+    #[clap(long, env = "IDLE_IO_ENGINE_IMAGE", default_value = utils::io_engine_image())]
+    pub idle_io_engine_image: String,
+
     /// Use the following runnable binary for the io_engine instances.
     #[clap(long, env = "IO_ENGINE_BIN", conflicts_with = "io_engine_image")]
     pub io_engine_bin: Option<String>,
+
+    /// Use the following runnable binary for the io_engine instances.
+    #[clap(
+        long,
+        env = "IDLE_IO_ENGINE_BIN",
+        conflicts_with = "idle_io_engine_image"
+    )]
+    pub idle_io_engine_bin: Option<String>,
 
     /// Add host block devices to the io_engine containers as a docker bind mount
     /// A raw block device: --io_engine-devices /dev/sda /dev/sdb
@@ -448,6 +470,11 @@ impl StartOptions {
         self
     }
     #[must_use]
+    pub fn with_idle_io_engines(mut self, idle_io_engines: u32) -> Self {
+        self.idle_io_engines = idle_io_engines;
+        self
+    }
+    #[must_use]
     pub fn with_pull_policy(mut self, policy: composer::ImagePullPolicy) -> Self {
         self.image_pull_policy = policy;
         self
@@ -487,8 +514,18 @@ impl StartOptions {
         self
     }
     #[must_use]
+    pub fn with_io_engine_tag(mut self, tag: &str) -> Self {
+        self.io_engine_image = utils::io_engine_image_tagged(tag.into());
+        self
+    }
+    #[must_use]
     pub fn with_io_engine_img(mut self, image: &str) -> Self {
         self.io_engine_image = image.to_string();
+        self
+    }
+    #[must_use]
+    pub fn with_idle_io_engine_bin(mut self, bin: &str) -> Self {
+        self.idle_io_engine_bin = Some(bin.to_string());
         self
     }
     #[must_use]

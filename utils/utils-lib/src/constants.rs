@@ -30,10 +30,11 @@ pub fn fio_spdk_image() -> String {
 
 /// Io-Engine container image used for testing.
 pub fn io_engine_image() -> String {
-    format!(
-        "{TARGET_REGISTRY}/{PRODUCT_NAME}-io-engine:{}",
-        target_tag()
-    )
+    io_engine_image_tagged(target_tag())
+}
+/// Io-Engine container image used for testing, but with a custom tag.
+pub fn io_engine_image_tagged(tag: String) -> String {
+    format!("{TARGET_REGISTRY}/{PRODUCT_NAME}-io-engine:{tag}")
 }
 
 /// Environment variable that points to an io-engine binary.

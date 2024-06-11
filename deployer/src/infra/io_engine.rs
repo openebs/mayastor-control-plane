@@ -11,33 +11,47 @@ use utils::DEFAULT_GRPC_CLIENT_ADDR;
 impl ComponentAction for IoEngine {
     fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         let mut cfg = cfg;
-        for i in 0 .. options.io_engines {
+        for i in 0 .. options.io_engines + options.idle_io_engines {
             let io_engine_socket =
                 format!("{}:10124", cfg.next_ip_for_name(&Self::name(i, options))?);
             let name = Self::name(i, options);
+            let reg_name;
+            let reg_name = if options.idle_io_engines == 0 {
+                &name
+            } else {
+                reg_name = Self::name(i % (options.idle_io_engines + 1), options);
+                &reg_name
+            };
             let ptpl_dir = format!("{}/{}", Self::ptpl().1, name);
 
             let bin = utils::DATA_PLANE_BINARY;
-            let binary = options.io_engine_bin.clone().or_else(|| Self::binary(bin));
+            let binary = if i < options.io_engines {
+                options.io_engine_bin.clone()
+            } else {
+                options.idle_io_engine_bin.clone()
+            }
+            .or_else(|| Self::binary(bin));
 
             let mut spec = if let Some(binary) = binary {
                 ContainerSpec::from_binary(&name, Binary::from_path(&binary))
                     .with_bind_binary_dir(true)
             } else {
-                ContainerSpec::from_image(&name, &options.io_engine_image)
+                let image = if i < options.io_engines {
+                    &options.io_engine_image
+                } else {
+                    &options.idle_io_engine_image
+                };
+                ContainerSpec::from_image(&name, image)
                     .with_pull_policy(options.image_pull_policy.clone())
             }
-            .with_args(vec!["-N", &name])
+            .with_args(vec!["-N", reg_name])
             .with_args(vec!["-g", &io_engine_socket])
             .with_args(vec!["-R", DEFAULT_GRPC_CLIENT_ADDR])
             .with_args(vec![
                 "--api-versions".to_string(),
                 IoEngineApiVersion::vec_to_str(options.io_engine_api_versions.clone()),
             ])
-            .with_args(vec![
-                "-r",
-                format!("/host/tmp/{}.sock", Self::name(i, options)).as_str(),
-            ])
+            .with_args(vec!["-r", format!("/host/tmp/{}.sock", reg_name).as_str()])
             .with_args(vec!["--ptpl-dir", &ptpl_dir])
             .with_env("MAYASTOR_NVMF_HOSTID", Uuid::new_v4().to_string().as_str())
             .with_env("NEXUS_NVMF_RESV_ENABLE", "1")
