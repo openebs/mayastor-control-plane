@@ -5,7 +5,7 @@ from pytest_bdd import given, scenario, then, when, parsers
 import pytest
 import docker
 import requests
-import time
+import time 
 
 from common import prod_domain_name, disk_pool_label_key, disk_pool_label_val
 from common.deployer import Deployer
@@ -29,15 +29,28 @@ NUM_IO_ENGINES = 3
 NODE_1_NAME = "io-engine-1"
 NODE_2_NAME = "io-engine-2"
 NODE_3_NAME = "io-engine-3"
+
+# The UUIDs of the pools on node1
 NODE_1_POOL_1_UUID = "node1pool1"
 NODE_1_POOL_2_UUID = "node1pool2"
 NODE_1_POOL_3_UUID = "node1pool3"
+NODE_1_POOL_4_UUID = "node1pool4"
+NODE_1_POOL_5_UUID = "node1pool5"
+
+# The UUIDs of the pools on node2
 NODE_2_POOL_1_UUID = "node2pool1"
 NODE_2_POOL_2_UUID = "node2pool2"
 NODE_2_POOL_3_UUID = "node2pool3"
+NODE_2_POOL_4_UUID = "node2pool4"
+NODE_2_POOL_5_UUID = "node2pool5"
+
+# The UUIDs of the pools on node3
 NODE_3_POOL_1_UUID = "node3pool1"
 NODE_3_POOL_2_UUID = "node3pool2"
 NODE_3_POOL_3_UUID = "node3pool3"
+NODE_3_POOL_4_UUID = "node3pool4"
+
+# The key used to pass the volume create request between test steps.
 CREATE_REQUEST_KEY = "create_request"
 VOLUME_SIZE = 10485761
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1441"
@@ -47,21 +60,28 @@ DISKPOOL_LABEL_VAL = disk_pool_label_val
 
 # The labels to be applied to the pools.
 ###############################################################################################
-#   Description            ||   Pool Name   ||         Label           ||        Node        ||
-# ==============================================================================================
-#     "pool1" has          ||   node1pool1  ||     zone-us=us-west-1   ||     io-engine-1    ||
-#       the label          ||   node2pool1  ||     zone-us=us-west-1   ||     io-engine-2    ||
-#   "zone-us=us-west-1"    ||   node3pool1  ||     zone-us=us-west-1   ||     io-engine-3    ||
-# ==============================================================================================
-#     "pool2" has          ||   node1pool2  ||     zone-ap=ap-south-1  ||     io-engine-1    ||
-#      the label           ||   node2pool2  ||     zone-ap=ap-south-1  ||     io-engine-2    ||
-#   "zone-ap=ap-south-1"   ||   node3pool2  ||     zone-ap=ap-south-1  ||     io-engine-3    ||
-# ==============================================================================================
-#     "pool3" has          ||   node1pool3  ||     zone-eu=eu-west-3   ||     io-engine-1    ||
-#      the label           ||   node2pool3  ||     zone-eu=eu-west-3   ||     io-engine-2    ||
-#   "zone-eu=eu-west-3"    ||   node3pool3  ||     zone-eu=eu-west-3   ||     io-engine-3    ||
-# ==============================================================================================
-# =========================================================================================
+#   Description            ||   Pool Name   ||         Label            ||        Node        ||
+#==============================================================================================
+#     "pool1" has          ||   node1pool1  ||     zone-us=us-west-1    ||     io-engine-1    || 
+#       the label          ||   node2pool1  ||     zone-us=us-west-1    ||     io-engine-2    ||
+#   "zone-us=us-west-1"    ||   node3pool1  ||     zone-us=us-west-1    ||     io-engine-3    ||
+#==============================================================================================
+#     "pool2" has          ||   node1pool2  ||     zone-ap=ap-south-1   ||     io-engine-1    ||
+#      the label           ||   node2pool2  ||     zone-ap=ap-south-1   ||     io-engine-2    ||
+#   "zone-ap=ap-south-1"   ||   node3pool2  ||     zone-ap=ap-south-1   ||     io-engine-3    ||
+#==============================================================================================
+#     "pool3" has          ||   node1pool3  ||     zone-eu=eu-west-3    ||     io-engine-1    ||
+#      the label           ||   node2pool3  ||     zone-eu=eu-west-3    ||     io-engine-2    ||
+#   "zone-eu=eu-west-3"    ||   node3pool3  ||     zone-eu=eu-west-3    ||     io-engine-3    ||
+#==============================================================================================
+#     "pool4" has          ||   node1pool4  ||     zone-ca=ca-central-1 ||     io-engine-1   || 
+#       the label          ||   node2pool4  ||     zone-ca=ca-central-1 ||     io-engine-2   ||
+#   "zone-ca=ca-central-1" ||   node3pool4  ||     zone-ca=ca-central-1 ||     io-engine-3   ||
+#==============================================================================================
+#     "pool5" has          ||   node1pool5  ||     zone-ca=ca-west-1    ||     io-engine-1   || 
+#       the label          ||   node2pool5  ||     zone-ca=ca-west-1    ||     io-engine-2   ||
+#   "zone-ca=ca-west-1"    ||               ||                          ||                   ||
+#==============================================================================================
 
 POOL_CONFIGURATIONS = [
     # Pool node1pool1 has the label "zone-us=us-west-1" and is on node "io-engine-1"
@@ -181,6 +201,72 @@ POOL_CONFIGURATIONS = [
             },
         ),
     },
+    # Pool node1pool4 has the label "zone-ca=ca-central-1" and is on node "io-engine-1"
+    {
+        "node_name": NODE_1_NAME,
+        "pool_uuid": NODE_1_POOL_4_UUID,
+        "pool_body": CreatePoolBody(
+            ["malloc:///disk4?size_mb=50"],
+            labels={
+                DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
+                "node": "io-engine-1",
+                "zone-ca": "ca-central-1",
+            },
+        ),
+    },
+    # Pool node2pool4 has the label "zone-ca=ca-central-1" and is on node "io-engine-2"
+    {
+        "node_name": NODE_2_NAME,
+        "pool_uuid": NODE_2_POOL_4_UUID,
+        "pool_body": CreatePoolBody(
+            ["malloc:///disk4?size_mb=50"],
+            labels={
+                DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
+                "node": "io-engine-2",
+                "zone-ca": "ca-central-1",
+            },
+        ),
+    },
+    # Pool node3pool4 has the label "zone-ca=ca-central-1" and is on node "io-engine-3"
+    {
+        "node_name": NODE_3_NAME,
+        "pool_uuid": NODE_3_POOL_4_UUID,
+        "pool_body": CreatePoolBody(
+            ["malloc:///disk4?size_mb=50"],
+            labels={
+                DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
+                "node": "io-engine-3",
+                "zone-ca": "ca-central-1",
+            },
+        ),
+    },
+     # Pool node1pool5 has the label "zone-ca=ca-west-1" and is on node "io-engine-1"
+    {
+        "node_name": NODE_1_NAME,
+        "pool_uuid": NODE_1_POOL_5_UUID,
+        "pool_body": CreatePoolBody(
+            ["malloc:///disk5?size_mb=50"],
+            labels={
+                DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
+                "node": "io-engine-1",
+                "zone-ca": "ca-west-1",
+            },
+        ),
+    },
+    # Pool node2pool5 has the label "zone-ca=ca-west-1" and is on node "io-engine-2"
+    {
+        "node_name": NODE_2_NAME,
+        "pool_uuid": NODE_2_POOL_5_UUID,
+        "pool_body": CreatePoolBody(
+            ["malloc:///disk5?size_mb=50"],
+            labels={
+                DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
+                "node": "io-engine-2",
+                "zone-ca": "ca-west-1",
+            },
+        ),
+    },
+
 ]
 
 
@@ -219,17 +305,20 @@ def replica_ctx():
 def test_suitable_pools_which_contain_volume_topology_labels():
     """Suitable pools which contain volume topology labels."""
 
-
 @scenario(
     "pool-topology.feature", "Suitable pools which contain volume topology keys only"
 )
 def test_suitable_pools_which_contain_volume_topology_keys_only():
     """Suitable pools which contain volume topology keys only."""
 
+@scenario('pool-topology.feature', 'Suitable pools which contain volume topology affinity key')
+def test_suitable_pools_which_contain_volume_topology_affinity_key():
+    """Suitable pools which contain volume topology affinity key."""
 
-@given("a control plane, three Io-Engine instances, nine pools")
-def a_control_plane_three_ioengine_instances_nine_pools(init):
-    """a control plane, three Io-Engine instances, nine pools."""
+
+@given("a control plane, three Io-Engine instances, fourteen pools")
+def a_control_plane_three_ioengine_instances_fourteen_pools(init):
+    """a control plane, three Io-Engine instances, fourteen pools."""
     docker_client = docker.from_env()
 
     # The control plane comprises the core agents, rest server and etcd instance.
@@ -250,9 +339,22 @@ def a_control_plane_three_ioengine_instances_nine_pools(init):
 
     # Check for a pools
     pools = ApiClient.pools_api().get_pools()
-    assert len(pools) == 9
+    assert len(pools) == 14
     yield
     Cluster.cleanup(pools=False)
+
+@given(
+    parsers.parse(
+        "a request for a {replica} replica volume with poolAffinityTopologyKey as {pool_affinity_topology_key} and pool topology affinity as {volume_pool_topology_affinty}"
+    )
+)
+def a_request_for_a_replica_replica_volume_with_poolaffinitytopologykey_as_pool_affinity_topology_key_and_pool_topology_affinity_as_volume_pool_topology_affinty(
+    create_request, replica, pool_affinity_topology_key, volume_pool_topology_affinty
+):
+    """a request for a <replica> replica volume with poolAffinityTopologyKey as <pool_affinity_topology_key> and pool topology affinity as <volume_pool_topology_affinty>."""
+    if pool_affinity_topology_key == "True":
+        request = create_volume_body(replica, volume_pool_topology_affinty, pool_affinity_topology_label="False", has_topology_key="False", pool_affinity_topology_key="True")
+        create_request[CREATE_REQUEST_KEY] = request
 
 
 @given(
@@ -268,7 +370,7 @@ def a_request_for_a_replica_replica_volume_with_poolaffinitytopologylabel_as_poo
 ):
     """a request for a <replica> replica volume with poolAffinityTopologyLabel as <pool_affinity_topology_label> and pool topology inclusion as <volume_pool_topology_inclusion_label>."""
     if pool_affinity_topology_label == "True":
-        request = create_volume_body(replica, volume_pool_topology_inclusion_label)
+        request = create_volume_body(replica, volume_pool_topology_inclusion_label, pool_affinity_topology_label="True", has_topology_key="False", pool_affinity_topology_key="False")
         create_request[CREATE_REQUEST_KEY] = request
 
 
@@ -282,7 +384,7 @@ def a_request_for_a_replica_replica_volume_with_poolhastopologykey_as_has_topolo
 ):
     """a request for a <replica> replica volume with poolHasTopologyKey as <has_topology_key> and pool topology inclusion as <volume_pool_topology_inclusion_label>."""
     if has_topology_key == "True":
-        request = create_volume_body(replica, volume_pool_topology_inclusion_label)
+        request = create_volume_body(replica, volume_pool_topology_inclusion_label, pool_affinity_topology_label="False", has_topology_key="True", pool_affinity_topology_key="False")
         create_request[CREATE_REQUEST_KEY] = request
 
 
@@ -298,6 +400,9 @@ def the_desired_number_of_replica_of_volume_ie_replica_here_is_expression_number
     no_of_eligible_pools = no_of_suitable_pools(
         create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
             "inclusion"
+        ],
+        create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
+            "affinitykey"
         ],
     )
     if expression == "<=":
@@ -323,6 +428,7 @@ def the_replica_replica_volume_creation_should_result_and_provisioned_provisione
             replica, create_request[CREATE_REQUEST_KEY]["topology"]
         )
         assert str(volume.spec) == str(expected_spec)
+
         pools_names_which_has_given_labels = get_pool_names_with_given_labels(
             pool_label
         )
@@ -369,21 +475,32 @@ def get_pool_names_with_given_labels(pool_label):
 
 
 # Return the create volume request body based on the input parameters.
-def create_volume_body(replica, volume_pool_topology_inclusion_label):
+def create_volume_body(replica, volume_pool_topology_inclusion_label, pool_affinity_topology_label, has_topology_key, pool_affinity_topology_key ):
     """Create a volume body."""
-    key, _, value = volume_pool_topology_inclusion_label.partition("=")
-    topology = Topology(
-        pool_topology=PoolTopology(
-            labelled=LabelledTopology(
-                exclusion={},
-                inclusion={
-                    key.strip(): value.strip(),
-                    DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
-                },
-                affinitykey=[],
+    if pool_affinity_topology_label == "True" or has_topology_key == "True" :
+        key, _, value = volume_pool_topology_inclusion_label.partition("=")
+        topology = Topology(
+            pool_topology=PoolTopology(
+                labelled=LabelledTopology(
+                    exclusion={},
+                    inclusion={
+                        key.strip(): value.strip(),
+                        DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
+                    },
+                    affinitykey=[],
+                )
             )
         )
-    )
+    elif pool_affinity_topology_key == "True":
+        topology = Topology(
+            pool_topology=PoolTopology(
+                labelled=LabelledTopology(
+                    exclusion={},
+                    inclusion={},
+                    affinitykey=[volume_pool_topology_inclusion_label],
+                )
+            )
+        )
     return CreateVolumeBody(
         VolumePolicy(False),
         int(replica),
@@ -409,15 +526,22 @@ def expected_volume_spec(replica, toplogy):
 
 
 # Return the number of pools that qualify based on the volume topology inclusion labels.
-def no_of_suitable_pools(volume_pool_topology_inclusion_labels):
+def no_of_suitable_pools(volume_pool_topology_inclusion_labels, volume_pool_topology_affinity):
     """Return the number of pools that qualify based on the volume topology inclusion labels."""
     pool_with_labels = get_pool_names_with_its_corresponding_labels()
-    qualified_pools = list()
+    qualified_pools = set() # Using HashSet to avoid duplicate entries.
     for pool_id, pool_labels in pool_with_labels.items():
-        if does_pool_qualify_inclusion_labels(
-            volume_pool_topology_inclusion_labels, pool_labels
-        ):
-            qualified_pools.append(pool_id)
+        if len(volume_pool_topology_inclusion_labels) !=0 :
+            if does_pool_qualify_inclusion_labels(
+                volume_pool_topology_inclusion_labels, pool_labels
+                ):
+                    qualified_pools.add(pool_id)
+        
+        if len(volume_pool_topology_affinity) != 0 :
+            if does_pool_qualify_affinity_keys(
+                volume_pool_topology_affinity, pool_labels
+            ):
+                qualified_pools.add(pool_id)
     return len(qualified_pools)
 
 
@@ -447,3 +571,16 @@ def does_pool_qualify_inclusion_labels(
         else:
             inc_match = False
     return inc_match
+
+# Return whether the pool qualifies based on the volume topology affinity keys.
+def does_pool_qualify_affinity_keys(
+    volume_pool_topology_affinit_key, pool_labels
+):
+    inc_key_match = True
+    for key in volume_pool_topology_affinit_key:
+        if key in pool_labels:
+            inc_key_match = True
+            break
+        else:
+            inc_key_match = False
+    return inc_key_match
