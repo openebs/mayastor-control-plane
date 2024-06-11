@@ -509,6 +509,7 @@ impl From<NodeSpec> for models::NodeSpec {
             labels,
             src.cordon_drain_state.into_opt(),
             src.node_nqn.into_opt(),
+            src.version,
         )
     }
 }

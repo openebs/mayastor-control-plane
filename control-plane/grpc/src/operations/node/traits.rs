@@ -96,7 +96,7 @@ impl TryFrom<node::Node> for Node {
                 spec.node_nqn.try_into_opt()?,
                 None,
                 None,
-                None,
+                spec.version,
             )),
             None => None,
         };
@@ -123,6 +123,7 @@ impl TryFrom<node::Node> for Node {
                     status,
                     None,
                     state.node_nqn.try_into_opt()?,
+                    state.version,
                 ))
             }
             None => None,
@@ -180,6 +181,7 @@ impl From<Node> for node::Node {
                 None => None,
             },
             node_nqn: types_v0_spec.node_nqn().as_ref().map(|nqn| nqn.to_string()),
+            version: types_v0_spec.version().clone(),
         });
         let grpc_node_state = match types_v0_node.state() {
             None => None,
@@ -190,6 +192,7 @@ impl From<Node> for node::Node {
                     endpoint: types_v0_state.grpc_endpoint.to_string(),
                     status: grpc_node_status as i32,
                     node_nqn: types_v0_state.node_nqn.as_ref().map(|nqn| nqn.to_string()),
+                    version: types_v0_state.version.clone(),
                 })
             }
         };

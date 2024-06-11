@@ -604,8 +604,6 @@ async fn snapshot_upgrade() {
             b.with_io_engines(2)
                 .with_idle_io_engines(2)
                 .with_io_engine_tag("v2.6.1")
-                // testing: remove me
-                .with_idle_io_engine_bin("~/git/mayastor/io-engine/target/debug/io-engine-fix")
         })
         .build()
         .await

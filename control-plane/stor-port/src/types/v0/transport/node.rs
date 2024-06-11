@@ -193,6 +193,7 @@ impl NodeState {
         status: NodeStatus,
         api_versions: Option<Vec<ApiVersion>>,
         node_nqn: Option<HostNqn>,
+        version: Option<String>,
     ) -> Self {
         Self {
             id,
@@ -203,7 +204,7 @@ impl NodeState {
             node_nqn,
             features: None,
             bugfixes: None,
-            version: None,
+            version,
         }
     }
     /// Get the node identification.
@@ -256,6 +257,7 @@ impl From<NodeState> for models::NodeState {
             src.id,
             src.status,
             src.node_nqn.into_opt(),
+            src.version,
         )
     }
 }

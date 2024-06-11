@@ -98,6 +98,8 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     let io_engine2 = cluster.node(1);
 
     let listed_node = client.nodes_api().get_node(io_engine1.as_str()).await;
+    let listed_node = listed_node.unwrap();
+    let version = listed_node.spec.as_ref().unwrap().version.clone();
     let mut node = models::Node {
         id: io_engine1.to_string(),
         spec: Some(models::NodeSpec {
@@ -109,6 +111,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             labels: None,
             cordondrainstate: None,
             node_nqn: Some(HostNqn::from_nodename(&io_engine1.to_string()).to_string()),
+            version: version.clone(),
         }),
         state: Some(models::NodeState {
             id: io_engine1.to_string(),
@@ -118,9 +121,10 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             ),
             status: models::NodeStatus::Online,
             node_nqn: Some(HostNqn::from_nodename(&io_engine1.to_string()).to_string()),
+            version,
         }),
     };
-    assert_eq!(listed_node.unwrap(), node);
+    assert_eq!(listed_node, node);
 
     let _ = client.pools_api().get_pools(None).await.unwrap();
     let pool = client

@@ -250,6 +250,7 @@ mod tests {
             NodeStatus::Online,
             None,
             None,
+            None,
         );
         NodeWrapper::new_stub(&state)
     }
