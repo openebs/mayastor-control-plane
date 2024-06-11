@@ -393,6 +393,17 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
         )
         .map_err(|_| tonic::Status::invalid_argument("Invalid node_spread_topology_key"))?;
 
+        // add validation for one-to-one mapping of topology params to storage class
+        validate_single_topology_param(
+            &pool_affinity_topology_label,
+            &pool_affinity_topology_key,
+            &pool_has_topology_key,
+            &node_affinity_topology_label,
+            &node_affinity_topology_key,
+            &node_has_topology_key,
+            &node_spread_topology_key,
+        )?;
+
         validate_topology_params(&node_affinity_topology_label, &node_spread_topology_key)?;
         validate_topology_params(&node_has_topology_key, &node_spread_topology_key)?;
 
@@ -412,6 +423,36 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
             node_spread_topology_key,
         })
     }
+}
+
+/// Ensure there's only 1 topology parameter enabled at a time.
+pub(crate) fn validate_single_topology_param(
+    pool_affinity_topology_label: &Option<HashMap<String, String>>,
+    pool_affinity_topology_key: &Option<Vec<String>>,
+    pool_has_topology_key: &Option<HashMap<String, String>>,
+    node_affinity_topology_label: &Option<HashMap<String, String>>,
+    node_affinity_topology_key: &Option<Vec<String>>,
+    node_has_topology_key: &Option<HashMap<String, String>>,
+    node_spread_topology_key: &Option<HashMap<String, String>>,
+) -> Result<(), tonic::Status> {
+    let topology_params = [
+        pool_affinity_topology_label.is_some(),
+        pool_affinity_topology_key.is_some(),
+        pool_has_topology_key.is_some(),
+        node_affinity_topology_label.is_some(),
+        node_affinity_topology_key.is_some(),
+        node_has_topology_key.is_some(),
+        node_spread_topology_key.is_some(),
+    ];
+
+    let number_of_topology_params = topology_params.iter().filter(|&&x| x).count();
+
+    if number_of_topology_params > 1 {
+        return Err(tonic::Status::invalid_argument(
+            "Multiple topology parameters are not allowed",
+        ));
+    }
+    Ok(())
 }
 
 /// Validate the topology parameters.
