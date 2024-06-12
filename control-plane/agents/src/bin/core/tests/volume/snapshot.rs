@@ -590,6 +590,130 @@ async fn unknown_snapshot_garbage_collector() {
 }
 
 #[tokio::test]
+async fn snapshot_upgrade() {
+    let mb = 1024 * 1024;
+    let gc_period = Duration::from_millis(200);
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_tmpfs_pool_ix(0, 100 * mb)
+        .with_tmpfs_pool_ix(1, 100 * mb)
+        .with_cache_period("200ms")
+        .with_reconcile_period(gc_period, gc_period)
+        .with_options(|b| {
+            b.with_io_engines(2)
+                .with_idle_io_engines(2)
+                .with_io_engine_tag("v2.6.1")
+        })
+        .build()
+        .await
+        .unwrap();
+
+    let vol_cli = cluster.grpc_client().volume();
+
+    let volume_1 = vol_cli
+        .create(
+            &CreateVolume {
+                uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
+                size: 16 * mb,
+                replicas: 1,
+                thin: false,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let volume_2 = vol_cli
+        .create(
+            &CreateVolume {
+                uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b8".try_into().unwrap(),
+                size: 16 * mb,
+                replicas: 2,
+                thin: false,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let volume_1 = vol_cli
+        .publish(
+            &PublishVolume {
+                uuid: volume_1.uuid().clone(),
+                share: Some(VolumeShareProtocol::Nvmf),
+                target_node: Some(cluster.node(0)),
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let _snapshot = vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume_1.uuid(), SnapshotId::new()),
+            None,
+        )
+        .await
+        .unwrap();
+    let error = vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume_2.uuid(), SnapshotId::new()),
+            None,
+        )
+        .await
+        .expect_err("Can't take nr snapshot");
+    assert_eq!(error.kind, ReplyErrorKind::FailedPrecondition);
+
+    let error = vol_cli
+        .set_replica(
+            &SetVolumeReplica {
+                uuid: volume_1.uuid().clone(),
+                replicas: 2,
+            },
+            None,
+        )
+        .await
+        .expect_err("No rebuild on older version!");
+    assert_eq!(error.kind, ReplyErrorKind::FailedPrecondition);
+
+    cluster
+        .replace_node(cluster.node(0), cluster.node(2))
+        .await
+        .unwrap();
+    cluster.wait_pool_online(cluster.pool(0, 0)).await.unwrap();
+    cluster
+        .replace_node(cluster.node(1), cluster.node(3))
+        .await
+        .unwrap();
+    cluster.wait_pool_online(cluster.pool(1, 0)).await.unwrap();
+
+    tokio::time::sleep(gc_period * 5).await;
+
+    let _volume = vol_cli
+        .set_replica(
+            &SetVolumeReplica {
+                uuid: volume_1.uuid().clone(),
+                replicas: 2,
+            },
+            None,
+        )
+        .await
+        .expect("After upgrade this should work!");
+
+    vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume_2.uuid(), SnapshotId::new()),
+            None,
+        )
+        .await
+        .expect("Now we can take nr snapshot");
+}
+
+#[tokio::test]
 #[ignore]
 async fn nr_snapshot() {
     let kb = 1024 * 1024;

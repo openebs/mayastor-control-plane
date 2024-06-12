@@ -33,8 +33,9 @@ use stor_port::{
         },
         transport::{
             CreateNexus, CreateReplica, Nexus, NexusId, NexusNvmePreemption, NexusNvmfConfig,
-            NodeId, NvmeReservation, NvmfControllerIdRange, Protocol, Replica, ReplicaId,
-            ReplicaOwners, ResizeNexus, ResizeReplica, Volume, VolumeShareProtocol, VolumeState,
+            NodeBugFix, NodeId, NvmeReservation, NvmfControllerIdRange, Protocol, Replica,
+            ReplicaId, ReplicaOwners, ResizeNexus, ResizeReplica, Volume, VolumeShareProtocol,
+            VolumeState,
         },
     },
     HostAccessControl,
@@ -340,13 +341,18 @@ impl OperationGuardArc<VolumeSpec> {
         registry: &Registry,
         nexus: &mut OperationGuardArc<NexusSpec>,
     ) -> Result<(), SvcError> {
-        let volume_children = registry
-            .specs()
-            .volume_replicas(self.uuid())
-            .len()
-            .min(self.as_ref().num_replicas as usize);
+        let (replicas, nodes) = {
+            let specs = registry.specs().read();
+            let replicas = specs.volume_replicas_it(self.uuid());
+            let nodes = specs.replica_nodes(replicas.clone());
+            (replicas.count(), nodes)
+        };
+        let volume_children = replicas.min(self.as_ref().num_replicas as usize);
         let mut nexus_children = nexus.as_ref().children.len();
 
+        if self.has_snapshots() {
+            registry.verify_nodes_fix(nodes.iter(), &NodeBugFix::NexusRebuildReplicaAncestry)?;
+        }
         let replicas = nexus_attach_candidates(self.as_ref(), nexus.as_ref(), registry).await?;
 
         let mut result = Ok(());
@@ -374,7 +380,10 @@ impl OperationGuardArc<VolumeSpec> {
                 continue;
             }
 
-            match nexus.attach_replica(registry, replica.state()).await {
+            match nexus
+                .attach_replica(registry, replica.state(), self.has_snapshots())
+                .await
+            {
                 Ok(_) => {
                     nexus.info_span(|| {
                         let state = replica.state();
@@ -588,7 +597,9 @@ impl OperationGuardArc<VolumeSpec> {
     ) -> Result<(), SvcError> {
         if let Some(target) = &self.as_ref().target() {
             let mut nexus_guard = registry.specs().nexus(target.nexus()).await?;
-            nexus_guard.attach_replica(registry, &replica).await
+            nexus_guard
+                .attach_replica(registry, &replica, self.has_snapshots())
+                .await
         } else {
             Ok(())
         }
@@ -797,5 +808,9 @@ impl OperationGuardArc<VolumeSpec> {
         } else {
             Ok(false)
         }
+    }
+
+    pub fn has_snapshots(&self) -> bool {
+        self.as_ref().metadata.has_snapshots()
     }
 }

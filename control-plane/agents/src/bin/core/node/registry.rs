@@ -1,6 +1,6 @@
 use crate::controller::{registry::Registry, wrapper::NodeWrapper};
 use agents::errors::SvcError;
-use stor_port::types::v0::transport::{NodeId, NodeState, Register};
+use stor_port::types::v0::transport::{NodeBugFix, NodeId, NodeState, Register};
 
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -67,5 +67,18 @@ impl Registry {
         if automatic {
             self.specs().register_node(self, request).await.ok();
         }
+    }
+
+    /// Verify if all nodes have the rebuild ancestry fix and error out otherwise.
+    pub fn verify_nodes_fix<'a>(
+        &self,
+        nodes: impl Iterator<Item = &'a NodeId>,
+        fix: &NodeBugFix,
+    ) -> Result<(), SvcError> {
+        let specs = self.specs().read();
+        for node in nodes {
+            specs.node_has_fix(node, fix)?;
+        }
+        Ok(())
     }
 }

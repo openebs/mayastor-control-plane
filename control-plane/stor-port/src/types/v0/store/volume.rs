@@ -254,6 +254,10 @@ impl VolumeMetadata {
     pub fn num_snapshots(&self) -> usize {
         self.runtime.snapshots.len()
     }
+    /// Check if there's any snapshot.
+    pub fn has_snapshots(&self) -> bool {
+        self.runtime.has_snapshots()
+    }
 }
 
 /// Volume meta information.

@@ -28,6 +28,8 @@ message NodeSpec {
   optional CordonDrainState cordon_drain_state = 4;
   // the host nqn
   optional string node_nqn = 5;
+  // the io-engine version
+  optional string version = 6;
 }
 
 message NodeState {
@@ -39,6 +41,8 @@ message NodeState {
   NodeStatus status = 3;
   // the host nqn
   optional string node_nqn = 4;
+  // the io-engine version
+  optional string version = 5;
 }
 
 // Multiple nodes
@@ -127,11 +131,11 @@ message DrainNodeReply {
 }
 
 message CordonDrainState {
-    oneof cordondrainstate {
-        CordonedState cordoned = 1;
-        DrainState draining = 2;
-        DrainState drained = 3;
-      }
+  oneof cordondrainstate {
+    CordonedState cordoned = 1;
+    DrainState draining = 2;
+    DrainState drained = 3;
+  }
 }
 
 message CordonedState {

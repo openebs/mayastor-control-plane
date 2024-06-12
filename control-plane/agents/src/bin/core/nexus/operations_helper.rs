@@ -15,8 +15,8 @@ use stor_port::types::v0::{
         volume::VolumeSpec,
     },
     transport::{
-        AddNexusReplica, Child, ChildUri, Nexus, NodeId, RemoveNexusChild, RemoveNexusReplica,
-        Replica, ReplicaOwners, SetReplicaEntityId, ShareReplica,
+        AddNexusReplica, Child, ChildUri, Nexus, NodeBugFix, NodeId, RemoveNexusChild,
+        RemoveNexusReplica, Replica, ReplicaOwners, SetReplicaEntityId, ShareReplica,
     },
 };
 
@@ -27,6 +27,7 @@ impl OperationGuardArc<NexusSpec> {
         &mut self,
         registry: &Registry,
         replica: &Replica,
+        snapshots_present: bool,
     ) -> Result<(), SvcError> {
         // Adding a replica to a nexus will initiate a rebuild.
         // First check that we are able to start a rebuild.
@@ -38,6 +39,7 @@ impl OperationGuardArc<NexusSpec> {
             nexus: self.as_ref().uuid.clone(),
             replica: ReplicaUri::new(&replica.uuid, &uri),
             auto_rebuild: true,
+            snapshots_present,
         };
         self.add_replica(registry, &request).await?;
         Ok(())
@@ -181,6 +183,15 @@ impl OperationGuardArc<NexusSpec> {
         request: &AddNexusReplica,
     ) -> Result<Child, SvcError> {
         let node = registry.node_wrapper(&request.node).await?;
+
+        if request.snapshots_present {
+            let replica_nodes = self.replica_nodes(registry);
+            registry.verify_nodes_fix(
+                replica_nodes.iter(),
+                &NodeBugFix::NexusRebuildReplicaAncestry,
+            )?;
+        }
+
         let replica = registry.specs().replica(request.replica.uuid()).await?;
         // we don't persist nexus owners to pstor anymore, instead we rebuild at startup
         replica.lock().owners.add_owner(&request.nexus);
@@ -213,5 +224,12 @@ impl OperationGuardArc<NexusSpec> {
                 }
             }
         }
+    }
+
+    fn replica_nodes(&self, registry: &Registry) -> Vec<NodeId> {
+        self.as_ref()
+            .replica_ids()
+            .flat_map(|r| registry.specs().replica_id_node(r))
+            .collect::<Vec<_>>()
     }
 }

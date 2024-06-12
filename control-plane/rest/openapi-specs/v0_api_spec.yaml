@@ -2912,6 +2912,9 @@ components:
             - $ref: '#/components/schemas/CordonDrainState'
         node_nqn:
           $ref: '#/components/schemas/HostNqn'
+        version:
+          description: Version of the io-engine instance
+          type: string
       additionalProperties: false
       required:
         - grpcEndpoint
@@ -2933,6 +2936,9 @@ components:
           $ref: '#/components/schemas/NodeStatus'
         node_nqn:
           $ref: '#/components/schemas/HostNqn'
+        version:
+          description: Version of the io-engine instance
+          type: string
       required:
         - grpcEndpoint
         - id

@@ -41,8 +41,9 @@ use stor_port::{
             SpecStatus, SpecTransaction,
         },
         transport::{
-            CreateReplica, CreateVolume, NodeId, PoolId, Protocol, Replica, ReplicaId, ReplicaName,
-            ReplicaOwners, SnapshotId, VolumeId, VolumeShareProtocol, VolumeState, VolumeStatus,
+            CreateReplica, CreateVolume, NodeBugFix, NodeId, PoolId, Protocol, Replica, ReplicaId,
+            ReplicaName, ReplicaOwners, SnapshotId, VolumeId, VolumeShareProtocol, VolumeState,
+            VolumeStatus,
         },
     },
 };
@@ -442,6 +443,16 @@ impl ResourceSpecs {
             // Use complete resource map for pagination, without any filtering.
             PaginatedResult::new(self.volume_snapshots.paginate(offset, length), last_result)
         }
+    }
+
+    /// Get an iterator for all the replicas owned by the given volume.
+    pub(crate) fn volume_replicas_it<'a>(
+        &'a self,
+        id: &'a VolumeId,
+    ) -> impl Iterator<Item = &'a ResourceMutex<ReplicaSpec>> + Clone + std::fmt::Debug {
+        self.replicas
+            .values()
+            .filter(|r| r.lock().owners.owned_by(id))
     }
 }
 
@@ -1060,6 +1071,9 @@ impl SpecOperationsHelper for VolumeSpec {
                             resource: ResourceKind::AffinityGroup,
                             count: *replica_count,
                         })
+                    } else if *replica_count > self.num_replicas && self.has_snapshots() {
+                        let fix = NodeBugFix::NexusRebuildReplicaAncestry;
+                        registry.volume_replica_nodes_fix(self, &fix)
                     } else {
                         Ok(())
                     }

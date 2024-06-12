@@ -14,12 +14,12 @@ use stor_port::{
             node::{NodeLabelOp, NodeLabels, NodeOperation, NodeSpec, NodeUnLabelOp},
             SpecStatus, SpecTransaction,
         },
-        transport::{NodeId, Register},
+        transport::{NodeBugFix, NodeId, Register},
     },
 };
 
 use crate::controller::resources::operations_helper::{
-    GuardedOperationsHelper, SpecOperationsHelper,
+    GuardedOperationsHelper, ResourceSpecs, SpecOperationsHelper,
 };
 
 impl ResourceSpecsLocked {
@@ -34,11 +34,20 @@ impl ResourceSpecsLocked {
             match specs.nodes.get(&node.id) {
                 Some(node_spec) => {
                     let mut node_spec = node_spec.lock();
+                    // todo: add custom PartialEq?
                     let changed = node_spec.endpoint() != node.grpc_endpoint
-                        || node_spec.node_nqn() != &node.node_nqn;
+                        || node_spec.node_nqn() != &node.node_nqn
+                        || node_spec.features() != &node.features
+                        || node_spec.bugfixes() != &node.bugfixes
+                        || node_spec.version() != &node.version;
 
-                    node_spec.set_endpoint(node.grpc_endpoint);
-                    node_spec.set_nqn(node.node_nqn.clone());
+                    if changed {
+                        node_spec.set_endpoint(node.grpc_endpoint);
+                        node_spec.set_nqn(node.node_nqn.clone());
+                        node_spec.set_features(node.features.clone());
+                        node_spec.set_bugfixes(node.bugfixes.clone());
+                        node_spec.set_version(node.version.clone());
+                    }
                     (changed, node_spec.clone())
                 }
                 None => {
@@ -48,6 +57,9 @@ impl ResourceSpecsLocked {
                         NodeLabels::new(),
                         None,
                         node.node_nqn.clone(),
+                        node.features.clone(),
+                        node.bugfixes.clone(),
+                        node.version.clone(),
                     );
                     specs.nodes.insert(node.clone());
                     (true, node)
@@ -112,6 +124,18 @@ impl ResourceSpecsLocked {
                 }
             })
             .collect()
+    }
+}
+
+impl ResourceSpecs {
+    /// Check if the given node has the given fix.
+    pub(crate) fn node_has_fix(&self, node_id: &NodeId, fix: &NodeBugFix) -> Result<(), SvcError> {
+        if let Some(node) = self.nodes.get(node_id) {
+            if !node.lock().has_fix(fix) {
+                return Err(SvcError::UpgradeRequiredToRebuild {});
+            }
+        }
+        Ok(())
     }
 }
 

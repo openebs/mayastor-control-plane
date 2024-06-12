@@ -166,6 +166,12 @@ impl NexusSpec {
             _ => None,
         })
     }
+    /// Get an iterator that references all the replica ids in the nexus.
+    pub fn replica_ids(&self) -> impl Iterator<Item = &ReplicaId> {
+        self.children
+            .iter()
+            .flat_map(|c| c.as_replica_ref().as_ref().map(|c| c.uuid()))
+    }
 }
 
 impl From<&NexusSpec> for CreateNexus {

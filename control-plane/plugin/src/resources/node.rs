@@ -2,7 +2,9 @@ use crate::{
     operations::{Cordoning, Drain, GetWithArgs, Label, ListWithArgs, PluginResult},
     resources::{
         error::Error,
-        utils::{self, print_table, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
+        utils::{
+            self, optional_cell, print_table, CreateRow, CreateRows, GetHeaderRow, OutputFormat,
+        },
         NodeId,
     },
     rest_wrapper::RestClient,
@@ -75,6 +77,7 @@ impl CreateRow for openapi::models::Node {
             grpc_endpoint: spec.grpc_endpoint,
             status: openapi::models::NodeStatus::Unknown,
             node_nqn: spec.node_nqn,
+            version: spec.version,
         });
         let statuses = match spec.cordondrainstate {
             None => format!("{:?}", state.status),
@@ -98,7 +101,12 @@ impl CreateRow for openapi::models::Node {
                 )
             }
         };
-        row![self.id, state.grpc_endpoint, statuses]
+        row![
+            self.id,
+            state.grpc_endpoint,
+            statuses,
+            optional_cell(state.version)
+        ]
     }
 }
 

@@ -31,8 +31,8 @@ use stor_port::{
             volume::{VolumeOperation, VolumeSpec, VolumeTarget},
         },
         transport::{
-            CreateReplicaSnapshot, DestroyReplicaSnapshot, NodeId, SnapshotId, SnapshotParameters,
-            SnapshotTxId, VolumeId,
+            CreateReplicaSnapshot, DestroyReplicaSnapshot, NodeBugFix, NodeId, SnapshotId,
+            SnapshotParameters, SnapshotTxId, VolumeId,
         },
     },
 };
@@ -57,6 +57,11 @@ impl ResourceSnapshotting for OperationGuardArc<VolumeSpec> {
         request: &Self::Create,
     ) -> Result<Self::CreateOutput, SvcError> {
         let state = registry.volume_state(request.source_id()).await?;
+
+        if self.as_ref().num_replicas > 1 {
+            let replicas_nodes = state.replica_topology.values().flat_map(|v| v.node());
+            registry.verify_nodes_fix(replicas_nodes, &NodeBugFix::NexusRebuildReplicaAncestry)?;
+        }
 
         let operation = VolumeOperation::CreateSnapshot(request.uuid().clone());
         let spec_clone = self.start_update(registry, &state, operation).await?;

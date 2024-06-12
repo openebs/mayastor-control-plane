@@ -48,7 +48,7 @@ use stor_port::{
             definitions::ObjectKey,
             registry::{ControlPlaneService, StoreLeaseLockKey},
         },
-        transport::CreatePool,
+        transport::{CreatePool, Filter, NodeId, NodeStatus, PoolId, PoolStatus},
     },
 };
 use tokio::{net::UnixStream, time::sleep};
@@ -253,6 +253,52 @@ impl Cluster {
         ))
     }
 
+    /// Wait till the node is in the given status.
+    pub async fn wait_node_status(&self, node_id: NodeId, status: NodeStatus) -> Result<(), ()> {
+        let timeout = Duration::from_secs(2);
+        let node_cli = self.grpc_client().node();
+        let start = std::time::Instant::now();
+        loop {
+            let node = node_cli
+                .get(Filter::Node(node_id.clone()), true, None)
+                .await
+                .expect("Cant get node object");
+            if let Some(node) = node.0.get(0) {
+                if node.state().map(|n| &n.status) == Some(&status) {
+                    return Ok(());
+                }
+            }
+            if std::time::Instant::now() > (start + timeout) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        Err(())
+    }
+    /// Wait till the pool is online.
+    pub async fn wait_pool_online(&self, pool_id: PoolId) -> Result<(), ()> {
+        let timeout = Duration::from_secs(2);
+        let start = std::time::Instant::now();
+        loop {
+            let filter = Filter::Pool(pool_id.clone());
+            if let Ok(pools) = self.grpc_client().pool().get(filter, None).await {
+                if pools
+                    .into_inner()
+                    .first()
+                    .and_then(|p| p.state().map(|s| s.status == PoolStatus::Online))
+                    == Some(true)
+                {
+                    return Ok(());
+                }
+            }
+            if std::time::Instant::now() > (start + timeout) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        Err(())
+    }
+
     /// return grpc handle to the container
     pub async fn grpc_handle(&self, name: &str) -> Result<RpcHandle, String> {
         match self.composer.containers().iter().find(|&c| c.0 == name) {
@@ -333,6 +379,16 @@ impl Cluster {
     ) -> Result<bool, ReplyError> {
         self.restart_core().await;
         self.volume_service_liveness(timeout_opts).await
+    }
+
+    /// Replace the given old node with a new one from the idles.
+    pub async fn replace_node(&self, old: NodeId, new: NodeId) -> Result<(), ()> {
+        self.composer().stop(&old).await.unwrap();
+        self.wait_node_status(old, NodeStatus::Unknown)
+            .await
+            .unwrap();
+        self.composer().start(&new).await.unwrap();
+        Ok(())
     }
 
     /// remove etcd store lock for `name` instance

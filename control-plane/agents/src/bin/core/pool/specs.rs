@@ -237,6 +237,22 @@ impl ResourceSpecs {
             .map(|obj| obj.lock().clone())
             .collect::<Vec<_>>()
     }
+
+    /// Get the nodes where these replicas reside on.
+    pub(crate) fn replica_nodes<'a>(
+        &self,
+        replicas: impl Iterator<Item = &'a ResourceMutex<ReplicaSpec>>,
+    ) -> Vec<NodeId> {
+        replicas
+            .flat_map(|r| self.replica_spec_node(r.immutable_ref()))
+            .collect::<Vec<_>>()
+    }
+    /// Get the node where this replica resides on.
+    pub(crate) fn replica_spec_node(&self, replica: &ReplicaSpec) -> Option<NodeId> {
+        self.pools
+            .get(replica.pool_name())
+            .map(|pool| pool.lock().node.clone())
+    }
 }
 
 impl ResourceSpecsLocked {
@@ -279,6 +295,13 @@ impl ResourceSpecsLocked {
     pub(crate) fn replica_rsc(&self, id: &ReplicaId) -> Option<ResourceMutex<ReplicaSpec>> {
         let specs = self.read();
         specs.replicas.get(id).cloned()
+    }
+
+    /// Get the node where the replica `id` resides on, if it exists.
+    pub(crate) fn replica_id_node(&self, id: &ReplicaId) -> Option<NodeId> {
+        let specs = self.read();
+        let replica = specs.replicas.get(id)?;
+        specs.replica_spec_node(replica.immutable_ref())
     }
 
     /// Get or Create the resourced PoolSpec for the given request.

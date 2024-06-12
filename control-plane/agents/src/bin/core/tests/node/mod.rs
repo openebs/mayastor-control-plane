@@ -13,6 +13,7 @@ fn new_node(
     status: NodeStatus,
     api_versions: Option<Vec<ApiVersion>>,
     node_nqn: Option<HostNqn>,
+    version: &Option<String>,
 ) -> Node {
     let endpoint = std::str::FromStr::from_str(&endpoint).unwrap();
     Node::new(
@@ -23,8 +24,18 @@ fn new_node(
             NodeLabels::new(),
             None,
             node_nqn.clone(),
+            None,
+            None,
+            version.clone(),
         )),
-        Some(NodeState::new(id, endpoint, status, api_versions, node_nqn)),
+        Some(NodeState::new(
+            id,
+            endpoint,
+            status,
+            api_versions,
+            node_nqn,
+            version.clone(),
+        )),
     )
 }
 
@@ -51,6 +62,10 @@ async fn node() {
     let nodes = node_client.get(Filter::None, false, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
     assert_eq!(nodes.0.len(), 1);
+    let version = nodes
+        .0
+        .first()
+        .and_then(|n| n.state().and_then(|n| n.version.clone()));
     assert_eq!(
         nodes.0.first().unwrap(),
         &new_node(
@@ -58,7 +73,8 @@ async fn node() {
             grpc.clone(),
             NodeStatus::Online,
             None,
-            Some(HostNqn::from_nodename(&maya_name.to_string()))
+            Some(HostNqn::from_nodename(&maya_name.to_string())),
+            &version
         )
     );
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -73,7 +89,8 @@ async fn node() {
             grpc.clone(),
             NodeStatus::Online,
             None,
-            Some(HostNqn::from_nodename(&maya_name.to_string()))
+            Some(HostNqn::from_nodename(&maya_name.to_string())),
+            &version
         )
     );
 
@@ -89,7 +106,8 @@ async fn node() {
             grpc.clone(),
             NodeStatus::Offline,
             None,
-            Some(HostNqn::from_nodename(&maya_name.to_string()))
+            Some(HostNqn::from_nodename(&maya_name.to_string())),
+            &version
         )
     );
     cluster.composer().start(maya_name.as_str()).await.unwrap();
@@ -111,7 +129,8 @@ async fn node() {
             grpc.clone(),
             NodeStatus::Online,
             None,
-            Some(HostNqn::from_nodename(&maya_name.to_string()))
+            Some(HostNqn::from_nodename(&maya_name.to_string())),
+            &version
         )
     );
 

@@ -21,8 +21,8 @@ use stor_port::{
             volume::VolumeSpec,
         },
         transport::{
-            uri_with_hostnqn, Nexus, NexusStatus, ReplicaSnapshot, ReplicaStatus, ReplicaTopology,
-            SnapshotId, Volume, VolumeId, VolumeState, VolumeStatus, VolumeUsage,
+            uri_with_hostnqn, Nexus, NexusStatus, NodeBugFix, ReplicaSnapshot, ReplicaStatus,
+            ReplicaTopology, SnapshotId, Volume, VolumeId, VolumeState, VolumeStatus, VolumeUsage,
         },
     },
     IntoOption,
@@ -357,5 +357,18 @@ impl Registry {
             snapshots.push(grpc_mod::VolumeSnapshot::new(&spec, state));
         }
         PaginatedResult::new(snapshots, last)
+    }
+
+    /// Verify if all replica nodes have the rebuild ancestry fix and error out otherwise.
+    pub fn volume_replica_nodes_fix(
+        &self,
+        volume: &VolumeSpec,
+        fix: &NodeBugFix,
+    ) -> Result<(), SvcError> {
+        let specs = self.specs().read();
+        let replicas = specs.volume_replicas_it(&volume.uuid);
+        let nodes = specs.replica_nodes(replicas);
+
+        self.verify_nodes_fix(nodes.iter(), fix)
     }
 }

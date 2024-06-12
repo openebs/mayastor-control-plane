@@ -196,6 +196,8 @@ pub enum SvcError {
     Internal { details: String },
     #[snafu(display("Invalid Arguments"))]
     InvalidArguments {},
+    #[snafu(display("IoEngine upgrade is required to rebuild volume with snapshots"))]
+    UpgradeRequiredToRebuild {},
     #[snafu(display("Invalid {}, labels: {} ", resource_kind, labels))]
     InvalidLabel {
         labels: String,
@@ -550,6 +552,13 @@ impl From<SvcError> for ReplyError {
 
             SvcError::InvalidArguments { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::Unknown,
+                source,
+                extra,
+            },
+
+            SvcError::UpgradeRequiredToRebuild { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::Unknown,
                 source,
                 extra,
