@@ -12,7 +12,6 @@ from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
 from common.nvme import nvme_connect, nvme_disconnect
-from time import sleep
 from common.fio import Fio
 from common.operations import Cluster
 
@@ -275,8 +274,7 @@ NODE_LABELS = [
 
 @pytest.fixture(scope="module")
 def init():
-    Deployer.start(NUM_IO_ENGINES)
-    time.sleep(10)
+    Deployer.start(NUM_IO_ENGINES, io_engine_coreisol=True)
     # Create the nodes with labels.
     for label, node_name in NODE_LABELS:
         [key, value] = label.split("=")
@@ -568,7 +566,6 @@ def create_volume_body(
                 inclusion={
                     **inclusion_labels,
                 },
-                affinitykey=[],
             )
         )
     )
