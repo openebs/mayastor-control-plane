@@ -1067,8 +1067,6 @@ fn context_into_topology(context: &CreateParams) -> CreateVolumeTopology {
     let mut pool_inclusive_label_topology: HashMap<String, String> = HashMap::new();
     let mut node_inclusive_label_topology: HashMap<String, String> = HashMap::new();
     let mut node_exclusive_label_topology: HashMap<String, String> = HashMap::new();
-    let mut pool_affinity_label_topology: Vec<String> = Vec::<String>::new();
-    let mut node_affinity_label_topology: Vec<String> = Vec::<String>::new();
     pool_inclusive_label_topology.insert(dsp_created_by_key(), String::from(DSP_OPERATOR));
     pool_inclusive_label_topology.extend(
         context
@@ -1081,13 +1079,6 @@ fn context_into_topology(context: &CreateParams) -> CreateVolumeTopology {
         context
             .publish_params()
             .pool_has_topology_key()
-            .clone()
-            .unwrap_or_default(),
-    );
-    pool_affinity_label_topology.extend(
-        context
-            .publish_params()
-            .pool_affinity_topology_key()
             .clone()
             .unwrap_or_default(),
     );
@@ -1112,23 +1103,14 @@ fn context_into_topology(context: &CreateParams) -> CreateVolumeTopology {
             .clone()
             .unwrap_or_default(),
     );
-    node_affinity_label_topology.extend(
-        context
-            .publish_params()
-            .node_affinity_topology_key()
-            .clone()
-            .unwrap_or_default(),
-    );
     CreateVolumeTopology::new(
         Some(models::NodeTopology::labelled(LabelledTopology {
             exclusion: node_exclusive_label_topology,
             inclusion: node_inclusive_label_topology,
-            affinitykey: node_affinity_label_topology,
         })),
         Some(PoolTopology::labelled(LabelledTopology {
             exclusion: Default::default(),
             inclusion: pool_inclusive_label_topology,
-            affinitykey: pool_affinity_label_topology,
         })),
     )
 }
