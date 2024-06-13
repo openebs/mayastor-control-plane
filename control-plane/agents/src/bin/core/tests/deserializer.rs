@@ -112,7 +112,6 @@ fn test_deserialization_v1_to_v2() {
                             );
                             labels
                         },
-                        affinity: Vec::new(),
                     })),
                 }),
                 sequencer: Default::default(),
