@@ -3,7 +3,7 @@ use stor_port::types::v0::{
     transport::{CtrlPoolState, PoolState, PoolStatus, Protocol, Replica, ReplicaId},
 };
 
-use std::{cmp::Ordering, ops::Deref};
+use std::{cmp::Ordering, collections::HashMap, ops::Deref};
 
 /// Wrapper over a `Pool` state and all the replicas
 /// with Ord traits to aid pool selection for volume replicas (legacy).
@@ -11,6 +11,7 @@ use std::{cmp::Ordering, ops::Deref};
 pub(crate) struct PoolWrapper {
     state: PoolState,
     replicas: Vec<Replica>,
+    labels: Option<HashMap<String, String>>,
     /// The accrued size/capacity of all replicas which means the pool usage could grow up to this
     /// size if < pool capacity. If this size is > pool capacity, then we can say the pool is
     /// overcommited by the size difference.
@@ -27,7 +28,11 @@ impl Deref for PoolWrapper {
 
 impl PoolWrapper {
     /// New Pool wrapper with the pool and replicas.
-    pub(crate) fn new(mut pool: PoolState, replicas: Vec<Replica>) -> Self {
+    pub(crate) fn new(
+        mut pool: PoolState,
+        labels: Option<HashMap<String, String>>,
+        replicas: Vec<Replica>,
+    ) -> Self {
         let free_space = if pool.capacity >= pool.used {
             pool.capacity - pool.used
         } else {
@@ -49,11 +54,16 @@ impl PoolWrapper {
         Self {
             state: pool,
             replicas,
+            labels,
             committed,
             free_space,
         }
     }
 
+    /// Get the labels.
+    pub(crate) fn labels(&self) -> Option<HashMap<String, String>> {
+        self.labels.clone()
+    }
     /// Get all the replicas.
     pub(crate) fn replicas(&self) -> &Vec<Replica> {
         &self.replicas
@@ -114,6 +124,11 @@ impl PoolWrapper {
     #[allow(dead_code)]
     pub(crate) fn set_unknown(&mut self) {
         self.state.status = PoolStatus::Unknown;
+    }
+
+    /// Set labels in PoolWrapper.
+    pub(crate) fn set_labels(&mut self, labels: Option<HashMap<String, String>>) {
+        self.labels = labels;
     }
 
     /// Add replica to list.

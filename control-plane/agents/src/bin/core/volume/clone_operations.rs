@@ -4,7 +4,7 @@ use crate::{
         resources::{
             operations::{ResourceCloning, ResourceLifecycle, ResourceLifecycleExt},
             operations_helper::{GuardedOperationsHelper, SpecOperationsHelper},
-            OperationGuardArc, TraceStrLog,
+            OperationGuardArc, ResourceUid, TraceStrLog,
         },
         scheduling::{volume::CloneVolumeSnapshot, ResourceFilter},
     },
@@ -119,6 +119,7 @@ impl CreateVolumeExeVal for SnapshotCloneOp<'_> {
 #[async_trait::async_trait]
 impl CreateVolumeExe for SnapshotCloneOp<'_> {
     type Candidates = Vec<SnapshotCloneSpecParams>;
+    type Replicas = Vec<Replica>;
 
     async fn setup<'a>(&'a self, context: &mut Context<'a>) -> Result<Self::Candidates, SvcError> {
         let clonable_snapshots = self.cloneable_snapshot(context).await?;
@@ -137,7 +138,7 @@ impl CreateVolumeExe for SnapshotCloneOp<'_> {
         &'a self,
         context: &mut Context<'a>,
         clone_replicas: Self::Candidates,
-    ) -> Vec<Replica> {
+    ) -> Result<Vec<Replica>, SvcError> {
         let mut replicas = Vec::new();
         let volume_replicas = context.volume.as_ref().num_replicas as usize;
         // todo: need to add new replica and do full rebuild, if clonable snapshots
@@ -161,11 +162,32 @@ impl CreateVolumeExe for SnapshotCloneOp<'_> {
                 }
             }
         }
-        replicas
+        // we can't fulfil the required replication factor, so let the caller
+        // decide what to do next
+        if replicas.len() < context.volume.as_ref().num_replicas as usize {
+            match self.undo(context, &replicas).await {
+                Ok(_) => {}
+                Err(_error) => {
+                    return Err(SvcError::ReplicaCreateNumber {
+                        id: context.volume.uid_str(),
+                    });
+                }
+            }
+            Err(SvcError::ReplicaCreateNumber {
+                id: context.volume.uid_str(),
+            })
+        } else {
+            Ok(replicas)
+        }
     }
 
-    async fn undo<'a>(&'a self, _context: &mut Context<'a>, _replicas: Vec<Replica>) {
+    async fn undo<'a>(
+        &'a self,
+        _context: &mut Context<'a>,
+        _replicas: &[Replica],
+    ) -> Result<(), SvcError> {
         // nothing to undo since we only support 1-replica snapshot
+        Ok(())
     }
 }
 

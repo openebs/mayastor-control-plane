@@ -68,12 +68,15 @@ impl DefaultBasePolicy {
     }
 }
 
-/// Return true if all the keys present in volume's pool/node inclusion matches with the pool/node
-/// labels otherwise returns false.
+/// Return true if all the keys present in the volume's pool/node
+/// inclusion/affinity match the pool/node labels; otherwise, return false.
 pub(crate) fn qualifies_label_criteria(
     vol_pool_inc_labels: HashMap<String, String>,
+    vol_pool_affinity: HashMap<String, String>,
     pool_labels: &HashMap<String, String>,
 ) -> bool {
+    let mut satisfy_inclusion = true;
+    let mut satisfy_affinity = true;
     for (vol_inc_key, vol_inc_value) in vol_pool_inc_labels.iter() {
         match pool_labels.get(vol_inc_key) {
             Some(pool_val) => {
@@ -81,13 +84,27 @@ pub(crate) fn qualifies_label_criteria(
                     continue;
                 }
                 if pool_val != vol_inc_value {
-                    return false;
+                    satisfy_inclusion = false;
+                    break;
                 }
             }
             None => {
-                return false;
+                satisfy_inclusion = false;
+                break;
             }
         }
     }
-    true
+
+    for (vol_affinity_key, _) in vol_pool_affinity.iter() {
+        match pool_labels.get(vol_affinity_key) {
+            Some(_) => {
+                continue;
+            }
+            None => {
+                satisfy_affinity = false;
+                break;
+            }
+        }
+    }
+    satisfy_inclusion && satisfy_affinity
 }

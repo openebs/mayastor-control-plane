@@ -74,6 +74,7 @@ impl NodeFilters {
     pub(crate) fn topology(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         let volume_node_topology_inclusion_labels: HashMap<String, String>;
         let volume_node_topology_exclusion_labels: HashMap<String, String>;
+        let volume_pool_afffinty: HashMap<String, String>;
         match &request.topology {
             None => return true,
             Some(topology) => match &topology.node {
@@ -84,11 +85,13 @@ impl NodeFilters {
                         // present, otherwise selection of any pool is allowed.
                         if !labelled_topology.inclusion.is_empty()
                             || !labelled_topology.exclusion.is_empty()
+                            || !labelled_topology.affinity.is_empty()
                         {
                             volume_node_topology_inclusion_labels =
                                 labelled_topology.inclusion.clone();
                             volume_node_topology_exclusion_labels =
                                 labelled_topology.exclusion.clone();
+                            volume_pool_afffinty = labelled_topology.affinity.clone();
                         } else {
                             return true;
                         }
@@ -101,11 +104,15 @@ impl NodeFilters {
         // We will reach this part of code only if the volume has inclusion/exclusion labels.
         match request.registry().specs().node(&item.pool.node) {
             Ok(spec) => {
-                qualifies_label_criteria(volume_node_topology_inclusion_labels, spec.labels())
-                    && qualifies_label_criteria(
-                        volume_node_topology_exclusion_labels,
-                        spec.labels(),
-                    )
+                qualifies_label_criteria(
+                    volume_node_topology_inclusion_labels,
+                    volume_pool_afffinty.clone(),
+                    spec.labels(),
+                ) && qualifies_label_criteria(
+                    volume_node_topology_exclusion_labels,
+                    volume_pool_afffinty,
+                    spec.labels(),
+                )
             }
             Err(_) => false,
         }
