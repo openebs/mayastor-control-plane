@@ -2481,8 +2481,6 @@ components:
           - ''
         inclusion:
           - ''
-        affinitykey:
-          - ''
       description: labelled topology
       type: object
       properties:
@@ -2512,22 +2510,9 @@ components:
           type: object
           additionalProperties:
             type: string
-        affinitykey:
-          example: ''
-          description: |-
-            This feature includes resources with identical $label keys. For example,
-             if the affinity key is set to "Zone":
-             Initially, a resource that matches the label is selected, example "Zone: A".
-             Subsequently, all other resources must match the given label "Zone: A",
-             effectively adding this requirement as an inclusion label.
-          type: array
-          items:
-            example: 'Zone'
-            type: string
       required:
         - exclusion
         - inclusion
-        - affinitykey
     Topology:
       description: node and pool topology for volumes
       type: object
