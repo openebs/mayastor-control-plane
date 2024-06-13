@@ -12,7 +12,6 @@ from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
 from common.nvme import nvme_connect, nvme_disconnect
-from time import sleep
 from common.fio import Fio
 from common.operations import Cluster
 
@@ -186,9 +185,7 @@ POOL_CONFIGURATIONS = [
 
 @pytest.fixture(scope="module")
 def init():
-    Deployer.start(NUM_IO_ENGINES)
-
-    time.sleep(10)
+    Deployer.start(NUM_IO_ENGINES, io_engine_coreisol=True)
     # Create the pools.
     for config in POOL_CONFIGURATIONS:
         ApiClient.pools_api().put_node_pool(
@@ -380,7 +377,6 @@ def create_volume_body(replica, volume_pool_topology_inclusion_label):
                     key.strip(): value.strip(),
                     DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 },
-                affinitykey=[],
             )
         )
     )
