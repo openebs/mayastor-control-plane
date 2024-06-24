@@ -7,7 +7,6 @@ use tracing::info;
 async fn affinity_group() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
-        .with_agents(vec!["core"])
         .with_io_engines(2)
         .with_pools(2)
         .with_cache_period("1s")

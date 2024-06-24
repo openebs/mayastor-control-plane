@@ -187,7 +187,6 @@ async fn create_nexus_replica_not_available() {
     let size = 10 * 1024 * 1024;
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
-        .with_agents(vec!["core"])
         .with_io_engines(2)
         .with_pools(1)
         .with_replicas(1, size, v0::Protocol::None)
