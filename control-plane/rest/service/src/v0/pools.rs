@@ -1,7 +1,8 @@
 use super::*;
 use grpc::operations::pool::traits::PoolOperations;
 use rest_client::versions::v0::apis::Uuid;
-use stor_port::types::v0::transport::{DestroyPool, Filter};
+use std::collections::HashMap;
+use stor_port::types::v0::transport::{DestroyPool, Filter, UnlabelPool};
 use transport_api::{ReplyError, ReplyErrorKind, ResourceKind};
 
 fn client() -> impl PoolOperations {
@@ -101,6 +102,33 @@ impl apis::actix_server::Pools for RestApi {
         let create =
             CreatePoolBody::from(create_pool_body).to_request(node_id.into(), pool_id.into());
         let pool = client().create(&create, None).await?;
+        Ok(pool.into())
+    }
+
+    async fn put_pool_label(
+        Path((pool_id, key, value)): Path<(String, String, String)>,
+        Query(overwrite): Query<Option<bool>>,
+    ) -> Result<models::Pool, RestError<RestJsonError>> {
+        let labels = HashMap::from([(key, value)]);
+        let label_pool_request = LabelPool {
+            pool_id: pool_id.into(),
+            labels,
+            overwrite: overwrite.unwrap_or(false),
+        };
+
+        let pool = client().label(&label_pool_request, None).await?;
+        Ok(pool.into())
+    }
+
+    async fn del_pool_label(
+        Path((pool_id, label_key)): Path<(String, String)>,
+    ) -> Result<models::Pool, RestError<RestJsonError>> {
+        let unlabel_pool_request = UnlabelPool {
+            pool_id: pool_id.into(),
+            label_key,
+        };
+
+        let pool = client().unlabel(&unlabel_pool_request, None).await?;
         Ok(pool.into())
     }
 }
