@@ -31,14 +31,19 @@ pub enum SvcError {
     NoNodes {},
     #[snafu(display("Node {} is cordoned", node_id))]
     CordonedNode { node_id: String },
-    #[snafu(display("Node {node_id} is already labelled with labels '{labels}'"))]
+    #[snafu(display("{resource} {id} is already labelled with labels '{labels}'"))]
     LabelsExists {
-        node_id: String,
+        resource: ResourceKind,
+        id: String,
         labels: String,
         conflict: bool,
     },
-    #[snafu(display("Node {node_id} doesn't have the label key '{label_key}'"))]
-    LabelNotFound { node_id: String, label_key: String },
+    #[snafu(display("{resource} {id} doesn't have the label key '{label_key}'"))]
+    LabelNotFound {
+        resource: ResourceKind,
+        id: String,
+        label_key: String,
+    },
     #[snafu(display("Node {node_id} is already cordoned with label '{label}'"))]
     CordonLabel { node_id: String, label: String },
     #[snafu(display("Node {node_id} does not have a cordon label '{label}'"))]
@@ -598,20 +603,22 @@ impl From<SvcError> for ReplyError {
                 extra,
             },
 
-            SvcError::LabelsExists { conflict, .. } => ReplyError {
+            SvcError::LabelsExists {
+                resource, conflict, ..
+            } => ReplyError {
                 kind: if conflict {
                     ReplyErrorKind::FailedPrecondition
                 } else {
                     ReplyErrorKind::AlreadyExists
                 },
-                resource: ResourceKind::Node,
+                resource,
                 source,
                 extra,
             },
 
-            SvcError::LabelNotFound { .. } => ReplyError {
+            SvcError::LabelNotFound { resource, .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
-                resource: ResourceKind::Node,
+                resource,
                 source,
                 extra,
             },

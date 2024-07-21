@@ -196,7 +196,8 @@ impl SpecOperationsHelper for NodeSpec {
                 let (existing, conflict) = self.label_collisions(labels);
                 if !*overwrite && !existing.is_empty() {
                     Err(SvcError::LabelsExists {
-                        node_id: self.id().to_string(),
+                        resource: ResourceKind::Node,
+                        id: self.id().to_string(),
                         labels: format!("{existing:?}"),
                         conflict,
                     })
@@ -209,7 +210,8 @@ impl SpecOperationsHelper for NodeSpec {
                 // Check that the label is present.
                 if !self.has_labels_key(label_key) {
                     Err(SvcError::LabelNotFound {
-                        node_id: self.id().to_string(),
+                        resource: ResourceKind::Node,
+                        id: self.id().to_string(),
                         label_key: label_key.to_string(),
                     })
                 } else {
