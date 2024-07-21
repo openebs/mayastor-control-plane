@@ -3,21 +3,25 @@ use crate::{
     context::Context,
     misc::traits::StringValue,
     pool,
-    pool::{get_pools_request, CreatePoolRequest, DestroyPoolRequest},
+    pool::{
+        get_pools_request, CreatePoolRequest, DestroyPoolRequest, LabelPoolRequest,
+        UnlabelPoolRequest,
+    },
 };
-use std::convert::TryFrom;
 use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind},
     types::v0::{
         store::pool::{PoolLabel, PoolSpec, PoolSpecStatus},
         transport,
         transport::{
-            CreatePool, CtrlPoolState, DestroyPool, Filter, NodeId, Pool, PoolDeviceUri, PoolId,
-            PoolState, VolumeId,
+            CreatePool, CtrlPoolState, DestroyPool, Filter, LabelPool, NodeId, Pool, PoolDeviceUri,
+            PoolId, PoolState, UnlabelPool, VolumeId,
         },
     },
     IntoOption,
 };
+
+use std::{collections::HashMap, convert::TryFrom};
 
 /// Trait implemented by services which support pool operations.
 #[tonic::async_trait]
@@ -36,6 +40,18 @@ pub trait PoolOperations: Send + Sync {
     ) -> Result<(), ReplyError>;
     /// Get pools based on the filters
     async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Pools, ReplyError>;
+    /// Associate the labels with the given pool.
+    async fn label(
+        &self,
+        pool: &dyn LabelPoolInfo,
+        ctx: Option<Context>,
+    ) -> Result<Pool, ReplyError>;
+    /// Remove label from the a given pool.
+    async fn unlabel(
+        &self,
+        pool: &dyn UnlabelPoolInfo,
+        ctx: Option<Context>,
+    ) -> Result<Pool, ReplyError>;
 }
 
 impl TryFrom<pool::PoolDefinition> for PoolSpec {
@@ -387,6 +403,110 @@ impl From<PoolSpecStatus> for common::SpecStatus {
             PoolSpecStatus::Created(_) => Self::Created,
             PoolSpecStatus::Deleting => Self::Deleting,
             PoolSpecStatus::Deleted => Self::Deleted,
+        }
+    }
+}
+
+/// LabelPoolInfo trait for the pool labeling to be implemented by entities which want
+/// to avail this operation
+pub trait LabelPoolInfo: Send + Sync + std::fmt::Debug {
+    /// Id of the pool.
+    fn pool_id(&self) -> PoolId;
+    /// Labels to be set on the pool.
+    fn labels(&self) -> HashMap<String, String>;
+    /// Overwrite the existing labels.
+    fn overwrite(&self) -> bool;
+}
+
+impl LabelPoolInfo for LabelPool {
+    fn pool_id(&self) -> PoolId {
+        self.pool_id.clone()
+    }
+
+    fn labels(&self) -> HashMap<String, String> {
+        self.labels.clone()
+    }
+
+    fn overwrite(&self) -> bool {
+        self.overwrite
+    }
+}
+
+impl LabelPoolInfo for LabelPoolRequest {
+    fn pool_id(&self) -> PoolId {
+        self.pool_id.clone().into()
+    }
+
+    fn labels(&self) -> HashMap<String, String> {
+        self.labels.clone()
+    }
+
+    fn overwrite(&self) -> bool {
+        self.overwrite
+    }
+}
+
+impl From<&dyn LabelPoolInfo> for LabelPoolRequest {
+    fn from(data: &dyn LabelPoolInfo) -> Self {
+        Self {
+            pool_id: data.pool_id().to_string(),
+            labels: data.labels().clone(),
+            overwrite: data.overwrite(),
+        }
+    }
+}
+
+impl From<&dyn LabelPoolInfo> for LabelPool {
+    fn from(data: &dyn LabelPoolInfo) -> Self {
+        Self {
+            pool_id: data.pool_id(),
+            labels: data.labels(),
+            overwrite: data.overwrite(),
+        }
+    }
+}
+
+/// UnlabelPoolInfo trait for the pool unlabeling to be implemented by entities which want to avail
+/// this operation
+pub trait UnlabelPoolInfo: Send + Sync + std::fmt::Debug {
+    /// Id of the pool.
+    fn pool_id(&self) -> PoolId;
+    /// Key of the label to be removed.
+    fn label_key(&self) -> String;
+}
+
+impl UnlabelPoolInfo for UnlabelPool {
+    fn pool_id(&self) -> PoolId {
+        self.pool_id.clone()
+    }
+    fn label_key(&self) -> String {
+        self.label_key.clone()
+    }
+}
+
+impl UnlabelPoolInfo for UnlabelPoolRequest {
+    fn pool_id(&self) -> PoolId {
+        self.pool_id.clone().into()
+    }
+    fn label_key(&self) -> String {
+        self.label_key.clone()
+    }
+}
+
+impl From<&dyn UnlabelPoolInfo> for UnlabelPoolRequest {
+    fn from(data: &dyn UnlabelPoolInfo) -> Self {
+        Self {
+            pool_id: data.pool_id().to_string(),
+            label_key: data.label_key().clone(),
+        }
+    }
+}
+
+impl From<&dyn UnlabelPoolInfo> for UnlabelPool {
+    fn from(data: &dyn UnlabelPoolInfo) -> Self {
+        Self {
+            pool_id: data.pool_id(),
+            label_key: data.label_key(),
         }
     }
 }
