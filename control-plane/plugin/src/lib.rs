@@ -244,6 +244,11 @@ impl ExecuteOperation for LabelResources {
                 label,
                 overwrite,
             } => node::Node::label(id, label.to_string(), *overwrite, &cli_args.output).await,
+            LabelResources::Pool {
+                id,
+                label,
+                overwrite,
+            } => pool::Pool::label(id, label.to_string(), *overwrite, &cli_args.output).await,
         }
     }
 }
