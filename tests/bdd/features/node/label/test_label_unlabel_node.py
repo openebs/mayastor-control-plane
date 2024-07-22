@@ -28,7 +28,7 @@ NODE_ID_1 = "io-engine-1"
 # Fixtures
 @pytest.fixture(scope="module")
 def init():
-    Deployer.start(NUM_IO_ENGINES, io_engine_env="MAYASTOR_HB_INTERVAL_SEC=0")
+    Deployer.start(NUM_IO_ENGINES)
     yield
     Deployer.stop()
 
