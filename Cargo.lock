@@ -832,6 +832,7 @@ dependencies = [
  "futures",
  "ipnetwork",
  "once_cell",
+ "serde",
  "tokio",
  "tracing",
 ]
@@ -1363,6 +1364,7 @@ name = "event-publisher"
 version = "0.1.0"
 dependencies = [
  "events-api",
+ "serde",
  "serde_json",
  "tokio",
  "tracing",
