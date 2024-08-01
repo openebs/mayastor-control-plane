@@ -3,12 +3,15 @@ let
   whitelistSource = src: allowedPrefixes:
     builtins.path {
       filter = (path: type:
-        lib.any
+        (lib.any
           (allowedPrefix:
             (lib.hasPrefix (toString (src + "/${allowedPrefix}")) path) ||
             (type == "directory" && lib.hasPrefix path (toString (src + "/${allowedPrefix}")))
           )
-          allowedPrefixes);
+          allowedPrefixes)
+        # there's no reason for this to be part of the build
+        && path != (toString (src + "/utils/dependencies/scripts/release.sh"))
+      );
       path = src;
       name = "controller";
     };
