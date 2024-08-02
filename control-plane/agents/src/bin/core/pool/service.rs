@@ -1,7 +1,7 @@
 use crate::controller::{
     registry::Registry,
     resources::{
-        operations::{ResourceLifecycle, ResourceResize, ResourceSharing},
+        operations::{ResourceLabel, ResourceLifecycle, ResourceResize, ResourceSharing},
         operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
         OperationGuardArc, ResourceMutex,
     },
@@ -11,7 +11,9 @@ use agents::errors::{PoolNotFound, ReplicaNotFound, SvcError};
 use grpc::{
     context::Context,
     operations::{
-        pool::traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},
+        pool::traits::{
+            CreatePoolInfo, DestroyPoolInfo, LabelPoolInfo, PoolOperations, UnlabelPoolInfo,
+        },
         replica::traits::{
             CreateReplicaInfo, DestroyReplicaInfo, ReplicaOperations, ResizeReplicaInfo,
             ShareReplicaInfo, UnshareReplicaInfo,
@@ -21,13 +23,14 @@ use grpc::{
 use stor_port::{
     transport_api::{
         v0::{Pools, Replicas},
-        ReplyError,
+        ReplyError, ResourceKind,
     },
     types::v0::{
         store::{pool::PoolSpec, replica::ReplicaSpec},
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas,
-            NodeId, Pool, PoolId, Replica, ResizeReplica, ShareReplica, UnshareReplica, VolumeId,
+            LabelPool, NodeId, Pool, PoolId, Replica, ResizeReplica, ShareReplica, UnlabelPool,
+            UnshareReplica, VolumeId,
         },
     },
 };
@@ -67,6 +70,36 @@ impl PoolOperations for Service {
         let req = GetPools { filter };
         let pools = self.get_pools(&req).await?;
         Ok(pools)
+    }
+
+    async fn label(
+        &self,
+        pool: &dyn LabelPoolInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Pool, ReplyError> {
+        let req = pool.into();
+        let service = self.clone();
+        let pool = Context::spawn(async move { service.label(&req).await }).await??;
+        Ok(pool)
+    }
+
+    /// Remove the specified label key from the pool.
+    async fn unlabel(
+        &self,
+        pool: &dyn UnlabelPoolInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Pool, ReplyError> {
+        let req: UnlabelPool = pool.into();
+        let service = self.clone();
+        if req.label_key().is_empty() {
+            return Err(SvcError::InvalidLabel {
+                labels: req.label_key(),
+                resource_kind: ResourceKind::Pool,
+            }
+            .into());
+        }
+        let pool = Context::spawn(async move { service.unlabel(&req).await }).await??;
+        Ok(pool)
     }
 }
 
@@ -333,5 +366,27 @@ impl Service {
     ) -> Result<Replica, SvcError> {
         let mut replica = self.specs().replica(&request.uuid).await?;
         replica.resize(&self.registry, request).await
+    }
+
+    /// Label the specified pool.
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %request.pool_id))]
+    async fn label(&self, request: &LabelPool) -> Result<Pool, SvcError> {
+        let mut guarded_pool = self.specs().guarded_pool(&request.pool_id).await?;
+        let spec = guarded_pool
+            .label(&self.registry, request.labels(), request.overwrite())
+            .await?;
+        let state = self.registry.ctrl_pool_state(&request.pool_id).await.ok();
+        Ok(Pool::new(spec, state))
+    }
+
+    /// Remove the specified label from  the specified pool.
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %request.pool_id))]
+    async fn unlabel(&self, request: &UnlabelPool) -> Result<Pool, SvcError> {
+        let mut guarded_pool = self.specs().guarded_pool(&request.pool_id).await?;
+        let spec = guarded_pool
+            .unlabel(&self.registry, request.label_key())
+            .await?;
+        let state = self.registry.ctrl_pool_state(&request.pool_id).await.ok();
+        Ok(Pool::new(spec, state))
     }
 }

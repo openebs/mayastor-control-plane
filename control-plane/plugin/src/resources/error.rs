@@ -1,4 +1,3 @@
-use crate::resources::node;
 use snafu::Snafu;
 
 /// All errors returned when resources command fails.
@@ -25,9 +24,14 @@ pub enum Error {
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
     #[snafu(display("Invalid label format: {source}"))]
-    NodeLabelFormat { source: node::TopologyError },
+    NodeLabelFormat { source: TopologyError },
     #[snafu(display("{source}"))]
-    NodeLabel { source: node::OpError },
+    NodeLabel { source: OpError },
+    #[snafu(display("Invalid label format: {source}"))]
+    PoolLabelFormat { source: TopologyError },
+    #[snafu(display("{source}"))]
+    PoolLabel { source: OpError },
+
     /// Error when node uncordon request fails.
     #[snafu(display("Failed to uncordon node {id}. Error {source}"))]
     NodeUncordonError {
@@ -98,4 +102,71 @@ pub enum Error {
         key1=value1,key2=value2"
     ))]
     LabelNodeFilter { labels: String },
+}
+
+/// Errors related to label topology formats.
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub))]
+pub enum TopologyError {
+    #[snafu(display("key must not be an empty string"))]
+    KeyIsEmpty {},
+    #[snafu(display("value must not be an empty string"))]
+    ValueIsEmpty {},
+    #[snafu(display("key part must not be more than 63 characters"))]
+    KeyTooLong {},
+    #[snafu(display("value part must not be more than 63 characters"))]
+    ValueTooLong {},
+    #[snafu(display("both key and value parts must start with an ascii alphanumeric character"))]
+    EdgesNotAlphaNum {},
+    #[snafu(display("key can contain at most one `/` character"))]
+    KeySlashCount {},
+    #[snafu(display(
+        "only ascii alphanumeric characters and (`/`,` - `, `_`,`.`) are allowed for the key part"
+    ))]
+    KeyIsNotAlphaNumericPlus {},
+    #[snafu(display(
+        "only ascii alphanumeric characters and (`-`,` _ `, `.`) are allowed for the label part"
+    ))]
+    ValueIsNotAlphaNumericPlus {},
+    #[snafu(display("only a single assignment key=value is allowed"))]
+    LabelMultiAssign {},
+    #[snafu(display(
+        "the supported formats are: \
+        key=value for adding (example: group=a) \
+        and key- for removing (example: group-)"
+    ))]
+    LabelAssign {},
+}
+
+/// Errors related to node label topology operation execution.
+#[derive(Debug, snafu::Snafu)]
+#[snafu(visibility(pub))]
+pub enum OpError {
+    #[snafu(display("{resource} {id} not unlabelled as it did not contain the label"))]
+    LabelNotFound { resource: String, id: String },
+    #[snafu(display("{resource} {id} not labelled as the same label already exists"))]
+    LabelExists { resource: String, id: String },
+    #[snafu(display("{resource} {id} not found"))]
+    ResourceNotFound { resource: String, id: String },
+    #[snafu(display(
+        "{resource} {id} not labelled as the label key already exists, but with a different value and --overwrite is false"
+    ))]
+    LabelConflict { resource: String, id: String },
+    #[snafu(display("Failed to label {resource} {id}. Error {source}"))]
+    Generic {
+        resource: String,
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
+}
+
+impl From<TopologyError> for Error {
+    fn from(source: TopologyError) -> Self {
+        Self::NodeLabelFormat { source }
+    }
+}
+impl From<OpError> for Error {
+    fn from(source: OpError) -> Self {
+        Self::NodeLabel { source }
+    }
 }

@@ -1,10 +1,10 @@
 use crate::{
     common::{CommonFilter, NodeFilter, NodePoolFilter, PoolFilter},
     context::{Client, Context, TracedChannel},
-    operations::pool::traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},
+    operations::pool::traits::{CreatePoolInfo, DestroyPoolInfo, LabelPoolInfo, PoolOperations},
     pool::{
-        create_pool_reply, get_pools_reply, get_pools_request, pool_grpc_client::PoolGrpcClient,
-        GetPoolsRequest,
+        create_pool_reply, get_pools_reply, get_pools_request, label_pool_reply,
+        pool_grpc_client::PoolGrpcClient, unlabel_pool_reply, GetPoolsRequest,
     },
 };
 use std::{convert::TryFrom, ops::Deref};
@@ -13,6 +13,8 @@ use stor_port::{
     types::v0::transport::{Filter, MessageIdVs, Pool},
 };
 use tonic::transport::Uri;
+
+use super::traits::UnlabelPoolInfo;
 
 /// RPC Pool Client
 #[derive(Clone)]
@@ -101,6 +103,40 @@ impl PoolOperations for PoolClient {
             Some(get_pools_reply) => match get_pools_reply {
                 get_pools_reply::Reply::Pools(pools) => Ok(Pools::try_from(pools)?),
                 get_pools_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
+        }
+    }
+
+    #[tracing::instrument(name = "PoolClient::label", level = "debug", skip(self), err)]
+    async fn label(
+        &self,
+        request: &dyn LabelPoolInfo,
+        ctx: Option<Context>,
+    ) -> Result<Pool, ReplyError> {
+        let req = self.request(request, ctx, MessageIdVs::LabelPool);
+        let response = self.client().label_pool(req).await?.into_inner();
+        match response.reply {
+            Some(label_pool_reply) => match label_pool_reply {
+                label_pool_reply::Reply::Pool(pool) => Ok(Pool::try_from(pool)?),
+                label_pool_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
+        }
+    }
+
+    #[tracing::instrument(name = "PoolClient::unlabel", level = "debug", skip(self), err)]
+    async fn unlabel(
+        &self,
+        request: &dyn UnlabelPoolInfo,
+        ctx: Option<Context>,
+    ) -> Result<Pool, ReplyError> {
+        let req = self.request(request, ctx, MessageIdVs::UnlabelPool);
+        let response = self.client().unlabel_pool(req).await?.into_inner();
+        match response.reply {
+            Some(unlabel_pool_reply) => match unlabel_pool_reply {
+                unlabel_pool_reply::Reply::Pool(pool) => Ok(Pool::try_from(pool)?),
+                unlabel_pool_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
         }

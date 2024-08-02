@@ -5,7 +5,7 @@ use crate::{
     IntoOption,
 };
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, fmt::Debug, ops::Deref};
+use std::{cmp::Ordering, collections::HashMap, fmt::Debug, ops::Deref};
 use strum_macros::{Display, EnumString};
 
 /// Pool Service
@@ -166,11 +166,11 @@ pub struct Pool {
 
 impl Pool {
     /// Construct a new pool with spec and state.
-    pub fn new(spec: PoolSpec, state: CtrlPoolState) -> Self {
+    pub fn new(spec: PoolSpec, state: Option<CtrlPoolState>) -> Self {
         Self {
             id: spec.id.clone(),
             spec: Some(spec),
-            state: Some(state),
+            state,
         }
     }
     /// Construct a new pool with spec but no state.
@@ -192,7 +192,7 @@ impl Pool {
     /// Try to construct a new pool from spec and state.
     pub fn try_new(spec: Option<PoolSpec>, state: Option<CtrlPoolState>) -> Option<Self> {
         match (spec, state) {
-            (Some(spec), Some(state)) => Some(Self::new(spec, state)),
+            (Some(spec), Some(state)) => Some(Self::new(spec, Some(state))),
             (Some(spec), None) => Some(Self::from_spec(spec)),
             (None, Some(state)) => Some(Self::from_state(state, None)),
             _ => None,
@@ -344,5 +344,45 @@ impl DestroyPool {
     /// Create a new `Self` from the given parameters.
     pub fn new(node: NodeId, id: PoolId) -> Self {
         Self { node, id }
+    }
+}
+
+/// Label Pool Request.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LabelPool {
+    /// Id of the pool.
+    pub pool_id: PoolId,
+    /// Labels to be set on the pool
+    pub labels: HashMap<String, String>,
+    /// Overwrite the existing labels
+    pub overwrite: bool,
+}
+
+impl LabelPool {
+    /// Create new `Self` from the given parameters.
+    pub fn new(pool_id: PoolId, labels: HashMap<String, String>, overwrite: bool) -> Self {
+        Self {
+            pool_id,
+            labels,
+            overwrite,
+        }
+    }
+}
+
+/// Un-Label Pool Request.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UnlabelPool {
+    /// Id of the pool.
+    pub pool_id: PoolId,
+    /// Label key to be removed from the pool.
+    pub label_key: String,
+}
+
+impl UnlabelPool {
+    /// Create new `Self` from the given parameters.
+    pub fn new(pool_id: PoolId, label_key: String) -> Self {
+        Self { pool_id, label_key }
     }
 }

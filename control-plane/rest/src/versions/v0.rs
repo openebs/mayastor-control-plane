@@ -1,7 +1,10 @@
 #![allow(clippy::field_reassign_with_default)]
 
 use super::super::RestClient;
-use std::convert::{TryFrom, TryInto};
+use std::{
+    collections::HashMap,
+    convert::{TryFrom, TryInto},
+};
 
 pub use stor_port::{
     transport_api,
@@ -11,8 +14,8 @@ pub use stor_port::{
         transport::{
             AddNexusChild, BlockDevice, Child, ChildUri, CreateNexus, CreatePool, CreateReplica,
             CreateVolume, DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter,
-            GetBlockDevices, JsonGrpcRequest, Nexus, NexusId, NexusShareProtocol, Node, NodeId,
-            Pool, PoolDeviceUri, PoolId, Protocol, RemoveNexusChild, Replica, ReplicaId,
+            GetBlockDevices, JsonGrpcRequest, LabelPool, Nexus, NexusId, NexusShareProtocol, Node,
+            NodeId, Pool, PoolDeviceUri, PoolId, Protocol, RemoveNexusChild, Replica, ReplicaId,
             ReplicaShareProtocol, ShareNexus, ShareReplica, Specs, Topology, UnshareNexus,
             UnshareReplica, VolumeId, VolumeLabels, VolumePolicy, VolumeProperty, Watch,
             WatchCallback, WatchResourceId,
@@ -271,5 +274,14 @@ impl From<models::SetVolumePropertyBody> for SetVolumePropertyBody {
                 property: VolumeProperty::MaxSnapshots(x),
             },
         }
+    }
+}
+
+/// Convert into rpc request type.
+pub fn to_request(pool_id: PoolId, labels: HashMap<String, String>, overwrite: bool) -> LabelPool {
+    LabelPool {
+        pool_id,
+        labels,
+        overwrite,
     }
 }

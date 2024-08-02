@@ -129,9 +129,44 @@ message GetPoolsReply {
   }
 }
 
+// Label Pool request
+message LabelPoolRequest {
+  // Pool identification
+  string pool_id = 1;
+  // Pool label map
+  map<string, string> labels = 2;
+  // Overwrite an existing key
+  bool overwrite = 3;
+}
+
+// Reply type for a LabelPool request
+message LabelPoolReply {
+  oneof reply {
+    Pool pool = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+message UnlabelPoolRequest {
+  // Pool identification
+  string pool_id = 1;
+  // Pool label key to remove
+  string label_key = 2;
+}
+
+message UnlabelPoolReply {
+  oneof reply {
+    Pool pool = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+
 // Service for managing storage pools
 service PoolGrpc {
   rpc CreatePool (CreatePoolRequest) returns (CreatePoolReply) {}
   rpc DestroyPool (DestroyPoolRequest) returns (DestroyPoolReply) {}
   rpc GetPools (GetPoolsRequest) returns (GetPoolsReply) {}
+  rpc LabelPool (LabelPoolRequest) returns (LabelPoolReply) {}
+  rpc UnlabelPool (UnlabelPoolRequest) returns (UnlabelPoolReply) {}
 }
