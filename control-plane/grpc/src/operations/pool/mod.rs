@@ -100,7 +100,9 @@ mod test {
             context::Context,
             operations::pool::{
                 test::TimeoutTester,
-                traits::{CreatePoolInfo, DestroyPoolInfo, PoolOperations},
+                traits::{
+                    CreatePoolInfo, DestroyPoolInfo, LabelPoolInfo, PoolOperations, UnlabelPoolInfo,
+                },
             },
         };
         use std::time::Duration;
@@ -135,6 +137,20 @@ mod test {
                 tokio::time::sleep(Duration::from_secs(3)).await;
                 tester.complete();
                 Ok(Pools(vec![]))
+            }
+            async fn label(
+                &self,
+                _pool: &dyn LabelPoolInfo,
+                _ctx: Option<Context>,
+            ) -> Result<Pool, ReplyError> {
+                todo!()
+            }
+            async fn unlabel(
+                &self,
+                _pool: &dyn UnlabelPoolInfo,
+                _ctx: Option<Context>,
+            ) -> Result<Pool, ReplyError> {
+                todo!()
             }
         }
     }

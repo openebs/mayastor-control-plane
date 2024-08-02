@@ -1,15 +1,20 @@
 use crate::{
-    operations::{Get, ListWithArgs, PluginResult},
+    operations::{Get, Label, ListWithArgs, PluginResult},
     resources::{
-        error::Error,
+        error::{Error, LabelAssignSnafu, OpError, TopologyError},
         utils,
-        utils::{CreateRow, GetHeaderRow},
+        utils::{
+            optional_cell, print_table, validate_topology_key, validate_topology_value, CreateRow,
+            GetHeaderRow, OutputFormat,
+        },
         NodeId, PoolId,
     },
     rest_wrapper::RestClient,
 };
 use async_trait::async_trait;
+use openapi::apis::StatusCode;
 use prettytable::Row;
+use snafu::ResultExt;
 use std::collections::HashMap;
 
 use super::VolumeId;
@@ -50,7 +55,7 @@ impl CreateRow for openapi::models::Pool {
             ::utils::bytes::into_human(state.capacity),
             ::utils::bytes::into_human(state.used),
             ::utils::bytes::into_human(free),
-            utils::optional_cell(state.committed.map(::utils::bytes::into_human)),
+            optional_cell(state.committed.map(::utils::bytes::into_human)),
         ]
     }
 }
@@ -178,4 +183,99 @@ pub(crate) fn labels_matched(
         None => return Ok(true),
     }
     Ok(true)
+}
+
+#[async_trait(?Send)]
+impl Label for Pool {
+    type ID = PoolId;
+    async fn label(
+        id: &Self::ID,
+        label: String,
+        overwrite: bool,
+        output: &utils::OutputFormat,
+    ) -> PluginResult {
+        let result = if label.contains('=') {
+            let [key, value] = label.split('=').collect::<Vec<_>>()[..] else {
+                return Err(TopologyError::LabelMultiAssign {}.into());
+            };
+
+            validate_topology_key(key).context(super::error::PoolLabelFormatSnafu)?;
+            validate_topology_value(value).context(super::error::PoolLabelFormatSnafu)?;
+            match RestClient::client()
+                .pools_api()
+                .put_pool_label(id, key, value, Some(overwrite))
+                .await
+            {
+                Err(source) => match source.status() {
+                    Some(StatusCode::UNPROCESSABLE_ENTITY) if output.none() => {
+                        Err(OpError::LabelExists {
+                            resource: "Pool".to_string(),
+                            id: id.to_string(),
+                        })
+                    }
+                    Some(StatusCode::PRECONDITION_FAILED) if output.none() => {
+                        Err(OpError::LabelConflict {
+                            resource: "Pool".to_string(),
+                            id: id.to_string(),
+                        })
+                    }
+                    Some(StatusCode::NOT_FOUND) if output.none() => {
+                        Err(OpError::ResourceNotFound {
+                            resource: "Pool".to_string(),
+                            id: id.to_string(),
+                        })
+                    }
+                    _ => Err(OpError::Generic {
+                        resource: "Pool".to_string(),
+                        id: id.to_string(),
+                        source,
+                    }),
+                },
+                Ok(pool) => Ok(pool),
+            }
+        } else {
+            snafu::ensure!(label.len() >= 2 && label.ends_with('-'), LabelAssignSnafu);
+            let key = &label[.. label.len() - 1];
+            validate_topology_key(key)?;
+            match RestClient::client()
+                .pools_api()
+                .del_pool_label(id, key)
+                .await
+            {
+                Err(source) => match source.status() {
+                    Some(StatusCode::PRECONDITION_FAILED) if output.none() => {
+                        Err(OpError::LabelNotFound {
+                            resource: "Pool".to_string(),
+                            id: id.to_string(),
+                        })
+                    }
+                    Some(StatusCode::NOT_FOUND) if output.none() => {
+                        Err(OpError::ResourceNotFound {
+                            resource: "Pool".to_string(),
+                            id: id.to_string(),
+                        })
+                    }
+                    _ => Err(OpError::Generic {
+                        resource: "Pool".to_string(),
+                        id: id.to_string(),
+                        source,
+                    }),
+                },
+                Ok(pool) => Ok(pool),
+            }
+        }?;
+        let pool = result.into_body();
+        match output {
+            OutputFormat::Yaml | OutputFormat::Json => {
+                // Print json or yaml based on output format.
+                print_table(output, pool);
+            }
+            OutputFormat::None => {
+                // In case the output format is not specified, show a success message.
+                let labels = pool.spec.unwrap().labels.unwrap_or_default();
+                println!("Pool {id} labelled successfully. Current labels: {labels:?}");
+            }
+        }
+        Ok(())
+    }
 }

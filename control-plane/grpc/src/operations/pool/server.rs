@@ -2,10 +2,11 @@ use crate::{
     operations::pool::traits::PoolOperations,
     pool,
     pool::{
-        create_pool_reply, get_pools_reply,
+        create_pool_reply, get_pools_reply, label_pool_reply,
         pool_grpc_server::{PoolGrpc, PoolGrpcServer},
-        CreatePoolReply, CreatePoolRequest, DestroyPoolReply, DestroyPoolRequest, GetPoolsReply,
-        GetPoolsRequest,
+        unlabel_pool_reply, CreatePoolReply, CreatePoolRequest, DestroyPoolReply,
+        DestroyPoolRequest, GetPoolsReply, GetPoolsRequest, LabelPoolReply, LabelPoolRequest,
+        UnlabelPoolReply, UnlabelPoolRequest,
     },
 };
 use stor_port::types::v0::transport::Filter;
@@ -85,6 +86,36 @@ impl PoolGrpc for PoolServer {
             })),
             Err(err) => Ok(Response::new(GetPoolsReply {
                 reply: Some(get_pools_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn label_pool(
+        &self,
+        request: tonic::Request<LabelPoolRequest>,
+    ) -> Result<tonic::Response<LabelPoolReply>, tonic::Status> {
+        let req: LabelPoolRequest = request.into_inner();
+        match self.service.label(&req, None).await {
+            Ok(pool) => Ok(Response::new(LabelPoolReply {
+                reply: Some(label_pool_reply::Reply::Pool(pool.into())),
+            })),
+            Err(err) => Ok(Response::new(LabelPoolReply {
+                reply: Some(label_pool_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn unlabel_pool(
+        &self,
+        request: tonic::Request<UnlabelPoolRequest>,
+    ) -> Result<tonic::Response<UnlabelPoolReply>, tonic::Status> {
+        let req: UnlabelPoolRequest = request.into_inner();
+        match self.service.unlabel(&req, None).await {
+            Ok(pool) => Ok(Response::new(UnlabelPoolReply {
+                reply: Some(unlabel_pool_reply::Reply::Pool(pool.into())),
+            })),
+            Err(err) => Ok(Response::new(UnlabelPoolReply {
+                reply: Some(unlabel_pool_reply::Reply::Error(err.into())),
             })),
         }
     }
