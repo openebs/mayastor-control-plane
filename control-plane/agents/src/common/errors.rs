@@ -208,6 +208,15 @@ pub enum SvcError {
         labels: String,
         resource_kind: ResourceKind,
     },
+    #[snafu(display(
+        "Forbidden {}, cannot delete internal labels: {} ",
+        resource_kind,
+        labels
+    ))]
+    ForbiddenUnlabelKey {
+        labels: String,
+        resource_kind: ResourceKind,
+    },
     #[snafu(display("Multiple nexuses not supported"))]
     MultipleNexuses {},
     #[snafu(display("Storage Error: {}", source))]
@@ -796,6 +805,12 @@ impl From<SvcError> for ReplyError {
                 extra,
             },
             SvcError::InvalidLabel { resource_kind, .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: resource_kind,
+                source,
+                extra,
+            },
+            SvcError::ForbiddenUnlabelKey { resource_kind, .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: resource_kind,
                 source,
