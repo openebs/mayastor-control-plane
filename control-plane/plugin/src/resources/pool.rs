@@ -1,19 +1,22 @@
+extern crate utils as external_utils;
 use crate::{
-    operations::{Get, Label, ListWithArgs, PluginResult},
+    operations::{GetWithArgs, Label, ListWithArgs, PluginResult},
     resources::{
         error::{Error, LabelAssignSnafu, OpError, TopologyError},
         utils,
         utils::{
             optional_cell, print_table, validate_topology_key, validate_topology_value, CreateRow,
-            GetHeaderRow, OutputFormat,
+            CreateRows, GetHeaderRow, OutputFormat,
         },
         NodeId, PoolId,
     },
     rest_wrapper::RestClient,
 };
+
 use async_trait::async_trait;
 use openapi::apis::StatusCode;
-use prettytable::Row;
+use prettytable::{Cell, Row};
+use serde::Serialize;
 use snafu::ResultExt;
 use std::collections::HashMap;
 
@@ -68,6 +71,27 @@ impl GetHeaderRow for openapi::models::Pool {
     }
 }
 
+/// Arguments used when getting a pool.
+#[derive(Debug, Clone, clap::Args)]
+pub struct GetPoolArgs {
+    /// Id of the pool.
+    pool_id: PoolId,
+    /// Show the labels of the pool.
+    #[clap(long, default_value = "false")]
+    show_labels: bool,
+}
+
+impl GetPoolArgs {
+    /// Return the pool ID.
+    pub fn pool_id(&self) -> PoolId {
+        self.pool_id.clone()
+    }
+    /// Return whether to show the labels of the pool.
+    pub fn show_labels(&self) -> bool {
+        self.show_labels
+    }
+}
+
 /// Arguments used when getting pools.
 #[derive(Debug, Clone, clap::Args)]
 pub struct GetPoolsArgs {
@@ -84,6 +108,10 @@ pub struct GetPoolsArgs {
     /// Pools must satisfy all of the specified label constraints.
     #[clap(short = 'l', long)]
     selector: Option<String>,
+
+    /// Show the labels of the pool.
+    #[clap(long, default_value = "false")]
+    show_labels: bool,
 }
 
 impl GetPoolsArgs {
@@ -100,6 +128,11 @@ impl GetPoolsArgs {
     /// Select the pools based on labels.
     pub fn selector(&self) -> &Option<String> {
         &self.selector
+    }
+
+    /// Return whether to show the labels of the pool.
+    pub fn show_labels(&self) -> bool {
+        self.show_labels
     }
 }
 
@@ -133,7 +166,17 @@ impl ListWithArgs for Pools {
             },
             None => true,
         });
-        utils::print_table(output, pools);
+
+        let pools_display = PoolDisplay::new_pools(pools.clone(), args.show_labels());
+        match output {
+            OutputFormat::Yaml | OutputFormat::Json => {
+                print_table(output, pools_display.inner);
+            }
+            OutputFormat::None => {
+                print_table(output, pools_display);
+            }
+        }
+
         Ok(())
     }
 }
@@ -143,14 +186,22 @@ impl ListWithArgs for Pools {
 pub struct Pool {}
 
 #[async_trait(?Send)]
-impl Get for Pool {
+impl GetWithArgs for Pool {
     type ID = PoolId;
-    async fn get(id: &Self::ID, output: &utils::OutputFormat) -> PluginResult {
+    type Args = GetPoolArgs;
+    async fn get(id: &Self::ID, args: &Self::Args, output: &utils::OutputFormat) -> PluginResult {
         match RestClient::client().pools_api().get_pool(id).await {
-            Ok(pool) => {
-                // Print table, json or yaml based on output format.
-                utils::print_table(output, pool.into_body());
-            }
+            Ok(pool) => match output {
+                OutputFormat::Yaml | OutputFormat::Json => {
+                    print_table(output, pool.clone().into_body());
+                }
+                OutputFormat::None => {
+                    print_table(
+                        output,
+                        PoolDisplay::new(pool.into_body(), args.show_labels()),
+                    );
+                }
+            },
             Err(e) => {
                 return Err(Error::GetPoolError {
                     id: id.to_string(),
@@ -277,5 +328,83 @@ impl Label for Pool {
             }
         }
         Ok(())
+    }
+}
+
+/// The PoolDisplay structure is responsible for controlling the display formatting of Pool
+/// objects. `#[serde(flatten)]` and `#[serde(skip)]` attributes are used to ensure that when the
+/// object is serialised, only the `inner` object is represented.
+#[derive(Serialize, Debug)]
+pub struct PoolDisplay {
+    #[serde(flatten)]
+    pub inner: Vec<openapi::models::Pool>,
+    #[serde(skip)]
+    show_labels: bool,
+}
+
+impl PoolDisplay {
+    /// Create a new `PoolDisplay` instance.
+    pub(crate) fn new(pool: openapi::models::Pool, show_labels: bool) -> Self {
+        let vec: Vec<openapi::models::Pool> = vec![pool];
+        Self {
+            inner: vec,
+            show_labels,
+        }
+    }
+    /// Create a new `PoolDisplay` instance from a vector of pools.
+    pub(crate) fn new_pools(pools: Vec<openapi::models::Pool>, show_labels: bool) -> Self {
+        Self {
+            inner: pools,
+            show_labels,
+        }
+    }
+
+    /// Get a list of pool labels.
+    pub(crate) fn pool_label_list(pool: &openapi::models::Pool) -> Vec<String> {
+        let mut pools_labels: Vec<String> = vec![];
+        let internal_label = external_utils::dsp_created_by_key();
+
+        match &pool.spec {
+            Some(spec) => match &spec.labels {
+                Some(ds) => {
+                    pools_labels = ds
+                        .iter()
+                        // Dont return the created_by_dsp label for the gets
+                        .filter(|(key, _)| *key != &internal_label)
+                        .map(|(key, value)| format!("{}={}", key, value))
+                        .collect();
+                }
+                None => {}
+            },
+            None => {}
+        }
+        pools_labels
+    }
+}
+
+// Create the header for a `PoolDisplay` object.
+impl GetHeaderRow for PoolDisplay {
+    fn get_header_row(&self) -> Row {
+        let mut header = (*utils::POOLS_HEADERS).clone();
+        if self.show_labels {
+            header.extend(vec!["LABELS"]);
+        }
+        header
+    }
+}
+
+impl CreateRows for PoolDisplay {
+    fn create_rows(&self) -> Vec<Row> {
+        let mut rows = vec![];
+        for pool in self.inner.iter() {
+            let mut row = pool.row();
+            if self.show_labels {
+                let labelstring = PoolDisplay::pool_label_list(pool).join(", ");
+                // Add the pool labels to each row.
+                row.add_cell(Cell::new(&labelstring));
+            }
+            rows.push(row);
+        }
+        rows
     }
 }
