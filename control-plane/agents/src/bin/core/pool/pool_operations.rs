@@ -16,6 +16,7 @@ use stor_port::{
         transport::{CreatePool, CtrlPoolState, DestroyPool, Pool},
     },
 };
+use utils::dsp_created_by_key;
 
 #[async_trait::async_trait]
 impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
@@ -169,6 +170,12 @@ impl ResourceLabel for OperationGuardArc<PoolSpec> {
         registry: &Registry,
         label_key: String,
     ) -> Result<Self::UnlabelOutput, SvcError> {
+        if label_key == dsp_created_by_key() {
+            return Err(SvcError::ForbiddenUnlabelKey {
+                labels: label_key,
+                resource_kind: ResourceKind::Pool,
+            });
+        }
         let cloned_pool_spec = self.lock().clone();
         let spec_clone = self
             .start_update(
