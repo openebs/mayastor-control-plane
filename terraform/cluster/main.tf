@@ -1,7 +1,8 @@
 module "k8s" {
   source = "./mod/k8s"
 
-  num_nodes          = var.num_nodes
+  num_nodes          = local.num_nodes
+  master_nodes       = local.master_nodes
   ssh_user           = local.ssh_user
   private_key_path   = local.ssh_key_priv
   node_list          = module.provider.node_list
@@ -21,12 +22,17 @@ module "provider" {
   # lxd and libvirt
   ssh_user           = local.ssh_user
   ssh_key            = local.ssh_key_pub
-  num_nodes          = var.num_nodes
+  master_nodes       = local.master_nodes
+  worker_nodes       = var.worker_nodes
+  num_nodes          = local.num_nodes
   worker_memory      = var.worker_memory
   worker_vcpu        = var.worker_vcpu
   master_memory      = var.master_memory
   master_vcpu        = var.master_vcpu
-  hostname_formatter = var.hostname_formatter
+  master_fmt         = format("%s-%%d", var.master_prefix)
+  worker_fmt         = format("%s-%%d", var.worker_prefix)
+  lxc_cached_image   = var.lxc_cached_image
+  lxc_image          = var.lxc_image
 
   # libvirt
   image_path         = var.image_path
@@ -47,6 +53,8 @@ locals {
   ssh_key_priv = var.ssh_key_priv == "" ? pathexpand("~/.ssh/id_rsa") : var.ssh_key_priv
   ssh_user     = var.ssh_user == "" ? data.local_file.current_username.content : var.ssh_user
   qcow2_image  = var.qcow2_image == "" ? pathexpand("~/terraform_images/ubuntu-20.04-server-cloudimg-amd64.img") : pathexpand(var.qcow2_image)
+  master_nodes = 1
+  num_nodes    = var.worker_nodes + local.master_nodes
 }
 
 resource "null_resource" "generate_current_username" {

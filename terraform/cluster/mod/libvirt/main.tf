@@ -2,11 +2,14 @@
 
 variable "image_path" {}
 variable "num_nodes" {}
+variable "master_nodes" {}
+variable "worker_nodes" {}
 variable "worker_memory" {}
 variable "worker_vcpu" {}
 variable "master_memory" {}
 variable "master_vcpu" {}
-variable "hostname_formatter" {}
+variable "master_fmt" {}
+variable "worker_fmt" {}
 variable "ssh_user" {}
 variable "ssh_key" {}
 variable "private_key_path" {}
@@ -15,6 +18,9 @@ variable "pooldisk_size" {}
 variable "qcow2_image" {}
 variable "network_mode" {}
 variable "bridge_name" {}
+
+variable "lxc_image" {}
+variable "lxc_cached_image" {}
 
 provider "libvirt" {
   uri = "qemu:///system"
@@ -37,7 +43,7 @@ resource "libvirt_volume" "ubuntu-qcow2" {
 
 # we want to, based of the first image, create 3 separate images each with their own cloud-init settings
 resource "libvirt_volume" "ubuntu-qcow2-resized" {
-  name           = format(var.hostname_formatter, count.index + 1)
+  name           = count.index < var.master_nodes ? format(var.master_fmt, count.index + 1) : format(var.worker_fmt, count.index + 1 - var.master_nodes)
   count          = var.num_nodes
   base_volume_id = libvirt_volume.ubuntu-qcow2.id
   pool           = libvirt_pool.ubuntu-pool.name
@@ -50,7 +56,7 @@ resource "libvirt_volume" "pool-disk" {
   count  = var.num_nodes
   pool   = libvirt_pool.ubuntu-pool.name
   format = "raw"
-  size   = var.pooldisk_size
+  size   = count.index < var.master_nodes ? 0 : var.pooldisk_size
 }
 
 locals {
@@ -58,7 +64,7 @@ locals {
   # passes them to a template file to be filled in
   user_data = [
     for node_index in range(var.num_nodes) : templatefile("${path.module}/cloud_init.tmpl", {
-      ssh_user = var.ssh_user, ssh_key = var.ssh_key, hostname = format(var.hostname_formatter, node_index + 1)
+      ssh_user = var.ssh_user, ssh_key = var.ssh_key, hostname = node_index < var.master_nodes ? format(var.master_fmt, node_index + 1) : format(var.worker_fmt, node_index + 1 - var.master_nodes)
     })
   ]
   # likewise for networking
@@ -123,9 +129,9 @@ resource "libvirt_cloudinit_disk" "commoninit" {
 # create the actual VMs for the cluster
 resource "libvirt_domain" "ubuntu-domain" {
   count     = var.num_nodes
-  name      = format(var.hostname_formatter, count.index + 1)
-  memory    = count.index == 0 ? var.master_memory : var.worker_memory
-  vcpu      = count.index == 0 ? var.master_vcpu : var.worker_vcpu
+  name      = count.index < var.master_nodes ? format(var.master_fmt, count.index + 1) : format(var.worker_fmt, count.index + 1 - var.master_nodes)
+  memory    = count.index < var.master_nodes ? var.master_memory : var.worker_memory
+  vcpu      = count.index < var.master_nodes ? var.master_vcpu : var.worker_vcpu
   autostart = true
 
   cloudinit = libvirt_cloudinit_disk.commoninit[count.index].id
@@ -152,7 +158,7 @@ resource "libvirt_domain" "ubuntu-domain" {
 
   network_interface {
     network_name   = var.network_mode == "default" ? "default" : "k8snet"
-    hostname       = format(var.hostname_formatter, count.index + 1)
+    hostname       = count.index < var.master_nodes ? format(var.master_fmt, count.index + 1) : format(var.worker_fmt, count.index + 1 - var.master_nodes)
     wait_for_lease = true
   }
 
@@ -185,7 +191,7 @@ output "ks-cluster-nodes" {
 ${libvirt_domain.ubuntu-domain.0.name} ansible_host=${libvirt_domain.ubuntu-domain.0.network_interface.0.addresses.0} ansible_user=${var.ssh_user} ansible_ssh_private_key_file=${var.private_key_path} ansible_ssh_common_args='-o StrictHostKeyChecking=no'
 
 [nodes]%{for ip in libvirt_domain.ubuntu-domain.*~}
-%{if ip.name != "${format(var.hostname_formatter, 1)}"}${ip.name} ansible_host=${ip.network_interface.0.addresses.0} ansible_user=${var.ssh_user} ansible_ssh_private_key_file=${var.private_key_path} ansible_ssh_common_args='-o StrictHostKeyChecking=no'%{endif}
+%{if ip.name != "${format(var.master_fmt, 1)}"}${ip.name} ansible_host=${ip.network_interface.0.addresses.0} ansible_user=${var.ssh_user} ansible_ssh_private_key_file=${var.private_key_path} ansible_ssh_common_args='-o StrictHostKeyChecking=no'%{endif}
 %{endfor~}
 EOT
 }

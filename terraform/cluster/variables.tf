@@ -34,15 +34,19 @@ variable "pooldisk_size" {
   default     = 10737418240
 }
 
-variable "hostname_formatter" {
+variable "master_prefix" {
   type    = string
-  default = "ksnode-%d"
+  default = "ksmaster"
+}
+variable "worker_prefix" {
+  type    = string
+  default = "ksworker"
 }
 
-variable "num_nodes" {
+variable "worker_nodes" {
   type        = number
-  default     = 3
-  description = "The number of nodes to create (should be > 1)"
+  default     = 2
+  description = "The number of worker to create"
 }
 
 variable "network_mode" {
@@ -79,25 +83,25 @@ variable "nr_hugepages" {
 variable "worker_memory" {
   type        = number
   default     = 6144
-  description = "Amount of memory (MiB) allocated to each worker node - only needed for libvirt provider"
+  description = "Amount of memory (MiB) allocated to each worker node"
 }
 
 variable "worker_vcpu" {
   type        = number
   default     = 3
-  description = "Virtual CPUs allocated to each worker node - only needed for libvirt provider"
+  description = "Virtual CPUs allocated to each worker node"
 }
 
 variable "master_memory" {
   type        = number
-  default     = 3192
-  description = "Amount of memory (MiB) allocated to the master node - only needed for libvirt provider"
+  default     = 2048
+  description = "Amount of memory (MiB) allocated to the master node"
 }
 
 variable "master_vcpu" {
   type        = number
   default     = 2
-  description = "Virtual CPUs allocated to the master node - only needed for libvirt provider"
+  description = "Virtual CPUs allocated to the master node"
 }
 
 variable "kubernetes_version" {
@@ -123,4 +127,15 @@ variable "kubernetes_cni" {
   description = "URL containing the CNI plugin yaml"
   # default = "https://raw.githubusercontent.com/cloudnativelabs/kube-router/v1.5.4/daemonset/kubeadm-kuberouter.yaml"
   default     = "https://raw.githubusercontent.com/flannel-io/flannel/v0.21.5/Documentation/kube-flannel.yml"
+}
+
+variable "lxc_image" {
+  type        = string
+  description = "Image in the format: [<remote>:]<image>. Examples: images:busybox/1.36.1 ubuntu:22.04"
+  default     = "ubuntu:22.04"
+}
+variable "lxc_cached_image" {
+  type        = bool
+  description = "Use a terraform cached image"
+  default     = false
 }
