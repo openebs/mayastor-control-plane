@@ -1,7 +1,7 @@
 use crate::resources::{
     blockdevice::BlockDeviceArgs,
     node::{DrainNodeArgs, GetNodeArgs, GetNodesArgs},
-    pool::GetPoolsArgs,
+    pool::{GetPoolArgs, GetPoolsArgs},
     snapshot::VolumeSnapshotArgs,
     volume::VolumesArgs,
 };
@@ -51,7 +51,7 @@ pub enum GetResources {
     /// Get all pools.
     Pools(GetPoolsArgs),
     /// Get pool with the given ID.
-    Pool { id: PoolId },
+    Pool(GetPoolArgs),
     /// Get all nodes.
     Nodes(GetNodesArgs),
     /// Get node with the given ID.
