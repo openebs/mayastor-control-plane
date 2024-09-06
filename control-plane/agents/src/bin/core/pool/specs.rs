@@ -13,12 +13,12 @@ use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
         store::{
-            pool::{PoolOperation, PoolSpec},
+            pool::{PoolLabelOp, PoolOperation, PoolSpec, PoolUnLabelOp},
             replica::{ReplicaOperation, ReplicaSpec},
             SpecStatus, SpecTransaction,
         },
         transport::{
-            CreatePool, CreateReplica, NodeId, PoolId, PoolState, PoolStatus, Replica, ReplicaId,
+            CreatePool, CreateReplica, NodeId, PoolId, PoolStatus, Replica, ReplicaId,
             ReplicaOwners, ReplicaStatus,
         },
     },
@@ -29,8 +29,8 @@ impl GuardedOperationsHelper for OperationGuardArc<PoolSpec> {
     type Create = CreatePool;
     type Owners = ();
     type Status = PoolStatus;
-    type State = PoolState;
-    type UpdateOp = ();
+    type State = PoolSpec;
+    type UpdateOp = PoolOperation;
     type Inner = PoolSpec;
 
     fn validate_destroy(&self, registry: &Registry) -> Result<(), SvcError> {
@@ -59,14 +59,54 @@ impl SpecOperationsHelper for PoolSpec {
     type Create = CreatePool;
     type Owners = ();
     type Status = PoolStatus;
-    type State = PoolState;
-    type UpdateOp = ();
+    type State = PoolSpec;
+    type UpdateOp = PoolOperation;
 
     fn start_create_op(&mut self, _request: &Self::Create) {
         self.start_op(PoolOperation::Create);
     }
     fn start_destroy_op(&mut self) {
         self.start_op(PoolOperation::Destroy);
+    }
+    async fn start_update_op(
+        &mut self,
+        _: &Registry,
+        _state: &Self::State,
+        op: Self::UpdateOp,
+    ) -> Result<(), SvcError> {
+        match &op {
+            PoolOperation::Label(PoolLabelOp { labels, overwrite }) => {
+                let (existing, conflict) = self.label_collisions(labels);
+                if !*overwrite && !existing.is_empty() {
+                    Err(SvcError::LabelsExists {
+                        resource: ResourceKind::Pool,
+                        id: self.id().to_string(),
+                        labels: format!("{existing:?}"),
+                        conflict,
+                    })
+                } else {
+                    self.start_op(op);
+                    Ok(())
+                }
+            }
+            PoolOperation::Unlabel(PoolUnLabelOp { label_key }) => {
+                // Check that the label is present.
+                if !self.has_labels_key(label_key) {
+                    Err(SvcError::LabelNotFound {
+                        resource: ResourceKind::Pool,
+                        id: self.id().to_string(),
+                        label_key: label_key.to_string(),
+                    })
+                } else {
+                    self.start_op(op);
+                    Ok(())
+                }
+            }
+            _ => {
+                self.start_op(op);
+                Ok(())
+            }
+        }
     }
 
     fn dirty(&self) -> bool {
@@ -410,5 +450,18 @@ impl ResourceSpecsLocked {
             }
         }
         pending_ops
+    }
+
+    /// Get guarded pool spec by its `PoolId`.
+    pub async fn guarded_pool(
+        &self,
+        pool_id: &PoolId,
+    ) -> Result<OperationGuardArc<PoolSpec>, SvcError> {
+        match self.pool_rsc(pool_id) {
+            Some(pool) => pool.operation_guard_wait().await,
+            None => Err(PoolNotFound {
+                pool_id: pool_id.to_owned(),
+            }),
+        }
     }
 }

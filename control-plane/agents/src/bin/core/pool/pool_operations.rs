@@ -2,19 +2,21 @@ use crate::controller::{
     io_engine::PoolApi,
     registry::Registry,
     resources::{
-        operations::ResourceLifecycle,
+        operations::{ResourceLabel, ResourceLifecycle},
         operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
         OperationGuardArc,
     },
 };
 use agents::errors::{SvcError, SvcError::CordonedNode};
+use std::collections::HashMap;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
-        store::pool::PoolSpec,
+        store::pool::{PoolOperation, PoolSpec},
         transport::{CreatePool, CtrlPoolState, DestroyPool, Pool},
     },
 };
+use utils::dsp_created_by_key;
 
 #[async_trait::async_trait]
 impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
@@ -67,7 +69,7 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
 
         let state = pool.complete_create(result, registry, on_fail).await?;
         let spec = pool.lock().clone();
-        Ok(Pool::new(spec, CtrlPoolState::new(state)))
+        Ok(Pool::new(spec, Some(CtrlPoolState::new(state))))
     }
 
     async fn destroy(
@@ -133,5 +135,57 @@ impl ResourceLifecycle for Option<OperationGuardArc<PoolSpec>> {
                 pool_id: request.id.clone(),
             })
         }
+    }
+}
+
+/// Resource Label Operations.
+#[async_trait::async_trait]
+impl ResourceLabel for OperationGuardArc<PoolSpec> {
+    type LabelOutput = PoolSpec;
+    type UnlabelOutput = PoolSpec;
+
+    /// Label a node via operation guard functions.
+    async fn label(
+        &mut self,
+        registry: &Registry,
+        labels: HashMap<String, String>,
+        overwrite: bool,
+    ) -> Result<Self::LabelOutput, SvcError> {
+        let cloned_pool_spec = self.lock().clone();
+        let spec_clone = self
+            .start_update(
+                registry,
+                &cloned_pool_spec,
+                PoolOperation::Label((labels, overwrite).into()),
+            )
+            .await?;
+
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
+    }
+
+    /// Unlabel a node via operation guard functions.
+    async fn unlabel(
+        &mut self,
+        registry: &Registry,
+        label_key: String,
+    ) -> Result<Self::UnlabelOutput, SvcError> {
+        if label_key == dsp_created_by_key() {
+            return Err(SvcError::ForbiddenUnlabelKey {
+                labels: label_key,
+                resource_kind: ResourceKind::Pool,
+            });
+        }
+        let cloned_pool_spec = self.lock().clone();
+        let spec_clone = self
+            .start_update(
+                registry,
+                &cloned_pool_spec,
+                PoolOperation::Unlabel(label_key.into()),
+            )
+            .await?;
+
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
     }
 }

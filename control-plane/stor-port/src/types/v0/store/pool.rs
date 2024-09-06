@@ -15,7 +15,7 @@ pub type PoolLabel = std::collections::HashMap<String, String>;
 use crate::types::v0::transport::ImportPool;
 use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
-use std::{convert::From, fmt::Debug};
+use std::{collections::HashMap, convert::From, fmt::Debug};
 
 /// Pool data structure used by the persistent store.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -85,6 +85,62 @@ pub struct PoolSpec {
     pub operation: Option<PoolOperationState>,
 }
 
+impl PoolSpec {
+    /// Pool identification.
+    pub fn id(&self) -> &PoolId {
+        &self.id
+    }
+
+    /// Label pool by applying the labels.
+    pub fn label(&mut self, labels: HashMap<String, String>) {
+        match &mut self.labels {
+            Some(existing_labels) => {
+                existing_labels.extend(labels);
+            }
+            None => {
+                self.labels = Some(labels);
+            }
+        }
+    }
+
+    /// Check if the pool has the given topology label key.
+    pub fn has_labels_key(&self, key: &str) -> bool {
+        if let Some(labels) = &self.labels {
+            return labels.contains_key(key);
+        }
+        false
+    }
+
+    /// Remove label from pool.
+    pub fn unlabel(&mut self, label_key: &str) {
+        if let Some(labels) = &mut self.labels {
+            labels.remove(label_key);
+        }
+    }
+
+    /// Check if there are key collisions between current topology labels and the given labels.
+    pub fn label_collisions<'a>(
+        &'a self,
+        labels: &'a HashMap<String, String>,
+    ) -> (HashMap<&'a String, &'a String>, bool) {
+        let mut conflict = false;
+        let mut existing_conflicts = HashMap::new();
+
+        if let Some(existing_labels) = &self.labels {
+            for (key, value) in labels {
+                if let Some(existing_value) = existing_labels.get(key) {
+                    if existing_value != value {
+                        conflict = true;
+                        existing_conflicts.insert(key, existing_value);
+                    }
+                }
+            }
+        }
+
+        (existing_conflicts, conflict)
+    }
+}
+
 impl From<&PoolSpec> for ImportPool {
     fn from(value: &PoolSpec) -> Self {
         Self {
@@ -134,6 +190,12 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
                 PoolOperation::Create => {
                     self.status = SpecStatus::Created(transport::PoolStatus::Online);
                 }
+                PoolOperation::Label(PoolLabelOp { labels, .. }) => {
+                    self.label(labels);
+                }
+                PoolOperation::Unlabel(PoolUnLabelOp { label_key }) => {
+                    self.unlabel(&label_key);
+                }
             }
         }
         self.clear_op();
@@ -159,6 +221,10 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
     fn pending_op(&self) -> Option<&PoolOperation> {
         self.operation.as_ref().map(|o| &o.operation)
     }
+
+    fn log_op(&self, _operation: &PoolOperation) -> (bool, bool) {
+        (false, true)
+    }
 }
 
 /// Available Pool Operations
@@ -166,6 +232,30 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
 pub enum PoolOperation {
     Create,
     Destroy,
+    Label(PoolLabelOp),
+    Unlabel(PoolUnLabelOp),
+}
+
+/// Parameter for adding pool labels.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PoolLabelOp {
+    pub labels: HashMap<String, String>,
+    pub overwrite: bool,
+}
+impl From<(HashMap<String, String>, bool)> for PoolLabelOp {
+    fn from((labels, overwrite): (HashMap<String, String>, bool)) -> Self {
+        Self { labels, overwrite }
+    }
+}
+/// Parameter for removing pool labels.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PoolUnLabelOp {
+    pub label_key: String,
+}
+impl From<String> for PoolUnLabelOp {
+    fn from(label_key: String) -> Self {
+        Self { label_key }
+    }
 }
 
 impl PartialEq<transport::PoolState> for PoolSpec {

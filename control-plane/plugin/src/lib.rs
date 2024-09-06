@@ -148,7 +148,9 @@ impl ExecuteOperation for GetResources {
                 volume::Volume::topology(id, &cli_args.output).await
             }
             GetResources::Pools(args) => pool::Pools::list(args, &cli_args.output).await,
-            GetResources::Pool { id } => pool::Pool::get(id, &cli_args.output).await,
+            GetResources::Pool(args) => {
+                pool::Pool::get(&args.pool_id(), args, &cli_args.output).await
+            }
             GetResources::Nodes(args) => node::Nodes::list(args, &cli_args.output).await,
             GetResources::Node(args) => {
                 node::Node::get(&args.node_id(), args, &cli_args.output).await
@@ -244,6 +246,11 @@ impl ExecuteOperation for LabelResources {
                 label,
                 overwrite,
             } => node::Node::label(id, label.to_string(), *overwrite, &cli_args.output).await,
+            LabelResources::Pool {
+                id,
+                label,
+                overwrite,
+            } => pool::Pool::label(id, label.to_string(), *overwrite, &cli_args.output).await,
         }
     }
 }
