@@ -79,7 +79,9 @@ impl Device {
         match url.scheme() {
             "file" => Ok(Box::new(nbd::Nbd::try_from(&url)?)),
             "iscsi" => Ok(Box::new(iscsi::IscsiAttach::try_from(&url)?)),
-            "nvmf" => Ok(Box::new(nvmf::NvmfAttach::try_from(&url)?)),
+            "nvmf" | "nvmf+tcp" | "nvmf+rdma+tcp" => {
+                Ok(Box::new(nvmf::NvmfAttach::try_from(&url)?))
+            }
             "nbd" => Ok(Box::new(nbd::Nbd::try_from(&url)?)),
             scheme => Err(DeviceError::from(format!(
                 "unsupported device scheme: {scheme}"

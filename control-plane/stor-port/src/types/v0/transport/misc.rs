@@ -337,7 +337,7 @@ impl TryFrom<&str> for Protocol {
         } else {
             match url::Url::from_str(value) {
                 Ok(url) => match url.scheme() {
-                    "nvmf" => Self::Nvmf,
+                    "nvmf" | "nvmf+tcp" | "nvmf+rdma+tcp" => Self::Nvmf,
                     "iscsi" => Self::Iscsi,
                     "nbd" => Self::Nbd,
                     other => return Err(format!("Invalid nexus protocol: {other}")),
