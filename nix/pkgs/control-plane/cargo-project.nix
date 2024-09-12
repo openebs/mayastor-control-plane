@@ -54,6 +54,7 @@ let
     "k8s"
     "openapi/Cargo.toml"
     "openapi/build.rs"
+    "openapi/src/lib.rs"
     "rpc"
     "scripts/rust/generate-openapi-bindings.sh"
     "scripts/rust/branch_ancestor.sh"
