@@ -4,6 +4,7 @@ variable "k8s_cluster_token" {
 
 variable "overlay_cidr" {}
 variable "num_nodes" {}
+variable "master_nodes" {}
 
 variable "ssh_user" {}
 variable "private_key_path" {}
@@ -38,7 +39,7 @@ resource "null_resource" "k8s" {
 
   provisioner "remote-exec" {
     inline = [
-      count.index == 0 ? local.master : local.node
+      count.index < var.master_nodes ? local.master : local.node
     ]
   }
 }

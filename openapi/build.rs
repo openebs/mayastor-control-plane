@@ -19,5 +19,6 @@ fn main() {
     // directive against files created during the build of build.rs??
     // https://doc.rust-lang.org/cargo/reference/build-scripts.html#rerun-if-changed
     // println!("cargo:rerun-if-changed=.");
+    // println!("cargo:rerun-if-changed=./src/lib_.rs");
     // println!("cargo:rerun-if-changed=version.txt");
 }
