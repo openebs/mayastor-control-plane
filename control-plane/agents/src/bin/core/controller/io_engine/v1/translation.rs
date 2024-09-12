@@ -673,6 +673,7 @@ impl AgentToIoEngine for transport::CreatePool {
             uuid: None,
             pooltype: v1::pool::PoolType::Lvs as i32,
             cluster_size: None,
+            md_args: None,
         }
     }
 }
