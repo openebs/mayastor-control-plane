@@ -12,9 +12,9 @@ impl ComponentAction for Etcd {
                     "--data-dir",
                     "/tmp/etcd-data",
                     "--advertise-client-urls",
-                    "http://0.0.0.0:2379",
+                    "http://[::]:2379",
                     "--listen-client-urls",
-                    "http://0.0.0.0:2379",
+                    "http://[::]:2379",
                     // these ensure fast startup since it's not a cluster anyway
                     "--heartbeat-interval=1",
                     "--election-timeout=5",
@@ -38,7 +38,7 @@ impl ComponentAction for Etcd {
     }
     async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
         if !options.no_etcd {
-            let _store = EtcdStore::new("0.0.0.0:2379")
+            let _store = EtcdStore::new("[::]:2379")
                 .await
                 .expect("Failed to connect to etcd.");
         }

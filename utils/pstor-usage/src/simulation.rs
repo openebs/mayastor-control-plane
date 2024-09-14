@@ -165,7 +165,7 @@ impl Simulation {
         };
         let cleanup = cluster.is_none() || self.total_stats;
 
-        let etcd = Etcd::new(Url::parse("http://0.0.0.0:2379")?).await?;
+        let etcd = Etcd::new(Url::parse("http://[::]:2379")?).await?;
 
         // create some pools as backing for the volumes
         let four_mb = 4096 * 1024;

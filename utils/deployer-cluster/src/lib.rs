@@ -393,7 +393,7 @@ impl Cluster {
 
     /// remove etcd store lock for `name` instance
     pub async fn remove_store_lock(&self, name: ControlPlaneService) {
-        let mut store = etcd_client::Client::connect(["0.0.0.0:2379"], None)
+        let mut store = etcd_client::Client::connect(["[::]:2379"], None)
             .await
             .expect("Failed to connect to etcd.");
         store

@@ -133,7 +133,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
                 .long("grpc-endpoint")
                 .value_name("ENDPOINT")
                 .help("ip address where this instance runs, and optionally the gRPC port")
-                .default_value("0.0.0.0")
+                .default_value("[::]")
                 .required(false)
         )
         .arg(
@@ -440,7 +440,7 @@ fn validate_endpoints(
     // sent in registration request.
     if registration_enabled && grpc_endpoint_url.ip().is_unspecified() {
         return Err(anyhow::format_err!(
-            "gRPC endpoint: `0.0.0.0` is not allowed if registration is enabled"
+            "gRPC endpoint: `[::]`/`0.0.0.0` is not allowed if registration is enabled"
         ));
     }
     Ok(grpc_endpoint_url)

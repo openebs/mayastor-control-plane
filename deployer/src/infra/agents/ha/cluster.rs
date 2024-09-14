@@ -12,7 +12,7 @@ impl ComponentAction for HaClusterAgent {
     fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         let mut spec = ContainerSpec::from_binary(
             "agent-ha-cluster",
-            Binary::from_dbg("agent-ha-cluster").with_args(vec!["-g=0.0.0.0:11500"]),
+            Binary::from_dbg("agent-ha-cluster").with_args(vec!["-g=[::]:11500"]),
         )
         .with_portmap("11500", "11500");
 
