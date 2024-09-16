@@ -448,15 +448,26 @@ impl From<&NexusSpec> for DestroyNexus {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct NexusStatusInfo {
     shutdown_failed: bool,
+    #[serde(skip)]
+    reshutdown: bool,
 }
 
 impl NexusStatusInfo {
     /// Create a new nexus status info.
     pub fn new(shutdown_failed: bool) -> NexusStatusInfo {
-        Self { shutdown_failed }
+        Self {
+            shutdown_failed,
+            reshutdown: false,
+        }
     }
     /// Check the nexus had a failed shutdown or not.
     pub fn shutdown_failed(&self) -> bool {
         self.shutdown_failed
+    }
+    pub fn set_reshutdown(&mut self) {
+        self.reshutdown = true;
+    }
+    pub fn reshutdown(&self) -> bool {
+        self.reshutdown
     }
 }
