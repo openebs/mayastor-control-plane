@@ -1,5 +1,6 @@
 pub(super) mod capacity;
 mod garbage_collector;
+mod re_shutdown;
 
 use crate::{
     controller::{
@@ -59,7 +60,10 @@ impl NexusReconciler {
     pub(crate) fn from(period: PollPeriods) -> Self {
         NexusReconciler {
             counter: PollTimer::from(period),
-            poll_targets: vec![Box::new(GarbageCollector::new())],
+            poll_targets: vec![
+                Box::new(GarbageCollector::new()),
+                Box::new(re_shutdown::ReShutdown::new()),
+            ],
         }
     }
     /// Return new `Self` with the default period
