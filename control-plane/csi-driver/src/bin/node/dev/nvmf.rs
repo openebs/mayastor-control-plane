@@ -2,11 +2,12 @@ use std::{
     collections::HashMap,
     convert::{From, TryFrom},
     path::Path,
+    str::FromStr,
 };
 
 use nvmeadm::{
     error::NvmeError,
-    nvmf_discovery::{disconnect, ConnectArgsBuilder},
+    nvmf_discovery::{disconnect, ConnectArgsBuilder, TrType},
 };
 
 use csi_driver::PublishParams;
@@ -32,6 +33,7 @@ lazy_static::lazy_static! {
 pub(super) struct NvmfAttach {
     host: String,
     port: u16,
+    transport: TrType,
     uuid: Uuid,
     nqn: String,
     io_tmo: Option<u32>,
@@ -46,6 +48,7 @@ impl NvmfAttach {
     fn new(
         host: String,
         port: u16,
+        transport: TrType,
         uuid: Uuid,
         nqn: String,
         nr_io_queues: Option<u32>,
@@ -57,6 +60,7 @@ impl NvmfAttach {
         NvmfAttach {
             host,
             port,
+            transport,
             uuid,
             nqn,
             io_tmo: io_tmo.map(|io_tmo| io_tmo.as_secs().try_into().unwrap_or(u32::MAX)),
@@ -100,6 +104,7 @@ impl TryFrom<&Url> for NvmfAttach {
         let uuid = volume_uuid_from_url(url)?;
 
         let port = url.port().unwrap_or(4420);
+        let transport = transport_from_url(url)?;
 
         let nr_io_queues = config().nvme().nr_io_queues();
         let ctrl_loss_tmo = config().nvme().ctrl_loss_tmo();
@@ -112,6 +117,7 @@ impl TryFrom<&Url> for NvmfAttach {
         Ok(NvmfAttach::new(
             host.to_string(),
             port,
+            transport,
             uuid,
             segments[0].to_string(),
             nr_io_queues,
@@ -150,7 +156,12 @@ impl Attach for NvmfAttach {
 
     async fn attach(&self) -> Result<(), DeviceError> {
         // Get the subsystem, if not found issue a connect.
-        match Subsystem::get(self.host.as_str(), &self.port, self.nqn.as_str()) {
+        match Subsystem::get(
+            self.host.as_str(),
+            &self.port,
+            self.transport,
+            self.nqn.as_str(),
+        ) {
             Ok(subsystem) => {
                 tracing::debug!(?subsystem, "Subsystem already present, skipping connect");
                 Ok(())
@@ -170,6 +181,7 @@ impl Attach for NvmfAttach {
                 };
                 let ca = ConnectArgsBuilder::default()
                     .traddr(&self.host)
+                    .transport(self.transport)
                     .trsvcid(self.port.to_string())
                     .nqn(&self.nqn)
                     .ctrl_loss_tmo(self.ctrl_loss_tmo)
@@ -334,4 +346,18 @@ pub(crate) fn volume_uuid_from_url(url: &Url) -> Result<Uuid, DeviceError> {
     }
 
     extract_uuid(components[1]).map_err(|error| DeviceError::from(format!("invalid UUID: {error}")))
+}
+
+/// Extract nvmf fabric transport from Url.
+pub(crate) fn transport_from_url(url: &Url) -> Result<TrType, DeviceError> {
+    // Shouldn't expect nvmf:// scheme here in reality. However, if control plane is
+    // interacting with an old io-engine then old style uri scheme will be received.
+    // Default to tcp for handling that case.
+    let default_xprt = TrType::tcp.to_string();
+    let xprt = url
+        .scheme()
+        .split('+')
+        .nth(1)
+        .unwrap_or(default_xprt.as_str());
+    TrType::from_str(xprt).map_err(|e| DeviceError::new(format!("{e:?}").as_str()))
 }

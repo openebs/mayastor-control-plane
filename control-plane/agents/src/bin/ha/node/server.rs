@@ -24,7 +24,7 @@ use stor_port::{
 };
 
 use http::Uri;
-use nvmeadm::nvmf_subsystem::Subsystem;
+use nvmeadm::{nvmf_discovery::TrType, nvmf_subsystem::Subsystem};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Instant};
 use tokio::time::{sleep, Duration};
 use utils::nvme_target_nqn_prefix;
@@ -181,6 +181,7 @@ impl NodeAgentSvc {
         let preexisted_subsystem = Subsystem::get(
             parsed_uri.host(),
             &parsed_uri.port(),
+            parsed_uri.transport(),
             parsed_uri.nqn().as_str(),
         )
         .is_ok();
@@ -198,6 +199,7 @@ impl NodeAgentSvc {
             Ok(_) => match Subsystem::get(
                 parsed_uri.host(),
                 &parsed_uri.port(),
+                parsed_uri.transport(),
                 parsed_uri.nqn().as_str(),
             ) {
                 Ok(subsystem) => {
@@ -293,6 +295,7 @@ impl NodeAgentSvc {
                     let curr_subsystem = match Subsystem::get(
                         parsed_uri.host(),
                         &parsed_uri.port(),
+                        parsed_uri.transport(),
                         parsed_uri.nqn().as_str(),
                     ) {
                         Ok(s) => s,
@@ -454,6 +457,7 @@ fn parse_uri(new_path: &str) -> Result<ParsedUri, SvcError> {
 struct ParsedUri {
     host: String,
     port: u16,
+    transport: TrType,
     nqn: String,
 }
 
@@ -461,15 +465,37 @@ impl ParsedUri {
     fn new(uri: Uri) -> Result<ParsedUri, SvcError> {
         let host = uri.host().ok_or(SvcError::InvalidArguments {})?.to_string();
         let port = uri.port().ok_or(SvcError::InvalidArguments {})?.as_u16();
+        // split returning a None indicates we possibly received old style uri scheme nvmf:// for
+        // new path, which implies transport as tcp.
+        let trstring = uri
+            .scheme_str()
+            .ok_or(SvcError::InvalidArguments {})?
+            .split('+')
+            .nth(1);
+
+        let transport = if let Some(t) = trstring {
+            t.parse().map_err(|_| SvcError::InvalidArguments {})?
+        } else {
+            TrType::default()
+        };
+
         let nqn = uri.path()[1 ..].to_string();
 
-        Ok(Self { host, port, nqn })
+        Ok(Self {
+            host,
+            port,
+            transport,
+            nqn,
+        })
     }
     fn host(&self) -> &str {
         &self.host
     }
     fn port(&self) -> u16 {
         self.port
+    }
+    fn transport(&self) -> TrType {
+        self.transport
     }
     fn nqn(&self) -> String {
         self.nqn.clone()
