@@ -10,7 +10,7 @@ use crate::{
             operations_helper::{
                 GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard, SpecOperationsHelper,
             },
-            OperationGuardArc, TraceSpan, UpdateInnerValue,
+            OperationGuardArc, TraceSpan, TraceStrLog, UpdateInnerValue,
         },
         scheduling::resources::HealthyChildItems,
         wrapper::{GetterOps, NodeWrapper},
@@ -26,7 +26,8 @@ use stor_port::types::v0::{
     transport::{
         child::Child,
         nexus::{CreateNexus, DestroyNexus, Nexus, ResizeNexus, ShareNexus, UnshareNexus},
-        AddNexusChild, FaultNexusChild, NexusOwners, NodeStatus, RemoveNexusChild, ShutdownNexus,
+        AddNexusChild, FaultNexusChild, NexusOwners, NexusStatus, NodeStatus, RemoveNexusChild,
+        ShutdownNexus,
     },
 };
 
@@ -563,5 +564,38 @@ impl OperationGuardArc<NexusSpec> {
         }
 
         Ok(())
+    }
+
+    /// In case the previous nexus shutdown failed because the node is offline, and if the node is
+    /// now available, then we can shut down the nexus properly.
+    pub(crate) async fn re_shutdown_nexus(&mut self, registry: &Registry) {
+        if !self.as_ref().is_shutdown()
+            || !self.as_ref().status_info().shutdown_failed()
+            || self.as_ref().status_info.reshutdown()
+        {
+            return;
+        }
+
+        let Ok(nexus_state) = registry.nexus(self.uuid()).await else {
+            return;
+        };
+
+        if nexus_state.status == NexusStatus::Shutdown {
+            self.lock().status_info.set_reshutdown();
+            return;
+        }
+
+        let Ok(node) = registry.node_wrapper(&self.as_ref().node).await else {
+            return;
+        };
+
+        if node
+            .shutdown_nexus(&ShutdownNexus::new(self.uuid().clone(), false))
+            .await
+            .is_ok()
+        {
+            self.info("Successfully re-shutdown nexus");
+            self.lock().status_info.set_reshutdown();
+        }
     }
 }

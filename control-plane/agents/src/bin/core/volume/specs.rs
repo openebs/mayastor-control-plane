@@ -647,6 +647,19 @@ impl ResourceSpecsLocked {
             .collect()
     }
 
+    /// Get a list of resourced NexusSpecs's which have failed to shut down.
+    pub(crate) async fn failed_shutdown_nexuses(&self) -> Vec<ResourceMutex<NexusSpec>> {
+        self.read()
+            .nexuses
+            .values()
+            .filter(|nexus| {
+                let nexus_spec = nexus.lock();
+                nexus_spec.is_shutdown() && nexus_spec.status_info().shutdown_failed()
+            })
+            .cloned()
+            .collect()
+    }
+
     /// Get the resourced volume nexus target for the given volume.
     pub(crate) fn volume_target_nexus_rsc(
         &self,

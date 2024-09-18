@@ -13,8 +13,9 @@ use stor_port::{
         openapi::{apis::specs_api::tower::client::direct::Specs, models, models::SpecStatus},
         store::nexus::NexusSpec,
         transport::{
-            CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter, GetSpecs, Nexus,
-            PublishVolume, RepublishVolume, VolumeShareProtocol,
+            CreateReplica, CreateVolume, DestroyReplica, DestroyShutdownTargets, DestroyVolume,
+            Filter, GetSpecs, Nexus, NodeStatus, PublishVolume, ReplicaId, RepublishVolume,
+            VolumeShareProtocol,
         },
     },
 };
@@ -541,4 +542,155 @@ async fn node_exhaustion() {
 
     assert_eq!(error.kind, ReplyErrorKind::ResourceExhausted);
     assert_eq!(error.resource, ResourceKind::Node);
+}
+
+#[tokio::test]
+async fn shutdown_failed_replica_owner() {
+    let grpc_timeout = Duration::from_millis(512);
+
+    const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_agents(vec!["core"])
+        .with_io_engines(2)
+        .with_tmpfs_pool(POOL_SIZE_BYTES)
+        .with_cache_period("100ms")
+        .with_reconcile_period(Duration::from_millis(100), Duration::from_millis(100))
+        .with_node_deadline("2s")
+        .with_options(|o| {
+            o.with_io_engine_env("MAYASTOR_HB_INTERVAL_SEC", "1")
+                .with_isolated_io_engine(true)
+        })
+        .with_req_timeouts_min(true, grpc_timeout, grpc_timeout)
+        .build()
+        .await
+        .unwrap();
+
+    let vol_cli = cluster.grpc_client().volume();
+
+    let volume = vol_cli
+        .create(
+            &CreateVolume {
+                uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
+                size: 5242880,
+                replicas: 2,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let volume = vol_cli
+        .publish(
+            &PublishVolume {
+                uuid: volume.uuid().clone(),
+                share: None,
+                target_node: Some(cluster.node(0)),
+                publish_context: HashMap::new(),
+                frontend_nodes: vec![cluster.node(1).to_string()],
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    cluster
+        .composer()
+        .pause(cluster.node(0).as_str())
+        .await
+        .unwrap();
+
+    cluster
+        .wait_node_status(cluster.node(0), NodeStatus::Unknown)
+        .await
+        .unwrap();
+
+    vol_cli
+        .republish(
+            &RepublishVolume {
+                uuid: volume.uuid().clone(),
+                target_node: Some(cluster.node(1)),
+                share: VolumeShareProtocol::Nvmf,
+                reuse_existing: true,
+                frontend_node: cluster.node(1),
+                reuse_existing_fallback: false,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    cluster
+        .composer()
+        .thaw(cluster.node(0).as_str())
+        .await
+        .unwrap();
+
+    cluster
+        .wait_node_status(cluster.node(0), NodeStatus::Online)
+        .await
+        .unwrap();
+
+    assert!(!wait_till_pool_locked(&cluster).await);
+
+    let nexus_cli = cluster.grpc_client().nexus();
+    let nexuses = nexus_cli
+        .get(Filter::Node(cluster.node(0)), None)
+        .await
+        .unwrap();
+    assert_eq!(nexuses.into_inner().len(), 1);
+
+    let request = DestroyShutdownTargets::new(volume.uuid().clone(), None);
+    vol_cli
+        .destroy_shutdown_target(&request, None)
+        .await
+        .unwrap();
+
+    let nexuses = nexus_cli
+        .get(Filter::Node(cluster.node(0)), None)
+        .await
+        .unwrap();
+    assert!(nexuses.into_inner().is_empty());
+}
+
+async fn poll_pool_locked(cluster: &Cluster, is_locked: &mut bool) {
+    if *is_locked {
+        return;
+    }
+
+    let replica_cli = cluster.grpc_client().replica();
+    let req = CreateReplica {
+        node: cluster.node(0),
+        uuid: ReplicaId::new(),
+        pool_id: cluster.pool(0, 0),
+        size: 4 * 1024 * 1024,
+        thin: true,
+        ..Default::default()
+    };
+
+    let Ok(replica) = replica_cli.create(&req, None).await else {
+        *is_locked = true;
+        return;
+    };
+
+    let req = DestroyReplica::from(replica);
+    *is_locked = replica_cli.destroy(&req, None).await.is_err();
+}
+
+async fn wait_till_pool_locked(cluster: &Cluster) -> bool {
+    let timeout = Duration::from_secs(2);
+    let start = std::time::Instant::now();
+    let mut is_locked = false;
+    loop {
+        poll_pool_locked(cluster, &mut is_locked).await;
+        if is_locked {
+            return true;
+        }
+
+        if std::time::Instant::now() > (start + timeout) {
+            return false;
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
 }
