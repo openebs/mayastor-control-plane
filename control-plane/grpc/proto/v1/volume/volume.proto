@@ -157,6 +157,8 @@ message LabelledTopology {
   common.StringMapValue exclusion = 1;
   // inclusive labels
   common.StringMapValue inclusion = 2;
+  // affinity labels
+  common.StringMapValue affinity = 3;
 }
 
 message ExplicitNodeTopology {

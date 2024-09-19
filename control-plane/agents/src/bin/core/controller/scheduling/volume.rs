@@ -61,6 +61,11 @@ impl GetSuitablePools {
             move_repl,
         }
     }
+
+    /// Get the volume spec.
+    pub(crate) fn spec(&self) -> &VolumeSpec {
+        &self.spec
+    }
 }
 
 /// The context to select suitable pools for volume replica creation.

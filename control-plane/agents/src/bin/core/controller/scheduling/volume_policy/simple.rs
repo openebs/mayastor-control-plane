@@ -276,6 +276,7 @@ mod tests {
         let replica = Replica::default();
         let pool = PoolWrapper::new(
             state,
+            None,
             vec![replica]
                 .into_iter()
                 .cycle()

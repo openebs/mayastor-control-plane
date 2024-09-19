@@ -44,8 +44,7 @@ use stor_port::{
     },
 };
 
-use std::{fmt::Debug, ops::Deref};
-
+use std::{collections::HashMap, fmt::Debug, ops::Deref};
 #[async_trait::async_trait]
 impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
     type Create = CreateVolume;
@@ -763,97 +762,6 @@ impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
 }
 
 #[async_trait::async_trait]
-impl ResourceLifecycleExt<CreateVolume> for OperationGuardArc<VolumeSpec> {
-    type CreateOutput = Self;
-
-    async fn create_ext(
-        registry: &Registry,
-        request: &CreateVolume,
-    ) -> Result<Self::CreateOutput, SvcError> {
-        let specs = registry.specs();
-        let mut volume = specs
-            .get_or_create_volume(&CreateVolumeSource::None(request))?
-            .operation_guard_wait()
-            .await?;
-        let volume_clone = volume.start_create(registry, request).await?;
-
-        // If the volume is a part of the ag, create or update accordingly.
-        registry.specs().get_or_create_affinity_group(&volume_clone);
-
-        // todo: pick nodes and pools using the Node&Pool Topology
-        // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
-        let result = create_volume_replicas(registry, request, &volume_clone).await;
-        let create_replica_candidate = volume
-            .validate_create_step_ext(registry, result, OnCreateFail::Delete)
-            .await?;
-
-        let mut replicas = Vec::<Replica>::new();
-        for replica in create_replica_candidate.candidates() {
-            if replicas.len() >= request.replicas as usize {
-                break;
-            } else if replicas.iter().any(|r| r.node == replica.node) {
-                // don't reuse the same node
-                continue;
-            }
-            let replica = if replicas.is_empty() {
-                let mut replica = replica.clone();
-                // the local replica needs to be connected via "bdev:///"
-                replica.share = Protocol::None;
-                replica
-            } else {
-                replica.clone()
-            };
-            match OperationGuardArc::<ReplicaSpec>::create(registry, &replica).await {
-                Ok(replica) => {
-                    replicas.push(replica);
-                }
-                Err(error) => {
-                    volume_clone.error(&format!(
-                        "Failed to create replica {:?} for volume, error: {}",
-                        replica,
-                        error.full_string()
-                    ));
-                    // continue trying...
-                }
-            };
-        }
-
-        // we can't fulfil the required replication factor, so let the caller
-        // decide what to do next
-        let result = if replicas.len() < request.replicas as usize {
-            for replica_state in replicas {
-                let result = match specs.replica(&replica_state.uuid).await {
-                    Ok(mut replica) => {
-                        let request = DestroyReplica::from(replica_state.clone());
-                        replica.destroy(registry, &request.with_disown_all()).await
-                    }
-                    Err(error) => Err(error),
-                };
-                if let Err(error) = result {
-                    volume_clone.error(&format!(
-                        "Failed to delete replica {:?} from volume, error: {}",
-                        replica_state,
-                        error.full_string()
-                    ));
-                }
-            }
-            Err(SvcError::ReplicaCreateNumber {
-                id: request.uuid.to_string(),
-            })
-        } else {
-            Ok(())
-        };
-
-        // we can destroy volume on error because there's no volume resource created on the nodes,
-        // only sub-resources (such as nexuses/replicas which will be garbage-collected later).
-        volume
-            .complete_create(result, registry, OnCreateFail::Delete)
-            .await?;
-        Ok(volume)
-    }
-}
-
-#[async_trait::async_trait]
 impl ResourceLifecycleExt<CreateVolumeSource<'_>> for OperationGuardArc<VolumeSpec> {
     type CreateOutput = Self;
 
@@ -880,7 +788,10 @@ impl ResourceLifecycleExt<CreateVolumeSource<'_>> for OperationGuardArc<VolumeSp
         };
         let result = match request_src {
             CreateVolumeSource::None(params) => params.run(context).await,
-            CreateVolumeSource::Snapshot(params) => params.run(context).await,
+            CreateVolumeSource::Snapshot(params) => {
+                let replicas = params.run(context).await?;
+                Ok(ReplicaWithLabels::new(replicas, None))
+            }
         };
 
         // we can destroy volume on error because there's no volume resource created on the nodes,
@@ -920,38 +831,32 @@ pub(super) struct Context<'a> {
 pub(super) trait CreateVolumeExeVal: Sync + Send {
     fn pre_flight_check(&self) -> Result<(), SvcError>;
 }
-
 /// Trait that abstracts away the process of creating volume replicas.
 #[async_trait::async_trait]
 pub(super) trait CreateVolumeExe: CreateVolumeExeVal {
     type Candidates: Send + Sync;
+    type Replicas: Debug + Send + Sync;
 
-    async fn run<'a>(&'a self, mut context: Context<'a>) -> Result<Vec<Replica>, SvcError> {
+    async fn run<'a>(&'a self, mut context: Context<'a>) -> Result<Self::Replicas, SvcError> {
         let result = self.setup(&mut context).await;
         let candidates = context
             .volume
             .validate_create_step_ext(context.registry, result, OnCreateFail::Delete)
             .await?;
-        let replicas = self.create(&mut context, candidates).await;
-
-        // we can't fulfil the required replication factor, so let the caller
-        // decide what to do next
-        if replicas.len() < context.volume.as_ref().num_replicas as usize {
-            self.undo(&mut context, replicas).await;
-            Err(SvcError::ReplicaCreateNumber {
-                id: context.volume.uid_str(),
-            })
-        } else {
-            Ok(replicas)
-        }
+        let replicas = self.create(&mut context, candidates).await?;
+        Ok(replicas)
     }
     async fn setup<'a>(&'a self, context: &mut Context<'a>) -> Result<Self::Candidates, SvcError>;
     async fn create<'a>(
         &'a self,
         context: &mut Context<'a>,
         candidates: Self::Candidates,
-    ) -> Vec<Replica>;
-    async fn undo<'a>(&'a self, context: &mut Context<'a>, replicas: Vec<Replica>);
+    ) -> Result<Self::Replicas, SvcError>;
+    async fn undo<'a>(
+        &'a self,
+        context: &mut Context<'a>,
+        replicas: &[Replica],
+    ) -> Result<(), SvcError>;
 }
 
 impl CreateVolumeExeVal for CreateVolume {
@@ -964,15 +869,34 @@ impl CreateVolumeExeVal for CreateVolume {
     }
 }
 
+/// ReplicaWithLabels is a tuple of replicas and labels.
+#[derive(Debug, Clone)]
+pub(super) struct ReplicaWithLabels {
+    replicas: Vec<Replica>,
+    #[allow(dead_code)]
+    labels: Option<HashMap<String, String>>,
+}
+
+/// ReplicaWithLabels implementation.
+impl ReplicaWithLabels {
+    /// Create a new ReplicaWithLabels.
+    pub fn new(replicas: Vec<Replica>, labels: Option<HashMap<String, String>>) -> Self {
+        Self { replicas, labels }
+    }
+
+    /// Get the replicas.
+    #[allow(dead_code)]
+    pub fn replicas(&self) -> Vec<Replica> {
+        self.replicas.clone()
+    }
+}
+
 #[async_trait::async_trait]
 impl CreateVolumeExe for CreateVolume {
-    type Candidates = CreateReplicaCandidate;
+    type Candidates = Vec<CreateReplicaCandidate>;
+    type Replicas = ReplicaWithLabels;
 
-    async fn setup<'a>(
-        &'a self,
-        context: &mut Context<'a>,
-    ) -> Result<CreateReplicaCandidate, SvcError> {
-        // todo: pick nodes and pools using the Node&Pool Topology
+    async fn setup<'a>(&'a self, context: &mut Context<'a>) -> Result<Self::Candidates, SvcError> {
         // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
         create_volume_replicas(context.registry, self, context.volume.as_ref()).await
     }
@@ -980,70 +904,100 @@ impl CreateVolumeExe for CreateVolume {
     async fn create<'a>(
         &'a self,
         context: &mut Context<'a>,
-        candidates: CreateReplicaCandidate,
-    ) -> Vec<Replica> {
-        let mut replicas = Vec::<Replica>::with_capacity(candidates.candidates().len());
-        for replica in candidates.candidates() {
-            if replicas.len() >= self.replicas as usize {
-                break;
-            } else if replicas.iter().any(|r| {
-                r.node == replica.node
-                    || spread_label_is_same(r, replica, context).unwrap_or_else(|error| {
+        candidates: Self::Candidates,
+    ) -> Result<Self::Replicas, SvcError> {
+        // TODO : remove any existing replicas of volume in case of affinity
+        // TODO : update volume spec with affinity key
+
+        for create_replica_candidate in candidates.iter() {
+            let mut replicas =
+                Vec::<Replica>::with_capacity(create_replica_candidate.candidates().len());
+
+            for replica in create_replica_candidate.candidates() {
+                if replicas.len() >= self.replicas as usize {
+                    break;
+                } else if replicas.iter().any(|r| {
+                    r.node == replica.node
+                        || spread_label_is_same(r, replica, context).unwrap_or_else(|error| {
+                            context.volume.error(&format!(
+                                "Failed to create replica {:?} for volume, error: {}",
+                                replica,
+                                error.full_string()
+                            ));
+                            false
+                        })
+                }) {
+                    // don't re-use the same node or same exclusion labels
+                    continue;
+                }
+                let replica = if replicas.is_empty() {
+                    let mut replica = replica.clone();
+                    // the local replica needs to be connected via "bdev:///"
+                    replica.share = Protocol::None;
+                    replica
+                } else {
+                    replica.clone()
+                };
+                match OperationGuardArc::<ReplicaSpec>::create(context.registry, &replica).await {
+                    Ok(replica) => {
+                        replicas.push(replica);
+                    }
+                    Err(error) => {
                         context.volume.error(&format!(
                             "Failed to create replica {:?} for volume, error: {}",
                             replica,
                             error.full_string()
                         ));
-                        false
-                    })
-            }) {
-                // don't re-use the same node or same exclusion labels
-                continue;
+                        // continue trying...
+                    }
+                };
             }
-            let replica = if replicas.is_empty() {
-                let mut replica = replica.clone();
-                // the local replica needs to be connected via "bdev:///"
-                replica.share = Protocol::None;
-                replica
-            } else {
-                replica.clone()
-            };
-            match OperationGuardArc::<ReplicaSpec>::create(context.registry, &replica).await {
-                Ok(replica) => {
-                    replicas.push(replica);
-                }
-                Err(error) => {
-                    context.volume.error(&format!(
-                        "Failed to create replica {:?} for volume, error: {}",
-                        replica,
-                        error.full_string()
-                    ));
-                    // continue trying...
-                }
-            };
-        }
-        replicas
-    }
 
-    async fn undo<'a>(&'a self, context: &mut Context<'a>, replicas: Vec<Replica>) {
-        for replica_state in replicas {
-            let result = match context.registry.specs().replica(&replica_state.uuid).await {
-                Ok(mut replica) => {
-                    let request = DestroyReplica::from(replica_state.clone());
-                    replica
-                        .destroy(context.registry, &request.with_disown_all())
-                        .await
+            if replicas.len() < context.volume.as_ref().num_replicas as usize {
+                match self.undo(context, &replicas).await {
+                    Ok(_) => {}
+                    Err(_error) => {
+                        return Err(SvcError::ReplicaCreateNumber {
+                            id: context.volume.uid_str(),
+                        });
+                    }
                 }
-                Err(error) => Err(error),
-            };
-            if let Err(error) = result {
-                context.volume.error(&format!(
-                    "Failed to delete replica {:?} from volume, error: {}",
-                    replica_state,
-                    error.full_string()
+                continue;
+            } else {
+                return Ok(ReplicaWithLabels::new(
+                    replicas,
+                    create_replica_candidate.labels().clone(),
                 ));
             }
         }
+        return Err(SvcError::ReplicaCreateNumber {
+            id: context.volume.uid_str(),
+        });
+    }
+
+    async fn undo<'a>(
+        &'a self,
+        context: &mut Context<'a>,
+        replicas: &[Replica],
+    ) -> Result<(), SvcError> {
+        let mut result = Ok(());
+        for replica_state in replicas {
+            match context.registry.specs().replica(&replica_state.uuid).await {
+                Ok(mut replica) => {
+                    let request = DestroyReplica::from(replica_state.clone());
+                    if let Err(error) = replica
+                        .destroy(context.registry, &request.with_disown_all())
+                        .await
+                    {
+                        result = Err(error);
+                    }
+                }
+                Err(error) => {
+                    result = Err(error);
+                }
+            }
+        }
+        result
     }
 }
 

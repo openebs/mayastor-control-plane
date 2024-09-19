@@ -14,25 +14,55 @@ Feature: Volume Pool Topology
    which signifies the volume pool topology inclusion labels as {"rack": "", "zone" : ""} 
 
   Background:
-    Given a control plane, three Io-Engine instances, nine pools
+    Given a control plane, three Io-Engine instances, fourteen pools
 
 
 # The labels to be applied to the pools.
 ###############################################################################################
-#   Description            ||   Pool Name   ||         Label           ||        Node        ||
+#   Description            ||   Pool Name   ||         Label            ||        Node        ||
 #==============================================================================================
-#     "pool1" has          ||   node1pool1  ||     zone-us=us-west-1   ||     io-engine-1    || 
-#       the label          ||   node2pool1  ||     zone-us=us-west-1   ||     io-engine-2    ||
-#   "zone-us=us-west-1"    ||   node3pool1  ||     zone-us=us-west-1   ||     io-engine-3    ||
+#     "pool1" has          ||   node1pool1  ||     zone-us=us-west-1    ||     io-engine-1    || 
+#       the label          ||   node2pool1  ||     zone-us=us-west-1    ||     io-engine-2    ||
+#   "zone-us=us-west-1"    ||   node3pool1  ||     zone-us=us-west-1    ||     io-engine-3    ||
 #==============================================================================================
-#     "pool2" has          ||   node1pool2  ||     zone-ap=ap-south-1  ||     io-engine-1    ||
-#      the label           ||   node2pool2  ||     zone-ap=ap-south-1  ||     io-engine-2    ||
-#   "zone-ap=ap-south-1"   ||   node3pool2  ||     zone-ap=ap-south-1  ||     io-engine-3    ||
+#     "pool2" has          ||   node1pool2  ||     zone-ap=ap-south-1   ||     io-engine-1    ||
+#      the label           ||   node2pool2  ||     zone-ap=ap-south-1   ||     io-engine-2    ||
+#   "zone-ap=ap-south-1"   ||   node3pool2  ||     zone-ap=ap-south-1   ||     io-engine-3    ||
 #==============================================================================================
-#     "pool3" has          ||   node1pool3  ||     zone-eu=eu-west-3   ||     io-engine-1    ||
-#      the label           ||   node2pool3  ||     zone-eu=eu-west-3   ||     io-engine-2    ||
-#   "zone-eu=eu-west-3"    ||   node3pool3  ||     zone-eu=eu-west-3   ||     io-engine-3    ||
+#     "pool3" has          ||   node1pool3  ||     zone-eu=eu-west-3    ||     io-engine-1    ||
+#      the label           ||   node2pool3  ||     zone-eu=eu-west-3    ||     io-engine-2    ||
+#   "zone-eu=eu-west-3"    ||   node3pool3  ||     zone-eu=eu-west-3    ||     io-engine-3    ||
 #==============================================================================================
+#     "pool4" has          ||   node1pool4  ||     zone-ca=ca-central-1 ||     io-engine-1   || 
+#       the label          ||   node2pool4  ||     zone-ca=ca-central-1 ||     io-engine-2   ||
+#   "zone-ca=ca-central-1" ||   node3pool4  ||     zone-ca=ca-central-1 ||     io-engine-3   ||
+#==============================================================================================
+#     "pool5" has          ||   node1pool5  ||     zone-ca=ca-west-1    ||     io-engine-1   || 
+#       the label          ||   node2pool5  ||     zone-ca=ca-west-1    ||     io-engine-2   ||
+#   "zone-ca=ca-west-1"    ||               ||                          ||                   ||
+#==============================================================================================
+
+  Scenario Outline: Suitable pools which contain volume topology affinity key
+    Given a request for a <replica> replica volume with poolAffinityTopologyKey as <pool_affinity_topology_key> and pool topology affinity as <volume_pool_topology_affinty>
+    When the desired number of replica of volume i.e. <replica> here; is <expression> number of the pools containing the label <volume_pool_topology_affinty>
+    Then the <replica> replica volume creation should <result> and <provisioned> provisioned on pools with labels <pool_label>
+    Examples:
+      | pool_affinity_topology_key   |    volume_pool_topology_affinty       | replica |     expression     | result    | provisioned |     pool_label        |
+      |            True              |           zone-us                     |    1    |        <=          | succeed   |  must be    | zone-us=us-west-1     |
+      |            True              |           zone-us                     |    2    |        <=          | succeed   |  must be    | zone-us=us-west-1     |
+      |            True              |           zone-us                     |    3    |        <=          | succeed   |  must be    | zone-us=us-west-1     |
+      |            True              |           zone-us                     |    4    |        >           |   fail    |    not      | zone-us=us-west-1     |
+      |            True              |           zone-ap                     |    1    |        <=          | succeed   |  must be    | zone-ap=ap-south-1    |
+      |            True              |           zone-ap                     |    2    |        <=          | succeed   |  must be    | zone-ap=ap-south-1    |
+      |            True              |           zone-ap                     |    3    |        <=          | succeed   |  must be    | zone-ap=ap-south-1    |
+      |            True              |           zone-ap                     |    4    |        >           |   fail    |  not        | zone-ap=ap-south-1    |
+      |            True              |           zone-eu                     |    1    |        <=          | succeed   |  must be    | zone-eu=eu-west-3     |
+      |            True              |           zone-eu                     |    2    |        <=          | succeed   |  must be    | zone-eu=eu-west-3     |
+      |            True              |           zone-eu                     |    3    |        <=          | succeed   |  must be    | zone-eu=eu-west-3     |
+      |            True              |           zone-eu                     |    4    |        >           |   fail    |    not      | zone-eu=eu-west-3     |
+      |            True              |           zone-ca                     |    1    |        <=          | succeed   |  must be    | zone-ca=ca-central-1  |
+      |            True              |           zone-ca                     |    2    |        <=          | succeed   |  must be    | zone-ca=ca-central-1  |
+      |            True              |           zone-ca                     |    3    |        <=          | succeed   |  must be    | zone-ca=ca-central-1  |
 
   Scenario Outline: Suitable pools which contain volume topology labels
     Given a request for a <replica> replica volume with poolAffinityTopologyLabel as <pool_affinity_topology_label> and pool topology inclusion as <volume_pool_topology_inclusion_label>

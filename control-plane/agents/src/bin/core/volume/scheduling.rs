@@ -14,11 +14,39 @@ use crate::{
     nexus::scheduling::target_node_candidates,
     node::wrapper::NodeWrapper,
 };
+
 use agents::errors::{NotEnough, SvcError};
 use stor_port::types::v0::{
     store::{nexus::NexusSpec, volume::VolumeSpec},
-    transport::{NodeId, Replica, VolumeState},
+    transport::{NodeId, NodeTopology, PoolTopology, Replica, VolumeState},
 };
+
+use std::collections::HashMap;
+
+/// Return a list of pre sorted pools to be used by a volume at time of creation.
+pub(crate) async fn volume_pool_candidates_new(
+    request: impl Into<GetSuitablePools>,
+    registry: &Registry,
+) -> Vec<Vec<PoolWrapper>> {
+    let mut result: Vec<Vec<PoolWrapper>> = Vec::new();
+    let request = request.into();
+    let is_affinity = is_affinity_requested(request.clone());
+
+    let vec_of_pool_wrappers: Vec<PoolWrapper> =
+        volume::AddVolumeReplica::builder_with_defaults(request.clone(), registry)
+            .await
+            .collect()
+            .into_iter()
+            .map(|e| e.collect())
+            .collect();
+
+    if is_affinity {
+        result = group_pools_by_affinity(vec_of_pool_wrappers, request, registry);
+    } else {
+        result.push(vec_of_pool_wrappers);
+    }
+    result
+}
 
 /// Return a list of pre sorted pools to be used by a volume.
 pub(crate) async fn volume_pool_candidates(
@@ -142,4 +170,96 @@ pub(crate) async fn resizeable_replicas(
         .into_iter()
         .map(|item| item.state().clone())
         .collect()
+}
+
+/// Return true if affinity is requested in the volume spec.
+pub(crate) fn is_affinity_requested(suitable_pools: GetSuitablePools) -> bool {
+    match suitable_pools.spec().topology.as_ref() {
+        Some(topology) => {
+            let node_affinity = match &topology.node {
+                Some(node_topology) => match node_topology {
+                    NodeTopology::Labelled(label) => {
+                        let mut matching_key = false;
+                        for key in label.affinity.keys() {
+                            if label.inclusion.contains_key(key) {
+                                matching_key = true;
+                            }
+                        }
+                        !matching_key && !label.affinity.is_empty()
+                    }
+
+                    NodeTopology::Explicit(_) => false,
+                },
+                None => false,
+            };
+            let pool_affinity = match &topology.pool {
+                Some(pool_topology) => match pool_topology {
+                    PoolTopology::Labelled(label) => {
+                        let mut matching_key = false;
+                        for key in label.affinity.keys() {
+                            if label.inclusion.contains_key(key) {
+                                matching_key = true;
+                            }
+                        }
+                        !matching_key && !label.affinity.is_empty()
+                    }
+                },
+                None => false,
+            };
+            node_affinity || pool_affinity
+        }
+        None => false,
+    }
+}
+
+/// Return a list of pre sorted pools in case of affinity.
+pub(crate) fn group_pools_by_affinity(
+    mut pools: Vec<PoolWrapper>,
+    suitable_pools: GetSuitablePools,
+    registry: &Registry,
+) -> Vec<Vec<PoolWrapper>> {
+    let mut map: HashMap<String, Vec<PoolWrapper>> = HashMap::new();
+    for pool in pools.iter_mut() {
+        let id = pool.state().id.clone();
+        let spec = registry.specs().pool(&id).unwrap_or_default();
+        let pool_labels = spec.labels.clone().unwrap_or_default();
+
+        // Get the affinity labels from the pool topology
+        let pool_affinity = match suitable_pools
+            .spec()
+            .topology
+            .as_ref()
+            .and_then(|topology| topology.pool.as_ref())
+        {
+            Some(PoolTopology::Labelled(label)) => label.affinity.clone(),
+            _ => HashMap::new(),
+        };
+
+        // performance: gold and zone: us-west, then the map key is "performance:gold;zone:us-west;"
+        // and the values are the vec of pool wrappers that have these labels
+        for (pool_affinity_key, _) in pool_affinity.iter() {
+            let mut result = String::new();
+            let mut labels = HashMap::new();
+            if let Some(value) = pool_labels.get(pool_affinity_key) {
+                result.push_str(pool_affinity_key);
+                result.push_str(':'.to_string().as_str());
+                result.push_str(value);
+                result.push_str(';'.to_string().as_str());
+                labels.insert(pool_affinity_key.clone(), value.clone());
+            }
+            pool.set_labels(Some(labels.clone()));
+            if let Some(pools) = map.get_mut(&result) {
+                pools.push(pool.clone());
+            } else {
+                map.insert(result, vec![pool.clone()]);
+            }
+        }
+    }
+
+    let mut final_list_of_pools: Vec<Vec<PoolWrapper>> = map.into_values().collect();
+
+    // Sort vectors by their lengths in descending order
+    final_list_of_pools.sort_by_key(|b| std::cmp::Reverse(b.len()));
+
+    final_list_of_pools
 }

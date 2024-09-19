@@ -45,6 +45,7 @@ def a_published_selfhealing_volume():
                 labelled=LabelledTopology(
                     exclusion={},
                     inclusion={"node": IO_ENGINE_2},
+                    affinitykey=[],
                 )
             )
         ),

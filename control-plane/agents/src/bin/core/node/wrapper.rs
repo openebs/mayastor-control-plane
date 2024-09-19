@@ -526,7 +526,7 @@ impl NodeWrapper {
                         }
                     })
                     .collect::<Vec<Replica>>();
-                PoolWrapper::new(pool_state.pool, replicas)
+                PoolWrapper::new(pool_state.pool, None, replicas)
             })
             .collect()
     }
@@ -554,7 +554,7 @@ impl NodeWrapper {
                         }
                     })
                     .collect();
-                Some(PoolWrapper::new(pool_state.pool, replicas))
+                Some(PoolWrapper::new(pool_state.pool, None, replicas))
             }
             None => None,
         }
