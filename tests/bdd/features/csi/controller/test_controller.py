@@ -427,7 +427,9 @@ def check_publish_nvmf_volume_on_node(publish_nvmf_volume):
         "uri" in publish_nvmf_volume.publish_context
     ), "No URI provided for shared volume"
     uri = publish_nvmf_volume.publish_context["uri"]
-    assert uri.startswith("nvmf://"), "Non-nvmf protocol scheme in share URI: " + uri
+    assert uri.startswith(("nvmf://", "nvmf+tcp://", "nvmf+rdma+tcp://")), (
+        "Non-nvmf protocol scheme in share URI: " + uri
+    )
     assert check_nvmf_target(uri), "Volume is not discoverable over NVMF"
 
 
@@ -737,7 +739,9 @@ def check_nvmf_target(uri):
     """Check whether NVMF target is discoverable via target URI"""
     # Make sure URI represents nvmf target.
     assert uri, "URI must not be empty"
-    assert uri.startswith("nvmf://"), "Non-nvmf protocol scheme in share URI: " + uri
+    assert uri.startswith(("nvmf://", "nvmf+tcp://", "nvmf+rdma+tcp://")), (
+        "Non-nvmf protocol scheme in share URI: " + uri
+    )
 
     u = urlparse(uri)
     port = u.port
@@ -1006,7 +1010,7 @@ def check_volume_status_published():
     assert str(vol.spec.target.protocol) == "nvmf", "Volume protocol mismatches"
     assert vol.state.target["protocol"] == "nvmf", "Volume protocol mismatches"
     assert vol.state.target["deviceUri"].startswith(
-        "nvmf://"
+        ("nvmf://", "nvmf+tcp://", "nvmf+rdma+tcp://")
     ), "Volume share URI mismatches"
 
 

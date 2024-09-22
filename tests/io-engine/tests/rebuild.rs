@@ -222,7 +222,11 @@ async fn loopback_nvmf() {
         .unwrap();
 
     let share_url: Url = share_uri.parse().unwrap();
-    assert_eq!(share_url.scheme(), "nvmf");
+    assert!(
+        share_url.scheme() == "nvmf"
+            || share_url.scheme() == "nvmf+tcp"
+            || share_url.scheme() == "nvmf+rdma+tcp"
+    );
 
     let nx_api = cli.nexuses_api();
     let malloc_uri =
