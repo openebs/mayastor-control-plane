@@ -125,7 +125,6 @@ impl Parameters {
     ///  The input value to this function is like Some("A1\nCE \n")
     ///  and it will be parsed as {"A1": "", "CE ": ""}
     /// and it will be parsed as ["A1", "CE "]
-
     fn parse_topology_param_vec(
         value: Option<&String>,
     ) -> Result<Option<Vec<String>>, tonic::Status> {
@@ -137,7 +136,7 @@ impl Parameters {
                         result_vec.push(label.to_string())
                     } else {
                         return Err(tonic::Status::invalid_argument(format!(
-                            "Invalid label : {value:?}"
+                            "Invalid affinity key : {value:?}"
                         )));
                     }
                 }

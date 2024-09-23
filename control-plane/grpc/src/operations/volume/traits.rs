@@ -642,6 +642,7 @@ impl From<volume::LabelledTopology> for LabelledTopology {
                 Some(labels) => labels.value,
                 None => HashMap::new(),
             },
+            creation_affinity_keys: Some(Vec::new()),
         }
     }
 }
