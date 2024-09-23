@@ -1,22 +1,15 @@
 use crate::controller::{
-    reconciler::{GarbageCollect, PollContext, TaskPoller},
+    reconciler::{poller::ReconcilerWorker, GarbageCollect, PollContext, TaskPoller},
     resources::{
-        operations::{ResourceLifecycle, ResourceResize},
+        operations::{ResourceLifecycle, ResourceOwnerUpdate, ResourceResize},
         operations_helper::{OperationSequenceGuard, SpecOperationsHelper},
-        OperationGuardArc, TraceSpan, TraceStrLog,
+        OperationGuardArc, ResourceUid, TraceSpan, TraceStrLog,
     },
     task_poller::{PollEvent, PollResult, PollTimer, PollTriggerEvent, PollerState},
 };
-
-use crate::controller::{
-    reconciler::poller::ReconcilerWorker,
-    resources::{operations::ResourceOwnerUpdate, ResourceMutex, ResourceUid},
-};
 use agents::errors::SvcError;
 use stor_port::types::v0::{
-    store::{
-        nexus::NexusSpec, nexus_persistence::NexusInfo, replica::ReplicaSpec, volume::VolumeSpec,
-    },
+    store::{nexus_persistence::NexusInfo, replica::ReplicaSpec, volume::VolumeSpec},
     transport::{DestroyVolume, NexusOwners, ReplicaOwners, ResizeReplica, VolumeStatus},
 };
 use tracing::Instrument;
@@ -345,68 +338,78 @@ async fn disown_non_reservable_replicas(
     let mut results = vec![];
 
     // Fetch all nexuses that are not properly shutdown
-    let shutdown_failed_nexuses: Vec<ResourceMutex<NexusSpec>> = context
+    let shutdown_failed_nexuses = context
         .registry()
         .specs()
         .volume_failed_shutdown_nexuses(volume.uuid())
         .await;
 
-    // Remove the local child from the shutdown pending nexuses as they are
-    // non reservable.
+    // Remove the local children from the volume as they are non-reservable.
     for nexus in shutdown_failed_nexuses {
+        if target.uuid() == nexus.uuid() {
+            continue;
+        }
+
         let children = nexus.lock().clone().children;
         for child in children {
-            if let Some(replica_uri) = child.as_replica() {
-                if replica_uri.uri().is_local() {
-                    if let Ok(mut replica) = context.specs().replica(replica_uri.uuid()).await {
-                        if !replica.as_ref().dirty()
-                            && replica.as_ref().owners.owned_by(volume.uuid())
-                            && !replica
-                                .as_ref()
-                                .owners
-                                .nexuses()
-                                .iter()
-                                .any(|p| p != nexus.uuid())
-                            && !is_replica_healthy(
-                                context,
-                                &mut nexus_info,
-                                replica.as_ref(),
-                                volume.as_ref(),
-                            )
-                            .await?
-                        {
-                            volume.warn_span(|| tracing::warn!(replica.uuid = %replica.as_ref().uuid, "Attempting to disown non reservable replica"));
-
-                            // Since its a local replica of a shutting down nexus i.e. a failed
-                            // shutdown nexus we don't want it
-                            // to be a part of anything. Once this replica has no owner, the
-                            // garbage collector will remove the nexus. Even if the clean up is
-                            // delayed we since this replica is
-                            // anyhow not a part of the volume, we should be safe.
-                            match replica
-                                .remove_owners(
-                                    context.registry(),
-                                    &ReplicaOwners::new_disown_all(),
-                                    true,
-                                )
-                                .await
-                            {
-                                Ok(_) => {
-                                    volume.info_span(|| tracing::info!(replica.uuid = %replica.as_ref().uuid, "Successfully disowned non reservable replica"));
-                                }
-                                Err(error) => {
-                                    volume.error_span(|| tracing::error!(replica.uuid = %replica.as_ref().uuid, "Failed to disown non reservable replica"));
-                                    results.push(Err(error));
-                                }
-                            }
-                        }
-                    }
+            let Some(replica_uri) = child.as_replica() else {
+                continue;
+            };
+            if !replica_uri.uri().is_local() {
+                continue;
+            }
+            let Ok(replica) = context.specs().replica(replica_uri.uuid()).await else {
+                continue;
+            };
+            if !replica.as_ref().dirty()
+                && replica.as_ref().owners.owned_by(volume.uuid())
+                && !replica
+                    .as_ref()
+                    .owners
+                    .nexuses()
+                    .iter()
+                    .any(|p| p != nexus.uuid())
+                && !is_replica_healthy(context, &mut nexus_info, replica.as_ref(), volume.as_ref())
+                    .await?
+            {
+                if let Err(error) = disown_non_reservable_replica(volume, replica, context).await {
+                    results.push(Err(error));
                 }
             }
         }
     }
 
     GarbageCollector::squash_results(results)
+}
+
+async fn disown_non_reservable_replica(
+    volume: &OperationGuardArc<VolumeSpec>,
+    mut replica: OperationGuardArc<ReplicaSpec>,
+    context: &PollContext,
+) -> PollResult {
+    volume.warn_span(|| tracing::warn!(replica.uuid = %replica.as_ref().uuid, "Attempting to disown non reservable replica"));
+
+    // Since it's a local replica of a shutting down nexus i.e. a failed
+    // shutdown nexus we don't want to be a part of anything until such nexus is destroyed.
+    // Even if the cleanup is delayed, since this replica is
+    // anyhow not a part of the new volume nexus, we should be safe.
+    match replica
+        .remove_owners(
+            context.registry(),
+            &ReplicaOwners::new(Some(volume.uuid().clone()), vec![]),
+            true,
+        )
+        .await
+    {
+        Ok(_) => {
+            volume.info_span(|| tracing::info!(replica.uuid = %replica.as_ref().uuid, "Successfully disowned non reservable replica"));
+            PollResult::Ok(PollerState::Idle)
+        }
+        Err(error) => {
+            volume.error_span(|| tracing::error!(replica.uuid = %replica.as_ref().uuid, "Failed to disown non reservable replica"));
+            PollResult::Err(error)
+        }
+    }
 }
 
 async fn is_replica_healthy(
