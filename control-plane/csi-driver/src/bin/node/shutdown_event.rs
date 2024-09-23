@@ -90,7 +90,7 @@ mod tests {
         tokio::spawn(async move {
             if let Err(e) = Server::builder()
                 .add_service(NodePluginServer::new(NodePluginSvc::new(first_sender)))
-                .serve_with_shutdown("0.0.0.0:50011".parse().unwrap(), wait(shutdown_receiver))
+                .serve_with_shutdown("[::]:50011".parse().unwrap(), wait(shutdown_receiver))
                 .await
             {
                 panic!("gRPC server failed with error: {e}");
@@ -98,7 +98,7 @@ mod tests {
         });
         tokio::time::sleep(Duration::from_millis(250)).await;
         let channel =
-            tonic::transport::Endpoint::from(Uri::from_str("https://0.0.0.0:50011").unwrap())
+            tonic::transport::Endpoint::from(Uri::from_str("https://[::]:50011").unwrap())
                 .connect()
                 .await
                 .unwrap();
