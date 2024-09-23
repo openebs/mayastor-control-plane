@@ -2560,6 +2560,8 @@ components:
           - ''
         inclusion:
           - ''
+        affinity_key:
+          - ''
       description: labelled topology
       type: object
       properties:
@@ -2588,6 +2590,18 @@ components:
              inclusive label key value in the form "NAME: VALUE"
           type: object
           additionalProperties:
+            type: string
+        affinity_key:
+          example: ''
+          description: |-
+            This feature includes resources with identical $label keys. For example,
+             if the affinity key is set to "Zone":
+             Initially, a resource that matches the label is selected, example "Zone: A".
+             Subsequently, all other resources must match the given label "Zone: A",
+             effectively adding this requirement as an inclusion label.
+          type: array
+          items:
+            example: 'Zone'
             type: string
       required:
         - exclusion
