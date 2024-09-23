@@ -106,7 +106,11 @@ def publishing_the_volume_should_succeed_with_a_returned_volume_object_containin
     assert hasattr(volume.spec, "target")
     assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
     assert hasattr(volume.state, "target")
-    assert "nvmf://" in volume.state.target["deviceUri"]
+    assert (
+        "nvmf://" in volume.state.target["deviceUri"]
+        or "nvmf+tcp://" in volume.state.target["deviceUri"]
+        or "nvmf+rdma+tcp://" in volume.state.target["deviceUri"]
+    )
 
 
 @pytest.fixture
