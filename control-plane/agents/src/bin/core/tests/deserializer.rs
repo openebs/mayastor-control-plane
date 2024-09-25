@@ -112,6 +112,7 @@ fn test_deserialization_v1_to_v2() {
                             );
                             labels
                         },
+                        creation_affinity_keys: None,
                     })),
                 }),
                 sequencer: Default::default(),
