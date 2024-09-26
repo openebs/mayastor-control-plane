@@ -93,6 +93,20 @@ impl NodeAgentSvc {
     }
 }
 
+fn is_same_controller(new_path_uri: &ParsedUri, subsystem: &Subsystem) -> Result<bool, SvcError> {
+    let ctrlr_transport = subsystem
+        .transport
+        .parse()
+        .map_err(|_| SvcError::InvalidArguments {})?;
+
+    let same_transport = new_path_uri.transport().eq(&ctrlr_transport);
+    let same_host_port = subsystem
+        .address
+        .match_host_port(new_path_uri.host(), &new_path_uri.port().to_string());
+
+    Ok(same_transport && same_host_port)
+}
+
 /// Disconnect cached NVMe controller.
 async fn disconnect_controller(
     ctrlr: &NvmeController,
@@ -116,10 +130,11 @@ async fn disconnect_controller(
                 });
             }
 
-            if subsystem
-                .address
-                .match_host_port(new_path_uri.host(), &new_path_uri.port().to_string())
-            {
+            // It is same controller only if transport also match. Otherwise we disconnect it.
+            // This also takes care to disconnect old path if transport hasn't changed but host addr
+            // changed, for example due to interface name modified in io-engine args.
+            let same_controller = is_same_controller(&new_path_uri, &subsystem)?;
+            if same_controller {
                 tracing::info!(path, "Not disconnecting same NVMe controller");
                 Ok(None)
             } else {
