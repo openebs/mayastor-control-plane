@@ -140,8 +140,8 @@ pipeline {
             sh 'nix-shell --run "cargo build --bins"'
             sh 'nix-shell --run "deployer start --image-pull-policy always -w 60s && deployer stop"'
             // builds the tests
-            sh 'nix-shell --run "./scripts/rust/test.sh --no-run"'
-            sh 'nix-shell --run "./scripts/rust/test.sh"'
+            sh 'nix-shell --run "CLEAN=0 ./scripts/rust/test.sh --no-run"'
+            sh 'nix-shell --run "CLEAN=0 ./scripts/rust/test.sh"'
           }
           post {
             always {
@@ -161,7 +161,7 @@ pipeline {
             sh 'printenv'
             sh 'nix-shell --run "cargo build --bins"'
             sh 'nix-shell --run "deployer start --image-pull-policy always -w 60s && deployer stop"'
-            sh 'nix-shell --run "./scripts/python/test.sh"'
+            sh 'nix-shell --run "CLEAN=0 ./scripts/python/test.sh"'
           }
           post {
             always {
