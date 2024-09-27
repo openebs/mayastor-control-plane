@@ -255,6 +255,9 @@ pub struct LabelledTopology {
     /// Inclusive labels.
     #[serde(default)]
     pub inclusion: HashMap<String, String>,
+    /// Affinity keys.
+    #[serde(default)]
+    pub creation_affinity_keys: Option<Vec<String>>,
 }
 
 impl From<models::LabelledTopology> for LabelledTopology {
@@ -262,6 +265,7 @@ impl From<models::LabelledTopology> for LabelledTopology {
         Self {
             exclusion: src.exclusion,
             inclusion: src.inclusion,
+            creation_affinity_keys: src.affinity_key.into_opt(),
         }
     }
 }
