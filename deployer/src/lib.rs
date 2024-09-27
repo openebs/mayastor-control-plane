@@ -332,6 +332,13 @@ pub struct StartOptions {
 
     #[clap(long, default_value = "false")]
     pub enable_app_node_registration: bool,
+
+    /// Add custom RUST_LOG env to all containers.
+    #[clap(long)]
+    rust_log: Option<String>,
+    /// Add custom RUST_LOG_SILENCE env to all containers.
+    #[clap(long)]
+    rust_log_silence: Option<String>,
 }
 
 /// List of KeyValues
@@ -626,6 +633,8 @@ impl StartOptions {
             .with_base_image(self.base_image.clone())
             .with_prune_reuse(!self.reuse_cluster, self.reuse_cluster, self.reuse_cluster)
             .autorun(false)
+            .with_rust_log(self.rust_log.clone())
+            .with_rust_log_silence(self.rust_log_silence.clone())
             .load_existing_containers()
             .await
             .configure(components.clone())?
