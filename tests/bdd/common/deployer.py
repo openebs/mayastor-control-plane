@@ -36,6 +36,8 @@ class StartOptions:
     io_engine_devices: [str] = ()
     request_timeout: str = ""
     no_min_timeouts: bool = False
+    rust_log: str = None
+    rust_log_silence: str = None
 
     def args(self):
         args = [
@@ -83,6 +85,19 @@ class StartOptions:
             args.append(f"--request-timeout={self.request_timeout}")
         if self.no_min_timeouts:
             args.append(f"--no-min-timeouts")
+        if self.rust_log is not None:
+            args.append(f"--rust-log={self.rust_log}")
+        else:
+            rust_log = os.getenv("RUST_LOG")
+            if rust_log is not None:
+                args.append(f"--rust-log={rust_log}")
+
+        if self.rust_log_silence is not None:
+            args.append(f"--rust-log-silence={self.rust_log_silence}")
+        else:
+            rust_log_silence = os.getenv("RUST_LOG_SILENCE")
+            if rust_log_silence is not None:
+                args.append(f"--rust-log-silence={rust_log_silence}")
 
         agent_arg = "--agents=Core"
         if self.ha_node_agent:
@@ -122,6 +137,8 @@ class Deployer(object):
         io_engine_devices=[],
         request_timeout="",
         no_min_timeouts=False,
+        rust_log: str = None,
+        rust_log_silence: str = None,
     ):
         options = StartOptions(
             io_engines,
@@ -146,6 +163,8 @@ class Deployer(object):
             io_engine_devices=io_engine_devices,
             request_timeout=request_timeout,
             no_min_timeouts=no_min_timeouts,
+            rust_log=rust_log,
+            rust_log_silence=rust_log_silence,
         )
         pytest.deployer_options = options
         Deployer.start_with_opts(options)
