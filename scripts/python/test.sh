@@ -16,24 +16,36 @@ set -e
 SCRIPT_DIR="$(dirname "$0")"
 export ROOT_DIR="$SCRIPT_DIR/../.."
 
-cleanup_handler() {
-  ERROR=$?
+cleanup() {
   "$SCRIPT_DIR"/test-residue-cleanup.sh || true
   "$SCRIPT_DIR"/../rust/deployer-cleanup.sh || true
-  if [ $ERROR != 0 ]; then exit $ERROR; fi
+}
+
+cleanup_handler() {
+  ERROR=$?
+  trap - INT QUIT TERM HUP EXIT
+  cleanup
+  if [ $ERROR != 0 ]; then
+    exit $ERROR
+  fi
 }
 
 # FAST mode to avoid rebuilding certain dependencies
 FAST=${FAST:-"0"}
-if [ "$FAST" != "0" ]; then
+# Set to 0 to avoid cleanup/teardown of the deployer cluster and its resources
+CLEAN=${CLEAN:-}
+# How to disable the above modes.
+DISABLE=("no", "n", "false", "f", "0")
+
+if ! [[ "${DISABLE[*]}" =~ "$FAST" ]]; then
   echo "FAST enabled - will not rebuild the csi&openapi clients nor the deployer. (Make sure they are built already)"
 fi
 
 # shellcheck source=/dev/null
 . "$ROOT_DIR"/tests/bdd/setup.sh
 
-cleanup_handler >/dev/null
-if [ "$CLEAN" != "0" ]; then
+cleanup >/dev/null
+if ! [[ "${DISABLE[*]}" =~ "${CLEAN:-yes}" ]]; then
   trap cleanup_handler INT QUIT TERM HUP EXIT
 fi
 
