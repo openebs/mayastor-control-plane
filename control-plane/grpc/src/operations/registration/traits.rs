@@ -121,6 +121,7 @@ impl RegisterInfo for RegisterRequest {
             asymmetric_namespace_access: Some(features.asymmetric_namespace_access),
             logical_volume_manager: features.logical_volume_manager,
             snapshot_rebuild: features.snapshot_rebuild,
+            rdma_capable_io_engine: features.rdma_capable_io_engine,
         })
     }
 

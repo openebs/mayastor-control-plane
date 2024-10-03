@@ -138,6 +138,8 @@ pub struct NodeFeatures {
     pub logical_volume_manager: Option<bool>,
     /// SnapshotRebuild is enabled.
     pub snapshot_rebuild: Option<bool>,
+    /// Mayastor nvmf target supports RDMA.
+    pub rdma_capable_io_engine: Option<bool>,
 }
 
 /// Bug fixe in enum format
