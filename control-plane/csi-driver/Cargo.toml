@@ -48,7 +48,7 @@ url = "2.4.1"
 uuid = { version = "1.4.1", features = ["v4"] }
 which = "4.4.2"
 k8s-openapi = { version = "0.20.0", features = ["v1_22"] }
-kube = { version = "0.85.0", features = ["runtime", "derive"] }
+kube = { version = "0.87.0", features = ["runtime", "derive"] }
 nvmeadm = { path = "../../utils/dependencies/nvmeadm" }
 sysfs = { path = "../../utils/dependencies/sysfs" }
 stor-port = { path = "../stor-port" }
