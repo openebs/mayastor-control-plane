@@ -103,8 +103,12 @@ pub const DEFAULT_CLUSTER_AGENT_SERVER_ADDR: &str = "[::]:11500";
 /// The default value to be assigned as cluster agent GRPC client addr if not overridden.
 pub const DEFAULT_CLUSTER_AGENT_CLIENT_ADDR: &str = "https://agent-ha-cluster:11500";
 
-/// The default value to be assigned as node-agent GRPC server addr if not overridden.
-pub const DEFAULT_NODE_AGENT_SERVER_ADDR: &str = "[::]:11600";
+/// The default value to be assigned as node-agent GRPC ip addr if not overridden.
+pub const DEFAULT_NODE_AGENT_SERVER_IP: std::net::IpAddr =
+    std::net::IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED);
+
+/// The default value to be assigned as node-agent GRPC port if not overridden.
+pub const DEFAULT_NODE_AGENT_SERVER_PORT: u16 = 11600;
 
 /// The default worker threads cap for the api-rest service.
 pub const DEFAULT_REST_MAX_WORKER_THREADS: &str = "8";

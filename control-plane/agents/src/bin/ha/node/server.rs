@@ -44,7 +44,7 @@ impl NodeAgentApiServer {
     /// Returns a new `Self` with the given parameters.
     pub(crate) fn new(args: &Cli, path_cache: NvmePathCache) -> Self {
         Self {
-            endpoint: args.grpc_endpoint,
+            endpoint: args.grpc_endpoint(),
             path_cache,
             path_connection_timeout: *args.path_connection_timeout,
             subsys_refresh_period: *args.subsys_refresh_period,
