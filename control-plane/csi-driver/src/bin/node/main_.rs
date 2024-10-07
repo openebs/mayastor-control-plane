@@ -29,7 +29,7 @@ use std::{
     env, fs,
     future::Future,
     io::ErrorKind,
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     pin::Pin,
     str::FromStr,
     sync::Arc,
@@ -134,6 +134,24 @@ pub(super) async fn main() -> anyhow::Result<()> {
                 .value_name("ENDPOINT")
                 .help("ip address where this instance runs, and optionally the gRPC port")
                 .default_value("[::]")
+                .required(false)
+        )
+        .arg(
+            Arg::new("grpc-ip")
+                .long("grpc-ip")
+                .value_parser(clap::value_parser!(IpAddr))
+                .value_name("GRPC_IP")
+                .help("ip address this instance listens on")
+                .default_value("::")
+                .required(false)
+        )
+        .arg(
+            Arg::new("grpc-port")
+                .long("grpc-port")
+                .value_parser(clap::value_parser!(u16))
+                .value_name("GRPC_PORT")
+                .help("port this instance listens on")
+                .default_value(GRPC_PORT.to_string())
                 .required(false)
         )
         .arg(
@@ -330,10 +348,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
     let registration_enabled = matches.get_flag("enable-registration");
 
     // Parse instance and grpc endpoints from the command line arguments and validate.
-    let grpc_sock_addr = validate_endpoints(
-        matches.get_one::<String>("grpc-endpoint").unwrap(),
-        registration_enabled,
-    )?;
+    let grpc_sock_addr = validate_endpoints(&matches, registration_enabled)?;
 
     // Start the CSI server, node plugin grpc server and registration loop if registration is
     // enabled.
@@ -427,21 +442,35 @@ async fn check_ana_and_label_node(
 
 /// Validate that the grpc endpoint is valid.
 fn validate_endpoints(
-    grpc_endpoint: &str,
+    matches: &clap::ArgMatches,
     registration_enabled: bool,
 ) -> anyhow::Result<SocketAddr> {
-    let grpc_endpoint = if grpc_endpoint.contains(':') {
-        grpc_endpoint.to_string()
+    let grpc_endpoint_src = matches.value_source("grpc-endpoint");
+    let grpc_ip = matches.get_one::<IpAddr>("grpc-ip");
+    let grpc_port = matches.get_one::<u16>("grpc-port");
+    let grpc_endpoint_socket_addr = if grpc_endpoint_src
+        .unwrap_or(clap::parser::ValueSource::DefaultValue)
+        == clap::parser::ValueSource::DefaultValue
+    {
+        SocketAddr::new(
+            *grpc_ip.expect("must be provided if grpc-endpoint is missing"),
+            *grpc_port.expect("must be provided if grpc-port is missing"),
+        )
     } else {
-        format!("{grpc_endpoint}:{GRPC_PORT}")
+        let grpc_endpoint_arg = matches.get_one::<String>("grpc-endpoint").unwrap();
+        let grpc_endpoint = if grpc_endpoint_arg.contains(':') {
+            grpc_endpoint_arg.to_string()
+        } else {
+            format!("{grpc_endpoint_arg}:{GRPC_PORT}")
+        };
+        SocketAddr::from_str(&grpc_endpoint)?
     };
-    let grpc_endpoint_url = SocketAddr::from_str(&grpc_endpoint)?;
     // Should not allow using an unspecified ip if registration is enabled as grpc endpoint gets
     // sent in registration request.
-    if registration_enabled && grpc_endpoint_url.ip().is_unspecified() {
+    if registration_enabled && grpc_endpoint_socket_addr.ip().is_unspecified() {
         return Err(anyhow::format_err!(
             "gRPC endpoint: `[::]`/`0.0.0.0` is not allowed if registration is enabled"
         ));
     }
-    Ok(grpc_endpoint_url)
+    Ok(grpc_endpoint_socket_addr)
 }
