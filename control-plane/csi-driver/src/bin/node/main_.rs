@@ -134,7 +134,6 @@ pub(super) async fn main() -> anyhow::Result<()> {
                 .value_name("ENDPOINT")
                 .conflicts_with_all(["grpc-ip", "grpc-port"])
                 .help("ip address where this instance runs, and optionally the gRPC port")
-                .default_value("[::]")
                 .required(false)
         )
         .arg(
@@ -446,25 +445,22 @@ fn validate_endpoints(
     matches: &clap::ArgMatches,
     registration_enabled: bool,
 ) -> anyhow::Result<SocketAddr> {
-    let grpc_endpoint_src = matches.value_source("grpc-endpoint");
+    let grpc_endpoint = matches.get_one::<String>("grpc-endpoint");
     let grpc_ip = matches.get_one::<IpAddr>("grpc-ip");
     let grpc_port = matches.get_one::<u16>("grpc-port");
-    let grpc_endpoint_socket_addr = if grpc_endpoint_src
-        .unwrap_or(clap::parser::ValueSource::DefaultValue)
-        == clap::parser::ValueSource::DefaultValue
-    {
-        SocketAddr::new(
-            *grpc_ip.expect("must be provided if grpc-endpoint is missing"),
-            *grpc_port.expect("must be provided if grpc-port is missing"),
-        )
-    } else {
-        let grpc_endpoint_arg = matches.get_one::<String>("grpc-endpoint").unwrap();
-        let grpc_endpoint = if grpc_endpoint_arg.contains(':') {
-            grpc_endpoint_arg.to_string()
-        } else {
-            format!("{grpc_endpoint_arg}:{GRPC_PORT}")
-        };
-        SocketAddr::from_str(&grpc_endpoint)?
+    let grpc_endpoint_socket_addr = match grpc_endpoint {
+        None => SocketAddr::new(
+            *grpc_ip.expect("grpc-ip must be provided if grpc-endpoint is missing"),
+            *grpc_port.expect("grpc-port must be provided if grpc-endpoint is missing"),
+        ),
+        Some(grpc_endpoint) => {
+            let grpc_endpoint = if grpc_endpoint.contains(':') {
+                grpc_endpoint.to_string()
+            } else {
+                format!("{grpc_endpoint}:{GRPC_PORT}")
+            };
+            SocketAddr::from_str(&grpc_endpoint)?
+        }
     };
     // Should not allow using an unspecified ip if registration is enabled as grpc endpoint gets
     // sent in registration request.
