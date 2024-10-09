@@ -43,7 +43,7 @@ struct Cli {
     node_name: String,
 
     /// IP address and port for the ha node-agent to listen on.
-    #[clap(short, long = "grpc-endpoint")]
+    #[clap(short = 'g', long = "grpc-endpoint")]
     deprecated_grpc_endpoint: Option<SocketAddr>,
 
     #[clap(long, default_value_t = DEFAULT_NODE_AGENT_SERVER_IP)]
