@@ -2,6 +2,7 @@ receivers:
   otlp:
     protocols:
       grpc:
+        endpoint: jaeger:4317
 
 processors:
   batch:
@@ -15,6 +16,6 @@ exporters:
 service:
   pipelines:
     traces:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [otlp]
+      receivers: [ otlp ]
+      processors: [ batch ]
+      exporters: [ otlp ]
