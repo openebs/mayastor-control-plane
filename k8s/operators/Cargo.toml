@@ -3,36 +3,38 @@ name = "k8s-operators"
 description = "K8S Operator"
 version = "1.0.0"
 edition = "2018"
-authors = ["Jeffry Molanus <jeffry.molanus@gmail.com>"]
 
 [[bin]]
 name = "operator-diskpool"
 path = "src/pool/main.rs"
+required-features = ["bin"]
 
 [lib]
 name = "k8s_operators"
 path = "src/lib.rs"
 
-
 [features]
-default = [ "rls" ]
-rls = [ "openapi/tower-client-rls" ]
-tls = [ "openapi/tower-client-tls" ]
-
+default = ["rls", "bin"]
+bin = ["openapi", "utils", "anyhow", "chrono", "clap", "futures", "snafu", "tokio", "humantime", "tracing"]
+rls = ["openapi/tower-client-rls"]
+tls = ["openapi/tower-client-tls"]
 
 [dependencies]
-openapi = { path = "../../openapi", default-features = false, features = [ "tower-client", "tower-trace" ] }
-utils = { path = "../../utils/utils-lib" }
-anyhow = "1.0.75"
-chrono = "0.4.31"
-clap =  { version = "4.4.6", features = ["color", "env", "string"] }
-futures = "0.3.28"
+# CRD
 k8s-openapi = { version = "0.20.0", features = ["v1_22"] }
 kube = { version = "0.87.0", features = ["derive", "runtime"] }
-schemars = "0.8.15"
-serde = "1.0.188"
-serde_json = "1.0.107"
-snafu = "0.7.5"
-tokio = { version = "1.32.0", features = ["full"] }
-humantime = "2.1.0"
-tracing = "0.1.37"
+schemars = { version = "0.8.15" }
+serde = { version = "1.0.188" }
+serde_json = { version = "1.0.107" }
+
+# Binary
+openapi = { path = "../../openapi", default-features = false, features = ["tower-client", "tower-trace"], optional = true }
+utils = { path = "../../utils/utils-lib", optional = true }
+anyhow = { version = "1.0.75", optional = true }
+chrono = { version = "0.4.31", optional = true }
+clap = { version = "4.4.6", features = ["color", "env", "string"], optional = true }
+futures = { version = "0.3.28", optional = true }
+snafu = { version = "0.7.5", optional = true }
+tokio = { version = "1.32.0", features = ["full"], optional = true }
+humantime = { version = "2.1.0", optional = true }
+tracing = { version = "0.1.37", optional = true }
