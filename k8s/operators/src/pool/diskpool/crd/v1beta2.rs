@@ -1,8 +1,10 @@
 use kube::CustomResource;
-use openapi::models::{pool_status::PoolStatus as RestPoolStatus, Pool};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+#[cfg(feature = "openapi")]
+use openapi::models::{pool_status::PoolStatus as RestPoolStatus, Pool};
 
 #[derive(
     CustomResource, Serialize, Deserialize, Default, Debug, Eq, PartialEq, Clone, JsonSchema,
@@ -29,11 +31,11 @@ printcolumn = r#"{ "name":"available", "type":"integer", "format": "int64", "min
 /// The pool spec which contains the parameters we use when creating the pool
 pub struct DiskPoolSpec {
     /// The node the pool is placed on
-    node: String,
+    pub node: String,
     /// The disk device the pool is located on
-    disks: Vec<String>,
+    pub disks: Vec<String>,
     /// The topology for data placement.
-    topology: Option<Topology>,
+    pub topology: Option<Topology>,
 }
 
 /// Placement pool topology used by volume operations.
@@ -104,11 +106,11 @@ pub struct DiskPoolStatus {
     /// Pool status from respective control plane object.
     pub pool_status: Option<PoolStatus>,
     /// Capacity as number of bytes.
-    capacity: u64,
+    pub capacity: u64,
     /// Used number of bytes.
-    used: u64,
+    pub used: u64,
     /// Available number of bytes.
-    available: u64,
+    pub available: u64,
 }
 
 impl Default for DiskPoolStatus {
@@ -133,7 +135,8 @@ impl DiskPoolStatus {
         }
     }
 
-    /// Set when operator is attempting delete on pool.
+    /// Set when operator is attempting to delete on pool.
+    #[cfg(feature = "openapi")]
     pub fn terminating(p: Pool) -> Self {
         let state = p.state.unwrap_or_default();
         let free = if state.capacity > state.used {
@@ -168,6 +171,7 @@ impl DiskPoolStatus {
     }
 }
 
+#[cfg(feature = "openapi")]
 impl From<RestPoolStatus> for PoolStatus {
     fn from(p: RestPoolStatus) -> Self {
         match p {
@@ -180,6 +184,7 @@ impl From<RestPoolStatus> for PoolStatus {
 }
 
 /// Returns DiskPoolStatus from Control plane pool object.
+#[cfg(feature = "openapi")]
 impl From<Pool> for DiskPoolStatus {
     fn from(p: Pool) -> Self {
         if let Some(state) = p.state {
