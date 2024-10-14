@@ -74,7 +74,7 @@ impl PathReporter {
             .into_iter()
             .map(FailedPath::new)
             .collect::<Vec<FailedPath>>();
-        let node_ep = Cli::args().grpc_endpoint;
+        let node_ep = Cli::args().grpc_endpoint();
         let mut req = ReportFailedPaths::new(node_name.to_string(), failed_paths, node_ep);
 
         // Report all paths in a separate task, continue till transmission succeeds.

@@ -5,7 +5,10 @@ use grpc::{
 };
 use http::Uri;
 use once_cell::sync::OnceCell;
-use std::{net::SocketAddr, time::Duration};
+use std::{
+    net::{IpAddr, SocketAddr},
+    time::Duration,
+};
 use stor_port::{
     transport_api::TimeoutOptions, types::v0::transport::cluster_agent::NodeAgentInfo,
 };
@@ -14,9 +17,9 @@ use tonic::transport::{Channel, Endpoint};
 use tower::service_fn;
 use utils::{
     package_description, tracing_telemetry::KeyValue, version_info_str,
-    DEFAULT_CLUSTER_AGENT_CLIENT_ADDR, DEFAULT_NODE_AGENT_SERVER_ADDR,
-    NVME_PATH_AGGREGATION_PERIOD, NVME_PATH_CHECK_PERIOD, NVME_PATH_CONNECTION_PERIOD,
-    NVME_PATH_RETRANSMISSION_PERIOD, NVME_SUBSYS_REFRESH_PERIOD,
+    DEFAULT_CLUSTER_AGENT_CLIENT_ADDR, DEFAULT_NODE_AGENT_SERVER_IP,
+    DEFAULT_NODE_AGENT_SERVER_PORT, NVME_PATH_AGGREGATION_PERIOD, NVME_PATH_CHECK_PERIOD,
+    NVME_PATH_CONNECTION_PERIOD, NVME_PATH_RETRANSMISSION_PERIOD, NVME_SUBSYS_REFRESH_PERIOD,
 };
 mod detector;
 mod path_provider;
@@ -40,8 +43,14 @@ struct Cli {
     node_name: String,
 
     /// IP address and port for the ha node-agent to listen on.
-    #[clap(short, long, default_value = DEFAULT_NODE_AGENT_SERVER_ADDR)]
-    grpc_endpoint: SocketAddr,
+    #[clap(short = 'g', long = "grpc-endpoint")]
+    deprecated_grpc_endpoint: Option<SocketAddr>,
+
+    #[clap(long, default_value_t = DEFAULT_NODE_AGENT_SERVER_IP)]
+    grpc_ip: IpAddr,
+
+    #[clap(long, default_value_t = DEFAULT_NODE_AGENT_SERVER_PORT)]
+    grpc_port: u16,
 
     /// Add process service tags to the traces.
     #[clap(short, long, env = "TRACING_TAGS", value_delimiter=',', value_parser = utils::tracing_telemetry::parse_key_value)]
@@ -108,6 +117,15 @@ impl Cli {
     fn args() -> Self {
         Cli::parse()
     }
+
+    fn grpc_endpoint(&self) -> SocketAddr {
+        #[allow(deprecated)]
+        if let Some(deprecated_endpoint) = &self.deprecated_grpc_endpoint {
+            *deprecated_endpoint
+        } else {
+            std::net::SocketAddr::new(self.grpc_ip, self.grpc_port)
+        }
+    }
 }
 
 #[tokio::main]
@@ -139,7 +157,7 @@ async fn main() -> anyhow::Result<()> {
 
     if let Err(error) = cluster_agent_client()
         .register(
-            &NodeAgentInfo::new(cli_args.node_name.clone(), cli_args.grpc_endpoint),
+            &NodeAgentInfo::new(cli_args.node_name.clone(), cli_args.grpc_endpoint()),
             None,
         )
         .await
