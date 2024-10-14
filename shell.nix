@@ -39,6 +39,7 @@ mkShell {
     pre-commit
     python3
     utillinux
+    rdma-core
     which
   ] ++ pkgs.lib.optional (!norust) rust
   ++ pkgs.lib.optionals (system != "aarch64-darwin") [

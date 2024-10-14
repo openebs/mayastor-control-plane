@@ -14,6 +14,7 @@ use csi_driver::PublishParams;
 use glob::glob;
 use nvmeadm::nvmf_subsystem::Subsystem;
 use regex::Regex;
+use tracing::warn;
 use udev::{Device, Enumerator};
 use url::Url;
 use uuid::Uuid;
@@ -22,6 +23,7 @@ use crate::{
     config::{config, NvmeConfig, NvmeParseParams},
     dev::util::extract_uuid,
     match_dev::match_nvmf_device,
+    node::RDMA_CONNECT_CHECK,
 };
 
 use super::{Attach, Detach, DeviceError, DeviceName};
@@ -307,6 +309,16 @@ pub(crate) fn check_nvme_tcp_module() -> Result<(), std::io::Error> {
     Ok(())
 }
 
+/// Check for the presence of nvme tcp kernel module.
+/// TODO: Handle the case where this(and for that matter nvme_tcp too)
+/// could be builtin module.
+#[allow(unused)]
+pub(crate) fn check_nvme_rdma_module() -> Result<(), std::io::Error> {
+    let path = "/sys/module/nvme_rdma";
+    std::fs::metadata(path)?;
+    Ok(())
+}
+
 /// Set the nvme_core module IO timeout
 /// (note, this is a system-wide parameter)
 pub(crate) fn set_nvmecore_iotimeout(io_timeout_secs: u32) -> Result<(), std::io::Error> {
@@ -359,5 +371,19 @@ pub(crate) fn transport_from_url(url: &Url) -> Result<TrType, DeviceError> {
         .split('+')
         .nth(1)
         .unwrap_or(default_xprt.as_str());
-    TrType::from_str(xprt).map_err(|e| DeviceError::new(format!("{e:?}").as_str()))
+
+    let ret_xprt = TrType::from_str(xprt).map_err(|e| DeviceError::new(format!("{e:?}").as_str()));
+    let connect_cap_check = RDMA_CONNECT_CHECK.get().unwrap_or(&(false, false));
+
+    if !connect_cap_check.0 {
+        ret_xprt
+    } else {
+        match ret_xprt {
+            Ok(t) if t == TrType::rdma && !connect_cap_check.1 => {
+                warn!("rdma incapable node, connecting over tcp");
+                Ok(TrType::tcp)
+            }
+            _else => _else,
+        }
+    }
 }

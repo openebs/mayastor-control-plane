@@ -12,6 +12,7 @@
 , gitVersions
 , openapi-generator
 , which
+, rdma-core
 , systemdMinimal
 , utillinux
 , sourcer
@@ -71,7 +72,7 @@ let
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
     nativeBuildInputs = [ clang pkg-config openapi-generator which git llvmPackages.bintools ];
-    buildInputs = [ llvmPackages.libclang protobuf openssl.dev systemdMinimal.dev utillinux.dev ];
+    buildInputs = [ llvmPackages.libclang protobuf openssl.dev systemdMinimal.dev utillinux.dev rdma-core ];
     doCheck = false;
   };
   release_build = { "release" = true; "debug" = false; };
