@@ -99,6 +99,11 @@ fn is_same_controller(new_path_uri: &ParsedUri, subsystem: &Subsystem) -> Result
         .parse()
         .map_err(|_| SvcError::InvalidArguments {})?;
 
+    tracing::info!(
+        "Check same controller. old subsys {:?}, new path {:?}",
+        subsystem,
+        new_path_uri
+    );
     let same_transport = new_path_uri.transport().eq(&ctrlr_transport);
     let same_host_port = subsystem
         .address
@@ -476,6 +481,16 @@ struct ParsedUri {
     nqn: String,
 }
 
+impl std::fmt::Debug for ParsedUri {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ParsedUri")
+            .field("host", &self.host())
+            .field("port", &self.port())
+            .field("transport", &self.transport())
+            .field("nqn", &self.nqn())
+            .finish()
+    }
+}
 impl ParsedUri {
     fn new(uri: Uri) -> Result<ParsedUri, SvcError> {
         let host = uri.host().ok_or(SvcError::InvalidArguments {})?.to_string();

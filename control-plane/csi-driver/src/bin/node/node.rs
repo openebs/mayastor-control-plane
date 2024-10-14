@@ -10,6 +10,7 @@ use csi_driver::{
     filesystem::FileSystem as Fs,
     limiter::VolumeOpGuard,
 };
+use once_cell::sync::OnceCell;
 use rpc::{
     csi,
     csi::{
@@ -76,6 +77,12 @@ impl Node {
 
 const ATTACH_TIMEOUT_INTERVAL: Duration = Duration::from_millis(100);
 const ATTACH_RETRIES: u32 = 100;
+// A type and static variable used to check and set node's rdma capability during startup.
+// This is used to decide if initiator can indeed connect over rdma.
+// First index bool tells if we need to fallback to tcp connect in case initiator node is
+// not rdma capable. Second index bool is the actual capability indicator.
+type CheckAndFallbackNvmeConnect = (bool, bool);
+pub(crate) static RDMA_CONNECT_CHECK: OnceCell<CheckAndFallbackNvmeConnect> = OnceCell::new();
 
 // Determine if given access mode in conjunction with ro mount flag makes
 // sense or not. If access mode is not supported or the combination does
