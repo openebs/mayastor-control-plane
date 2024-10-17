@@ -9,7 +9,7 @@ use crate::{
     identity::Identity,
     k8s::patch_k8s_node,
     mount::probe_filesystems,
-    node::Node,
+    node::{Node, RDMA_CONNECT_CHECK},
     nodeplugin_grpc::NodePluginGrpcServer,
     nodeplugin_nvme::NvmeOperationsSvc,
     registration::run_registration_loop,
@@ -221,6 +221,16 @@ pub(super) async fn main() -> anyhow::Result<()> {
                 .value_parser(clap::value_parser!(bool))
                 .help("Enable ansi color for logs")
         )
+        .arg(
+            Arg::new("nvme-connect-fallback")
+                .long("nvme-connect-fallback")
+                .default_value("false")
+                .value_parser(clap::value_parser!(bool))
+                .help(
+                    "Enable falling back to nvme connect over tcp if initiator node is not rdma capable, \n\
+                    even though volume target is rdma capable."
+            )
+        )
         .subcommand(
             clap::Command::new("fs-freeze")
                 .arg(
@@ -325,6 +335,31 @@ pub(super) async fn main() -> anyhow::Result<()> {
     if platform::current_platform_type() == platform::PlatformType::K8s {
         let kube_client = kube::Client::try_default().await?;
         check_ana_and_label_node(&kube_client, node_name, nvme_enabled).await?;
+    }
+
+    let conn_fallback = matches.get_flag("nvme-connect-fallback");
+    // Check and store if this node has an RDMA device so that nvme connect over RDMA
+    // can be done. If this node is also an io-engine node with rdma enabled and working,
+    // then this check will always set capability true.
+    let ibv_output = tokio::process::Command::new("ibv_devinfo")
+        .arg("-l")
+        .output()
+        .await;
+
+    if ibv_output.as_ref().is_ok_and(|s| {
+        !String::from_utf8(s.stdout.clone())
+            .unwrap_or_default()
+            .starts_with("0 HCA")
+    }) {
+        info!(
+            "host node rdma capable. conn_fallback({conn_fallback:?}), {:?}",
+            String::from_utf8(ibv_output.unwrap().stdout.clone())
+        );
+        // todo: check for the presence of nvme_rdma too. But don't bail out as we do for nvme_tcp.
+        let _ = RDMA_CONNECT_CHECK.set((conn_fallback, true));
+    } else {
+        error!("Error executing ibv_devinfo, or no output received. conn_fallback({conn_fallback:?}), {ibv_output:?}");
+        let _ = RDMA_CONNECT_CHECK.set((conn_fallback, false));
     }
 
     // Parse the CSI socket file name from the command line arguments.
