@@ -45,59 +45,52 @@ skip_if_md5_same="no"
 while [ "$#" -gt 0 ]; do
   _arg="$1"
   case "$_arg" in
-      --spec-changes)
-          check_spec="yes"
-          shift
-          ;;
-      --skip-git-diff)
-          skip_git_diff="yes"
-          shift
-          ;;
-      --default-toml)
-          default_toml="yes"
-          shift
-          ;;
-      --skip-md5-same)
-          skip_if_md5_same="yes"
-          shift
-          ;;
-      --if-rev-changed)
-          if [[ -f "$VERSION_FILE" ]]; then
-            version=$(cat "$VERSION_FILE")
-            bin_version=$(which openapi-generator-cli)
-            [[ "$version" = "$bin_version" ]] && exit 0
-          fi
-          skip_git_diff="yes"
-          shift
-          ;;
-      --root-dir)
-          test $# -lt 2 && die "Missing value for the optional argument '$_arg'."
-          ROOTDIR="$2"
-          shift
-          ;;
-      --root-dir=*)
-          ROOTDIR="${_arg#*=}"
-          shift
-          ;;
-      --target-dir)
-          test $# -lt 2 && die "Missing value for the optional argument '$_arg'."
-          TARGET="$2"
-          shift
-          ;;
-      --target-dir=*)
-          TARGET="${_arg#*=}"
-          shift
-          ;;
-      --spec-file)
-          test $# -lt 2 && die "Missing value for the optional argument '$_arg'."
-          SPEC="$2"
-          shift
-          ;;
-      --spec-file=*)
-          SPEC="${_arg#*=}"
-          shift
-          ;;
+    --spec-changes)
+        check_spec="yes"
+        ;;
+    --skip-git-diff)
+        skip_git_diff="yes"
+        ;;
+    --default-toml)
+        default_toml="yes"
+        ;;
+    --skip-md5-same)
+        skip_if_md5_same="yes"
+        ;;
+    --if-rev-changed)
+        if [[ -f "$VERSION_FILE" ]]; then
+          version=$(cat "$VERSION_FILE")
+          bin_version=$(which openapi-generator-cli)
+          [[ "$version" = "$bin_version" ]] && exit 0
+        fi
+        skip_git_diff="yes"
+        ;;
+    --root-dir)
+        test $# -lt 2 && die "Missing value for the optional argument '$_arg'."
+        ROOTDIR="$2"
+        shift
+        ;;
+    --root-dir=*)
+        ROOTDIR="${_arg#*=}"
+        ;;
+    --target-dir)
+        test $# -lt 2 && die "Missing value for the optional argument '$_arg'."
+        TARGET="$2"
+        shift
+        ;;
+    --target-dir=*)
+        TARGET="${_arg#*=}"
+        ;;
+    --spec-file)
+        test $# -lt 2 && die "Missing value for the optional argument '$_arg'."
+        SPEC="$2"
+        shift
+        ;;
+    --spec-file=*)
+        SPEC="${_arg#*=}"
+        ;;
   esac
+  shift
 done
 
 if [[ $check_spec = "yes" ]]; then
