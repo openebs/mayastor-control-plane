@@ -135,7 +135,7 @@ async fn disconnect_controller(
             // changed, for example due to interface name modified in io-engine args.
             let same_controller = is_same_controller(&new_path_uri, &subsystem)?;
             if same_controller {
-                tracing::info!(path, "Not disconnecting same NVMe controller");
+                tracing::info!(path, "Not disconnecting same NVMe controller. old subsys {subsystem:?}, new path {new_path_uri:?}");
                 Ok(None)
             } else {
                 tracing::info!(path, "Disconnecting NVMe controller");
@@ -476,6 +476,16 @@ struct ParsedUri {
     nqn: String,
 }
 
+impl std::fmt::Debug for ParsedUri {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ParsedUri")
+            .field("host", &self.host())
+            .field("port", &self.port())
+            .field("transport", &self.transport())
+            .field("nqn", &self.nqn())
+            .finish()
+    }
+}
 impl ParsedUri {
     fn new(uri: Uri) -> Result<ParsedUri, SvcError> {
         let host = uri.host().ok_or(SvcError::InvalidArguments {})?.to_string();
