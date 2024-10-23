@@ -21,7 +21,7 @@ from common.fio import Fio
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.volume_status import VolumeStatus
 from openapi.model.volume_policy import VolumePolicy
 from openapi.exceptions import NotFoundException
@@ -111,10 +111,12 @@ def there_are_4_overcommitted_thin_volumes():
         )
         volume = ApiClient.volumes_api().put_volume_target(
             volume.spec.uuid,
-            publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=node),
+            publish_volume_body=PublishVolumeBody(
+                {}, VolumeShareProtocol("nvmf"), node=node
+            ),
         )
         assert hasattr(volume.spec, "target")
-        assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
+        assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
         volumes.append(volume)
     pytest.volumes = volumes
 
@@ -131,7 +133,7 @@ def there_are_4_overcommitted_thin_volumes():
         fio_size = f"{int(fio_size)}M"
         volumes[i].fio_offset = fio_size
 
-        uri = urlparse(volumes[i].state.target["deviceUri"])
+        uri = urlparse(volumes[i].state.target["device_uri"])
         fio = Fio(name="job", rw="write", uri=uri, size=fio_size)
         fios.append(fio.open())
 
@@ -176,7 +178,7 @@ def filling_up_the_volumes_with_data():
     fios = list()
 
     for volume in volumes:
-        uri = urlparse(volume.state.target["deviceUri"])
+        uri = urlparse(volume.state.target["device_uri"])
         fio = Fio(name="job", rw="write", uri=uri, offset=volume.fio_offset)
         fios.append(fio.open())
     pytest.fios = fios

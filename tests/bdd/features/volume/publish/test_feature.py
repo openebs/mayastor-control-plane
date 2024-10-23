@@ -14,7 +14,7 @@ from common.apiclient import ApiClient
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.publish_volume_body import PublishVolumeBody
 
@@ -57,11 +57,11 @@ def a_published_volume():
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=NODE_NAME, frontend_node=""
+            {}, VolumeShareProtocol("nvmf"), node=NODE_NAME, frontend_node=""
         ),
     )
     assert hasattr(volume.spec, "target")
-    assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
+    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
 
 
 @given("an existing volume")
@@ -83,7 +83,7 @@ def publishing_the_volume_should_return_an_already_published_error():
         ApiClient.volumes_api().put_volume_target(
             VOLUME_UUID,
             publish_volume_body=PublishVolumeBody(
-                {}, Protocol("nvmf"), node=NODE_NAME, frontend_node=""
+                {}, VolumeShareProtocol("nvmf"), node=NODE_NAME, frontend_node=""
             ),
         )
     except Exception as e:
@@ -100,16 +100,16 @@ def publishing_the_volume_should_succeed_with_a_returned_volume_object_containin
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=NODE_NAME, frontend_node=""
+            {}, VolumeShareProtocol("nvmf"), node=NODE_NAME, frontend_node=""
         ),
     )
     assert hasattr(volume.spec, "target")
-    assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
+    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
     assert hasattr(volume.state, "target")
     assert (
-        "nvmf://" in volume.state.target["deviceUri"]
-        or "nvmf+tcp://" in volume.state.target["deviceUri"]
-        or "nvmf+rdma+tcp://" in volume.state.target["deviceUri"]
+        "nvmf://" in volume.state.target["device_uri"]
+        or "nvmf+tcp://" in volume.state.target["device_uri"]
+        or "nvmf+rdma+tcp://" in volume.state.target["device_uri"]
     )
 
 

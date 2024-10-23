@@ -25,7 +25,7 @@ from common.nvme import (
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.volume_policy import VolumePolicy
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.publish_volume_body import PublishVolumeBody
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1123"
@@ -127,7 +127,10 @@ def background():
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=TARGET_NODE_1, frontend_node="app-node-1"
+            {},
+            VolumeShareProtocol("nvmf"),
+            node=TARGET_NODE_1,
+            frontend_node="app-node-1",
         ),
     )
     yield volume
@@ -137,7 +140,7 @@ def background():
 @pytest.fixture
 def connect_to_first_path(background):
     volume = background
-    device_uri = volume.state["target"]["deviceUri"]
+    device_uri = volume.state["target"]["device_uri"]
     yield nvme_connect(device_uri)
     nvme_disconnect(device_uri)
 

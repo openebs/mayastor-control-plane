@@ -26,7 +26,7 @@ from time import sleep
 import openapi.exceptions
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.exceptions import NotFoundException
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.nexus_state import NexusState
@@ -181,7 +181,7 @@ def publish_volume(uuid, publish_on):
     volume = ApiClient.volumes_api().put_volume_target(
         uuid,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=publish_on, frontend_node=""
+            {}, VolumeShareProtocol("nvmf"), node=publish_on, frontend_node=""
         ),
     )
     assert hasattr(volume.state, "target")
@@ -193,7 +193,7 @@ def create_and_publish_volume(uuid, size, rcount, publish_on):
     volume = ApiClient.volumes_api().put_volume_target(
         uuid,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=publish_on, frontend_node=""
+            {}, VolumeShareProtocol("nvmf"), node=publish_on, frontend_node=""
         ),
     )
     assert hasattr(volume.state, "target")
@@ -208,7 +208,7 @@ def create_volume_snapshot(volume, snapid):
 
 
 def start_fio(volume):
-    uri = urlparse(volume.state.target["deviceUri"])
+    uri = urlparse(volume.state.target["device_uri"])
     fio = Fio(name="fio-pre-resize", rw="write", uri=uri)
     pytest.fio = fio.open()
 
@@ -424,7 +424,7 @@ def io_on_the_new_volume_runs_without_error_for_the_complete_volume_size(
     """IO on the new volume runs without error for the complete volume size."""
     test_volume = test_volume_factory()
 
-    uri = urlparse(test_volume.state.target["deviceUri"])
+    uri = urlparse(test_volume.state.target["device_uri"])
     fio = Fio(name="fio-restored-volume", rw="write", uri=uri)
 
     fio_proc = fio.open()
@@ -465,7 +465,7 @@ def the_new_capacity_should_be_available_for_the_application(test_volume_factory
     # IO to the complete expanded volume.
     if hasattr(test_volume.state, "target"):
         assert test_volume.state.target["size"] >= VOLUME_NEW_SIZE
-        uri = urlparse(test_volume.state.target["deviceUri"])
+        uri = urlparse(test_volume.state.target["device_uri"])
         fio = Fio(name="fio-post-resize", rw="write", uri=uri)
         # If previous fio is running, kill and start fresh.
         if pytest.fio is not None and pytest.fio.poll() is not None:
@@ -592,7 +592,7 @@ def wait_pool_online(pool_id):
 @retry(wait_fixed=200, stop_max_attempt_number=30)
 def wait_volume_published(vol_id):
     volume = ApiClient.volumes_api().get_volume(vol_id)
-    assert NexusState(volume.state.target["state"]) == NexusState("Online")
+    assert volume.state.target["state"] == NexusState("Online")
 
 
 @retry(wait_fixed=500, stop_max_attempt_number=30)
@@ -615,7 +615,7 @@ def wait_rebuild_start():
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     childlist = vol.state.target["children"]
     assert (len(childlist) == DEFAULT_REPLICA_CNT) and (
-        NexusState(vol.state.target["state"]) == NexusState("Degraded")
+        vol.state.target["state"] == NexusState("Degraded")
     )
 
 

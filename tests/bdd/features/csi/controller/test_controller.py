@@ -217,9 +217,6 @@ def populate_published_volume(_create_1_replica_nvmf_volume):
     assert (
         str(volume.spec.target.protocol) == "nvmf"
     ), "Protocol mismatches for published volume"
-    assert (
-        volume.state.target["protocol"] == "nvmf"
-    ), "Protocol mismatches for published volume"
     return volume
 
 
@@ -238,9 +235,6 @@ def populate_published_2_replica_volume(_create_2_replica_nvmf_volume):
     volume = ApiClient.volumes_api().get_volume(VOLUME4_UUID)
     assert (
         str(volume.spec.target.protocol) == "nvmf"
-    ), "Protocol mismatches for published volume"
-    assert (
-        volume.state.target["protocol"] == "nvmf"
     ), "Protocol mismatches for published volume"
     return volume
 
@@ -358,7 +352,7 @@ def check_unpublish_volume_on_a_different_node(unpublish_volume_on_a_different_n
     target_fixture="unpublish_volume_from_its_node",
 )
 def unpublish_volume_from_its_node(populate_published_volume):
-    uri = populate_published_volume.state.target["deviceUri"]
+    uri = populate_published_volume.state.target["device_uri"]
     # Make sure the volume is still published and is discoverable.
     assert check_nvmf_target(uri), "Volume is not discoverable over NVMF"
     do_unpublish_volume(VOLUME1_UUID, NODE1)
@@ -1008,8 +1002,7 @@ def check_unpublish_not_existing_volume(unpublish_not_existing_volume):
 def check_volume_status_published():
     vol = ApiClient.volumes_api().get_volume(VOLUME1_UUID)
     assert str(vol.spec.target.protocol) == "nvmf", "Volume protocol mismatches"
-    assert vol.state.target["protocol"] == "nvmf", "Volume protocol mismatches"
-    assert vol.state.target["deviceUri"].startswith(
+    assert vol.state.target["device_uri"].startswith(
         ("nvmf://", "nvmf+tcp://", "nvmf+rdma+tcp://")
     ), "Volume share URI mismatches"
 

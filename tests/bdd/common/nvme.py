@@ -188,7 +188,12 @@ def nvme_find_subsystem_devices(nqn):
         subsystems = list()
         for subsystem in dev.get("Subsystems"):
             if nqn in subsystem.get("SubsystemNQN"):
-                subsystems.append(subsystem)
+                if (
+                    subsystem.get("Controllers") is not None
+                    and len(subsystem.get("Controllers")) > 0
+                ):
+                    subsystems.append(subsystem)
+
         if len(subsystems) > 0:
             dev["Subsystems"] = subsystems
             devs.append(dev)

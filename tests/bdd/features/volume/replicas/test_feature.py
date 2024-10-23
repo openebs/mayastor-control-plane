@@ -19,7 +19,7 @@ from common.operations import Cluster
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.publish_volume_body import PublishVolumeBody
 
@@ -96,10 +96,12 @@ def init_resources(disks):
     # Publish volume so that there is a nexus to add a replica to.
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=NODE_1_NAME),
+        publish_volume_body=PublishVolumeBody(
+            {}, VolumeShareProtocol("nvmf"), node=NODE_1_NAME
+        ),
     )
     assert hasattr(volume.spec, "target")
-    assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
+    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
 
 
 # Fixture used to pass the replica context between test steps.

@@ -20,5 +20,13 @@ tmpd=$(mktemp -d /tmp/openapi-gen-bdd-XXXXXXX)
 # Generate a new openapi python client for use by the BDD tests
 openapi-generator-cli generate -i "$SPEC" -g python-prior -o "$tmpd" --additional-properties packageName="openapi"
 
+# Path AllOf bug on openapi-generator
+cat <<EOF | patch "$tmpd/openapi/model_utils.py"
+651c651
+<                     if v not in values:
+---
+>                     if v not in values and str(v) not in list(map(lambda e: str(e), values)):
+EOF
+
 mv "$tmpd"/openapi/* "$TARGET"
 rm -rf "$tmpd"

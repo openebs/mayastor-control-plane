@@ -20,21 +20,20 @@ from common.deployer import Deployer
 from common.apiclient import ApiClient
 from common.docker import Docker
 from common.operations import Snapshot, Volume
-from time import sleep
 
 import openapi.exceptions
+from openapi.model.child_state import ChildState
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from common.fio import Fio
 from openapi.model.nexus_state import NexusState
 from openapi.model.pool_status import PoolStatus
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.replica_state import ReplicaState
 from openapi.model.spec_status import SpecStatus
 from openapi.model.resize_volume_body import ResizeVolumeBody
 from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_status import VolumeStatus
 
 
 POOL1_UUID = "91a60318-bcfe-4e36-92cb-ddc7abf212ea"
@@ -65,12 +64,20 @@ def cordon_node(node_name, label):
 
 def is_cordoned(node_name):
     node = ApiClient.nodes_api().get_node(node_name)
-    present = False
-    try:
-        assert node.spec.cordondrainstate["cordonedstate"]["cordonlabels"] != []
-        return True
-    except AttributeError as e:
-        return False
+    return len(cordon_labels(node)) > 0
+
+
+def cordon_labels(node):
+    if node.spec.get("cordondrainstate") is None:
+        return []
+    if node.spec.get("cordondrainstate").get("cordonedstate") is None:
+        return []
+    if (
+        node.spec.get("cordondrainstate").get("cordonedstate").get("cordonlabels")
+        is None
+    ):
+        return []
+    return node.spec.cordondrainstate["cordonedstate"]["cordonlabels"]
 
 
 def uncordon_node(node_name, label):
@@ -98,7 +105,7 @@ def publish_volume(uuid, publish_on):
     volume = ApiClient.volumes_api().put_volume_target(
         uuid,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=publish_on, frontend_node=""
+            {}, VolumeShareProtocol("nvmf"), node=publish_on, frontend_node=""
         ),
     )
     assert hasattr(volume.state, "target")
@@ -115,7 +122,7 @@ def create_and_publish_volume(uuid, size, rcount, publish_on):
     volume = ApiClient.volumes_api().put_volume_target(
         uuid,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=publish_on, frontend_node=""
+            {}, VolumeShareProtocol("nvmf"), node=publish_on, frontend_node=""
         ),
     )
     assert hasattr(volume.state, "target")
@@ -324,7 +331,7 @@ def one_of_the_replica_is_not_in_online_state():
 def the_volume_is_receiving_io():
     """the volume is receiving IO."""
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    uri = urlparse(volume.state.target["deviceUri"])
+    uri = urlparse(volume.state.target["device_uri"])
     fio = Fio(name="fio-pre-resize", rw="write", uri=uri, extra_args="--loops=2")
     pytest.fio = fio.open()
 
@@ -493,7 +500,7 @@ def the_new_capacity_should_be_available_for_the_application_to_use():
     volume = ApiClient.volumes_api().get_volume(pytest.volume.spec.uuid)
     assert volume.state.target["size"] == VOLUME_NEW_SIZE
     # Run IO across expanded volume capacity
-    uri = urlparse(volume.state.target["deviceUri"])
+    uri = urlparse(volume.state.target["device_uri"])
     fio = Fio(name="fio-post-resize", rw="write", uri=uri, size=VOLUME_NEW_SIZE)
     try:
         code = fio.run().returncode
@@ -560,7 +567,7 @@ def the_volume_should_get_published_with_expanded_capacity():
     """the volume should get published with expanded capacity."""
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     assert hasattr(volume.spec, "target")
-    assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
+    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
     assert volume.spec.size == VOLUME_NEW_SIZE
     assert volume.state.target["size"] == VOLUME_NEW_SIZE
 
@@ -576,7 +583,7 @@ def wait_pool_online(pool_id):
 def wait_rebuild_finish():
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     assert (vol.state.target["rebuilds"] == 0) and (
-        NexusState(vol.state.target["state"]) == NexusState("Online")
+        vol.state.target["state"] == NexusState("Online")
     )
 
 
@@ -585,7 +592,9 @@ def wait_child_added_back():
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     target = vol.state.target
     childlist = target["children"]
-    degraded = list(filter(lambda child: child.get("state") == "Degraded", childlist))
+    degraded = list(
+        filter(lambda child: child.get("state") == ChildState("Degraded"), childlist)
+    )
     assert len(degraded) == 1, "Failed to add child again as Degraded!"
     assert target["rebuilds"] == 1
 

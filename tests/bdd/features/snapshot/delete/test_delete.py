@@ -11,7 +11,7 @@ from common.deployer import Deployer
 from common.operations import Snapshot, Volume, Cluster, wait_node_online
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.volume_policy import VolumePolicy
 
@@ -84,7 +84,7 @@ def a_single_replica_publish_status_volume(publish_status):
         ApiClient.volumes_api().put_volume_target(
             VOLUME1_UUID,
             publish_volume_body=PublishVolumeBody(
-                {}, Protocol("nvmf"), node=NODE1, frontend_node="app-node-1"
+                {}, VolumeShareProtocol("nvmf"), node=NODE1, frontend_node="app-node-1"
             ),
         )
     yield

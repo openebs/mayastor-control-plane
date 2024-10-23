@@ -20,7 +20,7 @@ from openapi.model.spec_status import SpecStatus
 from openapi.model.replica_state import ReplicaState
 from openapi.exceptions import NotFoundException
 from openapi.model.pool_status import PoolStatus
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.volume_policy import VolumePolicy
 
@@ -331,7 +331,9 @@ def create_volume(replicas=1, volume_id="", publish_status="", replica_location=
         node = NODE1
         ApiClient.volumes_api().put_volume_target(
             volume_id,
-            publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=node),
+            publish_volume_body=PublishVolumeBody(
+                {}, VolumeShareProtocol("nvmf"), node=node
+            ),
         )
 
     pytest.volume = volume
