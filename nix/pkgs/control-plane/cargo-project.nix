@@ -26,6 +26,7 @@
   # for this we use naersk which is not as fully fledged as the builtin rustPlatform so it should only be used
   # for development and not for CI
 , incremental ? false
+, rustFlags
 }:
 let
   channel = import ../../lib/rust.nix { inherit sources; };
@@ -101,7 +102,7 @@ let
       inherit buildType cargoBuildFlags;
 
       preBuild = "patchShebangs ./scripts/rust";
-
+      ${if rustFlags == "" then null else "RUSTFLAGS"} = builtins.split " " rustFlags;
       cargoLock = {
         lockFile = ../../../Cargo.lock;
       };

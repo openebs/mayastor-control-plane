@@ -1,4 +1,4 @@
-{ stdenv, git, lib, pkgs, allInOne, incremental, sourcer, tag ? "" }:
+{ stdenv, git, lib, pkgs, allInOne, incremental, sourcer, tag ? "", rustFlags }:
 let
   versionDrv = import ../../lib/version.nix { inherit sourcer lib stdenv git tag; };
   version = builtins.readFile "${versionDrv}";
@@ -9,7 +9,7 @@ let
   };
 
   project-builder =
-    pkgs.callPackage ../control-plane/cargo-project.nix { inherit sourcer gitVersions allInOne incremental; };
+    pkgs.callPackage ../control-plane/cargo-project.nix { inherit sourcer gitVersions allInOne incremental rustFlags; };
   installer = { name, src }:
     stdenv.mkDerivation {
       inherit src;
