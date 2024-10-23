@@ -33,7 +33,7 @@ mkShell {
     jq
     llvmPackages.libclang
     nixpkgs-fmt
-    openapi-generator
+    openapi-generator-cli
     openssl
     pkg-config
     pre-commit
@@ -41,6 +41,7 @@ mkShell {
     utillinux
     rdma-core
     which
+    paperclip
   ] ++ pkgs.lib.optional (!norust) rust
   ++ pkgs.lib.optionals (system != "aarch64-darwin") [
     e2fsprogs

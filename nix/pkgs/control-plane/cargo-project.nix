@@ -10,7 +10,7 @@
 , sources
 , pkgs
 , gitVersions
-, openapi-generator
+, paperclip
 , which
 , rdma-core
 , systemdMinimal
@@ -57,6 +57,7 @@ let
     "openapi/Cargo.toml"
     "openapi/build.rs"
     "openapi/src/lib.rs"
+    "openapi/templates"
     "rpc"
     "scripts/rust/generate-openapi-bindings.sh"
     "scripts/rust/branch_ancestor.sh"
@@ -72,7 +73,7 @@ let
     GIT_VERSION = "${gitVersions.tag_or_long}";
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
-    nativeBuildInputs = [ clang pkg-config openapi-generator which git llvmPackages.bintools ];
+    nativeBuildInputs = [ clang pkg-config paperclip which git llvmPackages.bintools ];
     buildInputs = [ llvmPackages.libclang protobuf openssl.dev systemdMinimal.dev utillinux.dev rdma-core ];
     doCheck = false;
   };

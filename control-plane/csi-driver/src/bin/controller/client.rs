@@ -519,10 +519,7 @@ impl RestApiClient {
         // This call should be idempotent and should return success if the volume
         // size is already greater than or equal to the target_volume_size.
         let resize_result = vol_client
-            .put_volume_size(
-                volume_id,
-                ResizeVolumeBody::new(required_volume_size as usize),
-            )
+            .put_volume_size(volume_id, ResizeVolumeBody::new(required_volume_size))
             .await
             .map(|response| response.into_body());
 

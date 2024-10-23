@@ -2890,6 +2890,7 @@ components:
         - startTime
         - endTime
     RebuildHistory:
+      type: object
       properties:
         targetUuid:
           description: Id of the volume target
