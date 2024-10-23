@@ -1,11 +1,15 @@
 #![cfg(test)]
 use crate::volume::helpers::wait_node_online;
-use deployer_cluster::{Cluster, ClusterBuilder};
-use grpc::operations::{
-    nexus::traits::NexusOperations, pool::traits::PoolOperations,
-    registry::traits::RegistryOperations, replica::traits::ReplicaOperations,
-    volume::traits::VolumeOperations,
+use deployer_cluster::{Cluster, ClusterBuilder, FindVolumeRequest};
+use grpc::{
+    csi_node_nvme::{nvme_operations_client, NvmeConnectRequest},
+    operations::{
+        nexus::traits::NexusOperations, pool::traits::PoolOperations,
+        registry::traits::RegistryOperations, replica::traits::ReplicaOperations,
+        volume::traits::VolumeOperations,
+    },
 };
+use http::Uri;
 use std::{collections::HashMap, time::Duration};
 use stor_port::{
     transport_api::{ReplyErrorKind, ResourceKind},
@@ -20,6 +24,7 @@ use stor_port::{
     },
 };
 use tokio::time::sleep;
+use tower::service_fn;
 
 // This test: Creates a three io engine cluster
 // Creates volume with 2 replicas and publishes it to create nexus
@@ -689,4 +694,207 @@ async fn wait_till_pool_locked(cluster: &Cluster) -> bool {
         }
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
+}
+
+#[tokio::test]
+async fn republished_nexus_two_paths() {
+    let grpc_timeout = Duration::from_millis(512);
+
+    const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_csi(true, true)
+        .with_agents(vec!["core"])
+        .with_io_engines(3)
+        .with_tmpfs_pool(POOL_SIZE_BYTES)
+        .with_cache_period("1s")
+        .with_reconcile_period(Duration::from_secs(5), Duration::from_secs(5))
+        .with_node_deadline("2s")
+        .with_options(|o| {
+            o.with_io_engine_env("MAYASTOR_HB_INTERVAL_SEC", "1")
+                .with_isolated_io_engine(true)
+        })
+        .with_req_timeouts_min(true, grpc_timeout, grpc_timeout)
+        .build()
+        .await
+        .unwrap();
+
+    let node_idx0 = cluster.node(0);
+    let node_idx1 = cluster.node(1);
+    let vol_cli = cluster.grpc_client().volume();
+
+    let volume = vol_cli
+        .create(
+            &CreateVolume {
+                uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
+                size: 52428800,
+                replicas: 3,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let volume = vol_cli
+        .publish(
+            &PublishVolume {
+                uuid: volume.uuid().clone(),
+                share: Some(VolumeShareProtocol::Nvmf),
+                target_node: Some(node_idx0.clone()),
+                publish_context: HashMap::new(),
+                frontend_nodes: vec![node_idx0.to_string()],
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let api = cluster.rest_v00();
+    let rest_cli = api.volumes_api();
+    let volume_grpc = volume.clone();
+    let volume_models = rest_cli.get_volume(volume_grpc.uuid()).await.unwrap();
+
+    let (s, r) = tokio::sync::oneshot::channel::<()>();
+    let task = run_fio_vol(&cluster, volume_models.clone(), r).await;
+    drop(s);
+    println!("DSDEBUG: started fio...");
+
+    cluster.composer().pause(node_idx0.as_str()).await.unwrap();
+
+    println!("DSDEBUG: disconnected container from network...");
+    cluster
+        .wait_node_status(node_idx0.clone(), NodeStatus::Unknown)
+        .await
+        .unwrap();
+    println!("DSDEBUG: node now unknown...");
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    let vol_republished = vol_cli
+        .republish(
+            &RepublishVolume {
+                uuid: volume.uuid().clone(),
+                target_node: Some(node_idx1),
+                share: VolumeShareProtocol::Nvmf,
+                reuse_existing: true,
+                frontend_node: node_idx0.clone(),
+                reuse_existing_fallback: false,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    println!("DSDEBUG: Republished volume to new node...");
+
+    let csi_node_ip = cluster.composer().container_ip("csi-node-1");
+    let socket_path_cp = std::path::PathBuf::from("/var/tmp/csi-app-node-1.sock");
+    let channel =
+        tonic::transport::channel::Endpoint::try_from(format!("http://{csi_node_ip}:50051"))
+            .expect("local endpoint should be valid")
+            .connect_with_connector_lazy(service_fn(move |_: Uri| {
+                tokio::net::UnixStream::connect(socket_path_cp.clone())
+            }));
+    let mut nvme_clnt = nvme_operations_client::NvmeOperationsClient::new(channel);
+    let new_path_uri = vol_republished.state().target.unwrap().device_uri;
+    let _ = nvme_clnt
+        .nvme_connect(NvmeConnectRequest {
+            uri: new_path_uri,
+            publish_context: None,
+        })
+        .await;
+
+    cluster.composer().thaw(node_idx0.as_str()).await.unwrap();
+
+    cluster
+        .wait_node_status(node_idx0.clone(), NodeStatus::Online)
+        .await
+        .unwrap();
+    println!("DSDEBUG: Reconnected older container back to network...");
+
+    let nexus_cli = cluster.grpc_client().nexus();
+    let nexuses = nexus_cli
+        .get(Filter::Node(node_idx0.clone()), None)
+        .await
+        .unwrap();
+    assert_eq!(nexuses.into_inner().len(), 1);
+
+    tracing::info!("DSDEBUG: wait fio completion...");
+    task.await.ok();
+    tracing::info!("DSDEBUG: fio completed...");
+}
+
+async fn run_fio_vol(
+    cluster: &Cluster,
+    volume: models::Volume,
+    stop: tokio::sync::oneshot::Receiver<()>,
+) -> tokio::task::JoinHandle<Option<i64>> {
+    run_fio_vol_verify(cluster, volume, stop).await
+}
+async fn run_fio_vol_verify(
+    cluster: &Cluster,
+    volume: models::Volume,
+    mut stop: tokio::sync::oneshot::Receiver<()>,
+) -> tokio::task::JoinHandle<Option<i64>> {
+    let fio_builder = |device: &str| {
+        let filename = format!("--filename={device}");
+        vec![
+            "fio",
+            "--direct=1",
+            "--ioengine=libaio",
+            "--bs=4k",
+            "--iodepth=16",
+            "--loops=10",
+            "--numjobs=1",
+            "--name=fio",
+            "--readwrite=randwrite",
+            "--verify=crc32",
+            filename.as_str(),
+        ]
+        .into_iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+    };
+
+    println!("DSDEBUG: staging volume");
+    let mut node = cluster.csi_node_client(0).await.unwrap();
+    node.node_stage_volume(&volume, HashMap::new())
+        .await
+        .unwrap();
+
+    let response = node
+        .internal()
+        .find_volume(FindVolumeRequest {
+            volume_id: volume.spec.uuid.to_string(),
+        })
+        .await
+        .unwrap();
+
+    let device_path = response.into_inner().device_path;
+    let device_path = device_path.trim_end();
+    let fio_cmd = fio_builder(device_path);
+    let fio_cmdline = fio_cmd
+        .iter()
+        .fold(String::new(), |acc, next| format!("{acc} {next}"));
+    let composer = cluster.composer().clone();
+
+    println!("DSDEBUG: spawn fio in container");
+    tokio::spawn(async move {
+        use tokio::sync::oneshot::error::TryRecvError;
+        let code = loop {
+            let (code, out) = composer.exec("csi-node-1", fio_cmd.clone()).await.unwrap();
+            println!("{}: {}, code: {:?}", fio_cmdline, out, code);
+            if code != Some(0) {
+                return code;
+            }
+            assert_eq!(code, Some(0));
+
+            if stop.try_recv().is_ok() || matches!(stop.try_recv(), Err(TryRecvError::Closed)) {
+                break code;
+            }
+        };
+
+        node.node_unstage_volume(&volume).await.unwrap();
+        code
+    })
 }
