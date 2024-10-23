@@ -14,7 +14,7 @@ from common.nvme import nvme_find_device, nvme_find_device_path
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.volume_policy import VolumePolicy
 
 from common.csi import CsiHandle
@@ -85,15 +85,15 @@ def staging_a_volume(staging_target_path, csi_instance, block_volume_capability)
     volume = ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=NODE1, frontend_node=""
+            {}, VolumeShareProtocol("nvmf"), node=NODE1, frontend_node=""
         ),
     )
-    device_uri = volume.state["target"]["deviceUri"]
+    device_uri = volume.state["target"]["device_uri"]
     print(device_uri)
     csi_instance.node.NodeStageVolume(
         pb.NodeStageVolumeRequest(
             volume_id=volume.spec.uuid,
-            publish_context={"uri": volume.state["target"]["deviceUri"]},
+            publish_context={"uri": volume.state["target"]["device_uri"]},
             staging_target_path=staging_target_path,
             volume_capability=block_volume_capability,
             secrets={},
@@ -111,7 +111,7 @@ def staging_a_volume(staging_target_path, csi_instance, block_volume_capability)
 
 def volume_device_path():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    device_path = nvme_find_device_path(volume.state["target"]["deviceUri"])
+    device_path = nvme_find_device_path(volume.state["target"]["device_uri"])
     return device_path
 
 

@@ -14,7 +14,7 @@ from common.apiclient import ApiClient
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.publish_volume_body import PublishVolumeBody
 
@@ -57,11 +57,11 @@ def a_published_volume():
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=NODE_NAME, frontend_node=""
+            {}, VolumeShareProtocol("nvmf"), node=NODE_NAME, frontend_node=""
         ),
     )
     assert hasattr(volume.spec, "target")
-    assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
+    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
 
 
 @given("an existing volume")

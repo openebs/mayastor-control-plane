@@ -20,7 +20,7 @@ from common.operations import Cluster
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.spec_status import SpecStatus
 from openapi.model.volume_spec import VolumeSpec
 from openapi.model.topology import Topology
@@ -221,7 +221,9 @@ def an_existing_published_volume_without_pool_topology():
     # Publish volume so that there is a nexus to add a replica to.
     ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=NODE_1_NAME),
+        publish_volume_body=PublishVolumeBody(
+            {}, VolumeShareProtocol("nvmf"), node=NODE_1_NAME
+        ),
     )
 
 
@@ -256,7 +258,9 @@ def an_existing_published_volume_with_a_topology_matching_pool_labels():
     # Publish volume so that there is a nexus to add a replica to.
     ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=NODE_1_NAME),
+        publish_volume_body=PublishVolumeBody(
+            {}, VolumeShareProtocol("nvmf"), node=NODE_1_NAME
+        ),
     )
 
 
@@ -283,7 +287,9 @@ def an_existing_published_volume_with_a_topology_not_matching_pool_labels():
     # Publish volume so that there is a nexus to add a replica to.
     ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=NODE_1_NAME),
+        publish_volume_body=PublishVolumeBody(
+            {}, VolumeShareProtocol("nvmf"), node=NODE_1_NAME
+        ),
     )
 
 

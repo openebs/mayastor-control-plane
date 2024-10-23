@@ -21,7 +21,7 @@ from common.operations import Cluster
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.exceptions import ApiException
 from openapi.model.volume_status import VolumeStatus
 from openapi.model.volume_policy import VolumePolicy
@@ -121,7 +121,7 @@ def an_existing_published_volume(disks):
     ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=NODE_1_NAME, frontend_node=""
+            {}, VolumeShareProtocol("nvmf"), node=NODE_1_NAME, frontend_node=""
         ),
     )
 

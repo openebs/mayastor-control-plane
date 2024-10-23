@@ -14,7 +14,7 @@ from common.fio import Fio
 from openapi.exceptions import NotFoundException
 from openapi.model.node_status import NodeStatus
 from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 
 
 class Pool(object):
@@ -74,12 +74,12 @@ class Volume(object):
         try:
             volume = ApiClient.volumes_api().put_volume_target(
                 volume.spec.uuid,
-                publish_volume_body=PublishVolumeBody({}, Protocol("nvmf")),
+                publish_volume_body=PublishVolumeBody({}, VolumeShareProtocol("nvmf")),
             )
         except ApiException as e:
             assert e.status == http.HTTPStatus.PRECONDITION_FAILED
             volume = Volume.update(volume)
-        uri = urlparse(volume.state.target["deviceUri"])
+        uri = urlparse(volume.state.target["device_uri"])
         fio = Fio(name="job", rw=rw, uri=uri, offset=offset, size=size)
         fio.run()
         volume = Volume.update(volume)

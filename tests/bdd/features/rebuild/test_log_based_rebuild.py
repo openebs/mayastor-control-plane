@@ -24,12 +24,11 @@ from common.operations import Cluster
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.volume_status import VolumeStatus
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.replica_state import ReplicaState
 from openapi.model.child_state import ChildState
-from openapi.model.child_state_reason import ChildStateReason
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 NODE_1_NAME = "io-engine-1"
@@ -156,7 +155,10 @@ def a_volume_with_three_replicas_filled_with_user_data(disks):
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=NODE_1_NAME, frontend_node="app-node-1"
+            {},
+            VolumeShareProtocol("nvmf"),
+            node=NODE_1_NAME,
+            frontend_node="app-node-1",
         ),
     )
 
@@ -165,7 +167,7 @@ def a_volume_with_three_replicas_filled_with_user_data(disks):
         NODE_4_NAME, POOL_4_UUID, CreatePoolBody([f"aio://{disks[3]}"])
     )
     # Launch fio in background and let it run along with the test.
-    uri = volume["state"]["target"]["deviceUri"]
+    uri = volume["state"]["target"]["device_uri"]
     disk = nvme_connect(uri)
     fio = Fio(name="job", rw="randwrite", device=disk, runtime=FIO_RUN)
     fio = fio.open()
@@ -195,7 +197,7 @@ def wait_child_faulted():
     childlist = target["children"]
     pytest.faulted_child_uri = None
     for child in childlist:
-        if ChildState(child["state"]) == ChildState("Faulted"):
+        if child["state"] == ChildState("Faulted"):
             pytest.faulted_child_uri = child["uri"]
     assert pytest.faulted_child_uri is not None, "Failed to find Faulted child!"
 
@@ -243,7 +245,7 @@ def a_full_rebuild_starts_for_unhealthy_child():
     childlist = target["children"]
     assert len(childlist) == NUM_VOLUME_REPLICAS
     for child in childlist:
-        if ChildState(child["state"]) == ChildState("Degraded"):
+        if child["state"] == ChildState("Degraded"):
             assert child["uri"] != pytest.faulted_child_uri
             assert child["rebuildProgress"] != 0
 
@@ -261,7 +263,7 @@ def a_log_based_rebuild_starts_for_the_unhealthy_child():
     assert pytest.faulted_child_uri is not None
     for child in childlist:
         if child["uri"] == pytest.faulted_child_uri:
-            assert ChildState(child["state"]) == ChildState("Degraded")
+            assert child["state"] == ChildState("Degraded")
 
 
 @then("a full rebuild starts before the timed-wait period")

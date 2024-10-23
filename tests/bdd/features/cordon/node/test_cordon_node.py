@@ -7,9 +7,7 @@ from pytest_bdd import (
     when,
 )
 
-import os
 import pytest
-import requests
 
 from common.apiclient import ApiClient
 from common.operations import Cluster
@@ -130,18 +128,26 @@ def get_volumes():
 
 def is_cordoned(node_name):
     node = ApiClient.nodes_api().get_node(node_name)
-    present = False
-    try:
-        assert node.spec.cordondrainstate["cordonedstate"]["cordonlabels"] != []
-        return True
-    except AttributeError as e:
-        return False
+    return len(cordon_labels(node)) > 0
+
+
+def cordon_labels(node):
+    if node.spec.get("cordondrainstate") is None:
+        return []
+    if node.spec.get("cordondrainstate").get("cordonedstate") is None:
+        return []
+    if (
+        node.spec.get("cordondrainstate").get("cordonedstate").get("cordonlabels")
+        is None
+    ):
+        return []
+    return node.spec.cordondrainstate["cordonedstate"]["cordonlabels"]
 
 
 def remove_all_cordons(node_name):
     if is_cordoned(node_name):
         node = ApiClient.nodes_api().get_node(node_name)
-        for label in node.spec.cordondrainstate["cordonedstate"]["cordonlabels"]:
+        for label in cordon_labels(node):
             ApiClient.nodes_api().delete_node_cordon(node_name, label)
 
 

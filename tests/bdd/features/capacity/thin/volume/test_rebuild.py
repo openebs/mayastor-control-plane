@@ -20,7 +20,7 @@ from common.fio import Fio
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.volume_status import VolumeStatus
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.create_replica_body import CreateReplicaBody
@@ -99,10 +99,10 @@ def a_thin_provisioned_volume_with_1_replica():
     )
     volume = ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid,
-        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf")),
+        publish_volume_body=PublishVolumeBody({}, VolumeShareProtocol("nvmf")),
     )
     assert hasattr(volume.spec, "target")
-    assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
+    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
     pytest.volume = volume
 
 
@@ -119,10 +119,12 @@ def a_thin_provisioned_volume_with_2_replicas():
     node = NODE_NAME_1
     volume = ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid,
-        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=node),
+        publish_volume_body=PublishVolumeBody(
+            {}, VolumeShareProtocol("nvmf"), node=node
+        ),
     )
     assert hasattr(volume.spec, "target")
-    assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
+    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
     pytest.volume = volume
 
 
@@ -130,7 +132,7 @@ def a_thin_provisioned_volume_with_2_replicas():
 def data_is_written_to_the_volume():
     """data is written to the volume."""
     volume = pytest.volume
-    uri = urlparse(volume.state.target["deviceUri"])
+    uri = urlparse(volume.state.target["device_uri"])
 
     fio = Fio(name="job", rw="write", uri=uri, size="10M")
 
@@ -148,7 +150,7 @@ def data_is_written_to_the_volume_which_exceeds_the_free_space_on_one_of_the_poo
     )
 
     volume = pytest.volume
-    uri = urlparse(volume.state.target["deviceUri"])
+    uri = urlparse(volume.state.target["device_uri"])
 
     fio = Fio(name="job", rw="write", uri=uri)
     pytest.fio = fio.open()
@@ -241,10 +243,10 @@ def if_the_volume_is_republished_again():
     ApiClient.volumes_api().del_volume_target(VOLUME_UUID)
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf")),
+        publish_volume_body=PublishVolumeBody({}, VolumeShareProtocol("nvmf")),
     )
     assert hasattr(volume.spec, "target")
-    assert str(volume.spec.target.protocol) == str(Protocol("nvmf"))
+    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
     pytest.volume = volume
 
 
@@ -283,7 +285,7 @@ def wait_volume_enospc(volume):
 
     enospcs = list(
         filter(
-            lambda child: child.get("state_reason") == "OutOfSpace",
+            lambda child: str(child.get("state_reason")) == "OutOfSpace",
             list(volume.state.target["children"]),
         )
     )

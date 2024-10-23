@@ -17,7 +17,7 @@ from common.operations import Volume as VolumeOps
 from common.operations import Pool as PoolOps
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.volume_policy import VolumePolicy
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 
 POOL1_UUID = "ec176677-8202-4199-b461-2b68e53a055f"
 NODE1 = "io-engine-1"
@@ -56,7 +56,7 @@ def get_uuid(n):
 def share_type(request):
     types = {
         "nbd": Protocol("nbd"),
-        "nvmf": Protocol("nvmf"),
+        "nvmf": VolumeShareProtocol("nvmf"),
         "iscsi": Protocol("iscsi"),
     }
     yield types[request.param]
@@ -288,10 +288,10 @@ def publish_nexus(setup, volumes, published_nexuses):
         volume = ApiClient.volumes_api().put_volume_target(
             uuid,
             publish_volume_body=PublishVolumeBody(
-                {}, Protocol("nvmf"), node=NODE1, frontend_node=""
+                {}, VolumeShareProtocol("nvmf"), node=NODE1, frontend_node=""
             ),
         )
-        nexus = Nexus(uuid, protocol, volume.state["target"]["deviceUri"])
+        nexus = Nexus(uuid, protocol, volume.state["target"]["device_uri"])
         published_nexuses[uuid] = nexus
         return nexus
 

@@ -17,7 +17,7 @@ from common.operations import Pool as PoolOps
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.protocol import Protocol
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 
 POOL1_UUID = "ec176677-8202-4199-b461-2b68e53a055f"
 NODE1 = "io-engine-1"
@@ -117,7 +117,7 @@ def io_timeout():
 def share_type(request):
     types = {
         "nbd": Protocol("nbd"),
-        "nvmf": Protocol("nvmf"),
+        "nvmf": VolumeShareProtocol("nvmf"),
         "iscsi": Protocol("iscsi"),
     }
     yield types[request.param]
@@ -154,7 +154,7 @@ def published_nexus(volumes, share_type, volume_id):
     volume = ApiClient.volumes_api().put_volume_target(
         uuid,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=NODE1, frontend_node=""
+            {}, VolumeShareProtocol("nvmf"), node=NODE1, frontend_node=""
         ),
     )
     yield volume.state["target"]
@@ -202,12 +202,12 @@ def publish_mount_flags(read_only):
 
 @pytest.fixture
 def stage_context(published_nexus, io_timeout):
-    yield {"uri": published_nexus["deviceUri"], "ioTimeout": io_timeout}
+    yield {"uri": published_nexus["device_uri"], "ioTimeout": io_timeout}
 
 
 @pytest.fixture
 def publish_context(published_nexus, volume_id):
-    yield {"uri": published_nexus["deviceUri"]}
+    yield {"uri": published_nexus["device_uri"]}
 
 
 @pytest.fixture

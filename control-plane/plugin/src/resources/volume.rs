@@ -200,7 +200,7 @@ impl Scale for Volume {
         output: &utils::OutputFormat,
     ) -> PluginResult {
         let req = openapi::models::ResizeVolumeBody {
-            size: requested_size as usize,
+            size: requested_size,
         };
         match RestClient::client()
             .volumes_api()
@@ -431,6 +431,6 @@ fn child_uuid(uri: &str) -> String {
     }
 }
 
-fn to_human_readable(val: isize) -> String {
-    ::utils::bytes::into_human(val as u64)
+fn to_human_readable(val: u64) -> String {
+    ::utils::bytes::into_human(val)
 }

@@ -32,7 +32,7 @@ from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.volume_policy import VolumePolicy
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = int(20 * 1024 * 1024)
@@ -109,7 +109,7 @@ def test_second_failure_during_switchover_with_no_other_nodes():
 def a_connected_nvme_initiator(connect_to_first_path):
     """a connected nvme initiator."""
     volume = pytest.volume
-    device_uri = volume.state["target"]["deviceUri"]
+    device_uri = volume.state["target"]["device_uri"]
     nvme_set_reconnect_delay(device_uri, 1)
 
 
@@ -123,7 +123,7 @@ def a_deployer_cluster(init):
 def a_reconnect_delay_set_to_15s():
     """a reconnect_delay set to 15s."""
     volume = pytest.volume
-    device_uri = volume.state["target"]["deviceUri"]
+    device_uri = volume.state["target"]["device_uri"]
     nvme_set_reconnect_delay(device_uri, 7)
 
 
@@ -135,7 +135,9 @@ def a_single_replica_volume():
     )
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=TARGET_NODE_1),
+        publish_volume_body=PublishVolumeBody(
+            {}, VolumeShareProtocol("nvmf"), node=TARGET_NODE_1
+        ),
     )
     pytest.volume = volume
 
@@ -148,7 +150,9 @@ def a_2_replica_volume():
     )
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=TARGET_NODE_1),
+        publish_volume_body=PublishVolumeBody(
+            {}, VolumeShareProtocol("nvmf"), node=TARGET_NODE_1
+        ),
     )
     pytest.volume = volume
 
@@ -260,7 +264,7 @@ def disks(tmp_files):
 @pytest.fixture
 def connect_to_first_path():
     volume = pytest.volume
-    device_uri = volume.state["target"]["deviceUri"]
+    device_uri = volume.state["target"]["device_uri"]
     yield nvme_connect(device_uri)
     nvme_disconnect(device_uri)
 

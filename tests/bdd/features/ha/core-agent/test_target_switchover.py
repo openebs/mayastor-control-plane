@@ -20,7 +20,7 @@ from common.operations import Cluster
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.publish_volume_body import PublishVolumeBody
 
@@ -143,10 +143,13 @@ def a_published_volume_with_two_replicas():
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=NODE_NAME_1, frontend_node="app-node-1"
+            {},
+            VolumeShareProtocol("nvmf"),
+            node=NODE_NAME_1,
+            frontend_node="app-node-1",
         ),
     )
-    pytest.older_target_uri = volume["state"]["target"]["deviceUri"]
+    pytest.older_target_uri = volume["state"]["target"]["device_uri"]
 
 
 @when("the destroy shutdown target call has succeeded")
@@ -210,7 +213,7 @@ def the_volume_republish_and_the_destroy_shutdown_target_call_has_succeeded_for_
                 VOLUME_UUID,
                 publish_volume_body=PublishVolumeBody(
                     {},
-                    Protocol("nvmf"),
+                    VolumeShareProtocol("nvmf"),
                     republish=True,
                     reuse_existing=pytest.reuse_existing,
                     frontend_node="app-node-1",
@@ -232,7 +235,7 @@ def the_volume_republish_on_another_node_has_succeeded():
             VOLUME_UUID,
             publish_volume_body=PublishVolumeBody(
                 {},
-                Protocol("nvmf"),
+                VolumeShareProtocol("nvmf"),
                 reuse_existing=pytest.reuse_existing,
                 node=NODE_NAME_2,
                 republish=True,
@@ -247,7 +250,7 @@ def the_volume_republish_on_another_node_has_succeeded():
 def the_newer_target_should_have_rw_access_to_the_replicas():
     """the newer target should have R/W access to the replicas."""
     newer_target = get_newer_target()
-    uri = urlparse(newer_target["deviceUri"])
+    uri = urlparse(newer_target["device_uri"])
 
     fio = Fio(name="job", rw="randrw", size="50M", uri=uri)
 

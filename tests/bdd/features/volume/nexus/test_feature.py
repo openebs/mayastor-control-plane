@@ -13,7 +13,7 @@ from common.docker import Docker
 
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.nexus_state import NexusState
 from openapi.model.topology import Topology
@@ -53,7 +53,7 @@ def a_published_selfhealing_volume():
     ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, Protocol("nvmf"), node=IO_ENGINE_1, frontend_node=""
+            {}, VolumeShareProtocol("nvmf"), node=IO_ENGINE_1, frontend_node=""
         ),
     )
 
@@ -139,7 +139,7 @@ def init(create_pool_disk_images):
 def check_target_faulted():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     if hasattr(volume.state, "target"):
-        assert NexusState(volume.state.target["state"]) == NexusState("Faulted")
+        assert volume.state.target["state"] == NexusState("Faulted")
 
 
 @retry(wait_fixed=200, stop_max_attempt_number=30)
@@ -156,8 +156,8 @@ def check_nexus_removed():
     assert (
         not hasattr(volume.state, "target")
         # or it might have been recreated if we lost the "race"...
-        or NexusState(volume.state.target["state"]) == NexusState("Online")
-        or NexusState(volume.state.target["state"]) == NexusState("Degraded")
+        or volume.state.target["state"] == NexusState("Online")
+        or volume.state.target["state"] == NexusState("Degraded")
     )
 
 

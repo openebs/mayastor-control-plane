@@ -1,4 +1,6 @@
 """Swap ANA enabled Nexus on ANA enabled host feature tests."""
+from urllib.parse import urlparse
+
 from pytest_bdd import (
     given,
     scenario,
@@ -23,7 +25,7 @@ from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.volume_policy import VolumePolicy
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
@@ -116,7 +118,9 @@ def background():
     )
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=TARGET_NODE_1),
+        publish_volume_body=PublishVolumeBody(
+            {}, VolumeShareProtocol("nvmf"), node=TARGET_NODE_1
+        ),
     )
     yield volume
     Deployer.stop()
@@ -125,7 +129,9 @@ def background():
 @pytest.fixture
 def connect_to_first_path(background):
     volume = background
-    device_uri = volume.state["target"]["deviceUri"]
+    print(volume)
+    print(volume.state["target"])
+    device_uri = volume.state["target"]["device_uri"]
     yield nvme_connect(device_uri)
     nvme_disconnect(device_uri)
 
@@ -153,20 +159,20 @@ def degrade_first_path():
 @pytest.fixture
 def publish_to_node_2(background):
     volume = background
-    device_uri = volume.state["target"]["deviceUri"]
+    device_uri = volume.state["target"]["device_uri"]
 
     volume_updated = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
             {},
-            Protocol("nvmf"),
+            VolumeShareProtocol("nvmf"),
             node=TARGET_NODE_2,
             reuse_existing=False,
             republish=True,
             force=True,
         ),
     )
-    device_uri_2 = volume_updated.state["target"]["deviceUri"]
+    device_uri_2 = volume_updated.state["target"]["device_uri"]
     assert device_uri != device_uri_2
     return device_uri_2
 
@@ -180,12 +186,13 @@ def connect_to_node_2(publish_to_node_2):
 
     good_path_checked = False
     broken_path_checked = False
+    uri = urlparse(publish_to_node_2)
     for p in subsystem["Paths"]:
-        if p["Name"] in device:
+        if uri.hostname not in p["Address"]:
             assert p["State"] == "connecting", "Degraded I/O path has incorrect state"
             broken_path_checked = True
         else:
-            assert p["State"] == "live", "Healthy I/O path has incorrect state"
+            assert p["State"] == "live", f"Healthy I/O path has incorrect state"
             good_path_checked = True
     assert good_path_checked, "No state reported for healthy I/O path"
     assert broken_path_checked, "No state reported for broken I/O path"

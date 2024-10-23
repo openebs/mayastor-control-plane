@@ -10,12 +10,12 @@ die()
 write_version()
 {
   write_version="yes"
-  if [ -f "$VERSION_FILE" ] && [ "$(which openapi-generator-cli)" = "$(cat "$VERSION_FILE")" ]; then
+  if [ -f "$VERSION_FILE" ] && [ "$(which paperclip-ng)" = "$(cat "$VERSION_FILE")" ]; then
     write_version=
   fi
 
   if [ -n "$write_version" ]; then
-    which openapi-generator-cli > "$VERSION_FILE"
+    which paperclip-ng > "$VERSION_FILE"
   fi
 }
 
@@ -60,7 +60,7 @@ while [ "$#" -gt 0 ]; do
     --if-rev-changed)
         if [[ -f "$VERSION_FILE" ]]; then
           version=$(cat "$VERSION_FILE")
-          bin_version=$(which openapi-generator-cli)
+          bin_version=$(which paperclip-ng)
           [[ "$version" = "$bin_version" ]] && exit 0
         fi
         skip_git_diff="yes"
@@ -105,7 +105,7 @@ fi
 tmpd=$(mktemp -d /tmp/openapi-gen-XXXXXXX)
 
 # Generate a new openapi crate
-openapi-generator-cli generate -i "$SPEC" -g rust-mayastor -o "$tmpd"
+RUST_LOG=debug paperclip-ng --spec "$SPEC" -o "$tmpd" --templates "$TARGET"/templates
 ( cd "$tmpd"; rm -rf api; rm -rf examples; rm -rf .* 2>/dev/null || true )
 
 if [[ $default_toml = "no" ]]; then

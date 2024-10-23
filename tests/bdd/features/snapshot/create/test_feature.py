@@ -15,7 +15,7 @@ from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.spec_status import SpecStatus
 from openapi.model.volume_policy import VolumePolicy
-from openapi.model.protocol import Protocol
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.replica_state import ReplicaState
 from openapi.model.pool_status import PoolStatus
@@ -162,7 +162,9 @@ def the_volume_is_published_on_node_a(node_a, volume):
     """the volume is published on node A."""
     ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid,
-        publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=node_a),
+        publish_volume_body=PublishVolumeBody(
+            {}, VolumeShareProtocol("nvmf"), node=node_a
+        ),
     )
 
 
@@ -465,7 +467,9 @@ def put_volume(replicas=1, publish_status="", replica_location=""):
 
         ApiClient.volumes_api().put_volume_target(
             VOLUME_UUID,
-            publish_volume_body=PublishVolumeBody({}, Protocol("nvmf"), node=node),
+            publish_volume_body=PublishVolumeBody(
+                {}, VolumeShareProtocol("nvmf"), node=node
+            ),
         )
 
     pytest.volume = volume
