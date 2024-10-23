@@ -105,7 +105,7 @@ async fn store_lease_lock() {
 
     let mut etcd = Etcd::new("0.0.0.0:2379").await.unwrap();
     let svc = ControlPlaneService::CoreAgent;
-    let obj: StoreLeaseOwner = etcd
+    let (obj, _mod_rev): (StoreLeaseOwner, i64) = etcd
         .get_obj(&StoreLeaseOwnerKey::new(&svc))
         .await
         .expect("Should exist!");
@@ -149,7 +149,7 @@ async fn core_agent_lease_lock() {
 
     let mut etcd = Etcd::new("0.0.0.0:2379").await.unwrap();
     let svc = ControlPlaneService::CoreAgent;
-    let obj: StoreLeaseOwner = etcd
+    let (obj, _mod_rev): (StoreLeaseOwner, i64) = etcd
         .get_obj(&StoreLeaseOwnerKey::new(&svc))
         .await
         .expect("Should exist!");

@@ -114,7 +114,7 @@ impl GetPersistedNexusChildrenCtx {
         request: &GetPersistedNexusChildren,
     ) -> Result<Self, SvcError> {
         let nexus_info = registry
-            .nexus_info(request.volume_id(), request.nexus_info_id(), false)
+            .nexus_info(request.volume_id(), request.nexus_info_id(), false, None)
             .await?;
         let shutdown_pending_nexuses = match request.volume_id() {
             None => Vec::new(),

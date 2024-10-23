@@ -14,9 +14,10 @@ use crate::{
 use async_trait::async_trait;
 use etcd_client::{
     Client, Compare, CompareOp, DeleteOptions, EventType, GetOptions, KeyValue, SortOrder,
-    SortTarget, Txn, TxnOp, WatchStream, Watcher,
+    SortTarget, Txn, TxnOp, TxnOpResponse, WatchStream, Watcher,
 };
 use serde_json::Value;
+
 use snafu::ResultExt;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
@@ -343,7 +344,6 @@ impl StoreObj for Etcd {
     async fn put_obj<O: StorableObject>(&mut self, object: &O) -> Result<(), Error> {
         let key = object.key().key();
         let vec_value = serde_json::to_vec(object).context(SerialiseValue)?;
-
         if let Some((lease_id, lock_key)) = self.lease_lock()? {
             let cmp = Compare::lease(lock_key.clone(), CompareOp::Equal, lease_id);
             let put = TxnOp::put(key.to_string(), vec_value, None);
@@ -372,21 +372,62 @@ impl StoreObj for Etcd {
         Ok(())
     }
 
-    async fn get_obj<O: StorableObject>(&mut self, key: &O::Key) -> Result<O, Error> {
+    /// Compare and swap the value as part of transaction.
+    async fn put_obj_cas<O: StorableObject>(
+        &mut self,
+        object: &O,
+        expected_mod_rev: i64,
+    ) -> Result<(), Error> {
+        let key = object.key().key();
+        let obj_value = serde_json::to_vec(object).context(SerialiseValue)?;
+        let cmp = Compare::mod_revision(key.to_string(), CompareOp::Equal, expected_mod_rev);
+        let put = TxnOp::put(key.to_string(), obj_value, None);
+        let get = TxnOp::get(key.to_string(), None);
+        let resp = self
+            .client
+            .txn(Txn::new().when([cmp]).and_then([put]).or_else([get]))
+            .await
+            .context(Put {
+                key: object.key().key(),
+                value: serde_json::to_string(object).context(SerialiseValue)?,
+            })?;
+        if !resp.succeeded() {
+            if let TxnOpResponse::Get(g) = &resp.op_responses()[0] {
+                if let Some(kv) = g.kvs().first() {
+                    let mod_rev_found = kv.mod_revision();
+                    tracing::error!("Expected mod_rev: {expected_mod_rev}, Found: {mod_rev_found}");
+                }
+            }
+            return Err(Error::Put {
+                key: object.key().key(),
+                value: serde_json::to_string(object).context(SerialiseValue)?,
+                source: etcd_client::Error::IoError(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Etcd Txn Compare failed".to_string(),
+                )),
+            });
+        }
+
+        Ok(())
+    }
+
+    async fn get_obj<O: StorableObject>(&mut self, key: &O::Key) -> Result<(O, i64), Error> {
         let resp = self
             .client
             .get(key.key(), None)
             .await
             .context(Get { key: key.key() })?;
         match resp.kvs().first() {
-            Some(kv) => Ok(
+            Some(kv) => Ok((
                 serde_json::from_slice(kv.value()).context(DeserialiseValue {
                     value: kv.value_str().context(ValueString {})?,
                 })?,
-            ),
+                kv.mod_revision(),
+            )),
             None => Err(Error::MissingEntry { key: key.key() }),
         }
     }
+
     async fn watch_obj<K: ObjectKey>(
         &mut self,
         key: &K,

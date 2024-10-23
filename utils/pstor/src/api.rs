@@ -60,8 +60,15 @@ pub trait StoreKv: Sync + Send + Clone {
 pub trait StoreObj: Sync + Send + Clone {
     /// Puts the given `O` object into the store.
     async fn put_obj<O: StorableObject>(&mut self, object: &O) -> Result<(), Error>;
+    /// Puts the given `O` object into the store as a compare and swap
+    /// transaction against expected value.
+    async fn put_obj_cas<O: StorableObject>(
+        &mut self,
+        object: &O,
+        expected_mod_rev: i64,
+    ) -> Result<(), Error>;
     /// Gets the object `O` through its `O::Key`.
-    async fn get_obj<O: StorableObject>(&mut self, _key: &O::Key) -> Result<O, Error>;
+    async fn get_obj<O: StorableObject>(&mut self, _key: &O::Key) -> Result<(O, i64), Error>;
     /// Watches for changes under the given `K` object key entry.
     /// Returns a channel which is signalled when an event occurs.
     /// # Warning: Events may be lost if we are restarted.

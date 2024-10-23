@@ -1118,7 +1118,7 @@ impl SpecOperationsHelper for VolumeSpec {
                     })
                 } else {
                     match registry
-                        .nexus_info(Some(&self.uuid), self.health_info_id(), true)
+                        .nexus_info(Some(&self.uuid), self.health_info_id(), true, None)
                         .await?
                     {
                         Some(info) => match info

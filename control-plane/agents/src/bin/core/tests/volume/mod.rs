@@ -153,7 +153,7 @@ async fn nexus_persistence_test_iteration(
     let mut store = Etcd::new("0.0.0.0:2379")
         .await
         .expect("Failed to connect to etcd.");
-    let mut nexus_info: NexusInfo = store
+    let (mut nexus_info, _mod_rev): (NexusInfo, i64) = store
         .get_obj(&NexusInfoKey::new(&Some(volume_uuid.clone()), &nexus_uuid))
         .await
         .unwrap();
@@ -196,7 +196,7 @@ async fn nexus_persistence_test_iteration(
         }
     }
     store.put_obj(&nexus_info).await.unwrap();
-    nexus_info = store
+    let (mut nexus_info, _mod_rev): (NexusInfo, i64) = store
         .get_obj(&NexusInfoKey::new(&Some(volume_uuid.clone()), &nexus_uuid))
         .await
         .unwrap();

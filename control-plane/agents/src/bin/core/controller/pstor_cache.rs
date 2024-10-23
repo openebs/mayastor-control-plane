@@ -36,19 +36,30 @@ impl pstor::StoreObj for PStorCache {
         unimplemented!()
     }
 
-    async fn get_obj<O: StorableObject>(&mut self, key: &O::Key) -> Result<O, Error> {
+    async fn get_obj<O: StorableObject>(&mut self, key: &O::Key) -> Result<(O, i64), Error> {
         let key = key.key();
         match self.entries.get(&key) {
             Some(kv) => Ok(
-                serde_json::from_value(kv.clone()).context(DeserialiseValue {
-                    value: kv.to_string(),
-                })?,
+                (
+                    serde_json::from_value(kv.clone()).context(DeserialiseValue {
+                        value: kv.to_string(),
+                    })?,
+                    i64::MIN,
+                ), // todo: If required later - store mod_rev in pstor_cache.
             ),
             None => Err(Error::MissingEntry { key }),
         }
     }
 
     async fn watch_obj<K: ObjectKey>(&mut self, _key: &K) -> Result<StoreWatchReceiver, Error> {
+        unimplemented!()
+    }
+
+    async fn put_obj_cas<O: StorableObject>(
+        &mut self,
+        _object: &O,
+        _expected_mod_rev: i64,
+    ) -> Result<(), Error> {
         unimplemented!()
     }
 }

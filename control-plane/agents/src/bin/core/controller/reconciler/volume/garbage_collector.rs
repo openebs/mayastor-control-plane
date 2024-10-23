@@ -423,7 +423,12 @@ async fn is_replica_healthy(
         None => {
             *nexus_info = context
                 .registry()
-                .nexus_info(Some(&volume_spec.uuid), volume_spec.health_info_id(), true)
+                .nexus_info(
+                    Some(&volume_spec.uuid),
+                    volume_spec.health_info_id(),
+                    true,
+                    None,
+                )
                 .await?;
             match nexus_info {
                 Some(info) => info,
