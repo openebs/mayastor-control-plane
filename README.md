@@ -1,8 +1,7 @@
 # Mayastor Control Plane "2.0"
 
 [![FOSSA Status](https://app.fossa.com/api/projects/custom%2B39852%2Fgit%40github.com%3Aopenebs%2Fmayastor-control-plane.git.svg?type=shield&issueType=license)](https://app.fossa.com/projects/custom%2B39852%2Fgit%40github.com%3Aopenebs%2Fmayastor-control-plane.git?ref=badge_shield&issueType=license)
-
-[![CI-basic](https://mayastor-ci.mayadata.io/buildStatus/icon?job=Mayastor-Control-Plane%2Fmaster)](https://mayastor-ci.mayadata.io/blue/organizations/jenkins/Mayastor-Control-Plane/activity/)
+[![CI-basic](https://mayastor-ci.mayadata.io/buildStatus/icon?job=Mayastor-Control-Plane%2Fdevelop)](https://mayastor-ci.mayadata.io/blue/organizations/jenkins/Mayastor-Control-Plane/activity/)
 [![Slack](https://img.shields.io/badge/JOIN-SLACK-blue)](https://kubernetes.slack.com/messages/openebs)
 [![built with nix](https://builtwithnix.org/badge.svg)](https://builtwithnix.org)
 
