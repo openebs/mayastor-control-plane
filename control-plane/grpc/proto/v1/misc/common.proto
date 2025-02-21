@@ -237,9 +237,15 @@ message EncryptionKey {
   optional uint32 key2_length = 5;
 }
 
-message Encryption {
+message EncryptionData {
   // Cipher to be used.
   Cipher cipher = 1;
   // The encryption key.
   EncryptionKey key = 2;
+}
+
+// This message represents name of the source for getting
+// key parameter details.
+message EncryptionSecret {
+  string secret = 1;
 }
