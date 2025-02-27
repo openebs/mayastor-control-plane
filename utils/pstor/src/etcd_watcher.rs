@@ -1,5 +1,5 @@
 use crate::{
-    api::{StoreKvWatcher, WatchCallback, WatchCbArg, WatchKey, WatchResult, WatcherCtx},
+    api::{StoreKvWatcher, WatchCbArg, WatchKey, WatchResult},
     Error,
 };
 use etcd_client::{ResponseHeader, WatchResponse};
@@ -20,33 +20,34 @@ const HEALTH_CHECK_TMO: Duration = Duration::from_secs(5);
 /// We should be receiving progress reports every 10 minutes or so.
 const NO_PROGRESS_TMO: Duration = Duration::from_secs(60 * 20);
 
-enum WatchRequest<Ctx: WatcherCtx> {
+enum WatchRequest<Ctx: Send + Sync + 'static> {
     Register(WatchRegister<Ctx>),
     Unregister { prefix: String },
 }
-struct WatchRegister<Ctx: WatcherCtx> {
+struct WatchRegister<Ctx: Send + Sync + 'static> {
     prefix: String,
     rev: Option<i64>,
     ctx: Ctx,
 }
 
-struct WatchConfigData<Ctx: WatcherCtx> {
+struct WatchConfigData<Ctx: Send + Sync + 'static> {
     rev: i64,
     ctx: Ctx,
 }
 
-struct WatchConfig<Ctx: WatcherCtx> {
+struct WatchConfig<Ctx: Send + Sync + 'static> {
     // The keys which we're tasked with watching over and the last revision we've received.
     keys: BTreeMap<String, WatchConfigData<Ctx>>,
     // "global" watcher callback.
-    ctx_cb: Box<dyn WatchCallback<Ctx>>,
+    #[allow(clippy::type_complexity)]
+    ctx_cb: Box<dyn Fn(WatchCbArg<Ctx>) -> WatchResult + Send + Sync + 'static>,
     // The revision reported by the last watch event.
     rev: Option<i64>,
     // Timestamp of the last watch event.
     updated: Option<std::time::Instant>,
     closed: bool,
 }
-impl<Ctx: WatcherCtx> WatchConfig<Ctx> {
+impl<Ctx: Send + Sync + 'static> WatchConfig<Ctx> {
     fn register(&mut self, register: WatchRegister<Ctx>) {
         tracing::info!("Adding watch key: {}", register.prefix);
         let rev = register.rev.unwrap_or_default();
@@ -102,7 +103,7 @@ enum WatchState {
     Closed,
 }
 
-pub(crate) struct EtcdWatchRunner<Ctx: WatcherCtx> {
+pub(crate) struct EtcdWatchRunner<Ctx: Send + Sync + 'static> {
     client: etcd_client::Client,
     config: WatchConfig<Ctx>,
 }
@@ -132,7 +133,7 @@ impl StreamedWatcher {
             watch_keys: Default::default(),
         })
     }
-    async fn watch_key_prefixes<Ctx: WatcherCtx>(
+    async fn watch_key_prefixes<Ctx: Send + Sync + 'static>(
         &mut self,
         data: &WatchConfig<Ctx>,
     ) -> Result<(), etcd_client::Error> {
@@ -175,7 +176,7 @@ impl StreamedWatcher {
             self.waiting_ids.remove(&watch_id);
         }
     }
-    async fn unregister_key<Ctx: WatcherCtx>(
+    async fn unregister_key<Ctx: Send + Sync + 'static>(
         &mut self,
         key: String,
         config: &mut WatchConfig<Ctx>,
@@ -184,7 +185,7 @@ impl StreamedWatcher {
         self.del_watch_key_prefix(&key).await;
     }
 
-    async fn notify_events<Ctx: WatcherCtx>(
+    async fn notify_events<Ctx: Send + Sync + 'static>(
         mut self,
         config: &mut WatchConfig<Ctx>,
         response: WatchResponse,
@@ -239,8 +240,11 @@ impl StreamedWatcher {
     }
 }
 
-impl<Ctx: WatcherCtx> EtcdWatchRunner<Ctx> {
-    fn new<W: WatchCallback<Ctx>>(client: etcd_client::Client, ctx_cb: W) -> Self {
+impl<Ctx: Send + Sync + 'static> EtcdWatchRunner<Ctx> {
+    fn new<W: Fn(WatchCbArg<Ctx>) -> WatchResult + Send + Sync + 'static>(
+        client: etcd_client::Client,
+        ctx_cb: W,
+    ) -> Self {
         Self {
             client,
             config: WatchConfig {
@@ -462,18 +466,21 @@ impl<Ctx: WatcherCtx> EtcdWatchRunner<Ctx> {
 /// An etcd watcher stream frontend which can be updated by adding or removing keys to be
 /// watched by the stream.
 /// The stream lifecycle is maintained by us, recreating the stream is necessary.
-pub struct EtcdWatcher<Ctx: WatcherCtx> {
+pub struct EtcdWatcher<Ctx: Send + Sync + 'static> {
     watcher: tokio::sync::mpsc::UnboundedSender<WatchRequest<Ctx>>,
 }
-impl<Ctx: WatcherCtx> EtcdWatcher<Ctx> {
+impl<Ctx: Send + Sync + 'static> EtcdWatcher<Ctx> {
     /// Create a new instance using the given client.
-    pub(crate) fn new<W: WatchCallback<Ctx>>(client: etcd_client::Client, ctx_cb: W) -> Self {
+    pub(crate) fn new<W: Fn(WatchCbArg<Ctx>) -> WatchResult + Send + Sync + 'static>(
+        client: etcd_client::Client,
+        ctx_cb: W,
+    ) -> Self {
         let runner = EtcdWatchRunner::new(client, ctx_cb);
         runner.watch()
     }
 }
 
-impl<Ctx: WatcherCtx> StoreKvWatcher<Ctx> for EtcdWatcher<Ctx> {
+impl<Ctx: Send + Sync + 'static> StoreKvWatcher<Ctx> for EtcdWatcher<Ctx> {
     fn watch(&self, key: WatchKey, ctx: Ctx) -> Result<(), Error> {
         self.watcher
             .send(WatchRequest::Register(WatchRegister {

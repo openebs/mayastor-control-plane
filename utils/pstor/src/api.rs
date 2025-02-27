@@ -45,7 +45,10 @@ pub trait StoreKv: Sync + Send + Clone {
     /// Deletes all key values from a given prefix.
     async fn delete_values_prefix(&mut self, key_prefix: &str) -> Result<(), Error>;
     /// Get a StoreKv watcher.
-    fn kv_watcher<Ctx: WatcherCtx, W: WatchCallback<Ctx>>(
+    fn kv_watcher<
+        Ctx: Send + Sync + 'static,
+        W: Fn(WatchCbArg<Ctx>) -> WatchResult + Send + Sync + 'static,
+    >(
         &self,
         ctx_cb: W,
     ) -> impl StoreKvWatcher<Ctx> + 'static;
@@ -85,11 +88,6 @@ impl WatchKey {
         Self { rev, ..self }
     }
 }
-/// The watch context which can be used by the registrants for bookkeeping.
-pub struct WatchCtx {
-    /// A uuid v4 for bookkeeping.
-    pub uuid: uuid::Uuid,
-}
 
 /// Callback may request for the respective registrant key to be unwatched.
 pub enum WatchResult {
@@ -107,19 +105,10 @@ pub struct WatchCbArg<'a, Ctx> {
     /// The actual key which was updated (which contains the prefix of `key_prefix`).
     pub updated_key: &'a str,
 }
-/// Watch callback function to be triggered on update events for `WatchKey`.
-pub trait WatchCallback<Ctx: WatcherCtx>:
-    Fn(WatchCbArg<Ctx>) -> WatchResult + Send + Sync + 'static
-{
-}
-impl<T, Ctx: WatcherCtx> WatchCallback<Ctx> for T where
-    T: Fn(WatchCbArg<Ctx>) -> WatchResult + Send + Sync + 'static
-{
-}
 
 /// Trait defining the operations that can be performed on a key-value store using object semantics.
 /// It allows for abstracting the key component into the `StorableObject` itself.
-pub trait StoreKvWatcher<Ctx: WatcherCtx> {
+pub trait StoreKvWatcher<Ctx: Send + Sync + 'static> {
     /// Watch for the key prefix specified in the [`WatchKey`].
     /// Callbacks are received by the global [`WatchCallback`].
     fn watch(&self, key: WatchKey, ctx: Ctx) -> Result<(), Error>;
@@ -128,10 +117,6 @@ pub trait StoreKvWatcher<Ctx: WatcherCtx> {
     /// Cancel all watches.
     fn abort(self);
 }
-
-/// Per watch context for [`StoreKvWatcher`] callbacks.
-pub trait WatcherCtx: Send + Sync + 'static {}
-impl<T> WatcherCtx for T where T: Send + Sync + 'static {}
 
 /// Store keys type trait.
 pub trait StoreKey: Sync + ToString {}

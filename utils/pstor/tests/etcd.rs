@@ -150,10 +150,7 @@ async fn test_kv_watcher(_test: ComposeTest) -> Result<(), etcd_client::Error> {
 
     for volume in &volumes {
         watcher
-            .watch(
-                WatchKey::new(volume).with_rev(Some(1)),
-                uuid::Uuid::new_v4(),
-            )
+            .watch(WatchKey::new(volume).with_rev(Some(1)), 0)
             .unwrap();
     }
 

@@ -23,7 +23,7 @@ mod products;
 /// Export pstor module.
 pub use api::{
     ObjectKey, StorableObject, Store, StoreKey, StoreKv, StoreKvWatcher, StoreObj,
-    StoreWatchReceiver, WatchCtx, WatchEvent, WatchKey, WatchResult,
+    StoreWatchReceiver, WatchEvent, WatchKey, WatchResult,
 };
 pub use common::{ApiVersion, StorableObjectType};
 pub use products::{

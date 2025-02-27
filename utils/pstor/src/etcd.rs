@@ -1,7 +1,7 @@
 use crate::{
     api::{
         ObjectKey, StorableObject, Store, StoreKey, StoreKv, StoreKvWatcher, StoreObj, StoreValue,
-        WatchCallback, WatchEvent, WatcherCtx,
+        WatchCbArg, WatchEvent,
     },
     error::{
         Connect, Delete, DeletePrefix, DeserialiseValue, Error, Get, GetPrefix, KeyString, Put,
@@ -9,6 +9,7 @@ use crate::{
     },
     etcd_keep_alive::{ControlPlaneService, EtcdSingletonLock, LeaseLockInfo},
     etcd_watcher::EtcdWatcher,
+    WatchResult,
 };
 use async_trait::async_trait;
 use etcd_client::{
@@ -323,7 +324,10 @@ impl StoreKv for Etcd {
         Ok(())
     }
 
-    fn kv_watcher<Ctx: WatcherCtx, W: WatchCallback<Ctx>>(
+    fn kv_watcher<
+        Ctx: Send + Sync + 'static,
+        W: Fn(WatchCbArg<Ctx>) -> WatchResult + Send + Sync + 'static,
+    >(
         &self,
         ctx_cb: W,
     ) -> impl StoreKvWatcher<Ctx> + 'static {
