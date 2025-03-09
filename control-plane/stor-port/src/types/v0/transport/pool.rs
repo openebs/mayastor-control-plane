@@ -400,12 +400,28 @@ impl UnlabelPool {
 }
 
 /// Encryption parameters.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub enum Encryption {
+    /// Name of the secret or file to parse the encryption parameters.
+    Secret(EncryptionSecret),
+    /// The Encryption parameters.
+    Data(EncryptionData),
+}
+
+/// Encryption secret.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
-pub struct Encryption {
+pub struct EncryptionSecret {
+    /// Name of the secret.
+    pub secret: String,
+}
+
+/// Encryption parameters.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+pub struct EncryptionData {
     /// Cipher to be used.
     pub cipher: Cipher,
     /// The encryption key.
-    pub key: Option<EncryptionKey>,
+    pub key: EncryptionKey,
 }
 
 /// Represents an encryption key that can be used to encrypt an
@@ -430,4 +446,118 @@ pub enum Cipher {
     #[default]
     AesCbc,
     AesXts,
+}
+
+impl TryFrom<Encryption> for models::Encryption {
+    type Error = String;
+
+    fn try_from(value: Encryption) -> Result<Self, Self::Error> {
+        match value {
+            Encryption::Secret(secret_name) => Ok(Self::secret(secret_name.into())),
+            Encryption::Data(data) => Ok(Self::data(data.try_into()?)),
+        }
+    }
+}
+
+impl TryFrom<EncryptionData> for models::EncryptionData {
+    type Error = String;
+
+    fn try_from(value: EncryptionData) -> Result<Self, Self::Error> {
+        Ok(Self {
+            cipher: value.cipher.into(),
+            key: value.key.try_into()?,
+        })
+    }
+}
+
+impl From<Cipher> for models::encryption_data::Cipher {
+    fn from(value: Cipher) -> Self {
+        match value {
+            Cipher::AesCbc => Self::AesCbc,
+            Cipher::AesXts => Self::AesXts,
+        }
+    }
+}
+
+impl TryFrom<EncryptionKey> for models::EncryptionKey {
+    type Error = String;
+
+    fn try_from(value: EncryptionKey) -> Result<Self, Self::Error> {
+        Ok(Self {
+            key_name: value.key_name,
+            key: String::from_utf8(value.key).map_err(|error| error.to_string())?,
+            key_length: value.key_length,
+            key2: match value.key2 {
+                None => None,
+                Some(value) => Some(String::from_utf8(value).map_err(|error| error.to_string())?),
+            },
+            key2_length: value.key2_length,
+        })
+    }
+}
+
+impl From<EncryptionSecret> for models::EncryptionSecret {
+    fn from(value: EncryptionSecret) -> Self {
+        Self {
+            secret: value.secret,
+        }
+    }
+}
+
+impl From<models::Encryption> for Encryption {
+    fn from(value: models::Encryption) -> Self {
+        match value {
+            models::Encryption::secret(secret_name) => Self::Secret(secret_name.into()),
+            models::Encryption::data(params) => Self::Data(params.into()),
+        }
+    }
+}
+
+impl From<models::EncryptionData> for EncryptionData {
+    fn from(value: models::EncryptionData) -> Self {
+        Self {
+            cipher: value.cipher.into(),
+            key: value.key.into(),
+        }
+    }
+}
+
+impl From<models::encryption_data::Cipher> for Cipher {
+    fn from(value: models::encryption_data::Cipher) -> Self {
+        match value {
+            models::encryption_data::Cipher::AesCbc => Self::AesCbc,
+            models::encryption_data::Cipher::AesXts => Self::AesXts,
+        }
+    }
+}
+
+impl From<models::EncryptionKey> for EncryptionKey {
+    // type Error = String;
+    //
+    // fn try_from(value: models::EncryptionKey) -> Result<Self, Self::Error> {
+    //     Ok(Self {
+    //         key_name: value.key_name,
+    //         key: Vec::from(value.key),
+    //         key_length: value.key_length,
+    //         key2: value.key2.map(|key| Vec::from(key)),
+    //         key2_length: value.key2_length,
+    //     })
+    // }
+    fn from(value: models::EncryptionKey) -> Self {
+        Self {
+            key_name: value.key_name,
+            key: Vec::from(value.key),
+            key_length: value.key_length,
+            key2: value.key2.map(Vec::from),
+            key2_length: value.key2_length,
+        }
+    }
+}
+
+impl From<models::EncryptionSecret> for EncryptionSecret {
+    fn from(value: models::EncryptionSecret) -> Self {
+        Self {
+            secret: value.secret,
+        }
+    }
 }

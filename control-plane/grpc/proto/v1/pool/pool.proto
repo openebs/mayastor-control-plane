@@ -98,8 +98,12 @@ message CreatePoolRequest {
   repeated string disks = 3;
   // labels to be set on the pool
   optional common.StringMapValue labels = 5;
-  // Encryption parameters for this pool.
-  optional common.Encryption encryption = 6;
+  // Encryption parameters for this pool. Either as raw key params, OR a name to a Kubernetes
+  // Secret resource or a file.
+  oneof encryption {
+    common.EncryptionData data = 6;
+    common.EncryptionSecret secret = 7;
+  }
 }
 
 // Destroy Pool Request
