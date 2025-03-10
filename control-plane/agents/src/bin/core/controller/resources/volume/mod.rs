@@ -1,9 +1,17 @@
 mod snapshot;
 
 use super::{ResourceMutex, ResourceUid};
-use stor_port::types::v0::{
-    store::volume::{AffinityGroupSpec, VolumeSpec},
-    transport::VolumeId,
+use parking_lot::Mutex;
+use std::{collections::BTreeMap, sync::Arc};
+use stor_port::{
+    pstor,
+    types::v0::{
+        store::{
+            nexus_persistence::{NexusInfo, NexusInfoKey},
+            volume::{AffinityGroupSpec, VolumeSpec},
+        },
+        transport::VolumeId,
+    },
 };
 
 impl ResourceMutex<VolumeSpec> {
@@ -55,3 +63,93 @@ macro_rules! volume_span {
     };
 }
 crate::impl_trace_span!(volume_span, VolumeSpec);
+
+use pstor::{StoreKv, StoreKvWatcher};
+
+/// A watcher for volume health information which issues a single watch for etcd, listening
+/// on the base prefix shared by all volumes health info.
+pub(crate) struct VolumeHealthWatcher {
+    watcher: Box<dyn StoreKvWatcher>,
+    key_prefix: String,
+    health: Arc<Mutex<BTreeMap<uuid::Uuid, Arc<NexusInfo>>>>,
+}
+impl std::fmt::Debug for VolumeHealthWatcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VolumeHealthWatcher").finish()
+    }
+}
+
+impl VolumeHealthWatcher {
+    /// Create a new `Self`.
+    pub(crate) fn new(store: &impl StoreKv) -> Self {
+        let health = Arc::new(Mutex::new(BTreeMap::new()));
+
+        let health_cln = health.clone();
+        let watcher = store.kv_watcher(move |arg| {
+            let cnt = pstor::WatchResult::Continue;
+
+            if arg.value.is_empty() {
+                match NexusInfoKey::parse_id(arg.updated_key) {
+                    Ok(id) => {
+                        //tracing::warn!(key=%arg.updated_key, "Removing key");
+                        health_cln.lock().remove(id.uuid());
+                    }
+                    Err(error) => {
+                        tracing::warn!(key=%arg.updated_key, error, "Received unexpected PStor Update");
+                    }
+                }
+                return cnt;
+            }
+
+            let Ok(nexus_info) = serde_json::from_str::<NexusInfo>(arg.value) else {
+                tracing::error!(
+                    key = arg.updated_key,
+                    value = arg.value,
+                    "Failed to parse health value information"
+                );
+                return cnt;
+            };
+
+            match nexus_info.with_key(arg.updated_key) {
+                Ok(Some(info)) => {
+                    tracing::debug!(?info, "Adding Info");
+                    health_cln.lock().insert(*info.uuid, Arc::new(info));
+                }
+                Ok(None) => {
+                    tracing::warn!(key=%arg.updated_key, "Received unexpected PStor Update");
+                }
+                Err(error) => tracing::warn!(key=%arg.updated_key, %error, "Failed to parse uuids"),
+            }
+
+            cnt
+        });
+
+        Self {
+            watcher: Box::new(watcher),
+            key_prefix: NexusInfoKey::key_prefix(),
+            health,
+        }
+    }
+    /// Get the health key prefix.
+    pub(crate) fn key_prefix(&self) -> &str {
+        &self.key_prefix
+    }
+    /// Start the watcher.
+    /// All registered pstor key updates will be propagated via the callback.
+    pub(crate) async fn init(&self) -> Result<(), agents::errors::SvcError> {
+        self.watcher
+            .watch(pstor::WatchKey::new(NexusInfoKey::key_prefix()), ())?;
+        Ok(())
+    }
+    /// If the health info hasn't been added yet, insert it.
+    pub(crate) fn if_empty_insert(&self, info: NexusInfo) {
+        let mut health = self.health.lock();
+        if health.get(&info.uuid).is_none() {
+            health.insert(*info.uuid, Arc::new(info));
+        }
+    }
+    /// Expose a retain interface, allowing clean up of objects.
+    pub(crate) fn retain<F: FnMut(&uuid::Uuid, &mut Arc<NexusInfo>) -> bool>(&self, retain: F) {
+        self.health.lock().retain(retain);
+    }
+}

@@ -46,6 +46,41 @@ use stor_port::{
 use http::Uri;
 
 impl OperationGuardArc<VolumeSpec> {
+    /// Prune volume health from older targets.
+    pub(crate) fn prune_health(&self, registry: &Registry) {
+        let Some(target) = self.lock().health_info_id().cloned() else {
+            return;
+        };
+        let volume_uuid = self.uuid();
+        registry.health().retain(|k, v| {
+            let Some(vol_entry) = &v.volume_uuid else {
+                // we're not interested in these test nexuses
+                return false;
+            };
+            if vol_entry != volume_uuid {
+                // only interested in the given volume
+                return true;
+            }
+            if k != target.uuid() {
+                // remove older targets.
+                return false;
+            }
+            false
+        });
+    }
+
+    /// Remove volume health from this volume.
+    pub(crate) fn remove_health(&self, registry: &Registry) {
+        let volume_uuid = self.uuid();
+        registry.health().retain(|_k, v| {
+            let Some(vol_entry) = &v.volume_uuid else {
+                // we're not interested in these test nexuses
+                return false;
+            };
+            vol_entry != volume_uuid
+        });
+    }
+
     /// Check if the volume is published.
     pub(super) fn published(&self) -> bool {
         self.as_ref().target().is_some()
@@ -849,5 +884,7 @@ impl OperationGuardArc<VolumeSpec> {
                 );
             }
         }
+
+        self.remove_health(registry);
     }
 }

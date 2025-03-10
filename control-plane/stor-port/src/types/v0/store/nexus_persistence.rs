@@ -37,6 +37,24 @@ impl NexusInfo {
     pub fn no_healthy_replicas(&self) -> bool {
         self.children.iter().all(|c| !c.healthy) || self.children.is_empty()
     }
+
+    /// Modify the self with the given key information.
+    pub fn with_key(self, key: &str) -> Result<Option<Self>, uuid::Error> {
+        let Some((volume, nexus)) = parse_info_key(key) else {
+            return Ok(None);
+        };
+        let uuid = NexusId::try_from(nexus)?;
+
+        let Some(volume) = volume else {
+            return Ok(Some(Self { uuid, ..self }));
+        };
+
+        Ok(Some(Self {
+            uuid,
+            volume_uuid: Some(volume.try_into()?),
+            ..self
+        }))
+    }
 }
 
 /// Definition of the child information that gets saved in the persistent
@@ -68,6 +86,15 @@ impl NexusInfoKey {
             rm_all_nexuses: false,
         }
     }
+    /// Create a new NexusInfoKey.
+    pub fn new_(volume_id: VolumeId, nexus_id: NexusId) -> Self {
+        Self {
+            volume_id: Some(volume_id),
+            nexus_id,
+            mayastor_compat_v1: false,
+            rm_all_nexuses: false,
+        }
+    }
     /// Set the `mayastor_compat_v1`.
     pub fn with_mayastor_compat_v1(mut self, compat: bool) -> Self {
         self.mayastor_compat_v1 = compat;
@@ -92,6 +119,15 @@ impl NexusInfoKey {
     fn nexus_key_mayastor_v1(&self) -> String {
         // compatibility mode, return key at the root!
         self.nexus_id.to_string()
+    }
+
+    /// The key prefix which is shared by all `Self`.
+    /// # Warning
+    /// This doesn't support compatible v1 nexus health info.
+    pub fn key_prefix() -> String {
+        let dummy = Self::new(&Some(VolumeId::new()), &NexusId::new());
+        let namespace = key_prefix(dummy.version());
+        format!("{namespace}/volume/")
     }
 
     /// Parse the nexus id out of the given key.

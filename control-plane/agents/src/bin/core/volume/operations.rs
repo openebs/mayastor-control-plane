@@ -383,6 +383,8 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             .await;
         }
 
+        self.prune_health(registry);
+
         let volume = registry.volume(&request.uuid).await?;
         registry
             .notify_if_degraded(&volume, PollTriggerEvent::VolumeDegraded)
@@ -590,6 +592,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         };
 
         self.complete_update(registry, result, spec_clone).await?;
+        self.prune_health(registry);
 
         let volume = registry.volume(&request.uuid).await?;
         registry

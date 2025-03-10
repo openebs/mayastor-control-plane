@@ -23,6 +23,8 @@ pub(crate) mod operations_helper;
 /// Generic resources map.
 pub(crate) mod resource_map;
 
+pub(crate) use volume::VolumeHealthWatcher;
+
 impl<T: OperationSequencer + Sized, R> Drop for OperationGuard<T, R> {
     fn drop(&mut self) {
         self.unlock();
