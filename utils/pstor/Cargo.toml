@@ -19,7 +19,7 @@ parking_lot = "0.12.3"
 utils = { path = "../utils-lib" }
 
 # Utils dependencies
-platform = { path = "../platform" }
+platform = { path = "../dependencies/platform" }
 
 [dev-dependencies]
 composer = { path = "../dependencies/composer" }

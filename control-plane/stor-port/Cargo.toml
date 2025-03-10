@@ -25,6 +25,6 @@ tracing = "0.1.40"
 prost-types = "0.13.3"
 
 openapi = { path = "../../openapi", features = [ "actix-server", "tower-client", "tower-trace" ] }
-platform = { path = "../../utils/platform" }
+platform = { path = "../../utils/dependencies/platform" }
 pstor = { path = "../../utils/pstor" }
 utils = { path = "../../utils/utils-lib" }

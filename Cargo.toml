@@ -20,7 +20,6 @@ members = [
     "rpc",
     "utils/utils-lib",
     "utils/pstor",
-    "utils/platform",
     "utils/pstor-usage",
     "utils/shutdown",
     "utils/weighted-scoring",
