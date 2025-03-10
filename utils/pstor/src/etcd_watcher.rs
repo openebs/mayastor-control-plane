@@ -61,21 +61,22 @@ impl<Ctx: Send + Sync + 'static> WatchConfig<Ctx> {
         tracing::info!("Removing watch key: {key}");
         self.keys.remove(key);
     }
-    fn update(&mut self, key: &str, rev: i64, updated_key: &str) -> WatchResult {
-        let Some(value) = self.keys.get_mut(key) else {
+    fn update(&mut self, key: &str, rev: i64, updated_key: &str, value: &str) -> WatchResult {
+        let Some(config) = self.keys.get_mut(key) else {
             // todo: if we can't find the key, should we request watch removal?
             return WatchResult::Continue;
         };
 
-        let old_rev = value.rev;
+        let old_rev = config.rev;
         tracing::trace!("Updating {key} from revision {old_rev} to {rev} due to {updated_key}");
-        value.rev = rev;
+        config.rev = rev;
 
         // callback and update the data, ex: volume update callback!
         (self.ctx_cb)(WatchCbArg {
             updated_key,
             key_prefix: key,
-            cb_ctx: &value.ctx,
+            cb_ctx: &config.ctx,
+            value,
         })
     }
     fn update_rev(&mut self, header: Option<&ResponseHeader>) {
@@ -223,7 +224,7 @@ impl StreamedWatcher {
             };
 
             if matches!(
-                config.update(registrant_key, kv.mod_revision(), k),
+                config.update(registrant_key, kv.mod_revision(), k, v),
                 WatchResult::Remove
             ) && unregister.is_none()
             {
