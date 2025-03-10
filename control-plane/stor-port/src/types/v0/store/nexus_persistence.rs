@@ -55,6 +55,7 @@ pub struct NexusInfoKey {
     volume_id: Option<VolumeId>,
     nexus_id: NexusId,
     mayastor_compat_v1: bool,
+    rm_all_nexuses: bool,
 }
 
 impl NexusInfoKey {
@@ -64,11 +65,17 @@ impl NexusInfoKey {
             volume_id: volume_id.clone(),
             nexus_id: nexus_id.clone(),
             mayastor_compat_v1: false,
+            rm_all_nexuses: false,
         }
     }
     /// Set the `mayastor_compat_v1`.
     pub fn with_mayastor_compat_v1(mut self, compat: bool) -> Self {
         self.mayastor_compat_v1 = compat;
+        self
+    }
+    /// Set the `rm_all_nexuses`.
+    pub fn with_rm_all_nexuses(mut self, rm_all_nexuses: bool) -> Self {
+        self.rm_all_nexuses = rm_all_nexuses;
         self
     }
 
@@ -86,6 +93,28 @@ impl NexusInfoKey {
         // compatibility mode, return key at the root!
         self.nexus_id.to_string()
     }
+
+    /// Parse the nexus id out of the given key.
+    pub fn parse_id(key: &str) -> Result<NexusId, String> {
+        let Some((_, n)) = parse_info_key(key) else {
+            return Err("Failed to match nexus info format".into());
+        };
+
+        n.try_into().map_err(|e: uuid::Error| e.to_string())
+    }
+}
+
+fn parse_info_key(key: &str) -> Option<(Option<&str>, &str)> {
+    // $prefix/volume/{volume_uuid}/nexus/{nexus_uuid}/info
+    let values = key.split('/').collect::<Vec<_>>();
+    if let [.., "volume", volume, "nexus", nexus, "info"] = values[..] {
+        return Some((Some(volume), nexus));
+    }
+    if let [.., "nexus", nexus, "info"] = values[..] {
+        return Some((None, nexus));
+    }
+
+    None
 }
 
 impl ObjectKey for NexusInfoKey {
@@ -98,6 +127,9 @@ impl ObjectKey for NexusInfoKey {
         let namespace = key_prefix(self.version());
         let nexus_uuid = self.nexus_id.clone();
         match &self.volume_id {
+            Some(volume_uuid) if self.rm_all_nexuses => {
+                format!("{namespace}/volume/{volume_uuid}/nexus/")
+            }
             Some(volume_uuid) => {
                 format!("{namespace}/volume/{volume_uuid}/nexus/{nexus_uuid}/info")
             }
@@ -130,6 +162,7 @@ impl StorableObject for NexusInfo {
             volume_id: self.volume_uuid.clone(),
             nexus_id: self.uuid.clone(),
             mayastor_compat_v1: false,
+            rm_all_nexuses: false,
         }
     }
 }

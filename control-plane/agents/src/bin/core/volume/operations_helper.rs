@@ -23,11 +23,13 @@ use agents::errors::{NotEnough, SvcError, SvcError::ReplicaRemovalNoCandidates};
 
 use grpc::operations::volume::traits::PublishVolumeInfo;
 use stor_port::{
+    pstor::ObjectKey,
     transport_api::ErrorChain,
     types::v0::{
         store::{
             nexus::{NexusSpec, ReplicaUri},
             nexus_child::NexusChild,
+            nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
             volume::{FrontendConfig, TargetConfig, VolumeOperation, VolumeSpec, VolumeTarget},
         },
@@ -810,7 +812,42 @@ impl OperationGuardArc<VolumeSpec> {
         }
     }
 
+    /// Check if volume has snapshots.
     pub fn has_snapshots(&self) -> bool {
         self.as_ref().metadata.has_snapshots()
+    }
+
+    /// Delete all NexusInfo keys from the persistent store.
+    /// If deletion fails we just log it and continue.
+    pub(super) async fn delete_all_info(&self, registry: &Registry) {
+        // this is just a placeholder id, since we're deleting all anyway
+        // but this allows us to skip this step if we never published, even once.
+        let Some(nexus_id) = self.as_ref().health_info_id() else {
+            return;
+        };
+
+        let info =
+            NexusInfoKey::new(&Some(self.uuid().clone()), nexus_id).with_rm_all_nexuses(true);
+        let vol_id = match info.volume_id() {
+            Some(v) => v.as_str(),
+            None => "",
+        };
+        match registry.delete_kv_prefix(&info.key()).await {
+            Ok(_) => {
+                tracing::trace!(
+                    volume.uuid = %vol_id,
+                    nexus.uuid = %info.nexus_id(),
+                    "Deleted NexusInfo entry from persistent store",
+                );
+            }
+            Err(error) => {
+                tracing::error!(
+                    %error,
+                    volume.uuid = %vol_id,
+                    nexus.uuid = %info.nexus_id(),
+                    "Failed to delete NexusInfo entry from persistent store",
+                );
+            }
+        }
     }
 }

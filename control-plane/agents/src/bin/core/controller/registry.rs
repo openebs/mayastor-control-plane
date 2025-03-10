@@ -386,6 +386,32 @@ impl Registry {
         }
     }
 
+    /// Serialized delete to the persistent store, with a prefix.
+    pub(crate) async fn delete_kv_prefix<K: StoreKey>(&self, key: &K) -> Result<(), SvcError> {
+        let store = self.store.clone();
+        match tokio::time::timeout(self.store_timeout, async move {
+            let mut store = store.lock().await;
+            let key = key.to_string();
+            Self::op_with_threshold(async move { store.delete_values_prefix(&key).await }).await
+        })
+        .await
+        {
+            Ok(result) => match result {
+                Ok(_) => Ok(()),
+                // already deleted, no problem
+                Err(StoreError::MissingEntry { .. }) => {
+                    tracing::warn!("Entry with key {} missing from store.", key.to_string());
+                    Ok(())
+                }
+                Err(error) => Err(SvcError::from(error)),
+            },
+            Err(_) => Err(SvcError::from(StoreError::Timeout {
+                operation: "Delete".to_string(),
+                timeout: self.store_timeout,
+            })),
+        }
+    }
+
     async fn op_with_threshold<F, O>(future: F) -> O
     where
         F: Future<Output = O>,
