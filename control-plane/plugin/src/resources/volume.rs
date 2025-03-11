@@ -40,10 +40,15 @@ pub struct VolumesArgs {
 impl CreateRow for openapi::models::Volume {
     fn row(&self) -> Row {
         let state = &self.state;
+        let target_node = match state.target.clone().map(|t| t.node) {
+            Some(node) => Some(node),
+            None if self.spec.target.is_some() => Some("<missing>".to_string()),
+            None => None,
+        };
         row![
             state.uuid,
             self.spec.num_replicas,
-            optional_cell(state.target.clone().map(|t| t.node)),
+            optional_cell(target_node),
             optional_cell(state.target.as_ref().and_then(target_protocol)),
             state.status.clone(),
             ::utils::bytes::into_human(state.size),
