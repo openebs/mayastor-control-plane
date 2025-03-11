@@ -33,9 +33,14 @@ impl NexusInfo {
         }
     }
 
-    /// Check if no replica is healthy
+    /// Check if no replica is healthy.
     pub fn no_healthy_replicas(&self) -> bool {
         self.children.iter().all(|c| !c.healthy) || self.children.is_empty()
+    }
+
+    /// Get number of healthy replicas.
+    pub fn nr_healthy_replicas(&self) -> u8 {
+        self.children.iter().filter(|c| c.healthy).count() as u8
     }
 
     /// Modify the self with the given key information.

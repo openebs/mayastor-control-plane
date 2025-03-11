@@ -65,9 +65,8 @@ macro_rules! volume_span {
 crate::impl_trace_span!(volume_span, VolumeSpec);
 
 use pstor::{StoreKv, StoreKvWatcher};
+use stor_port::types::v0::transport::NexusId;
 
-/// A watcher for volume health information which issues a single watch for etcd, listening
-/// on the base prefix shared by all volumes health info.
 pub(crate) struct VolumeHealthWatcher {
     watcher: Box<dyn StoreKvWatcher>,
     key_prefix: String,
@@ -91,7 +90,7 @@ impl VolumeHealthWatcher {
             if arg.value.is_empty() {
                 match NexusInfoKey::parse_id(arg.updated_key) {
                     Ok(id) => {
-                        //tracing::warn!(key=%arg.updated_key, "Removing key");
+                        tracing::debug!(key=%arg.updated_key, %id, "Removing key");
                         health_cln.lock().remove(id.uuid());
                     }
                     Err(error) => {
@@ -112,7 +111,7 @@ impl VolumeHealthWatcher {
 
             match nexus_info.with_key(arg.updated_key) {
                 Ok(Some(info)) => {
-                    tracing::debug!(?info, "Adding Info");
+                    tracing::debug!(?info, "Updating Health info");
                     health_cln.lock().insert(*info.uuid, Arc::new(info));
                 }
                 Ok(None) => {
@@ -147,6 +146,10 @@ impl VolumeHealthWatcher {
         if health.get(&info.uuid).is_none() {
             health.insert(*info.uuid, Arc::new(info));
         }
+    }
+    /// Get the volume health info for the given target.
+    pub(crate) fn health(&self, target: &NexusId) -> Option<Arc<NexusInfo>> {
+        self.health.lock().get(target.uuid()).cloned()
     }
     /// Expose a retain interface, allowing clean up of objects.
     pub(crate) fn retain<F: FnMut(&uuid::Uuid, &mut Arc<NexusInfo>) -> bool>(&self, retain: F) {

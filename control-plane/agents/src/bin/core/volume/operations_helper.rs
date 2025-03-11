@@ -61,11 +61,8 @@ impl OperationGuardArc<VolumeSpec> {
                 // only interested in the given volume
                 return true;
             }
-            if k != target.uuid() {
-                // remove older targets.
-                return false;
-            }
-            false
+            // remove older targets
+            k == target.uuid()
         });
     }
 

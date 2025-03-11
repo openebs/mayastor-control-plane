@@ -503,6 +503,7 @@ impl Registry {
             let Ok(mut info) = pstor_cache.get_obj::<NexusInfo>(&nexus_info_key).await else {
                 continue;
             };
+            info.uuid = nexus_info_key.nexus_id().clone();
             info.volume_uuid = Some(volume.uuid().clone());
             self.health.if_empty_insert(info);
         }
