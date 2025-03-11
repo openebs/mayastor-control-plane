@@ -28,6 +28,7 @@ lazy_static! {
         "ALLOCATED",
         "SNAPSHOTS",
         "SOURCE",
+        "CLEAN-SHUTDOWN",
     ];
     pub static ref SNAPSHOT_HEADERS: Row = row![
         "ID",

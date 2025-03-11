@@ -64,6 +64,7 @@ impl CreateRow for openapi::models::Volume {
                     VolumeContentSource::snapshot(_) => "Snapshot",
                 }
             })),
+            optional_cell(state.health.as_ref().map(|h| h.clean_shutdown))
         ]
     }
 }
