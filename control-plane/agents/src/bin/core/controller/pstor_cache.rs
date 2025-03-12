@@ -6,12 +6,15 @@ use stor_port::{
     pstor::{error::DeserialiseValue, Error, ObjectKey, StorableObject, StoreWatchReceiver},
 };
 
+/// A persistent store cache, which fetches all entries and them allows reading
+/// them via the `pstor::StoreObj` interface.
 #[derive(Clone)]
 pub(crate) struct PStorCache {
     entries: BTreeMap<String, serde_json::Value>,
 }
 
 impl PStorCache {
+    /// Create a new `PStorCache`.
     pub(crate) async fn new(
         pstor: &mut impl pstor::StoreKv,
         page_size: i64,
