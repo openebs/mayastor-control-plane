@@ -1,10 +1,11 @@
 use super::{
     v1alpha1::DiskPool as AlphaDiskPool,
     v1beta1::DiskPool as Beta1DiskPool,
-    v1beta2::{DiskPool, DiskPoolSpec},
+    v1beta2::DiskPool as Beta2DiskPool,
+    v1beta3::{DiskPool, DiskPoolSpec},
 };
 use crate::{
-    diskpool::client::{discard_older_schema, list_existing_cr, v1beta2_api},
+    diskpool::client::{discard_older_schema, list_existing_cr, v1beta3_api},
     error::Error,
     ApiVersion,
 };
@@ -19,7 +20,7 @@ use tracing::{error, info};
 
 const PAGINATION_LIMIT: u32 = 100;
 
-/// In case of v1alpha1 and v1beta1 check, ensure that crd exist and then migrate to v1beta2.
+/// In case of v1alpha1, v1beta1 and v1beta2 check, ensure that crd exist and then migrate to v1beta3.
 pub(crate) async fn ensure_and_migrate_crd(
     k8s: Client,
     namespace: &str,
@@ -41,8 +42,8 @@ pub(crate) async fn ensure_and_migrate_crd(
     Ok(())
 }
 
-/// Ensure the CRD is installed. This creates a chicken and egg problem. When the CRD is removed,
-/// the operator will fail to list the CRD going into a error loop.
+/// Ensure the CRD is installed. This creates a chicken-and-egg problem. When the CRD is removed,
+/// the operator will fail to list the CRD going into an error loop.
 ///
 /// To prevent that, we will simply panic, and hope we can make progress after restart. Keep
 /// running is not an option as the operator would be "running" and the only way to know something
@@ -52,10 +53,13 @@ pub(crate) async fn ensure_crd(
     api_version: &ApiVersion,
 ) -> Result<CustomResourceDefinition, Error> {
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
+
     let mut crd = if api_version == &ApiVersion::V1Alpha1 {
         AlphaDiskPool::crd()
-    } else {
+    } else if api_version == &ApiVersion::V1Beta1 {
         Beta1DiskPool::crd()
+    } else {
+        Beta2DiskPool::crd()
     };
 
     let crd_name = crd.metadata.name.as_ref().ok_or(Error::InvalidCRField {
@@ -65,7 +69,7 @@ pub(crate) async fn ensure_crd(
     let new_crd = DiskPool::crd();
     let all_crds = vec![crd.clone(), new_crd.clone()];
     let new_crd =
-        merge_crds(all_crds, "v1beta2").map_err(|source| Error::CrdMergeError { source })?;
+        merge_crds(all_crds, "v1beta3").map_err(|source| Error::CrdMergeError { source })?;
 
     // If diskpool exist then replace it with new generated one.
     let result = match crd_api.get(crd_name).await {
@@ -75,9 +79,11 @@ pub(crate) async fn ensure_crd(
                 serde_json::to_string_pretty(&new_crd).unwrap_or_default()
             );
             let param = if api_version == &ApiVersion::V1Alpha1 {
-                PatchParams::apply("merge_v1alpha1_v1beta2").force()
+                PatchParams::apply("merge_v1alpha1_v1beta3").force()
+            } else if api_version == &ApiVersion::V1Beta1 {
+                PatchParams::apply("merge_v1beta1_v1beta3").force()
             } else {
-                PatchParams::apply("merge_v1beta1_v1beta2").force()
+                PatchParams::apply("merge_v1beta2_v1beta3").force()
             };
             crd_api
                 .patch(&super::diskpools_name(), &param, &Patch::Apply(&new_crd))
@@ -90,7 +96,7 @@ pub(crate) async fn ensure_crd(
     Ok(crd)
 }
 
-/// Migrate existing v1alpha1/v1beta1 CR in cluster to v1beta2 CR.
+/// Migrate existing v1alpha1/v1beta1/v1beta2 CR in cluster to v1beta3 CR.
 async fn run_crd_migration(
     k8s: Client,
     namespace: &str,
@@ -98,20 +104,20 @@ async fn run_crd_migration(
     target_schema: &str,
 ) -> Result<(), Error> {
     match api_version {
-        ApiVersion::V1Alpha1 | ApiVersion::V1Beta1 => {
-            migrate_to_v1beta2(k8s.clone(), namespace, PAGINATION_LIMIT).await?;
+        ApiVersion::V1Alpha1 | ApiVersion::V1Beta1 | ApiVersion::V1Beta2 => {
+            migrate_to_v1beta3(k8s.clone(), namespace, PAGINATION_LIMIT).await?;
             _ = discard_older_schema(&k8s, target_schema).await;
         }
-        ApiVersion::V1Beta2 => {
+        ApiVersion::V1Beta3 => {
             info!("CRD has the latest schema. Skipping CRD Operations");
         }
     }
     Ok(())
 }
 
-/// Lists existing v1alpha1/v1beta1 CR in cluster and replaces them with v1beta2 CR.
-/// This ensures that there is no v1alpha1/v1beta1 stored objects in cluster.
-pub(crate) async fn migrate_to_v1beta2(
+/// Lists existing v1alpha1/v1beta1/v1beta2 CR in cluster and replaces them with v1beta3 CR.
+/// This ensures that there is no v1alpha1/v1beta1/v1beta2 stored objects in cluster.
+pub(crate) async fn migrate_to_v1beta3(
     k8s: Client,
     ns: &str,
     pagination_limit: u32,
@@ -122,12 +128,12 @@ pub(crate) async fn migrate_to_v1beta2(
                 let name = dsp.name_any();
                 let node = dsp.spec.node();
                 let disk = dsp.spec.disks();
-                replace_with_v1beta2(
+                replace_with_v1beta3(
                     &k8s,
                     &name,
                     ns,
                     Some(res_ver.clone()),
-                    DiskPoolSpec::new(node, disk, None),
+                    DiskPoolSpec::new(node, disk, None, None),
                 )
                 .await?;
                 info!(crd = ?dsp.name_any(), "CR creation successful");
@@ -146,8 +152,8 @@ pub(crate) async fn migrate_to_v1beta2(
     Ok(())
 }
 
-/// Replaces a given disk pool CR with v1beta2 schema CR.
-pub(crate) async fn replace_with_v1beta2(
+/// Replaces a given disk pool CR with v1beta3 schema CR.
+pub(crate) async fn replace_with_v1beta3(
     client: &Client,
     cr_name: &str,
     namespace: &str,
@@ -155,12 +161,12 @@ pub(crate) async fn replace_with_v1beta2(
     spec: DiskPoolSpec,
 ) -> Result<(), Error> {
     let post_params = PostParams::default();
-    let api = v1beta2_api(client, namespace);
+    let api = v1beta3_api(client, namespace);
     let mut new_disk_pool: DiskPool = DiskPool::new(cr_name, spec);
     new_disk_pool.metadata.resource_version = res_ver;
     info!(
         pool.cr_name = cr_name,
-        "Patching existing pool with v1beta2 schema"
+        "Patching existing pool with v1beta3 schema"
     );
     match api.replace(cr_name, &post_params, &new_disk_pool).await {
         Ok(_) => Ok(()),
@@ -168,7 +174,7 @@ pub(crate) async fn replace_with_v1beta2(
             error!(
                 ?error,
                 pool.cr_name = cr_name,
-                "Failed to patch pool with v1beta2 schema"
+                "Failed to patch pool with v1beta3 schema"
             );
             Err(error.into())
         }
