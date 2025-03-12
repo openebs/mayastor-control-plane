@@ -49,16 +49,20 @@ pub struct Topology {
     pub labelled: HashMap<String, String>,
 }
 
+/// Encryption configuration from a specified source.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, JsonSchema)]
 pub struct EncryptionConfig {
     pub source: EncryptionSource,
 }
 
+/// Encryption configuration Sources.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, JsonSchema)]
 pub enum EncryptionSource {
+    #[serde(rename = "secret")]
     Secret(EncryptionSecretConfig),
 }
 
+/// Encryption Secret source details.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, JsonSchema)]
 pub struct EncryptionSecretConfig {
     pub name: String,
@@ -140,8 +144,7 @@ pub struct DiskPoolStatus {
     /// Available number of bytes.
     pub available: u64,
     /// Encryption enabled.
-    #[serde(default)]
-    pub encrypted: bool,
+    pub encrypted: Option<bool>,
 }
 
 impl Default for DiskPoolStatus {
@@ -152,7 +155,7 @@ impl Default for DiskPoolStatus {
             capacity: 0,
             used: 0,
             available: 0,
-            encrypted: false,
+            encrypted: None,
         }
     }
 }
@@ -182,7 +185,7 @@ impl DiskPoolStatus {
             capacity: state.capacity,
             used: state.used,
             available: free,
-            encrypted: state.encrypted,
+            encrypted: Some(state.encrypted),
         }
     }
 
@@ -232,7 +235,7 @@ impl From<Pool> for DiskPoolStatus {
                 capacity: state.capacity,
                 used: state.used,
                 available: free,
-                encrypted: false,
+                encrypted: Some(state.encrypted),
             }
         } else {
             Self {

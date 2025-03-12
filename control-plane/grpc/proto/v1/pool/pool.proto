@@ -46,6 +46,8 @@ message PoolSpec {
   repeated string disks = 3;
   // labels to be set on the pool
   optional common.StringMapValue labels = 5;
+  // Encryption details
+  optional common.EncryptionSecret secret = 6;
 }
 
 // Pool information
@@ -64,6 +66,8 @@ message PoolState {
   uint64 used = 6;
   // total size of pool replicas
   optional uint64 committed = 7;
+  // Is the pool encrypted.
+  optional bool encrypted = 8;
 }
 
 // status of the pool
@@ -101,8 +105,7 @@ message CreatePoolRequest {
   // Encryption parameters for this pool. Either as raw key params, OR a name to a Kubernetes
   // Secret resource or a file.
   oneof encryption {
-    common.EncryptionData data = 6;
-    common.EncryptionSecret secret = 7;
+    common.EncryptionSecret secret = 6;
   }
 }
 

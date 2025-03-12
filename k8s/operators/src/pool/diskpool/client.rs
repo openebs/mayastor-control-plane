@@ -1,5 +1,6 @@
 use super::crd::v1beta3::{DiskPool, DiskPoolSpec, EncryptionSource};
 use crate::{diskpool::crd::diskpools_name, error::Error, ApiVersion};
+use openapi::models::PoolSpecEncryption;
 use openapi::{apis::StatusCode, clients};
 
 use crate::diskpool::crd::v1beta3;
@@ -8,7 +9,6 @@ use kube::{
     api::{ListParams, Patch, PatchParams, PostParams},
     Api, Client, CustomResourceExt, ResourceExt,
 };
-use openapi::models::PoolSpecEncryptionConfig;
 use tracing::{info, warn};
 
 /// Get the DiskPool v1beta3 api.
@@ -88,10 +88,10 @@ pub(crate) async fn create_missing_cr(
                 Err(kube::Error::Api(e)) if e.code == StatusCode::NOT_FOUND => {
                     if let Some(spec) = &pool.spec {
                         warn!(pool.id, spec.node, "DiskPool CR is missing");
-                        let encryption = match spec.encryption_config.clone() {
+                        let encryption = match spec.encryption.clone() {
                             None => None,
                             Some(config) => match config {
-                                PoolSpecEncryptionConfig::secret(details) => {
+                                PoolSpecEncryption::secret(details) => {
                                     Some(v1beta3::EncryptionConfig {
                                         source: EncryptionSource::Secret(
                                             v1beta3::EncryptionSecretConfig { name: details.name },

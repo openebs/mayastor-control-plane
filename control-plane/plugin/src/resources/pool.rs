@@ -41,6 +41,7 @@ impl CreateRow for openapi::models::Pool {
             status: openapi::models::PoolStatus::Unknown,
             used: 0,
             committed: None,
+            encrypted: spec.encryption.is_some(),
         });
         let free = if state.capacity > state.used {
             state.capacity - state.used

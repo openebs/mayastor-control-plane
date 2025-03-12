@@ -11,18 +11,18 @@ use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
         openapi::apis::IntoVec,
+        store::pool::{Encryption, EncryptionSecret},
         transport::{
-            self, ChildState, ChildStateReason, Cipher, Encryption, EncryptionKey, Nexus, NexusId,
-            NexusNvmePreemption, NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState,
-            PoolUuid, Protocol, Replica, ReplicaId, ReplicaKind, ReplicaName, ReplicaStatus,
-            SetReplicaEntityId, SnapshotId, VolumeId,
+            self, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
+            NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState, PoolUuid, Protocol,
+            Replica, ReplicaId, ReplicaKind, ReplicaName, ReplicaStatus, SetReplicaEntityId,
+            SnapshotId, VolumeId,
         },
     },
     IntoOption,
 };
 
 use std::{convert::TryFrom, time::UNIX_EPOCH};
-use stor_port::types::v0::transport::{EncryptionData, EncryptionSecret};
 
 /// Trait for converting agent messages to io-engine messages.
 pub(super) trait AgentToIoEngine {
@@ -657,6 +657,7 @@ impl IoEngineToAgent for v1::pool::Pool {
             } else {
                 Some(self.committed)
             },
+            encrypted: self.encrypted.unwrap_or_default(),
         }
     }
 }
@@ -883,7 +884,6 @@ impl From<ExternalType<Encryption>> for v1::pb::create_pool_request::Encryption 
     fn from(value: ExternalType<Encryption>) -> Self {
         match value.0 {
             Encryption::Secret(secret) => Self::Secret(From::from(ExternalType(secret))),
-            Encryption::Data(data) => Self::Data(From::from(ExternalType(data))),
         }
     }
 }
@@ -892,17 +892,6 @@ impl From<ExternalType<Encryption>> for v1::pb::import_pool_request::Encryption 
     fn from(value: ExternalType<Encryption>) -> Self {
         match value.0 {
             Encryption::Secret(secret) => Self::Secret(From::from(ExternalType(secret))),
-            Encryption::Data(data) => Self::Data(From::from(ExternalType(data))),
-        }
-    }
-}
-
-impl From<ExternalType<EncryptionData>> for v1::pb::EncryptionData {
-    fn from(value: ExternalType<EncryptionData>) -> Self {
-        let cipher: v1::pb::Cipher = From::from(ExternalType(value.0.cipher));
-        Self {
-            cipher: cipher as i32,
-            key: Some(From::from(ExternalType(value.0.key))),
         }
     }
 }
@@ -910,28 +899,7 @@ impl From<ExternalType<EncryptionData>> for v1::pb::EncryptionData {
 impl From<ExternalType<EncryptionSecret>> for v1::pb::EncryptionSecret {
     fn from(value: ExternalType<EncryptionSecret>) -> Self {
         Self {
-            secret: value.0.secret,
-        }
-    }
-}
-
-impl From<ExternalType<Cipher>> for v1::pb::Cipher {
-    fn from(value: ExternalType<Cipher>) -> Self {
-        match value.0 {
-            Cipher::AesCbc => v1::pb::Cipher::AesCbc,
-            Cipher::AesXts => v1::pb::Cipher::AesXts,
-        }
-    }
-}
-
-impl From<ExternalType<EncryptionKey>> for v1::pb::EncryptionKey {
-    fn from(value: ExternalType<EncryptionKey>) -> Self {
-        Self {
-            key_name: value.0.key_name,
-            key: value.0.key,
-            key_length: value.0.key_length,
-            key2: value.0.key2,
-            key2_length: value.0.key2_length,
+            secret: value.0.name,
         }
     }
 }

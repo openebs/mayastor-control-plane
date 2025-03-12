@@ -90,6 +90,7 @@ impl IoEngineToAgent for v0::Pool {
             capacity: self.capacity,
             used: self.used,
             committed: None,
+            encrypted: false,
         }
     }
 }
