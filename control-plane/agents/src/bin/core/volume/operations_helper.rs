@@ -52,7 +52,7 @@ impl OperationGuardArc<VolumeSpec> {
             return;
         };
         let volume_uuid = self.uuid();
-        registry.health().retain(|k, v| {
+        registry.health_retain(|k, v| {
             let Some(vol_entry) = &v.volume_uuid else {
                 // we're not interested in these test nexuses
                 return false;
@@ -69,7 +69,7 @@ impl OperationGuardArc<VolumeSpec> {
     /// Remove volume health from this volume.
     pub(crate) fn remove_health(&self, registry: &Registry) {
         let volume_uuid = self.uuid();
-        registry.health().retain(|_k, v| {
+        registry.health_retain(|_k, v| {
             let Some(vol_entry) = &v.volume_uuid else {
                 // we're not interested in these test nexuses
                 return false;

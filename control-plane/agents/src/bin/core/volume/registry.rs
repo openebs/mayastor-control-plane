@@ -30,6 +30,7 @@ use stor_port::{
     IntoOption,
 };
 
+use crate::controller::resources::VolumeHealthWatcher;
 use std::collections::HashMap;
 
 impl Registry {
@@ -41,7 +42,19 @@ impl Registry {
         let volume_spec = self.specs().volume_clone(volume_uuid)?;
         let replica_specs = self.specs().volume_replicas_cln(volume_uuid);
 
-        self.volume_state_with_replicas(&volume_spec, &replica_specs)
+        self.volume_state_with_replicas(&volume_spec, &replica_specs, None)
+            .await
+    }
+
+    /// Get the volume state for the specified volume, with added health information.
+    pub(crate) async fn volume_state_health(
+        &self,
+        volume_uuid: &VolumeId,
+    ) -> Result<VolumeState, SvcError> {
+        let volume_spec = self.specs().volume_clone(volume_uuid)?;
+        let replica_specs = self.specs().volume_replicas_cln(volume_uuid);
+
+        self.volume_state_with_replicas(&volume_spec, &replica_specs, self.health())
             .await
     }
 
@@ -51,6 +64,7 @@ impl Registry {
         &self,
         volume_spec: &VolumeSpec,
         replicas: &[ReplicaSpec],
+        health: Option<&VolumeHealthWatcher>,
     ) -> Result<VolumeState, SvcError> {
         let replica_specs = replicas
             .iter()
@@ -71,7 +85,7 @@ impl Registry {
 
         let health = volume_spec
             .health_info_id()
-            .and_then(|i| self.health().health(i));
+            .and_then(|i| health.and_then(|h| h.health(i)));
 
         let mut total_replica = 0;
         let mut total_snapshots = 0;
@@ -170,7 +184,19 @@ impl Registry {
                 Some(_) => {
                     match &health {
                         // for some reason, we don't have the etcd health information!?
-                        None => VolumeStatus::Unknown,
+                        None => {
+                            if volume_spec.target().is_none() {
+                                if replica_specs.len() >= volume_spec.num_replicas as usize {
+                                    VolumeStatus::Online
+                                } else if replica_specs.is_empty() {
+                                    VolumeStatus::Faulted
+                                } else {
+                                    VolumeStatus::Degraded
+                                }
+                            } else {
+                                VolumeStatus::Unknown
+                            }
+                        }
                         Some(h) => {
                             if h.online_clean_replicas >= volume_spec.num_replicas {
                                 VolumeStatus::Online
@@ -265,7 +291,10 @@ impl Registry {
         let replicas = self.specs().replicas_cloned();
         let mut volumes = Vec::with_capacity(volume_specs.len());
         for spec in volume_specs {
-            if let Ok(state) = self.volume_state_with_replicas(&spec, &replicas).await {
+            if let Ok(state) = self
+                .volume_state_with_replicas(&spec, &replicas, self.health())
+                .await
+            {
                 volumes.push(Volume::new(spec, state));
             }
         }
@@ -281,7 +310,7 @@ impl Registry {
         let mut volumes = Vec::with_capacity(volume_specs.len());
         let last = volume_specs.last();
         for spec in volume_specs.result() {
-            if let Ok(state) = self.volume_state(&spec.uuid).await {
+            if let Ok(state) = self.volume_state_health(&spec.uuid).await {
                 volumes.push(Volume::new(spec, state));
             }
         }
@@ -292,7 +321,7 @@ impl Registry {
     pub(crate) async fn volume(&self, id: &VolumeId) -> Result<Volume, SvcError> {
         Ok(Volume::new(
             self.specs().volume_clone(id)?,
-            self.volume_state(id).await?,
+            self.volume_state_health(id).await?,
         ))
     }
 

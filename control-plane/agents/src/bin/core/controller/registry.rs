@@ -76,7 +76,7 @@ pub(crate) struct RegistryInner<S: Store> {
     nodes: NodesMapLocked,
     /// spec (aka desired state) of the various resources.
     specs: ResourceSpecsLocked,
-    health: VolumeHealthWatcher,
+    health: Option<VolumeHealthWatcher>,
     /// period to refresh the cache.
     cache_period: std::time::Duration,
     store: Arc<Mutex<S>>,
@@ -139,6 +139,7 @@ impl Registry {
         thin_args: ThinArgs,
         ha_enabled: bool,
         etcd_max_page_size: i64,
+        no_volume_health: bool,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -168,7 +169,11 @@ impl Registry {
             inner: Arc::new(RegistryInner {
                 nodes: Default::default(),
                 specs: ResourceSpecsLocked::new(),
-                health: VolumeHealthWatcher::new(&store),
+                health: if no_volume_health {
+                    None
+                } else {
+                    Some(VolumeHealthWatcher::new(&store))
+                },
                 cache_period,
                 store: Arc::new(Mutex::new(store.clone())),
                 store_timeout,
@@ -327,8 +332,17 @@ impl Registry {
         &self.specs
     }
     /// Get a reference to the volume health watcher.
-    pub(crate) fn health(&self) -> &VolumeHealthWatcher {
-        &self.health
+    pub(crate) fn health(&self) -> Option<&VolumeHealthWatcher> {
+        self.health.as_ref()
+    }
+    /// Retain health info as per the given retain closure.
+    pub(crate) fn health_retain<F: FnMut(&uuid::Uuid, &mut Arc<NexusInfo>) -> bool>(
+        &self,
+        retain: F,
+    ) {
+        if let Some(h) = self.health() {
+            h.retain(retain)
+        }
     }
 
     /// Serialized write to the persistent store.
@@ -488,12 +502,15 @@ impl Registry {
     }
 
     async fn init_health(&self) -> Result<(), SvcError> {
-        self.health.init().await?;
+        let Some(health) = &self.health else {
+            return Ok(());
+        };
+        health.init().await?;
         let mut store = self.store.lock().await;
         let mut pstor_cache = PStorCache::new(
             store.deref_mut(),
             self.etcd_max_page_size,
-            self.health.key_prefix(),
+            health.key_prefix(),
         )
         .await?;
         for volume in self.specs.volumes_rsc() {
@@ -505,7 +522,7 @@ impl Registry {
             };
             info.uuid = nexus_info_key.nexus_id().clone();
             info.volume_uuid = Some(volume.uuid().clone());
-            self.health.if_empty_insert(info);
+            health.if_empty_insert(info);
         }
         Ok(())
     }
