@@ -1,5 +1,5 @@
 use crate::resources::{
-    error::Error, utils, CordonResources, DrainResources, GetResources, LabelResources,
+    error::Error, utils, CordonResources, DeleteArgs, DrainResources, GetResources, LabelResources,
     ScaleResources, SetPropertyResources, UnCordonResources,
 };
 use async_trait::async_trait;
@@ -31,6 +31,8 @@ pub enum Operations {
     /// 'Label' resources.
     #[clap(subcommand)]
     Label(LabelResources),
+    /// 'Delete' resources.
+    Delete(DeleteArgs),
 }
 
 /// Drain trait.
@@ -192,4 +194,16 @@ pub trait Cordoning {
     type ID;
     async fn cordon(id: &Self::ID, label: &str, output: &utils::OutputFormat) -> PluginResult;
     async fn uncordon(id: &Self::ID, label: &str, output: &utils::OutputFormat) -> PluginResult;
+}
+
+/// Delete trait.
+/// To be implemented by resources which support the 'delete' operation.
+#[async_trait(?Send)]
+pub trait Delete {
+    type ID;
+    async fn del(
+        id: &Self::ID,
+        ignore_not_found: bool,
+        output: &utils::OutputFormat,
+    ) -> PluginResult;
 }

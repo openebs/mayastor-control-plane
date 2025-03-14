@@ -1,5 +1,7 @@
 use crate::{
-    operations::{Get, ListExt, PluginResult, RebuildHistory, ReplicaTopology, Scale, SetProperty},
+    operations::{
+        Delete, Get, ListExt, PluginResult, RebuildHistory, ReplicaTopology, Scale, SetProperty,
+    },
     resources::{
         error::Error,
         utils::{self, optional_cell, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
@@ -8,13 +10,13 @@ use crate::{
     rest_wrapper::RestClient,
     SetVolumeProperties,
 };
+use async_trait::async_trait;
+use chrono::prelude::*;
 use openapi::{
+    apis::StatusCode,
     models::{SetVolumePropertyBody, VolumeContentSource},
     tower::client::Url,
 };
-
-use async_trait::async_trait;
-use chrono::prelude::*;
 use prettytable::Row;
 use std::{collections::HashMap, str::FromStr};
 
@@ -144,6 +146,27 @@ async fn get_paginated_volumes(volume_args: &VolumesArgs) -> Option<Vec<openapi:
 /// Volume resource.
 #[derive(clap::Args, Debug)]
 pub struct Volume {}
+
+#[async_trait(?Send)]
+impl Delete for Volume {
+    type ID = VolumeId;
+    async fn del(
+        id: &Self::ID,
+        ignore_not_found: bool,
+        _output: &utils::OutputFormat,
+    ) -> PluginResult {
+        match RestClient::client().volumes_api().del_volume(id).await {
+            Ok(_) => Ok(()),
+            Err(source) if ignore_not_found && source.status() == Some(StatusCode::NOT_FOUND) => {
+                Ok(())
+            }
+            Err(source) => Err(Error::GetVolumeError {
+                id: id.to_string(),
+                source,
+            }),
+        }
+    }
+}
 
 #[async_trait(?Send)]
 impl Get for Volume {

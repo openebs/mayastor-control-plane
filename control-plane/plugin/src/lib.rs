@@ -10,14 +10,14 @@ use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
 use crate::{
     operations::{
-        Cordoning, Drain, Get, GetBlockDevices, GetSnapshotTopology, GetSnapshots, GetWithArgs,
-        List, ListExt, ListWithArgs, Operations, PluginResult, RebuildHistory, ReplicaTopology,
-        Scale,
+        Cordoning, Delete, Drain, Get, GetBlockDevices, GetSnapshotTopology, GetSnapshots,
+        GetWithArgs, List, ListExt, ListWithArgs, Operations, PluginResult, RebuildHistory,
+        ReplicaTopology, Scale,
     },
     resources::{
-        blockdevice, cordon, drain, node, pool, snapshot, volume, CordonResources, DrainResources,
-        GetCordonArgs, GetDrainArgs, GetResources, ScaleResources, SetPropertyResources,
-        SetVolumeProperties, UnCordonResources,
+        blockdevice, cordon, drain, node, pool, snapshot, volume, CordonResources, DeleteArgs,
+        DeleteResources, DrainResources, GetCordonArgs, GetDrainArgs, GetResources, ScaleResources,
+        SetPropertyResources, SetVolumeProperties, UnCordonResources,
     },
 };
 
@@ -115,6 +115,7 @@ impl ExecuteOperation for Operations {
             Operations::Cordon(resource) => resource.execute(cli_args).await,
             Operations::Uncordon(resource) => resource.execute(cli_args).await,
             Operations::Label(resource) => resource.execute(cli_args).await,
+            Operations::Delete(resource) => resource.execute(cli_args).await,
         }
     }
 }
@@ -273,6 +274,24 @@ impl ExecuteOperation for LabelResources {
                 label,
                 overwrite,
             } => pool::Pool::label(id, label.to_string(), *overwrite, &cli_args.output).await,
+        }
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl ExecuteOperation for DeleteArgs {
+    type Args = CliArgs;
+    type Error = resources::Error;
+    async fn execute(&self, cli_args: &CliArgs) -> PluginResult {
+        resources::confirm(
+            "Are you sure you want to delete the resource?",
+            "this operation cannot be undone!",
+            self.yes,
+        )?;
+        match &self.resource {
+            DeleteResources::Volume { id } => {
+                volume::Volume::del(id, self.ignore_not_found, &cli_args.output).await
+            }
         }
     }
 }

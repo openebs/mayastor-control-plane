@@ -176,6 +176,55 @@ pub enum GetDrainArgs {
     Nodes,
 }
 
+/// Delete resources.
+#[derive(Debug, clap::Args)]
+pub struct DeleteArgs {
+    /// Ignore error if resource is not found.
+    #[clap(long, short, global = true)]
+    pub ignore_not_found: bool,
+
+    /// Automatically confirm and assume yes for all prompts.
+    #[clap(long, short, global = true)]
+    pub yes: bool,
+
+    #[clap(subcommand)]
+    pub resource: DeleteResources,
+}
+
+/// The type of resources which support the delete operation.
+#[derive(clap::Subcommand, Debug)]
+pub enum DeleteResources {
+    /// Deletes the specified volume resource.
+    Volume {
+        /// The id of the volume to delete.
+        id: VolumeId,
+    },
+}
+
+/// Prompt the user with the given question, and collect a y/n answer.
+/// # NOTE: A newline must be added to ensure it's not a mistake.
+pub fn prompt(question: &str, help: &str) -> Result<bool, Error> {
+    inquire::Confirm::new(question)
+        .with_default(false)
+        .with_help_message(help)
+        .prompt()
+        .map_err(|source| Error::Dialogue { source })
+}
+
+/// Confirm the operation by prompting user with the question, and specify whether the answer has been given
+/// automatically as part of cli args.
+/// In case of negative answer, return an error.
+pub fn confirm(question: &str, help: &str, yes: bool) -> Result<(), Error> {
+    if yes {
+        return Ok(());
+    }
+    if prompt(question, help)? {
+        Ok(())
+    } else {
+        Err(Error::DialogueAbort {})
+    }
+}
+
 /// Tabular Output Tests.
 #[cfg(test)]
 mod tests;
