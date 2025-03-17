@@ -122,6 +122,7 @@ impl RegisterInfo for RegisterRequest {
             logical_volume_manager: features.logical_volume_manager,
             snapshot_rebuild: features.snapshot_rebuild,
             rdma_capable_io_engine: features.rdma_capable_io_engine,
+            diskpool_encryption: features.diskpool_encryption,
         })
     }
 

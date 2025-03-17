@@ -140,6 +140,8 @@ pub struct NodeFeatures {
     pub snapshot_rebuild: Option<bool>,
     /// Mayastor nvmf target supports RDMA.
     pub rdma_capable_io_engine: Option<bool>,
+    /// Mayastor supports diskpool encryption.
+    pub diskpool_encryption: Option<bool>,
 }
 
 /// Bug fixe in enum format
