@@ -272,6 +272,7 @@ mod tests {
             capacity,
             used,
             committed: None,
+            encrypted: false,
         };
         let replica = Replica::default();
         let pool = PoolWrapper::new(

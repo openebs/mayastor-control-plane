@@ -1,22 +1,25 @@
 use super::{
-    diskpool::crd::v1beta2::{CrPoolState, DiskPool, DiskPoolStatus},
+    diskpool::crd::v1beta3::{CrPoolState, DiskPool, DiskPoolStatus},
     error::Error,
 };
-use k8s_openapi::{api::core::v1::Event, apimachinery::pkg::apis::meta::v1::MicroTime};
-use kube::{
-    api::{Api, ObjectMeta, PatchParams},
-    runtime::{controller::Action, finalizer},
-    Client, Resource, ResourceExt,
-};
+use super::{normalize_disk, v1beta3_api};
+use openapi::models::{Encryption, EncryptionSecret};
 use openapi::{
     apis::StatusCode,
     clients,
     models::{CreatePoolBody, Pool},
 };
+use utils::dsp_created_by_key;
 
-use super::{normalize_disk, v1beta2_api};
+use crate::diskpool::crd::v1beta3::EncryptionSource;
 use chrono::Utc;
+use k8s_openapi::{api::core::v1::Event, apimachinery::pkg::apis::meta::v1::MicroTime};
 use kube::api::{Patch, PostParams};
+use kube::{
+    api::{Api, ObjectMeta, PatchParams},
+    runtime::{controller::Action, finalizer},
+    Client, Resource, ResourceExt,
+};
 use serde_json::json;
 use std::{
     collections::HashMap,
@@ -25,7 +28,6 @@ use std::{
     time::Duration,
 };
 use tracing::{debug, error, info};
-use utils::dsp_created_by_key;
 
 const WHO_AM_I: &str = "DiskPool Operator";
 const WHO_AM_I_SHORT: &str = "dsp-operator";
@@ -183,7 +185,7 @@ impl ResourceContext {
 
     /// Construct an API handle for the resource
     fn api(&self) -> Api<DiskPool> {
-        v1beta2_api(&self.ctx.k8s, &self.namespace().unwrap())
+        v1beta3_api(&self.ctx.k8s, &self.namespace().unwrap())
     }
 
     /// Control plane pool handler.
@@ -261,7 +263,18 @@ impl ResourceContext {
             }
         }
 
-        let body = CreatePoolBody::new_all(self.spec.disks(), labels, None);
+        let encryption = match self.spec.encryption_config() {
+            None => None,
+            Some(config) => match config.source {
+                EncryptionSource::Secret(secret_config) => {
+                    Some(Encryption::secret(EncryptionSecret {
+                        name: secret_config.name,
+                    }))
+                }
+            },
+        };
+
+        let body = CreatePoolBody::new_all(self.spec.disks(), labels, encryption);
         match self
             .pools_api()
             .put_node_pool(&self.spec.node(), &self.name_any(), body)

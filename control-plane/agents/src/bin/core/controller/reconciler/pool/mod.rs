@@ -145,7 +145,7 @@ async fn missing_pool_state_reconciler(
         async {
             pool_spec.warn_span(|| tracing::warn!("Attempting to recreate missing pool"));
 
-            let request = ImportPool::new(&pool_spec.node, &pool_spec.id, &pool_spec.disks);
+            let request = ImportPool::new(&pool_spec.node, &pool_spec.id, &pool_spec.disks, &pool_spec.encryption);
             match node.import_pool(&request).await {
                 Ok(_) => {
                     pool_spec.info_span(|| tracing::info!("Pool successfully recreated"));

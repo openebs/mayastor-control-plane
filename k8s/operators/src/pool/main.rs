@@ -9,16 +9,20 @@ pub(crate) mod error;
 mod mayastorpool;
 
 use crate::diskpool::client::{
-    create_crd, create_missing_cr, create_v1beta2_cr, get_api_version, v1beta2_api,
+    create_crd, create_missing_cr, create_v1beta3_cr, get_api_version, v1beta3_api,
 };
-use chrono::Utc;
-use clap::{Arg, ArgMatches};
 use context::OperatorContext;
 use diskpool::crd::{
     migration::ensure_and_migrate_crd,
-    v1beta2::{CrPoolState, DiskPool, DiskPoolSpec, DiskPoolStatus},
+    v1beta3::{CrPoolState, DiskPool, DiskPoolSpec, DiskPoolStatus},
 };
 use error::Error;
+use mayastorpool::client::{check_crd, delete, list};
+use openapi::clients::{self, tower::Url};
+use utils::tracing_telemetry::{FmtLayer, FmtStyle};
+
+use chrono::Utc;
+use clap::{Arg, ArgMatches};
 use futures::StreamExt;
 use kube::{
     api::Api,
@@ -28,15 +32,12 @@ use kube::{
     },
     Client, ResourceExt,
 };
-use mayastorpool::client::{check_crd, delete, list};
-use openapi::clients::{self, tower::Url};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tracing::{error, info, trace, warn};
-use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
 const PAGINATION_LIMIT: u32 = 100;
 const BACKOFF_PERIOD: u64 = 20;
-const LATEST_API_VERSION: &str = "v1beta2";
+const LATEST_API_VERSION: &str = "v1beta3";
 /// Determine what we want to do when dealing with errors from the
 /// reconciliation loop
 fn error_policy(_object: Arc<DiskPool>, error: &Error, _ctx: Arc<OperatorContext>) -> Action {
@@ -92,6 +93,8 @@ pub enum ApiVersion {
     V1Beta1,
     /// Represents v1beta2
     V1Beta2,
+    /// Represents v1beta3
+    V1Beta3,
 }
 
 async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
@@ -101,11 +104,11 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
 
     match api_version {
         Some(version) => match version {
-            ApiVersion::V1Alpha1 | ApiVersion::V1Beta1 => {
+            ApiVersion::V1Alpha1 | ApiVersion::V1Beta1 | ApiVersion::V1Beta2 => {
                 ensure_and_migrate_crd(k8s.clone(), namespace, &version, LATEST_API_VERSION)
                     .await?;
             }
-            ApiVersion::V1Beta2 => {
+            ApiVersion::V1Beta3 => {
                 info!("CRD has the latest schema. Skipping CRD Operations");
             }
         },
@@ -117,7 +120,7 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
     // Migrate the MayastorPool CRs to the DiskPool.
     migrate_and_clean_msps(&k8s, namespace).await?;
 
-    let newdsp: Api<DiskPool> = v1beta2_api(&k8s, namespace);
+    let newdsp: Api<DiskPool> = v1beta3_api(&k8s, namespace);
 
     let url = Url::parse(args.get_one::<String>("endpoint").unwrap())
         .expect("endpoint is not a valid URL");
@@ -332,12 +335,13 @@ pub(crate) async fn migrate_and_clean_msps(k8s: &Client, namespace: &str) -> Res
                     })?;
                     let node = msp.spec.node();
                     let disks = msp.spec.disks();
-                    // Create the corresponding v1beta2 DiskPool CRs.
-                    if let Err(error) = create_v1beta2_cr(
+                    // Create the corresponding v1beta3 DiskPool CRs.
+                    // Hardcoding encryption to be none as it did not exist at that point.
+                    if let Err(error) = create_v1beta3_cr(
                         k8s,
                         namespace,
                         &name,
-                        DiskPoolSpec::new(node, disks, None),
+                        DiskPoolSpec::new(node, disks, None, None),
                     )
                     .await
                     {

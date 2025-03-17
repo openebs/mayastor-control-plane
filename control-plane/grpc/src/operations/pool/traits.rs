@@ -11,18 +11,16 @@ use crate::{
 use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind},
     types::v0::{
-        store::pool::{PoolLabel, PoolSpec, PoolSpecStatus},
+        store::pool::{Encryption, EncryptionSecret, PoolLabel, PoolSpec, PoolSpecStatus},
         transport::{
-            Cipher, CreatePool, CtrlPoolState, DestroyPool, Encryption, EncryptionData,
-            EncryptionKey, Filter, LabelPool, NodeId, Pool, PoolDeviceUri, PoolId, PoolState,
-            PoolStatus, UnlabelPool, VolumeId,
+            CreatePool, CtrlPoolState, DestroyPool, Filter, LabelPool, NodeId, Pool, PoolDeviceUri,
+            PoolId, PoolState, PoolStatus, UnlabelPool, VolumeId,
         },
     },
     IntoOption,
 };
 
 use std::{collections::HashMap, convert::TryFrom};
-use stor_port::types::v0::transport::EncryptionSecret;
 
 /// Trait implemented by services which support pool operations.
 #[tonic::async_trait]
@@ -99,6 +97,9 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
             sequencer: Default::default(),
             operation: None,
             creat_tsc: None,
+            encryption: pool_spec
+                .secret
+                .map(|details| Encryption::Secret(EncryptionSecret { name: details.name })),
         })
     }
 }
@@ -124,6 +125,7 @@ impl TryFrom<pool::PoolState> for PoolState {
             capacity: pool_state.capacity,
             used: pool_state.used,
             committed: pool_state.committed,
+            encrypted: pool_state.encrypted.unwrap_or_default(),
         })
     }
 }
@@ -164,6 +166,14 @@ impl From<PoolSpec> for pool::PoolDefinition {
                 labels: pool_spec
                     .labels
                     .map(|labels| crate::common::StringMapValue { value: labels }),
+                secret: match pool_spec.encryption {
+                    None => None,
+                    Some(config) => match config {
+                        Encryption::Secret(details) => {
+                            Some(common::EncryptionSecret { name: details.name })
+                        }
+                    },
+                },
             }),
             metadata: Some(pool::Metadata {
                 uuid: None,
@@ -183,6 +193,7 @@ impl From<PoolState> for pool::PoolState {
             capacity: pool_state.capacity,
             used: pool_state.used,
             committed: pool_state.committed,
+            encrypted: Some(pool_state.encrypted),
         }
     }
 }
@@ -327,15 +338,6 @@ impl ValidateRequestTypes for CreatePoolRequest {
             encryption: match self.encryption.clone() {
                 None => None,
                 Some(encryption) => match encryption {
-                    pool::create_pool_request::Encryption::Data(data) => Some(Encryption::Data(
-                        EncryptionData::try_from(data).map_err(|error| {
-                            ReplyError::invalid_argument(
-                                ResourceKind::Pool,
-                                "create_pool_request.encryption",
-                                error.to_string(),
-                            )
-                        })?,
-                    )),
                     pool::create_pool_request::Encryption::Secret(secret) => {
                         Some(Encryption::Secret(secret.into()))
                     }
@@ -558,95 +560,24 @@ impl From<&dyn UnlabelPoolInfo> for UnlabelPool {
     }
 }
 
-impl From<common::Cipher> for Cipher {
-    fn from(value: common::Cipher) -> Self {
-        match value {
-            common::Cipher::AesCbc => Self::AesCbc,
-            common::Cipher::AesXts => Self::AesXts,
-        }
-    }
-}
-
-impl From<Cipher> for common::Cipher {
-    fn from(value: Cipher) -> Self {
-        match value {
-            Cipher::AesCbc => common::Cipher::AesCbc,
-            Cipher::AesXts => common::Cipher::AesXts,
-        }
-    }
-}
-
-impl TryFrom<common::EncryptionData> for EncryptionData {
-    type Error = ReplyError;
-
-    fn try_from(value: common::EncryptionData) -> Result<Self, Self::Error> {
-        let cipher: common::Cipher = common::Cipher::try_from(value.cipher).map_err(|error| {
-            ReplyError::invalid_argument(
-                ResourceKind::Volume,
-                "create_pool_request.encryption_params.cipher",
-                error.to_string(),
-            )
-        })?;
-        let key = value.key.ok_or(ReplyError::invalid_argument(
-            ResourceKind::Volume,
-            "create_pool_request.encryption_params.key",
-            "missing encryption key parameters".to_string(),
-        ))?;
-
-        Ok(Self {
-            cipher: cipher.into(),
-            key: EncryptionKey {
-                key_name: key.key_name,
-                key: key.key,
-                key_length: key.key_length,
-                key2: key.key2,
-                key2_length: key.key2_length,
-            },
-        })
-    }
-}
-
 impl From<Encryption> for pool::create_pool_request::Encryption {
     fn from(value: Encryption) -> Self {
         match value {
             Encryption::Secret(secret) => {
                 pool::create_pool_request::Encryption::Secret(secret.into())
             }
-            Encryption::Data(params) => {
-                let cipher: common::Cipher = params.cipher.into();
-                pool::create_pool_request::Encryption::Data(common::EncryptionData {
-                    cipher: cipher as i32,
-                    key: Some(params.key.into()),
-                })
-            }
-        }
-    }
-}
-
-impl From<EncryptionKey> for common::EncryptionKey {
-    fn from(value: EncryptionKey) -> Self {
-        Self {
-            key_name: value.key_name,
-            key: value.key,
-            key_length: value.key_length,
-            key2: value.key2,
-            key2_length: value.key2_length,
         }
     }
 }
 
 impl From<EncryptionSecret> for common::EncryptionSecret {
     fn from(value: EncryptionSecret) -> Self {
-        Self {
-            secret: value.secret,
-        }
+        Self { name: value.name }
     }
 }
 
 impl From<common::EncryptionSecret> for EncryptionSecret {
     fn from(value: common::EncryptionSecret) -> Self {
-        Self {
-            secret: value.secret,
-        }
+        Self { name: value.name }
     }
 }

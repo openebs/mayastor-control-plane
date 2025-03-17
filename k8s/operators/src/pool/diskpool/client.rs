@@ -1,27 +1,30 @@
-use super::crd::v1beta2::{DiskPool, DiskPoolSpec};
+use super::crd::v1beta3::{DiskPool, DiskPoolSpec, EncryptionSource};
 use crate::{diskpool::crd::diskpools_name, error::Error, ApiVersion};
+use openapi::models::PoolSpecEncryption;
+use openapi::{apis::StatusCode, clients};
+
+use crate::diskpool::crd::v1beta3;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::{
     api::{ListParams, Patch, PatchParams, PostParams},
     Api, Client, CustomResourceExt, ResourceExt,
 };
-use openapi::{apis::StatusCode, clients};
 use tracing::{info, warn};
 
-/// Get the DiskPool v1beta2 api.
-pub(crate) fn v1beta2_api(client: &Client, namespace: &str) -> Api<DiskPool> {
+/// Get the DiskPool v1beta3 api.
+pub(crate) fn v1beta3_api(client: &Client, namespace: &str) -> Api<DiskPool> {
     Api::namespaced(client.clone(), namespace)
 }
 
-/// Create a v1beta2 disk pool CR, with the given name and spec.
-pub(crate) async fn create_v1beta2_cr(
+/// Create a v1beta3 disk pool CR, with the given name and spec.
+pub(crate) async fn create_v1beta3_cr(
     client: &Client,
     namespace: &str,
     name: &str,
     spec: DiskPoolSpec,
 ) -> Result<(), Error> {
     let post_params = PostParams::default();
-    let api = v1beta2_api(client, namespace);
+    let api = v1beta3_api(client, namespace);
     let new_disk_pool: DiskPool = DiskPool::new(name, spec);
     match api.create(&post_params, &new_disk_pool).await {
         Ok(_) => Ok(()),
@@ -78,15 +81,31 @@ pub(crate) async fn create_missing_cr(
     namespace: &str,
 ) -> Result<(), Error> {
     if let Ok(pools) = control_client.pools_api().get_pools(None).await {
-        let pools_api: Api<DiskPool> = v1beta2_api(k8s, namespace);
+        let pools_api: Api<DiskPool> = v1beta3_api(k8s, namespace);
         let param = PostParams::default();
         for pool in pools.into_body().iter_mut() {
             match pools_api.get(&pool.id).await {
                 Err(kube::Error::Api(e)) if e.code == StatusCode::NOT_FOUND => {
                     if let Some(spec) = &pool.spec {
                         warn!(pool.id, spec.node, "DiskPool CR is missing");
-                        let cr_spec: DiskPoolSpec =
-                            DiskPoolSpec::new(spec.node.clone(), spec.disks.clone(), None);
+                        let encryption = match spec.encryption.clone() {
+                            None => None,
+                            Some(config) => match config {
+                                PoolSpecEncryption::secret(details) => {
+                                    Some(v1beta3::EncryptionConfig {
+                                        source: EncryptionSource::Secret(
+                                            v1beta3::EncryptionSecretConfig { name: details.name },
+                                        ),
+                                    })
+                                }
+                            },
+                        };
+                        let cr_spec: DiskPoolSpec = DiskPoolSpec::new(
+                            spec.node.clone(),
+                            spec.disks.clone(),
+                            None,
+                            encryption,
+                        );
                         let new_disk_pool: DiskPool = DiskPool::new(&pool.id, cr_spec);
                         if let Err(error) = pools_api.create(&param, &new_disk_pool).await {
                             info!(pool.id, spec.node, %error, "Failed to create CR for missing DiskPool");
@@ -135,11 +154,11 @@ pub(crate) async fn list_existing_cr(
 ) -> Result<Vec<DiskPool>, Error> {
     // Create the list params with pagination limit.
     let mut list_params = ListParams::default().limit(pagination_limit);
-    // Since v1alpha1/v1beta1 is not served at this stage we cannot use v1alpha1/v1beta1 api client
-    // to list existing CRs. Existing CRs which were created and stored as v1alpha1/v1beta1 can
-    // be retrieved using v1beta2 client. Kube api server performs the required conversions and
+    // Since v1alpha1/v1beta1/v1beta2 is not served at this stage we cannot use v1alpha1/v1beta1/v1beta2 api client
+    // to list existing CRs. Existing CRs which were created and stored as v1alpha1/v1beta1/v1beta2 can
+    // be retrieved using v1beta3 client. Kube api server performs the required conversions and
     // returns us the resources.
-    let pools_api: Api<DiskPool> = v1beta2_api(client, namespace);
+    let pools_api: Api<DiskPool> = v1beta3_api(client, namespace);
     let mut pools: Vec<DiskPool> = vec![];
     loop {
         let mut result = pools_api.list(&list_params).await?;
@@ -164,8 +183,12 @@ pub(crate) async fn get_api_version(k8s: Client) -> Option<ApiVersion> {
                 return Some(ApiVersion::V1Alpha1);
             } else if status.stored_versions == Some(vec!["v1beta1".to_string()]) {
                 return Some(ApiVersion::V1Beta1);
-            } else {
+            } else if status.stored_versions == Some(vec!["v1beta2".to_string()]) {
                 return Some(ApiVersion::V1Beta2);
+            } else if status.stored_versions == Some(vec!["v1beta3".to_string()]) {
+                return Some(ApiVersion::V1Beta3);
+            } else {
+                return None;
             }
         }
     }

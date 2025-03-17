@@ -10,22 +10,23 @@ use openapi::models::{pool_status::PoolStatus as RestPoolStatus, Pool};
     CustomResource, Serialize, Deserialize, Default, Debug, Eq, PartialEq, Clone, JsonSchema,
 )]
 #[kube(
-group = "openebs.io",
-version = "v1beta2",
-kind = "DiskPool",
-plural = "diskpools",
-// The name of the struct that gets created that represents a resource
-namespaced,
-status = "DiskPoolStatus",
-derive = "PartialEq",
-derive = "Default",
-shortname = "dsp",
-printcolumn = r#"{ "name":"node", "type":"string", "description":"node the pool is on", "jsonPath":".spec.node"}"#,
-printcolumn = r#"{ "name":"state", "type":"string", "description":"dsp cr state", "jsonPath":".status.cr_state"}"#,
-printcolumn = r#"{ "name":"pool_status", "type":"string", "description":"Control plane pool status", "jsonPath":".status.pool_status"}"#,
-printcolumn = r#"{ "name":"capacity", "type":"integer", "format": "int64", "minimum" : "0", "description":"total bytes", "jsonPath":".status.capacity"}"#,
-printcolumn = r#"{ "name":"used", "type":"integer", "format": "int64", "minimum" : "0", "description":"used bytes", "jsonPath":".status.used"}"#,
-printcolumn = r#"{ "name":"available", "type":"integer", "format": "int64", "minimum" : "0", "description":"available bytes", "jsonPath":".status.available"}"#
+    group = "openebs.io",
+    version = "v1beta3",
+    kind = "DiskPool",
+    plural = "diskpools",
+    // The name of the struct that gets created that represents a resource
+    namespaced,
+    status = "DiskPoolStatus",
+    derive = "PartialEq",
+    derive = "Default",
+    shortname = "dsp",
+    printcolumn = r#"{ "name":"node", "type":"string", "description":"node the pool is on", "jsonPath":".spec.node"}"#,
+    printcolumn = r#"{ "name":"state", "type":"string", "description":"dsp cr state", "jsonPath":".status.cr_state"}"#,
+    printcolumn = r#"{ "name":"pool_status", "type":"string", "description":"Control plane pool status", "jsonPath":".status.pool_status"}"#,
+    printcolumn = r#"{ "name":"encrypted", "type":"boolean", "description":"encryption enabled", "jsonPath":".status.encrypted"}"#,
+    printcolumn = r#"{ "name":"capacity", "type":"integer", "format": "int64", "minimum" : "0", "description":"total bytes", "jsonPath":".status.capacity"}"#,
+    printcolumn = r#"{ "name":"used", "type":"integer", "format": "int64", "minimum" : "0", "description":"used bytes", "jsonPath":".status.used"}"#,
+    printcolumn = r#"{ "name":"available", "type":"integer", "format": "int64", "minimum" : "0", "description":"available bytes", "jsonPath":".status.available"}"#
 )]
 /// The pool spec which contains the parameters we use when creating the pool
 pub struct DiskPoolSpec {
@@ -35,6 +36,9 @@ pub struct DiskPoolSpec {
     pub disks: Vec<String>,
     /// The topology for data placement.
     pub topology: Option<Topology>,
+    /// Use to create encrypted pool.
+    #[serde(rename = "encryptionConfig")]
+    pub encryption_config: Option<EncryptionConfig>,
 }
 
 /// Placement pool topology used by volume operations.
@@ -45,31 +49,56 @@ pub struct Topology {
     pub labelled: HashMap<String, String>,
 }
 
+/// Encryption configuration from a specified source.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, JsonSchema)]
+pub struct EncryptionConfig {
+    pub source: EncryptionSource,
+}
+
+/// Encryption configuration Sources.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, JsonSchema)]
+pub enum EncryptionSource {
+    #[serde(rename = "secret")]
+    Secret(EncryptionSecretConfig),
+}
+
+/// Encryption Secret source details.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, JsonSchema)]
+pub struct EncryptionSecretConfig {
+    pub name: String,
+}
+
 impl DiskPoolSpec {
     /// Create a new DiskPoolSpec from the node and the disks.
-    #[allow(dead_code)]
-    pub fn new(node: String, disks: Vec<String>, topology: Option<Topology>) -> Self {
+    pub fn new(
+        node: String,
+        disks: Vec<String>,
+        topology: Option<Topology>,
+        encryption_config: Option<EncryptionConfig>,
+    ) -> Self {
         Self {
             node,
             disks,
             topology,
+            encryption_config,
         }
     }
     /// The node the pool is placed on.
-    #[allow(dead_code)]
     pub fn node(&self) -> String {
         self.node.clone()
     }
     /// The disk devices that compose the pool.
-    #[allow(dead_code)]
     pub fn disks(&self) -> Vec<String> {
         self.disks.clone()
     }
 
     /// The topology that decides replica placement.
-    #[allow(dead_code)]
     pub fn topology(&self) -> Option<Topology> {
         self.topology.clone()
+    }
+    /// The encryption configuration.
+    pub fn encryption_config(&self) -> Option<EncryptionConfig> {
+        self.encryption_config.clone()
     }
 }
 
@@ -114,6 +143,8 @@ pub struct DiskPoolStatus {
     pub used: u64,
     /// Available number of bytes.
     pub available: u64,
+    /// Encryption enabled.
+    pub encrypted: Option<bool>,
 }
 
 impl Default for DiskPoolStatus {
@@ -124,13 +155,13 @@ impl Default for DiskPoolStatus {
             capacity: 0,
             used: 0,
             available: 0,
+            encrypted: None,
         }
     }
 }
 
 impl DiskPoolStatus {
     /// Set when Pool is not found for some reason.
-    #[allow(dead_code)]
     pub fn not_found(status: &Option<Self>) -> Self {
         Self {
             cr_state: status.clone().unwrap_or_default().cr_state,
@@ -141,7 +172,6 @@ impl DiskPoolStatus {
 
     /// Set when operator is attempting to delete on pool.
     #[cfg(feature = "openapi")]
-    #[allow(dead_code)]
     pub fn terminating(p: Pool) -> Self {
         let state = p.state.unwrap_or_default();
         let free = if state.capacity > state.used {
@@ -155,11 +185,11 @@ impl DiskPoolStatus {
             capacity: state.capacity,
             used: state.used,
             available: free,
+            encrypted: Some(state.encrypted),
         }
     }
 
     /// Set when deleting a Pool which is not accessible.
-    #[allow(dead_code)]
     pub fn terminating_when_unknown() -> Self {
         Self {
             cr_state: CrPoolState::Terminating,
@@ -168,7 +198,6 @@ impl DiskPoolStatus {
         }
     }
 
-    #[allow(dead_code)]
     pub fn mark_unknown() -> Self {
         Self {
             cr_state: CrPoolState::Created,
@@ -206,6 +235,7 @@ impl From<Pool> for DiskPoolStatus {
                 capacity: state.capacity,
                 used: state.used,
                 available: free,
+                encrypted: Some(state.encrypted),
             }
         } else {
             Self {

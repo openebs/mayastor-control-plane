@@ -1,7 +1,9 @@
 //! Definition of pool types that can be saved to the persistent store.
 
+use crate::types::v0::transport::ImportPool;
 use crate::types::v0::{
     openapi::models,
+    openapi::models::PoolSpecEncryption,
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
@@ -12,7 +14,6 @@ use crate::types::v0::{
 // PoolLabel is the type for the labels
 pub type PoolLabel = std::collections::HashMap<String, String>;
 
-use crate::types::v0::transport::ImportPool;
 use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, convert::From, fmt::Debug};
@@ -54,6 +55,7 @@ impl From<&CreatePool> for PoolSpec {
             sequencer: OperationSequence::new(),
             operation: None,
             creat_tsc: None,
+            encryption: request.encryption.clone(),
         }
     }
 }
@@ -64,10 +66,11 @@ impl From<&PoolSpec> for CreatePool {
             id: pool.id.clone(),
             disks: pool.disks.clone(),
             labels: pool.labels.clone(),
-            encryption: None,
+            encryption: pool.encryption.clone(),
         }
     }
 }
+
 impl PartialEq<CreatePool> for PoolSpec {
     fn eq(&self, other: &CreatePool) -> bool {
         let mut other = PoolSpec::from(other);
@@ -76,6 +79,20 @@ impl PartialEq<CreatePool> for PoolSpec {
         other.creat_tsc = self.creat_tsc;
         &other == self
     }
+}
+
+/// Encryption parameters.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub enum Encryption {
+    /// Name of the secret or file to parse the encryption parameters.
+    Secret(EncryptionSecret),
+}
+
+/// Encryption secret.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+pub struct EncryptionSecret {
+    /// Name of the secret.
+    pub name: String,
 }
 
 /// User specification of a pool.
@@ -99,6 +116,8 @@ pub struct PoolSpec {
     /// Last modification timestamp.
     #[serde(skip)]
     pub creat_tsc: Option<std::time::SystemTime>,
+    /// Use to create/import encrypted pool
+    pub encryption: Option<Encryption>,
 }
 
 impl PoolSpec {
@@ -164,7 +183,7 @@ impl From<&PoolSpec> for ImportPool {
             id: value.id.clone(),
             disks: value.disks.clone(),
             uuid: None,
-            encryption: None,
+            encryption: value.encryption.clone(),
         }
     }
 }
@@ -181,7 +200,17 @@ impl AsOperationSequencer for PoolSpec {
 
 impl From<PoolSpec> for models::PoolSpec {
     fn from(src: PoolSpec) -> Self {
-        Self::new_all(src.disks, src.id, src.labels, src.node, src.status)
+        let encryption = match src.encryption {
+            None => None,
+            Some(encr) => match encr {
+                Encryption::Secret(details) => Some(PoolSpecEncryption::secret(
+                    openapi::models::EncryptionSecret { name: details.name },
+                )),
+            },
+        };
+        Self::new_all(
+            src.disks, src.id, src.labels, src.node, src.status, encryption,
+        )
     }
 }
 
@@ -327,6 +356,21 @@ impl From<&PoolSpec> for transport::PoolState {
             capacity: 0,
             used: 0,
             committed: None,
+            encrypted: pool.encryption.is_some(),
+        }
+    }
+}
+
+impl From<EncryptionSecret> for models::EncryptionSecret {
+    fn from(value: EncryptionSecret) -> Self {
+        Self { name: value.name }
+    }
+}
+
+impl From<models::Encryption> for Encryption {
+    fn from(value: models::Encryption) -> Self {
+        match value {
+            models::Encryption::secret(secret_name) => Self::Secret(secret_name.into()),
         }
     }
 }
