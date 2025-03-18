@@ -68,6 +68,8 @@ pub enum Parameters {
     NodeHasTopologyKey,
     #[strum(serialize = "nodeSpreadTopologyKey")]
     NodeSpreadTopologyKey,
+    #[strum(serialize = "encrypted")]
+    Encrypted,
 }
 impl Parameters {
     fn parse_human_time(
@@ -239,6 +241,10 @@ impl Parameters {
     /// Parse the value for `Self::MaxSnapshots`.
     pub fn max_snapshots(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
         Self::parse_u32(value)
+    }
+    /// Parse the value for `Self::Encrypted`.
+    pub fn encrypted(value: Option<&String>) -> Result<Option<bool>, ParseBoolError> {
+        Self::parse_bool(value)
     }
 }
 
@@ -466,6 +472,7 @@ pub struct CreateParams {
     sts_affinity_group: Option<String>,
     clone_fs_id_as_volume_id: Option<bool>,
     max_snapshots: Option<u32>,
+    encrypted: Option<bool>,
 }
 impl CreateParams {
     /// Get the `Parameters::PublishParams` value.
@@ -492,6 +499,10 @@ impl CreateParams {
     /// Get the `Parameters::MaxSnapshots` value.
     pub fn max_snapshots(&self) -> Option<u32> {
         self.max_snapshots
+    }
+    /// Get the `Parameters::Encrypted` value.
+    pub fn encrypted(&self) -> Option<bool> {
+        self.encrypted
     }
 }
 impl TryFrom<&HashMap<String, String>> for CreateParams {
@@ -545,6 +556,11 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
                 tonic::Status::invalid_argument("Invalid `maxSnapshots` value, expected an u32")
             })?;
 
+        let encrypted =
+            Parameters::encrypted(args.get(Parameters::Encrypted.as_ref())).map_err(|_| {
+                tonic::Status::invalid_argument("Invalid `Encrypted` value, expected a boolean")
+            })?;
+
         Ok(Self {
             publish_params,
             share_protocol,
@@ -552,6 +568,7 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
             sts_affinity_group: sts_affinity_group_name,
             clone_fs_id_as_volume_id,
             max_snapshots,
+            encrypted,
         })
     }
 }

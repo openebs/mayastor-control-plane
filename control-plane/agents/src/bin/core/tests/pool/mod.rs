@@ -570,7 +570,7 @@ async fn reconciler_missing_pool_state() {
 
     // create volume to fill up some of the pool space
     for _ in 0..10 {
-        let body = CreateVolumeBody::new(VolumePolicy::default(), 1, 8388608u64, false);
+        let body = CreateVolumeBody::new(VolumePolicy::default(), 1, 8388608u64, false, false);
         let volume = VolumeId::new();
         volumes_api.put_volume(&volume, body).await.unwrap();
     }
@@ -867,7 +867,13 @@ async fn disown_unused_replicas() {
     let volume = volumes_api
         .put_volume(
             &"1e3cf927-80c2-47a8-adf0-95c481bdd7b7".parse().unwrap(),
-            models::CreateVolumeBody::new(models::VolumePolicy::default(), 1, 5242880u64, false),
+            models::CreateVolumeBody::new(
+                models::VolumePolicy::default(),
+                1,
+                5242880u64,
+                false,
+                false,
+            ),
         )
         .await
         .unwrap();

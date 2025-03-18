@@ -2705,11 +2705,15 @@ components:
           type: integer
           format: int32
           minimum: 0
+        encrypted:
+          description: flag to enable data encryption
+          type: boolean
       required:
         - policy
         - replicas
         - size
         - thin
+        - encrypted
     SetVolumePropertyBody:
       example:
         max_snapshots: 10

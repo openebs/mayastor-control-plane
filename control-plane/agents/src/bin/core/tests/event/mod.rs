@@ -69,7 +69,7 @@ async fn events() {
         pool_creation_event_test(&mut events_mbus_subscription).await;
     }
 
-    let body = CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false);
+    let body = CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false, false);
     let volid = VolumeId::new();
     let volume = volume_api.put_volume(&volid, body).await.unwrap();
 

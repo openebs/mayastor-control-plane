@@ -131,7 +131,13 @@ async fn volume_allowed_host() {
     let mut volume_1 = volumes_api
         .put_volume(
             &"ec4e66fd-3b33-4439-b504-d49aba53da26".parse().unwrap(),
-            models::CreateVolumeBody::new(models::VolumePolicy::new(true), 2, volume_1_size, true),
+            models::CreateVolumeBody::new(
+                models::VolumePolicy::new(true),
+                2,
+                volume_1_size,
+                true,
+                false,
+            ),
         )
         .await
         .unwrap();

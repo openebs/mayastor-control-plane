@@ -263,6 +263,7 @@ impl RestApiClient {
         thin: bool,
         affinity_group: Option<AffinityGroup>,
         max_snapshots: Option<u32>,
+        encrypted: bool,
     ) -> Result<Volume, ApiClientError> {
         let topology =
             Topology::new_all(volume_topology.node_topology, volume_topology.pool_topology);
@@ -276,6 +277,7 @@ impl RestApiClient {
             labels: None,
             affinity_group,
             max_snapshots,
+            encrypted,
         };
 
         let result = self
@@ -301,6 +303,7 @@ impl RestApiClient {
         thin: bool,
         affinity_group: Option<AffinityGroup>,
         max_snapshots: Option<u32>,
+        encrypted: bool,
     ) -> Result<Volume, ApiClientError> {
         let topology =
             Topology::new_all(volume_topology.node_topology, volume_topology.pool_topology);
@@ -314,6 +317,7 @@ impl RestApiClient {
             labels: None,
             affinity_group,
             max_snapshots,
+            encrypted,
         };
         let result = self
             .rest_client
