@@ -517,6 +517,7 @@ impl Registry {
             let Some(nexus_info_key) = volume.immutable_ref().health_info_key() else {
                 continue;
             };
+            let nexus_info_key = nexus_info_key.nexus_info_key();
             let Ok(mut info) = pstor_cache.get_obj::<NexusInfo>(&nexus_info_key).await else {
                 continue;
             };

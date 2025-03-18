@@ -1244,6 +1244,7 @@ async fn health() {
         .wait_node_status(cluster.node(1), transport::NodeStatus::Online)
         .await
         .unwrap();
+    cluster.wait_pool_online(cluster.pool(1, 0)).await.unwrap();
 
     let volume = volume_client
         .publish(

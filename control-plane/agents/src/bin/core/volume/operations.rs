@@ -109,7 +109,7 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
         // When nexus is destroyed ahead of the volume destroy, then
         // delete_nexus_info in previous will not be called since nexus won't be present.
         // So invoke delete_nexus_info explicitly using the nexus id in target_config if present.
-        self.delete_all_info(registry).await;
+        self.delete_all_nexusinfo(registry).await;
 
         let replicas = specs.volume_replicas(&request.uuid);
         for replica in replicas {

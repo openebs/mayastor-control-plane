@@ -29,7 +29,6 @@ use stor_port::{
         store::{
             nexus::{NexusSpec, ReplicaUri},
             nexus_child::NexusChild,
-            nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
             volume::{FrontendConfig, TargetConfig, VolumeOperation, VolumeSpec, VolumeTarget},
         },
@@ -44,6 +43,7 @@ use stor_port::{
 };
 
 use http::Uri;
+use stor_port::types::v0::store::nexus_persistence::VolumeHealthPrefix;
 
 impl OperationGuardArc<VolumeSpec> {
     /// Prune volume health from older targets.
@@ -851,33 +851,25 @@ impl OperationGuardArc<VolumeSpec> {
 
     /// Delete all NexusInfo keys from the persistent store.
     /// If deletion fails we just log it and continue.
-    pub(super) async fn delete_all_info(&self, registry: &Registry) {
-        // this is just a placeholder id, since we're deleting all anyway
-        // but this allows us to skip this step if we never published, even once.
-        let Some(nexus_id) = self.as_ref().health_info_id() else {
+    pub(super) async fn delete_all_nexusinfo(&self, registry: &Registry) {
+        // this allows us to skip this procedure if we never published, even once.
+        if self.as_ref().health_info_id().is_none() {
             return;
-        };
+        }
 
-        let info =
-            NexusInfoKey::new(&Some(self.uuid().clone()), nexus_id).with_rm_all_nexuses(true);
-        let vol_id = match info.volume_id() {
-            Some(v) => v.as_str(),
-            None => "",
-        };
+        let info = VolumeHealthPrefix::new(self.uuid().clone());
         match registry.delete_kv_prefix(&info.key()).await {
             Ok(_) => {
                 tracing::trace!(
-                    volume.uuid = %vol_id,
-                    nexus.uuid = %info.nexus_id(),
+                    volume.uuid = %self.uuid(),
                     "Deleted NexusInfo entry from persistent store",
                 );
             }
             Err(error) => {
                 tracing::error!(
                     %error,
-                    volume.uuid = %vol_id,
-                    nexus.uuid = %info.nexus_id(),
-                    "Failed to delete NexusInfo entry from persistent store",
+                    volume.uuid = %self.uuid(),
+                    "Failed to delete volume NexusInfo entry from persistent store",
                 );
             }
         }

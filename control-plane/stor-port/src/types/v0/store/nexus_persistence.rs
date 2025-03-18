@@ -78,7 +78,6 @@ pub struct NexusInfoKey {
     volume_id: Option<VolumeId>,
     nexus_id: NexusId,
     mayastor_compat_v1: bool,
-    rm_all_nexuses: bool,
 }
 
 impl NexusInfoKey {
@@ -88,26 +87,11 @@ impl NexusInfoKey {
             volume_id: volume_id.clone(),
             nexus_id: nexus_id.clone(),
             mayastor_compat_v1: false,
-            rm_all_nexuses: false,
-        }
-    }
-    /// Create a new NexusInfoKey.
-    pub fn new_(volume_id: VolumeId, nexus_id: NexusId) -> Self {
-        Self {
-            volume_id: Some(volume_id),
-            nexus_id,
-            mayastor_compat_v1: false,
-            rm_all_nexuses: false,
         }
     }
     /// Set the `mayastor_compat_v1`.
     pub fn with_mayastor_compat_v1(mut self, compat: bool) -> Self {
         self.mayastor_compat_v1 = compat;
-        self
-    }
-    /// Set the `rm_all_nexuses`.
-    pub fn with_rm_all_nexuses(mut self, rm_all_nexuses: bool) -> Self {
-        self.rm_all_nexuses = rm_all_nexuses;
         self
     }
 
@@ -158,6 +142,92 @@ fn parse_info_key(key: &str) -> Option<(Option<&str>, &str)> {
     None
 }
 
+enum NexusInfoKind<'a> {
+    Nexus(&'a NexusId),
+    Volume(&'a VolumeId, &'a NexusId),
+    VolumePrefix(&'a VolumeId),
+}
+
+impl NexusInfoKind<'_> {
+    fn key(&self, prefix: String) -> String {
+        match &self {
+            Self::Nexus(nexus_uuid) => format!("{prefix}/nexus/{nexus_uuid}/info"),
+            Self::Volume(volume_uuid, nexus_uuid) => {
+                format!("{prefix}/volume/{volume_uuid}/nexus/{nexus_uuid}/info")
+            }
+            Self::VolumePrefix(volume_uuid) => {
+                format!("{prefix}/volume/{volume_uuid}/nexus/")
+            }
+        }
+    }
+}
+
+/// Key used by the store to uniquely identify a NexusInfo structure.
+/// The volume is optional because a nexus can be created which is not associated with a volume.
+pub struct VolumeHealthKey {
+    volume_id: VolumeId,
+    nexus_id: NexusId,
+}
+impl VolumeHealthKey {
+    /// Create a new `VolumeHealthKey`.
+    pub fn new(volume_id: VolumeId, nexus_id: NexusId) -> Self {
+        Self {
+            volume_id,
+            nexus_id,
+        }
+    }
+    /// Get the id of the nexus.
+    pub fn nexus_id(&self) -> &NexusId {
+        &self.nexus_id
+    }
+    /// Get the id of the volume.
+    pub fn volume_id(&self) -> &VolumeId {
+        &self.volume_id
+    }
+    /// Convert into a `NexusInfoKey`.
+    pub fn nexus_info_key(self) -> NexusInfoKey {
+        NexusInfoKey {
+            volume_id: Some(self.volume_id),
+            nexus_id: self.nexus_id,
+            mayastor_compat_v1: false,
+        }
+    }
+}
+
+/// A pstor helper for referencing all [`NexusInfo`] for the given volume.
+pub struct VolumeHealthPrefix {
+    volume_id: VolumeId,
+}
+impl VolumeHealthPrefix {
+    /// Create a new `Self`, which can reference all volume health info.
+    pub fn new(volume_id: VolumeId) -> VolumeHealthPrefix {
+        Self { volume_id }
+    }
+}
+
+impl ObjectKey for VolumeHealthPrefix {
+    type Kind = StorableObjectType;
+
+    fn key(&self) -> String {
+        let namespace = key_prefix(self.version());
+        NexusInfoKind::VolumePrefix(&self.volume_id).key(namespace)
+    }
+
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
+    }
+
+    fn key_type(&self) -> StorableObjectType {
+        // The key is generated directly from the `key()` function above.
+        unreachable!()
+    }
+
+    fn key_uuid(&self) -> String {
+        // The key is generated directly from the `key()` function above.
+        unreachable!()
+    }
+}
+
 impl ObjectKey for NexusInfoKey {
     type Kind = StorableObjectType;
 
@@ -166,17 +236,10 @@ impl ObjectKey for NexusInfoKey {
             return self.nexus_key_mayastor_v1();
         }
         let namespace = key_prefix(self.version());
-        let nexus_uuid = self.nexus_id.clone();
+        let nexus_uuid = &self.nexus_id;
         match &self.volume_id {
-            Some(volume_uuid) if self.rm_all_nexuses => {
-                format!("{namespace}/volume/{volume_uuid}/nexus/")
-            }
-            Some(volume_uuid) => {
-                format!("{namespace}/volume/{volume_uuid}/nexus/{nexus_uuid}/info")
-            }
-            None => {
-                format!("{namespace}/nexus/{nexus_uuid}/info")
-            }
+            Some(volume_uuid) => NexusInfoKind::Volume(volume_uuid, nexus_uuid).key(namespace),
+            None => NexusInfoKind::Nexus(nexus_uuid).key(namespace),
         }
     }
 
@@ -203,7 +266,6 @@ impl StorableObject for NexusInfo {
             volume_id: self.volume_uuid.clone(),
             nexus_id: self.uuid.clone(),
             mayastor_compat_v1: false,
-            rm_all_nexuses: false,
         }
     }
 }
