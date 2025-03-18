@@ -37,6 +37,7 @@ serde_yaml = "0.9.34"
 humantime = "2.1.0"
 chrono = "0.4.38"
 snafu = "0.8.5"
+inquire = { version = "0.7.5", default-features = false, features = ["crossterm"] }
 
 [dev-dependencies]
 # Test dependencies

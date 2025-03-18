@@ -66,6 +66,12 @@ pub enum Error {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
+    /// Error when delete volume request fails.
+    #[snafu(display("Failed to delete volume {id}. Error {source}"))]
+    DelVolumeError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
     /// Error when get rebuild history for volume request fails.
     #[snafu(display("Failed to get rebuild history for volume {id}. Error {source}"))]
     GetRebuildHistory {
@@ -102,6 +108,14 @@ pub enum Error {
         key1=value1,key2=value2"
     ))]
     LabelNodeFilter { labels: String },
+    /// Error when interacting via console dialogue.
+    #[snafu(display("{source}"))]
+    Dialogue {
+        source: inquire::error::InquireError,
+    },
+    /// User has decided to abort the operation following a dialogue.
+    #[snafu(display("Operation was aborted by the user"))]
+    DialogueAbort {},
 }
 
 /// Errors related to label topology formats.
