@@ -97,6 +97,8 @@ impl Device {
         enumerator.match_subsystem("block")?;
         enumerator.match_property("DEVTYPE", "disk")?;
 
+        let multipath = utils::check_nvme_core_ana()?;
+
         for device in enumerator.scan_devices()? {
             if let Some((devname, path)) = match_dev::match_iscsi_device(&device) {
                 let value = iscsi::IscsiDetach::from_path(devname.to_string(), path)?;
@@ -108,7 +110,9 @@ impl Device {
                 continue;
             }
 
-            if let Some(devname) = match_dev::match_nvmf_device_valid(&device, &nvmf_key)? {
+            if let Some(devname) =
+                match_dev::match_nvmf_device_valid(&device, &nvmf_key, Some(multipath))?
+            {
                 let nqn = if std::env::var("MOAC").is_ok() {
                     format!("{}:nexus-{uuid}", nvme_target_nqn_prefix())
                 } else {
