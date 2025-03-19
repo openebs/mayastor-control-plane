@@ -948,6 +948,7 @@ async fn test_disown_missing_replica_owners() {
                 share: None,
                 size: 5242880,
                 thin: false,
+                encrypted: false,
                 allowed_hosts: None,
             },
         )

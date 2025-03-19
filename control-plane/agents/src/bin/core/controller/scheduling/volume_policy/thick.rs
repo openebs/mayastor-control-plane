@@ -23,6 +23,7 @@ impl ResourcePolicy<AddVolumeReplica> for ThickPolicy {
     fn apply(self, to: AddVolumeReplica) -> AddVolumeReplica {
         DefaultBasePolicy::filter(to)
             .filter(PoolBaseFilters::min_free_space_full_rebuild)
+            .filter(PoolBaseFilters::encrypted)
             .filter(affinity_group::SingleReplicaPolicy::replica_anti_affinity)
             // sort pools in order of preference (from least to most number of replicas)
             .sort_ctx(ThickPolicy::sort_by_weights)

@@ -212,6 +212,7 @@ pub(crate) async fn volume_replica_candidates(
                 owners: ReplicaOwners::from_volume(&request.uuid),
                 allowed_hosts: vec![],
                 kind: None,
+                encrypted: request.encrypted,
             }
         })
         .collect::<Vec<_>>())
@@ -260,12 +261,13 @@ pub(crate) async fn volume_move_replica_candidates(
                 owners: ReplicaOwners::from_volume(&request.uuid),
                 allowed_hosts: vec![],
                 kind: None,
+                encrypted: request.encrypted,
             }
         })
         .collect::<Vec<_>>())
 }
 
-/// Return a list of appropriate requests which can be used to create a a replica on a pool.
+/// Return a list of appropriate requests which can be used to create a replica on a pool.
 /// This can be used when creating a volume.
 pub(crate) async fn create_volume_replicas(
     registry: &Registry,

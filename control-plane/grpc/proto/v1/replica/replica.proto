@@ -102,6 +102,8 @@ message CreateReplicaRequest {
   repeated string allowed_hosts = 11;
   // Id of the entity which owns replica, If set.
   optional string entity_id = 12;
+  // Data encryption.
+  optional bool encrypted = 13;
 }
 
 // Replica owners which is a volume or none and a list of nexuses
@@ -258,6 +260,8 @@ message ReplicaSpec {
   optional google.protobuf.StringValue pool_uuid = 11;
   // Kind of the replica, eg: regular or clone.
   optional ReplicaKind kind = 12;
+  // Data encryption.
+  optional bool encrypted = 13;
 }
 
 // Service for managing replicas

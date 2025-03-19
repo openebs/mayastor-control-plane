@@ -441,6 +441,8 @@ pub struct CreateReplica {
     pub allowed_hosts: Vec<HostNqn>,
     /// The replica kind, eg: regular or clone.
     pub kind: Option<ReplicaKind>,
+    /// Data encryption.
+    pub encrypted: bool,
 }
 
 /// Replica owners which is a volume or none and a list of nexuses.

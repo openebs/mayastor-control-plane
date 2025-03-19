@@ -207,7 +207,7 @@ async fn loopback_nvmf() {
             cluster.node(0).as_str(),
             cluster.pool(0, 0).as_str(),
             &Uuid::new_v4(),
-            models::CreateReplicaBody::new(repl_size, false),
+            models::CreateReplicaBody::new(repl_size, false, false),
         )
         .await
         .unwrap();
@@ -271,7 +271,7 @@ async fn repeated_rebuilds() {
             cluster.node(1).as_str(),
             cluster.pool(1, 0).as_str(),
             &Uuid::new_v4(),
-            models::CreateReplicaBody::new(repl_size, false),
+            models::CreateReplicaBody::new(repl_size, false, false),
         )
         .await
         .unwrap();
@@ -284,7 +284,7 @@ async fn repeated_rebuilds() {
             cluster.node(2).as_str(),
             cluster.pool(2, 0).as_str(),
             &Uuid::new_v4(),
-            models::CreateReplicaBody::new(repl_size, false),
+            models::CreateReplicaBody::new(repl_size, false, false),
         )
         .await
         .unwrap();
@@ -297,7 +297,7 @@ async fn repeated_rebuilds() {
             cluster.node(1).as_str(),
             cluster.pool(1, 0).as_str(),
             &Uuid::new_v4(),
-            models::CreateReplicaBody::new(repl_size, false),
+            models::CreateReplicaBody::new(repl_size, false, false),
         )
         .await
         .unwrap();

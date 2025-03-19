@@ -167,6 +167,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
                 content_source: volume_spec.content_source.into_opt(),
                 num_snapshots: volume_spec.metadata.num_snapshots() as u32,
                 max_snapshots: volume_spec.max_snapshots,
+                encrypted: Some(volume_spec.encrypted),
             }),
             metadata: Some(volume::Metadata {
                 spec_status: spec_status as i32,
@@ -378,6 +379,7 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
             content_source: volume_spec.content_source.try_into_opt()?,
             num_snapshots: volume_spec.num_snapshots,
             max_snapshots: volume_spec.max_snapshots,
+            encrypted: volume_spec.encrypted.unwrap_or_default(),
         };
         Ok(volume_spec)
     }
@@ -932,6 +934,8 @@ pub trait CreateVolumeInfo: Send + Sync + std::fmt::Debug {
     fn cluster_capacity_limit(&self) -> Option<u64>;
     /// Max snapshot limit per volume.
     fn max_snapshots(&self) -> Option<u32>;
+    /// Data encryption.
+    fn encrypted(&self) -> bool;
 }
 
 impl CreateVolumeInfo for CreateVolume {
@@ -973,6 +977,10 @@ impl CreateVolumeInfo for CreateVolume {
 
     fn max_snapshots(&self) -> Option<u32> {
         self.max_snapshots
+    }
+
+    fn encrypted(&self) -> bool {
+        self.encrypted
     }
 }
 
@@ -1030,6 +1038,10 @@ impl CreateVolumeInfo for ValidatedCreateVolumeRequest {
     fn max_snapshots(&self) -> Option<u32> {
         self.inner.max_snapshots
     }
+
+    fn encrypted(&self) -> bool {
+        self.inner.encrypted.unwrap_or_default()
+    }
 }
 
 impl ValidateRequestTypes for CreateVolumeRequest {
@@ -1068,6 +1080,7 @@ impl From<&dyn CreateVolumeInfo> for CreateVolume {
             affinity_group: data.affinity_group(),
             cluster_capacity_limit: data.cluster_capacity_limit(),
             max_snapshots: data.max_snapshots(),
+            encrypted: data.encrypted(),
         }
     }
 }
@@ -1087,6 +1100,7 @@ impl From<&dyn CreateVolumeInfo> for CreateVolumeRequest {
             affinity_group: data.affinity_group().map(|ag| ag.into()),
             cluster_capacity_limit: data.cluster_capacity_limit(),
             max_snapshots: data.max_snapshots(),
+            encrypted: Some(data.encrypted()),
         }
     }
 }

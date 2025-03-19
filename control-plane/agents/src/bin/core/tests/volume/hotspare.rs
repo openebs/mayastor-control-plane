@@ -407,6 +407,7 @@ async fn hotspare_replica_count(cluster: &Cluster) {
                 pool_uuid: None,
                 size: volume.spec().size / 1024 / 1024 + 5,
                 thin: false,
+                encrypted: false,
                 share: Default::default(),
                 managed: true,
                 owners: ReplicaOwners::from_volume(volume.uuid()),

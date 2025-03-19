@@ -504,6 +504,8 @@ pub struct CreateVolume {
     pub cluster_capacity_limit: Option<u64>,
     /// Max Snapshots to limit per volume.
     pub max_snapshots: Option<u32>,
+    /// Data encryption.
+    pub encrypted: bool,
 }
 
 /// Resize volume request.

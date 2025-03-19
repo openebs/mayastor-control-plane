@@ -182,6 +182,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
                 None::<Vec<String>>,
                 12582912u64,
                 false,
+                false,
             ),
         )
         .await
