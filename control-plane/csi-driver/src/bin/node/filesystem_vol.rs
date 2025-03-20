@@ -28,6 +28,8 @@ pub(crate) async fn stage_fs_volume(
     device_path: &str,
     mnt: &MountVolume,
     filesystems: &[FileSystem],
+    mut format_options: &str,
+    override_global_format_opts: bool,
 ) -> Result<(), Status> {
     let volume_uuid = Uuid::parse_str(&msg.volume_id).map_err(|error| {
         failure!(
@@ -77,6 +79,14 @@ pub(crate) async fn stage_fs_volume(
             }
         }
     };
+
+    let xfs_global_args = std::env::var("MKFS_XFS_ARGS").unwrap_or_default();
+
+    let combined_format_opts = format!("{xfs_global_args} {format_options}");
+
+    if fstype == &Fs::Xfs.into() && !override_global_format_opts {
+        format_options = combined_format_opts.as_str()
+    }
 
     if let Some(existing) = mount::find_mount(Some(device_path), Some(fs_staging_path)) {
         debug!(
@@ -147,8 +157,15 @@ pub(crate) async fn stage_fs_volume(
         })?
         .mount_flags(mnt.mount_flags.clone());
 
-    if let Err(error) =
-        prepare_device(fstype, device_path, fs_staging_path, &mount_flags, fs_id).await
+    if let Err(error) = prepare_device(
+        fstype,
+        device_path,
+        fs_staging_path,
+        &mount_flags,
+        fs_id,
+        format_options.trim(),
+    )
+    .await
     {
         return Err(failure!(
             Code::Internal,

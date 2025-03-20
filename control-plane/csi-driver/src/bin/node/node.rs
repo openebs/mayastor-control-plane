@@ -10,6 +10,7 @@ use csi_driver::{
     csi::volume_capability::{access_mode::Mode, AccessType},
     filesystem::FileSystem as Fs,
     limiter::VolumeOpGuard,
+    Parameters,
 };
 use once_cell::sync::OnceCell;
 use rpc::{
@@ -792,12 +793,29 @@ impl node_server::Node for Node {
                 devpath
             }
         };
-
+        let format_options = match msg.volume_context.get(Parameters::FormatOptions.as_ref()) {
+            Some(opts) => opts,
+            None => "",
+        };
+        let override_global_format_opts = match Parameters::override_global_format_opts(
+            msg.volume_context
+                .get(Parameters::OverrideGlobalFormatOpts.as_ref()),
+        ) {
+            Ok(opts_bool) => opts_bool.unwrap_or(false),
+            Err(_) => false,
+        };
         // Attach successful, now stage mount if required.
         match access_type {
             AccessType::Mount(mnt) => {
-                if let Err(fsmount_error) =
-                    stage_fs_volume(&msg, &device_path, mnt, &self.filesystems).await
+                if let Err(fsmount_error) = stage_fs_volume(
+                    &msg,
+                    &device_path,
+                    mnt,
+                    &self.filesystems,
+                    format_options,
+                    override_global_format_opts,
+                )
+                .await
                 {
                     let mounts = crate::mount::find_src_mounts(&device_path, None);
                     // If the device is mounted elsewhere, don't detach it!
