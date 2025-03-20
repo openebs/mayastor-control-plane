@@ -287,8 +287,8 @@ pub(super) async fn main() -> anyhow::Result<()> {
 
     // Check for nvme ana multipath support and generate labels.
     let mut csi_labels = HashMap::new();
-    let nvme_enabled = utils::check_nvme_core_ana().unwrap_or_default().to_string();
-    csi_labels.insert(utils::csi_node_nvme_ana(), nvme_enabled.clone());
+    let nvme_enabled = utils::check_nvme_core_ana()?;
+    csi_labels.insert(utils::csi_node_nvme_ana(), nvme_enabled.to_string());
 
     // If running in k8s, label the nodes with generated labels.
     let node_name = matches.get_one::<String>("node-name").unwrap();
@@ -436,8 +436,9 @@ impl CsiServer {
 async fn check_ana_and_label_node(
     client: &kube::client::Client,
     node_name: &str,
-    nvme_enabled: String,
+    nvme_enabled: bool,
 ) -> anyhow::Result<()> {
+    let nvme_enabled = nvme_enabled.to_string();
     let node_patch = json!({
         "apiVersion": "v1",
         "kind": "Node",

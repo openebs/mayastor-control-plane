@@ -82,9 +82,11 @@ impl NvmfAttach {
         enumerator.match_subsystem("block")?;
         enumerator.match_property("DEVTYPE", "disk")?;
 
+        let multipath = utils::check_nvme_core_ana()?;
+
         let mut first_error = Ok(None);
         for device in enumerator.scan_devices()? {
-            match match_device(&device, &key, &self.warn_bad) {
+            match match_device(&device, &key, Some(multipath), &self.warn_bad) {
                 Ok(name) if name.is_some() => {
                     return Ok(Some(device));
                 }
@@ -240,17 +242,8 @@ impl Attach for NvmfAttach {
         let device = self
             .get_device()?
             .ok_or_else(|| DeviceError::new("NVMe device not found"))?;
-        let dev_name = device.sysname().to_str().unwrap();
-        let captures = DEVICE_REGEX.captures(dev_name).ok_or_else(|| {
-            DeviceError::new(&format!(
-                "NVMe device \"{}\" does not match \"{}\"",
-                dev_name, *DEVICE_REGEX,
-            ))
-        })?;
-        let major = captures.get(1).unwrap().as_str();
-        let nid = captures.get(2).unwrap().as_str();
 
-        let pattern = format!("/sys/class/block/nvme{major}c*n{nid}/queue");
+        let pattern = block_dev_q(&device, None)?;
         let glob = glob(&pattern).unwrap();
         let result = glob
             .into_iter()
@@ -271,7 +264,7 @@ impl Attach for NvmfAttach {
                     }
                     Err(error) => {
                         // This should never happen as we should always have permissions to list.
-                        tracing::error!(%error, "Unable to collect sysfs for /dev/nvme{major}");
+                        tracing::error!(%error, "Unable to collect sysfs for {pattern}");
                         Err(DeviceError::new(error.to_string().as_str()))
                     }
                 }
@@ -332,7 +325,7 @@ impl Detach for NvmfDetach {
 }
 
 /// Get the sysfs block device queue path for the given udev::Device.
-fn block_dev_q(device: &Device) -> Result<String, DeviceError> {
+fn block_dev_q(device: &Device, multipath: Option<bool>) -> Result<String, DeviceError> {
     let dev_name = device.sysname().to_str().unwrap();
     let captures = DEVICE_REGEX.captures(dev_name).ok_or_else(|| {
         DeviceError::new(&format!(
@@ -342,7 +335,12 @@ fn block_dev_q(device: &Device) -> Result<String, DeviceError> {
     })?;
     let major = captures.get(1).unwrap().as_str();
     let nid = captures.get(2).unwrap().as_str();
-    Ok(format!("/sys/class/block/nvme{major}c*n{nid}/queue"))
+    // without multipath enabled on the system, there's a simpler representation of the namespace
+    // since there can't be more than 1 controller.
+    Ok(match multipath.unwrap_or(utils::check_nvme_core_ana()?) {
+        true => format!("/sys/class/block/nvme{major}c*n{nid}/queue"),
+        false => format!("/sys/class/block/nvme{major}n{nid}/queue"),
+    })
 }
 
 /// Check if the given device is a valid NVMf device.
@@ -353,13 +351,14 @@ fn block_dev_q(device: &Device) -> Result<String, DeviceError> {
 pub(crate) fn match_device<'a>(
     device: &'a Device,
     key: &str,
+    multipath: Option<bool>,
     warn_bad: &std::sync::atomic::AtomicBool,
 ) -> Result<Option<&'a str>, DeviceError> {
     let Some(devname) = match_nvmf_device(device, key) else {
         return Ok(None);
     };
 
-    let glob = glob(&block_dev_q(device)?).unwrap();
+    let glob = glob(&block_dev_q(device, multipath)?).unwrap();
     if !glob.into_iter().any(|glob_result| glob_result.is_ok()) {
         if warn_bad.load(std::sync::atomic::Ordering::Relaxed) {
             let name = device.sysname().to_string_lossy();
