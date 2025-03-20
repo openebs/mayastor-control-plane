@@ -1128,7 +1128,7 @@ async fn health() {
         .with_io_engines(3)
         .with_tmpfs_pool(100 * 1024 * 1024)
         .with_cache_period("150ms")
-        .with_reconcile_period(Duration::from_millis(100), Duration::from_secs(100))
+        .with_reconcile_period(Duration::from_secs(100), Duration::from_secs(100))
         .build()
         .await
         .unwrap();
