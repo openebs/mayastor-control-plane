@@ -1,8 +1,7 @@
 #![cfg(test)]
 
 use deployer_cluster::ClusterBuilder;
-use stor_port::types::v0::openapi::models;
-use stor_port::types::v0::transport::VolumeId;
+use stor_port::types::v0::{openapi::models, transport::VolumeId};
 
 use std::{collections::HashMap, time::Duration};
 
@@ -46,13 +45,7 @@ async fn filesystem_volume_format_options() {
     let volume = volumes_api
         .put_volume(
             &vol_id,
-            models::CreateVolumeBody::new(
-                models::VolumePolicy::new(true),
-                1,
-                VOLUME_SIZE,
-                false,
-                false,
-            ),
+            models::CreateVolumeBody::new(models::VolumePolicy::new(true), 1, VOLUME_SIZE, false),
         )
         .await
         .expect("Volume to be created");

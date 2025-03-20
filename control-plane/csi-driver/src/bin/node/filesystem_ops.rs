@@ -91,7 +91,7 @@ impl FileSystem {
 #[async_trait]
 pub(crate) trait FileSystemOps: Send + Sync {
     /// Create the filesystem using its fs util.
-    async fn create(&self, device: &str) -> Result<(), Error>;
+    async fn create(&self, device: &str, format_options: &str) -> Result<(), Error>;
     /// Get the default mount options along with the user passed options for specific filesystems.
     fn mount_flags(&self, mount_flags: Vec<String>) -> Vec<String>;
     /// Unmount the filesystem if the filesystem uuid and the provided uuid differ.
@@ -132,10 +132,18 @@ pub(crate) trait FileSystemOps: Send + Sync {
 
 #[async_trait]
 impl FileSystemOps for Ext4Fs {
-    async fn create(&self, device: &str) -> Result<(), Error> {
+    async fn create(&self, device: &str, format_options: &str) -> Result<(), Error> {
         let binary = "mkfs.ext4";
-        let output = Command::new(binary)
-            .arg(device)
+        let mut cmd = Command::new(binary);
+        cmd.arg(device);
+        let arg_vec = format_options
+            .split_whitespace()
+            .map(str::to_string)
+            .collect::<Vec<String>>();
+        if !format_options.is_empty() {
+            cmd.args(arg_vec);
+        }
+        let output = cmd
             .output()
             .await
             .map_err(|error| format!("failed to execute {binary}: {error}"))?;
@@ -244,18 +252,18 @@ impl FileSystemOps for Ext4Fs {
 
 #[async_trait]
 impl FileSystemOps for XFs {
-    async fn create(&self, device: &str) -> Result<(), Error> {
+    async fn create(&self, device: &str, format_options: &str) -> Result<(), Error> {
         let binary = "mkfs.xfs";
-        let args = match std::env::var("MKFS_XFS_ARGS") {
-            Ok(args) => args
-                .split_whitespace()
-                .map(str::to_string)
-                .collect::<Vec<_>>(),
-            _ => vec![],
-        };
-        let output = Command::new(binary)
-            .args(args)
-            .arg(device)
+        let mut cmd = Command::new(binary);
+        cmd.arg(device);
+        let arg_vec = format_options
+            .split_whitespace()
+            .map(str::to_string)
+            .collect::<Vec<String>>();
+        if !format_options.is_empty() {
+            cmd.args(arg_vec);
+        }
+        let output = cmd
             .output()
             .await
             .map_err(|error| format!("failed to execute {binary}: {error}"))?;
@@ -344,10 +352,18 @@ impl FileSystemOps for XFs {
 
 #[async_trait]
 impl FileSystemOps for BtrFs {
-    async fn create(&self, device: &str) -> Result<(), Error> {
+    async fn create(&self, device: &str, format_options: &str) -> Result<(), Error> {
         let binary = "mkfs.btrfs";
-        let output = Command::new(binary)
-            .arg(device)
+        let mut cmd = Command::new(binary);
+        cmd.arg(device);
+        let arg_vec = format_options
+            .split_whitespace()
+            .map(str::to_string)
+            .collect::<Vec<String>>();
+        if !format_options.is_empty() {
+            cmd.args(arg_vec);
+        }
+        let output = cmd
             .output()
             .await
             .map_err(|error| format!("failed to execute {binary}: {error}"))?;

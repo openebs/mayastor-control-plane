@@ -1,8 +1,7 @@
 #![cfg(test)]
 
 use deployer_cluster::{Cluster, ClusterBuilder};
-use std::collections::HashMap;
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 use stor_port::types::v0::openapi::models;
 
 struct DeviceDisconnect(nvmeadm::NvmeTarget);
