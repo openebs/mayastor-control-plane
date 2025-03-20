@@ -235,7 +235,8 @@ def create_node_pools(node_pool_map: Dict[str, int]):
             )
             pool_index += 1
     ApiClient.volumes_api().put_volume(
-        NON_AG_VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 2, VOLUME_SIZE, False)
+        NON_AG_VOLUME_UUID,
+        CreateVolumeBody(VolumePolicy(False), 2, VOLUME_SIZE, False, False),
     )
 
 
@@ -250,6 +251,7 @@ def create_affinity_group(replicas, thin):
                 replicas=replicas,
                 size=VOLUME_SIZE,
                 thin=thin,
+                encrypted=False,
                 affinity_group=AG_PARAM,
             ),
         )

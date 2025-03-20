@@ -123,7 +123,7 @@ def a_control_plane_two_ioengine_instances_two_pools(init, disks):
 def a_published_volume_with_two_replicas():
     """a published volume with two replicas."""
     ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 2, VOLUME_SIZE, False)
+        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 2, VOLUME_SIZE, False, False)
     )
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,

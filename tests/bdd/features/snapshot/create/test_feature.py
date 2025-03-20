@@ -445,6 +445,7 @@ def put_volume(replicas=1, publish_status="", replica_location=""):
             replicas=replicas,
             size=VOLUME_SIZE,
             thin=False,
+            encrypted=False,
         ),
     )
 

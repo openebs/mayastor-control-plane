@@ -54,7 +54,7 @@ async fn rebuild_history_for_full_rebuild() {
     let volume_api = api_client.volumes_api();
     let nexus_client = cluster.grpc_client().nexus();
 
-    let body = CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false);
+    let body = CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false, false);
     let volid = VolumeId::new();
     let volume = volume_api.put_volume(&volid, body).await.unwrap();
     let volume = volume_api
@@ -184,7 +184,7 @@ async fn rebuild_history_for_partial_rebuild() {
     let api_client = cluster.rest_v00();
     let volume_api = api_client.volumes_api();
     let nexus_client = cluster.grpc_client().nexus();
-    let body = CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false);
+    let body = CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false, false);
     let volid = VolumeId::new();
     let volume = volume_api.put_volume(&volid, body).await.unwrap();
     let volume = volume_api
@@ -346,7 +346,7 @@ async fn rebuild_partial_disabled() {
     let api_client = cluster.rest_v00();
     let volume_api = api_client.volumes_api();
     let nexus_client = cluster.grpc_client().nexus();
-    let body = CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false);
+    let body = CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false, false);
     let volid = VolumeId::new();
     let volume = volume_api.put_volume(&volid, body).await.unwrap();
     let volume = volume_api

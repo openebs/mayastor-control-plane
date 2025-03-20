@@ -96,7 +96,9 @@ def a_thin_provisioned_volume_with_1_replica():
     """a thin provisioned volume with 1 replica."""
     volume = ApiClient.volumes_api().put_volume(
         VOLUME_UUID,
-        create_volume_body=CreateVolumeBody(VolumePolicy(True), 1, VOLUME_SIZE, True),
+        create_volume_body=CreateVolumeBody(
+            VolumePolicy(True), 1, VOLUME_SIZE, True, False
+        ),
     )
     volume = ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid,
@@ -112,7 +114,9 @@ def a_thin_provisioned_volume_with_2_replicas():
     """a thin provisioned volume with 2 replicas."""
     volume = ApiClient.volumes_api().put_volume(
         VOLUME_UUID,
-        create_volume_body=CreateVolumeBody(VolumePolicy(True), 2, VOLUME_SIZE, True),
+        create_volume_body=CreateVolumeBody(
+            VolumePolicy(True), 2, VOLUME_SIZE, True, False
+        ),
     )
 
     # Ensure it's the first replica that gets faulted with enospc to work around a datapath bug: GTM-609.

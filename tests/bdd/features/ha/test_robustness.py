@@ -131,7 +131,7 @@ def a_reconnect_delay_set_to_15s():
 def a_single_replica_volume():
     """a single replica volume."""
     ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(True), 1, VOLUME_SIZE, False)
+        VOLUME_UUID, CreateVolumeBody(VolumePolicy(True), 1, VOLUME_SIZE, False, False)
     )
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
@@ -146,7 +146,7 @@ def a_single_replica_volume():
 def a_2_replica_volume():
     """a 2 replica volume."""
     ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(True), 2, VOLUME_SIZE, False)
+        VOLUME_UUID, CreateVolumeBody(VolumePolicy(True), 2, VOLUME_SIZE, False, False)
     )
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,

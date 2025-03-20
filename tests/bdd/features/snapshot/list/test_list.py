@@ -318,6 +318,7 @@ def create_volume(replicas=1, volume_id="", publish_status="", replica_location=
             replicas=replicas,
             size=VOLUME_SIZE,
             thin=False,
+            encrypted=False,
         ),
     )
 

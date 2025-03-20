@@ -116,6 +116,7 @@ mod test {
                     1,
                     VOLUME_SIZE,
                     true,
+                    false,
                 ),
             )
             .await

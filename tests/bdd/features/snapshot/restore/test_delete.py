@@ -75,6 +75,7 @@ def a_single_replica_volume_from_the_snapshot(original_snapshot, volume_uuids):
             replicas=1,
             size=original_snapshot.definition.metadata.size,
             thin=True,
+            encrypted=False,
         ),
     )
     yield volume
@@ -101,6 +102,7 @@ def a_single_replica_volume_with_8mib_allocated(volume_uuids):
             replicas=1,
             size=88 * 1024 * 1024,
             thin=True,
+            encrypted=False,
         ),
     )
     # 8MiB get allocated on volume creation
@@ -325,6 +327,7 @@ def we_restore_volume_1_snapshot_2_into_restored_volume_2(
             replicas=1,
             size=restored_1_snapshot_2.definition.metadata.size,
             thin=True,
+            encrypted=False,
         ),
     )
     yield volume

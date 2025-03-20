@@ -42,7 +42,13 @@ async fn fs_consistent_snapshot() {
     let volume = volumes_api
         .put_volume(
             &VOLUME_UUID.parse().unwrap(),
-            models::CreateVolumeBody::new(models::VolumePolicy::new(true), 1, VOLUME_SIZE, true),
+            models::CreateVolumeBody::new(
+                models::VolumePolicy::new(true),
+                1,
+                VOLUME_SIZE,
+                true,
+                false,
+            ),
         )
         .await
         .expect("Failed to create volume");

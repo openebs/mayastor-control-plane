@@ -80,7 +80,7 @@ def cordon_node(node_name, label):
 
 def create_volume(vol_uuid):
     request = CreateVolumeBody(
-        VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False
+        VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
     )
     ApiClient.volumes_api().put_volume(vol_uuid, request)
     # Check that the volume was created.
@@ -89,7 +89,7 @@ def create_volume(vol_uuid):
 
 def create_volume_and_fail(vol_uuid):
     request = CreateVolumeBody(
-        VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False
+        VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
     )
     try:
         ApiClient.volumes_api().put_volume(vol_uuid, request)

@@ -142,6 +142,7 @@ def the_volume_belonging_to_a_affinity_group_with_one_replica_and_thin_is_create
                     replicas=1,
                     size=VOLUME_SIZE,
                     thin=bool(thin),
+                    encrypted=False,
                     affinity_group=AG_PARAM,
                 ),
             )
@@ -153,6 +154,7 @@ def the_volume_belonging_to_a_affinity_group_with_one_replica_and_thin_is_create
                     replicas=1,
                     size=VOLUME_SIZE,
                     thin=bool(thin),
+                    encrypted=False,
                     affinity_group=AG_PARAM,
                 ),
             )
@@ -245,7 +247,8 @@ def create_node_pools(node_pool_map: Dict[str, int]):
             )
             pool_index += 1
     ApiClient.volumes_api().put_volume(
-        NON_VG_VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 2, VOLUME_SIZE, False)
+        NON_VG_VOLUME_UUID,
+        CreateVolumeBody(VolumePolicy(False), 2, VOLUME_SIZE, False, False),
     )
 
 
@@ -258,6 +261,7 @@ def create_affinity_group(replicas, thin):
                 replicas=replicas,
                 size=VOLUME_SIZE,
                 thin=thin,
+                encrypted=False,
                 affinity_group=AG_PARAM,
             ),
         )

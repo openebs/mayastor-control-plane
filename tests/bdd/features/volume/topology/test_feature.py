@@ -162,6 +162,7 @@ def a_request_for_a_volume_with_topology_different_from_pools(create_request):
         NUM_VOLUME_REPLICAS,
         VOLUME_SIZE,
         False,
+        False,
         topology=Topology(
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(
@@ -181,6 +182,7 @@ def a_request_for_a_volume_with_topology_same_as_pool_labels(create_request):
         VolumePolicy(False),
         NUM_VOLUME_REPLICAS,
         VOLUME_SIZE,
+        False,
         False,
         topology=Topology(
             pool_topology=PoolTopology(
@@ -202,6 +204,7 @@ def a_request_for_a_volume_without_pool_topology(create_request):
         NUM_VOLUME_REPLICAS,
         VOLUME_SIZE,
         False,
+        False,
     )
     create_request[CREATE_REQUEST_KEY] = request
 
@@ -211,12 +214,7 @@ def an_existing_published_volume_without_pool_topology():
     """an existing published volume without pool topology"""
     ApiClient.volumes_api().put_volume(
         VOLUME_UUID,
-        CreateVolumeBody(
-            VolumePolicy(False),
-            1,
-            VOLUME_SIZE,
-            False,
-        ),
+        CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False, False),
     )
     # Publish volume so that there is a nexus to add a replica to.
     ApiClient.volumes_api().put_volume_target(
@@ -244,6 +242,7 @@ def an_existing_published_volume_with_a_topology_matching_pool_labels():
             VolumePolicy(False),
             1,
             VOLUME_SIZE,
+            False,
             False,
             topology=Topology(
                 pool_topology=PoolTopology(
@@ -273,6 +272,7 @@ def an_existing_published_volume_with_a_topology_not_matching_pool_labels():
             VolumePolicy(False),
             1,
             VOLUME_SIZE,
+            False,
             False,
             topology=Topology(
                 pool_topology=PoolTopology(

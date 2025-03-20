@@ -293,7 +293,13 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         .volumes_api()
         .put_volume(
             &volume_uuid,
-            models::CreateVolumeBody::new(models::VolumePolicy::default(), 1, 12582912u64, false),
+            models::CreateVolumeBody::new(
+                models::VolumePolicy::default(),
+                1,
+                12582912u64,
+                false,
+                false,
+            ),
         )
         .await
         .unwrap();
@@ -514,7 +520,13 @@ async fn unpublish_from_nonfrontend_node() {
         .volumes_api()
         .put_volume(
             &volume_uuid,
-            models::CreateVolumeBody::new(models::VolumePolicy::default(), 1, 12582912u64, false),
+            models::CreateVolumeBody::new(
+                models::VolumePolicy::default(),
+                1,
+                12582912u64,
+                false,
+                false,
+            ),
         )
         .await
         .unwrap();

@@ -101,7 +101,7 @@ def a_user_defined_maximum_number_of_rebuilds():
 def an_existing_published_volume(disks):
     """an existing published volume."""
     request = CreateVolumeBody(
-        VolumePolicy(True), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False
+        VolumePolicy(True), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
     )
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     ApiClient.volumes_api().put_volume_target(

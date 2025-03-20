@@ -86,6 +86,7 @@ def we_have_single_replica_publish_status_volume(publish_status):
             replicas=1,
             size=VOLUME1_SIZE,
             thin=False,
+            encrypted=False,
         ),
     )
     if publish_status == "published":

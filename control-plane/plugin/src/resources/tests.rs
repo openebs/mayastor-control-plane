@@ -40,6 +40,7 @@ async fn setup() {
                 thin: false,
                 affinity_group: None,
                 max_snapshots: None,
+                encrypted: false,
             },
         )
         .await
@@ -120,6 +121,7 @@ async fn get_volumes_paginated() {
                     labels: None,
                     affinity_group: None,
                     max_snapshots: None,
+                    encrypted: false,
                 },
             )
             .await

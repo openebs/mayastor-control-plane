@@ -132,7 +132,7 @@ def io_engine_is_installed_and_running():
 def a_volume_with_three_replicas_filled_with_user_data(disks):
     """a volume with three replicas, filled with user data."""
     request = CreateVolumeBody(
-        VolumePolicy(True), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False
+        VolumePolicy(True), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
     )
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     volume = ApiClient.volumes_api().put_volume_target(

@@ -46,6 +46,7 @@ async fn upgrade() {
                 replicas as u8,
                 volume_1_size,
                 false,
+                false,
             ),
         )
         .await

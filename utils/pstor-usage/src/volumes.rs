@@ -37,6 +37,7 @@ impl ResourceMgr for VolMgr {
                         self.n_replicas,
                         self.size_bytes,
                         false,
+                        false,
                     ),
                 )
                 .await?;

@@ -108,6 +108,7 @@ def a_valid_snapshot_of_a_multi_replica_volume(volume_uuids, snapshot_uuids):
             replicas=3,
             size=20 * 1024 * 1024,
             thin=False,
+            encrypted=False,
         ),
     )
     ApiClient.snapshots_api().put_volume_snapshot(volume_uuids[0], snapshot_uuids[0])
@@ -131,6 +132,7 @@ def we_attempt_to_create_4_new_volumes_with_the_snapshot_as_their_source(
             replicas=1,
             size=20 * 1024 * 1024,
             thin=True,
+            encrypted=False,
         )
         try:
             volume = ApiClient.volumes_api().put_snapshot_volume(
@@ -165,6 +167,7 @@ def we_create_a_new_volume_with_repl_count_replicas_using_snapshot_as_its_source
         replicas=repl_count,
         size=20 * 1024 * 1024,
         thin=True,
+        encrypted=False,
     )
     volume = ApiClient.volumes_api().put_snapshot_volume(
         snapshot_uuids[0], volume_uuids[1], body
@@ -241,6 +244,7 @@ def we_create_volume_restore_index_with_the_previous_snapshot_as_its_source(
         replicas=1,
         size=20 * 1024 * 1024,
         thin=True,
+        encrypted=False,
     )
     yield ApiClient.volumes_api().put_snapshot_volume(
         snapshot_uuids[index - 1], volume_uuids[index], body
@@ -368,6 +372,7 @@ def a_request_to_create_a_new_volume_with_the_snapshot_as_its_source():
         replicas=3,
         size=20 * 1024 * 1024,
         thin=True,
+        encrypted=False,
     )
 
 

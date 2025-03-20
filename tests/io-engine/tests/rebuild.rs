@@ -47,6 +47,7 @@ async fn concurrent_rebuilds() {
                     replica_count,
                     1 * gig,
                     false,
+                    false,
                 ),
             )
             .await
@@ -392,6 +393,7 @@ async fn repeated_volume_rebuilds() {
                     2,
                     volume_1_size,
                     false,
+                    false,
                 ),
             )
             .await
@@ -621,6 +623,7 @@ async fn repeated_volume_double_rebuilds() {
                     1,
                     volume_1_size,
                     false,
+                    false,
                 ),
             )
             .await
@@ -799,6 +802,7 @@ async fn fault_rebuild_verify() {
                 1,
                 volume_1_size,
                 false,
+                false,
             ),
         )
         .await
@@ -923,6 +927,7 @@ async fn destroy_rebuilding_nexus() {
                 models::VolumePolicy::new(false),
                 1,
                 volume_1_size,
+                false,
                 false,
             ),
         )
