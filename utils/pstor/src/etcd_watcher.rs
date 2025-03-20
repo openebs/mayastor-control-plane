@@ -15,10 +15,8 @@ const WATCH_ALL_TMO: Duration = Duration::from_secs(15);
 /// When a watch is requested, we expect etcd to accept it within this timeframe, and return
 /// a created event.
 const WATCH_ACCEPT_TMO: Duration = Duration::from_secs(10);
-/// Timeout for response when checking the client status.
-const HEALTH_CHECK_TMO: Duration = Duration::from_secs(5);
 /// We should be receiving progress reports every 10 minutes or so.
-const NO_PROGRESS_TMO: Duration = Duration::from_secs(60 * 20);
+const NO_PROGRESS_TMO: Duration = Duration::from_secs(60 * 12);
 
 enum WatchRequest<Ctx: Send + Sync + 'static> {
     Register(WatchRegister<Ctx>),
@@ -46,6 +44,7 @@ struct WatchConfig<Ctx: Send + Sync + 'static> {
     // Timestamp of the last watch event.
     updated: Option<std::time::Instant>,
     closed: bool,
+    requested_progress: bool,
 }
 impl<Ctx: Send + Sync + 'static> WatchConfig<Ctx> {
     fn register(&mut self, register: WatchRegister<Ctx>) {
@@ -61,21 +60,24 @@ impl<Ctx: Send + Sync + 'static> WatchConfig<Ctx> {
         tracing::info!("Removing watch key: {key}");
         self.keys.remove(key);
     }
-    fn update(&mut self, key: &str, rev: i64, updated_key: &str) -> WatchResult {
-        let Some(value) = self.keys.get_mut(key) else {
+    fn update(&mut self, key: &str, rev: i64, updated_key: &str, value: &str) -> WatchResult {
+        let Some(config) = self.keys.get_mut(key) else {
             // todo: if we can't find the key, should we request watch removal?
             return WatchResult::Continue;
         };
 
-        let old_rev = value.rev;
-        tracing::trace!("Updating {key} from revision {old_rev} to {rev} due to {updated_key}");
-        value.rev = rev;
+        let old_rev = config.rev;
+        if rev != old_rev {
+            tracing::trace!("Updating {key} from revision {old_rev} to {rev} due to {updated_key}");
+            config.rev = rev;
+        }
 
         // callback and update the data, ex: volume update callback!
         (self.ctx_cb)(WatchCbArg {
             updated_key,
             key_prefix: key,
-            cb_ctx: &value.ctx,
+            cb_ctx: &config.ctx,
+            value,
         })
     }
     fn update_rev(&mut self, header: Option<&ResponseHeader>) {
@@ -86,6 +88,7 @@ impl<Ctx: Send + Sync + 'static> WatchConfig<Ctx> {
     fn update_response(&mut self, response: &WatchResponse) {
         self.update_rev(response.header());
         self.updated = Some(std::time::Instant::now());
+        self.requested_progress = false;
     }
 }
 
@@ -127,7 +130,7 @@ impl StreamedWatcher {
         Ok(Self {
             watcher,
             stream,
-            watched_next: 1..i64::MAX,
+            watched_next: 1 .. i64::MAX,
             watch_ids: Default::default(),
             waiting_ids: Default::default(),
             watch_keys: Default::default(),
@@ -137,7 +140,8 @@ impl StreamedWatcher {
         &mut self,
         data: &WatchConfig<Ctx>,
     ) -> Result<(), etcd_client::Error> {
-        let rev = data.rev;
+        // don't bother receiving the same event again
+        let rev = data.rev.map(|r| r + 1);
         for (key, cfg) in &data.keys {
             self.watch_key_prefix(key.clone(), rev.or(Some(cfg.rev)))
                 .await?;
@@ -223,7 +227,7 @@ impl StreamedWatcher {
             };
 
             if matches!(
-                config.update(registrant_key, kv.mod_revision(), k),
+                config.update(registrant_key, kv.mod_revision(), k, v),
                 WatchResult::Remove
             ) && unregister.is_none()
             {
@@ -253,6 +257,7 @@ impl<Ctx: Send + Sync + 'static> EtcdWatchRunner<Ctx> {
                 ctx_cb: Box::new(ctx_cb),
                 rev: None,
                 updated: None,
+                requested_progress: false,
             },
         }
     }
@@ -290,8 +295,8 @@ impl<Ctx: Send + Sync + 'static> EtcdWatchRunner<Ctx> {
         EtcdWatcher { watcher: send }
     }
 
-    /// Handles a new [`WatchRequest`] when we are in the [`WatchState::Idle`] state, awaiting the very
-    /// first request.
+    /// Handles a new [`WatchRequest`] when we are in the [`WatchState::Idle`] state, awaiting the
+    /// very first request.
     fn handle_request_idle(&mut self, op: Option<WatchRequest<Ctx>>) -> WatchState {
         match op {
             None => WatchState::Closed,
@@ -368,7 +373,7 @@ impl<Ctx: Send + Sync + 'static> EtcdWatchRunner<Ctx> {
         &mut self,
         request: &mut tokio::sync::mpsc::UnboundedReceiver<WatchRequest<Ctx>>,
     ) {
-        for _ in 0..100 {
+        for _ in 0 .. 100 {
             match request.try_recv() {
                 Ok(WatchRequest::Register(register)) => {
                     self.config.register(register);
@@ -390,6 +395,7 @@ impl<Ctx: Send + Sync + 'static> EtcdWatchRunner<Ctx> {
     /// When in the [`WatchState::Connecting`] state we attempt the first connection, and we connect
     /// all the registered keys in the [`WatchConfig].
     async fn handle_connecting(&mut self) -> WatchState {
+        self.config.requested_progress = false;
         if self.config.closed {
             return WatchState::Closed;
         }
@@ -436,7 +442,7 @@ impl<Ctx: Send + Sync + 'static> EtcdWatchRunner<Ctx> {
         }
     }
 
-    async fn health_check(&mut self, watcher: StreamedWatcher) -> WatchState {
+    async fn health_check(&mut self, mut watcher: StreamedWatcher) -> WatchState {
         for (id, registered) in &watcher.waiting_ids {
             if registered.elapsed() > WATCH_ACCEPT_TMO {
                 return self.handle_error_msg(format!(
@@ -445,20 +451,25 @@ impl<Ctx: Send + Sync + 'static> EtcdWatchRunner<Ctx> {
                 ));
             }
         }
-        match tokio::time::timeout(HEALTH_CHECK_TMO, self.client.status()).await {
-            Ok(Ok(status)) => {
-                self.config.update_rev(status.header());
-                if let Some(updated) = self.config.updated {
-                    if updated.elapsed() > NO_PROGRESS_TMO {
-                        return self.handle_error_msg(format!(
-                            "No progress notification within {NO_PROGRESS_TMO:?}"
-                        ));
-                    }
-                }
-                WatchState::Watching(watcher)
+        if let Some(updated) = self.config.updated {
+            if updated.elapsed() > NO_PROGRESS_TMO && self.requested_progress(&mut watcher).await {
+                return self.handle_error_msg(format!(
+                    "No progress notification within {NO_PROGRESS_TMO:?}"
+                ));
             }
-            Ok(Err(error)) => self.handle_error(&error, "Fetching client status"),
-            Err(error) => self.handle_error(&error, "Fetching client status"),
+        }
+        WatchState::Watching(watcher)
+    }
+
+    /// If there are no keys matching our watches, then we get no progress from the etcd.
+    /// In this case, let's try to request progress anyway, only once.
+    async fn requested_progress(&mut self, watcher: &mut StreamedWatcher) -> bool {
+        if self.config.requested_progress {
+            true
+        } else {
+            watcher.watcher.request_progress().await.ok();
+            self.config.requested_progress = true;
+            false
         }
     }
 }

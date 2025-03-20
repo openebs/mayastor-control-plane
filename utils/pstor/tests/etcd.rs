@@ -1,5 +1,5 @@
 use composer::{Binary, Builder, ComposeTest, ContainerSpec};
-use pstor::{etcd::Etcd, Store, StoreKv, StoreKvWatcher, WatchEvent, WatchKey, WatchResult};
+use pstor::{etcd::Etcd, Store, StoreKv, WatchEvent, WatchKey, WatchResult};
 use serde::{Deserialize, Serialize};
 use std::{
     io,
@@ -143,7 +143,8 @@ async fn test_kv_watcher(_test: ComposeTest) -> Result<(), etcd_client::Error> {
         WatchResult::Continue
     });
 
-    let volumes = std::iter::repeat_n(0, updates)
+    let volumes = std::iter::repeat(0)
+        .take(updates)
         .enumerate()
         .map(|(i, _)| format!("/volume/{i}/nexus"))
         .collect::<Vec<_>>();

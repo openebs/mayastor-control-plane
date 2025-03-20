@@ -16,18 +16,21 @@ use stor_port::{
     types::v0::{
         store::{
             nexus::NexusSpec,
+            nexus_persistence::NexusInfo,
             replica::ReplicaSpec,
             snapshots::{replica::ReplicaSnapshotSpec, volume::VolumeSnapshot},
             volume::VolumeSpec,
         },
         transport::{
-            uri_with_hostnqn, Nexus, NexusStatus, NodeBugFix, ReplicaSnapshot, ReplicaStatus,
-            ReplicaTopology, SnapshotId, Volume, VolumeId, VolumeState, VolumeStatus, VolumeUsage,
+            uri_with_hostnqn, ChildState, Nexus, NexusStatus, NodeBugFix, ReplicaSnapshot,
+            ReplicaStatus, ReplicaTopology, SnapshotId, Volume, VolumeHealth, VolumeId,
+            VolumeState, VolumeStatus, VolumeUsage,
         },
     },
     IntoOption,
 };
 
+use crate::controller::resources::VolumeHealthWatcher;
 use std::collections::HashMap;
 
 impl Registry {
@@ -39,7 +42,19 @@ impl Registry {
         let volume_spec = self.specs().volume_clone(volume_uuid)?;
         let replica_specs = self.specs().volume_replicas_cln(volume_uuid);
 
-        self.volume_state_with_replicas(&volume_spec, &replica_specs)
+        self.volume_state_with_replicas(&volume_spec, &replica_specs, None)
+            .await
+    }
+
+    /// Get the volume state for the specified volume, with added health information.
+    pub(crate) async fn volume_state_health(
+        &self,
+        volume_uuid: &VolumeId,
+    ) -> Result<VolumeState, SvcError> {
+        let volume_spec = self.specs().volume_clone(volume_uuid)?;
+        let replica_specs = self.specs().volume_replicas_cln(volume_uuid);
+
+        self.volume_state_with_replicas(&volume_spec, &replica_specs, self.health())
             .await
     }
 
@@ -49,6 +64,7 @@ impl Registry {
         &self,
         volume_spec: &VolumeSpec,
         replicas: &[ReplicaSpec],
+        health: Option<&VolumeHealthWatcher>,
     ) -> Result<VolumeState, SvcError> {
         let replica_specs = replicas
             .iter()
@@ -67,6 +83,10 @@ impl Registry {
             }
         };
 
+        let health = volume_spec
+            .health_info_id()
+            .and_then(|i| health.and_then(|h| h.health(i)));
+
         let mut total_replica = 0;
         let mut total_snapshots = 0;
         let mut largest_replica = 0;
@@ -76,7 +96,7 @@ impl Registry {
         // Construct the topological information for the volume replicas.
         let mut replica_topology = HashMap::new();
         for replica_spec in &replica_specs {
-            let replica = self.replica_topology(replica_spec, &nexus).await;
+            let replica = self.replica_topology(replica_spec, &nexus, &health).await;
             if let Some(usage) = replica.usage() {
                 let allocated = usage.allocated();
                 let allocated_snaps = usage.allocated_snapshots();
@@ -106,8 +126,37 @@ impl Registry {
             total_snapshots,
         ));
 
-        // todo: fill in info from the pstor(etcd)
-        let health = None;
+        let health = health.map(|info| {
+            let healthy = info.children.iter().filter(|c| c.healthy);
+            let online_healthy = healthy.clone().filter(|c| {
+                replica_topology
+                    .iter()
+                    .any(|(r, t)| r == &c.uuid && t.status().online())
+            });
+            let online_healthy_replicas = online_healthy.count() as u8;
+            VolumeHealth {
+                clean_shutdown: info.clean_shutdown,
+                healthy_replicas: info.nr_healthy_replicas(),
+                clean_replicas: if info.clean_shutdown {
+                    info.nr_healthy_replicas()
+                } else {
+                    info.nr_healthy_replicas().min(1)
+                },
+                online_healthy_replicas,
+                online_clean_replicas: if info.clean_shutdown {
+                    online_healthy_replicas
+                } else {
+                    online_healthy_replicas.min(1)
+                },
+                live_healthy_replicas: healthy
+                    .filter(|c| {
+                        replica_topology.iter().any(|(r, t)| {
+                            r == &c.uuid && matches!(t.child_status(), Some(ChildState::Online))
+                        })
+                    })
+                    .count() as u8,
+            }
+        });
 
         Ok(if let Some((nexus, mut nexus_state)) = nexus {
             let ah = nexus.lock().allowed_hosts.clone();
@@ -129,20 +178,46 @@ impl Registry {
                 health,
             }
         } else {
+            let mut status = match volume_spec.health_info_id() {
+                // Volume never published, any replica may be used
+                None => VolumeStatus::Online,
+                Some(_) => {
+                    match &health {
+                        // for some reason, we don't have the etcd health information!?
+                        None => {
+                            if volume_spec.target().is_none() {
+                                if replica_specs.len() >= volume_spec.num_replicas as usize {
+                                    VolumeStatus::Online
+                                } else if replica_specs.is_empty() {
+                                    VolumeStatus::Faulted
+                                } else {
+                                    VolumeStatus::Degraded
+                                }
+                            } else {
+                                VolumeStatus::Unknown
+                            }
+                        }
+                        Some(h) => {
+                            if h.online_clean_replicas >= volume_spec.num_replicas {
+                                VolumeStatus::Online
+                            } else if h.online_clean_replicas > 0 {
+                                VolumeStatus::Degraded
+                            } else {
+                                VolumeStatus::Faulted
+                            }
+                        }
+                    }
+                }
+            };
+            if volume_spec.target().is_some() && status == VolumeStatus::Online {
+                // If the target is not coming up, mark volume status as degraded?
+                // This is mixing the target and replica status may lead to confusion.
+                status = VolumeStatus::Degraded;
+            }
             VolumeState {
                 uuid: volume_spec.uuid.to_owned(),
                 size: volume_spec.size,
-                status: if volume_spec.target().is_none() {
-                    if replica_specs.len() >= volume_spec.num_replicas as usize {
-                        VolumeStatus::Online
-                    } else if replica_specs.is_empty() {
-                        VolumeStatus::Faulted
-                    } else {
-                        VolumeStatus::Degraded
-                    }
-                } else {
-                    VolumeStatus::Unknown
-                },
+                status,
                 target: None,
                 replica_topology,
                 usage,
@@ -157,9 +232,12 @@ impl Registry {
         &self,
         spec: &ReplicaSpec,
         nexus: &Option<(ResourceMutex<NexusSpec>, Nexus)>,
+        health: &Option<std::sync::Arc<NexusInfo>>,
     ) -> ReplicaTopology {
         // todo: fill in info from the pstor(etcd)
-        let healthy = None;
+        let healthy = health
+            .as_ref()
+            .map(|health| health.is_replica_healthy(&spec.uuid));
         match self.replica(&spec.uuid).await {
             Ok(state) => {
                 let child = nexus.as_ref().and_then(|(_, n)| n.child(&state.uri));
@@ -213,7 +291,10 @@ impl Registry {
         let replicas = self.specs().replicas_cloned();
         let mut volumes = Vec::with_capacity(volume_specs.len());
         for spec in volume_specs {
-            if let Ok(state) = self.volume_state_with_replicas(&spec, &replicas).await {
+            if let Ok(state) = self
+                .volume_state_with_replicas(&spec, &replicas, self.health())
+                .await
+            {
                 volumes.push(Volume::new(spec, state));
             }
         }
@@ -229,7 +310,7 @@ impl Registry {
         let mut volumes = Vec::with_capacity(volume_specs.len());
         let last = volume_specs.last();
         for spec in volume_specs.result() {
-            if let Ok(state) = self.volume_state(&spec.uuid).await {
+            if let Ok(state) = self.volume_state_health(&spec.uuid).await {
                 volumes.push(Volume::new(spec, state));
             }
         }
@@ -240,7 +321,7 @@ impl Registry {
     pub(crate) async fn volume(&self, id: &VolumeId) -> Result<Volume, SvcError> {
         Ok(Volume::new(
             self.specs().volume_clone(id)?,
-            self.volume_state(id).await?,
+            self.volume_state_health(id).await?,
         ))
     }
 

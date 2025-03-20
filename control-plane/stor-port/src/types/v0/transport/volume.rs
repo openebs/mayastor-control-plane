@@ -83,7 +83,7 @@ pub struct VolumeHealth {
     pub healthy_replicas: u8,
     /// Indicates how many volume healthy replicas were part of a clean shutdown.
     /// If cleanShutdown is true, then this is equal to healthyReplicas.
-    /// If cleanShutdown is true, then this is equal to 1.
+    /// If cleanShutdown is false, then this is equal to 1.
     pub clean_replicas: u8,
     /// Indicates how many volume healthyReplicas are online.
     pub online_healthy_replicas: u8,

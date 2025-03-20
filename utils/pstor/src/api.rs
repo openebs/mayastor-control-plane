@@ -51,13 +51,13 @@ pub trait StoreKv: Sync + Send + Clone {
     >(
         &self,
         ctx_cb: W,
-    ) -> impl StoreKvWatcher<Ctx> + 'static;
+    ) -> Box<dyn StoreKvWatcher<Ctx> + 'static>;
 }
 
 /// Trait defining the operations that can be performed on a key-value store using object semantics.
 /// It allows for abstracting the key component into the `StorableObject` itself.
 #[async_trait]
-pub trait StoreObj: StoreKv + Sync + Send + Clone {
+pub trait StoreObj: Sync + Send + Clone {
     /// Puts the given `O` object into the store.
     async fn put_obj<O: StorableObject>(&mut self, object: &O) -> Result<(), Error>;
     /// Gets the object `O` through its `O::Key`.
@@ -77,9 +77,9 @@ pub struct WatchKey {
 }
 impl WatchKey {
     /// Create a new `Self` with the given key prefix.
-    pub fn new(prefix: &str) -> Self {
+    pub fn new(prefix: impl Into<String>) -> Self {
         Self {
-            prefix: prefix.to_string(),
+            prefix: prefix.into(),
             rev: None,
         }
     }
@@ -104,11 +104,13 @@ pub struct WatchCbArg<'a, Ctx> {
     pub cb_ctx: &'a Ctx,
     /// The actual key which was updated (which contains the prefix of `key_prefix`).
     pub updated_key: &'a str,
+    /// The latest value returned by the watch event.
+    pub value: &'a str,
 }
 
 /// Trait defining the operations that can be performed on a key-value store using object semantics.
 /// It allows for abstracting the key component into the `StorableObject` itself.
-pub trait StoreKvWatcher<Ctx: Send + Sync + 'static> {
+pub trait StoreKvWatcher<Ctx: Send + Sync + 'static = ()>: Send + Sync {
     /// Watch for the key prefix specified in the [`WatchKey`].
     /// Callbacks are received by the global [`WatchCallback`].
     fn watch(&self, key: WatchKey, ctx: Ctx) -> Result<(), Error>;

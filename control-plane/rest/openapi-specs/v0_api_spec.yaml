@@ -3779,6 +3779,8 @@ components:
           description: Indicates how many volume replicas are marked as healthy.
           type: integer
           format: uint8
+          minimum: 0
+          maximum: 255
         cleanReplicas:
           description: |-
             Indicates how many volume healthy replicas were part of a clean shutdown.
@@ -3786,18 +3788,26 @@ components:
             If cleanShutdown is true, then this is equal to 1.
           type: integer
           format: uint8
+          minimum: 0
+          maximum: 255
         onlineHealthyReplicas:
           description: Indicates how many volume healthyReplicas are online.
           type: integer
           format: uint8
+          minimum: 0
+          maximum: 255
         onlineCleanReplicas:
           description: Indicates how many volume cleanReplicas are online.
           type: integer
           format: uint8
+          minimum: 0
+          maximum: 255
         liveHealthyReplicas:
           description: Indicates how many volume replicas are currently online in the volume target.
           type: integer
           format: uint8
+          minimum: 0
+          maximum: 255
       required:
         - cleanShutdown
         - healthyReplicas
