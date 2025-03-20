@@ -41,6 +41,7 @@ def a_published_selfhealing_volume():
         NUM_VOLUME_REPLICAS,
         VOLUME_SIZE,
         False,
+        False,
         topology=Topology(
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(

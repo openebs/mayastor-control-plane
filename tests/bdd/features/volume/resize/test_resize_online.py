@@ -150,7 +150,7 @@ def uncordon_node(node_name, label):
 def create_volume_only(uuid, size, rcount):
     volume = ApiClient.volumes_api().put_volume(
         uuid,
-        CreateVolumeBody(VolumePolicy(True), int(rcount), size, False),
+        CreateVolumeBody(VolumePolicy(True), int(rcount), size, False, False),
     )
     assert volume.spec.uuid == uuid
     replicas = volume.state.replica_topology
@@ -342,10 +342,7 @@ def the_volume_is_receiving_io(test_volume_factory):
 def a_new_volume_is_created_with_the_snapshot_as_its_source():
     """a new volume is created with the snapshot as its source."""
     body = CreateVolumeBody(
-        VolumePolicy(True),
-        replicas=1,
-        size=VOLUME_SIZE,
-        thin=True,
+        VolumePolicy(True), replicas=1, size=VOLUME_SIZE, thin=True, encrypted=False
     )
     volume = ApiClient.volumes_api().put_snapshot_volume(
         SNAP_UUID_1, RESTORE_VOLUME_UUID, body

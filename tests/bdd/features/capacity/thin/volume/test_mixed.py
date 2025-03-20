@@ -68,7 +68,9 @@ def a_single_replica_overcommitted_thin_volume():
     """a single replica overcommitted thin volume."""
     volume = ApiClient.volumes_api().put_volume(
         THIN_VOLUME_UUID,
-        create_volume_body=CreateVolumeBody(VolumePolicy(True), 1, VOLUME_SIZE, True),
+        create_volume_body=CreateVolumeBody(
+            VolumePolicy(True), 1, VOLUME_SIZE, True, False
+        ),
     )
     volume = ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid,
@@ -84,7 +86,9 @@ def a_single_replica_thick_volume():
     """a single replica thick volume."""
     volume = ApiClient.volumes_api().put_volume(
         THICK_VOLUME_UUID,
-        create_volume_body=CreateVolumeBody(VolumePolicy(True), 1, VOLUME_SIZE, False),
+        create_volume_body=CreateVolumeBody(
+            VolumePolicy(True), 1, VOLUME_SIZE, False, False
+        ),
     )
     volume = ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid,

@@ -388,6 +388,7 @@ def create_volume_body(replica, volume_pool_topology_inclusion_label):
         int(replica),
         VOLUME_SIZE,
         False,
+        False,
         topology=topology,
     )
 

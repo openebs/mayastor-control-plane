@@ -64,7 +64,13 @@ def one_non_affinity_group_volume_with_2_replica_published_on_node_b():
     """one non affinity group volume with 2 replica published on node B."""
     ApiClient.volumes_api().put_volume(
         NON_AG_VOLUME_UUID,
-        CreateVolumeBody(VolumePolicy(False), replicas=2, size=VOLUME_SIZE, thin=True),
+        CreateVolumeBody(
+            VolumePolicy(False),
+            replicas=2,
+            size=VOLUME_SIZE,
+            thin=True,
+            encrypted=False,
+        ),
     )
     ApiClient.volumes_api().put_volume_target(
         NON_AG_VOLUME_UUID,
@@ -87,6 +93,7 @@ def one_unpublished_affinity_group_volume_with_2_replica():
             replicas=2,
             size=VOLUME_SIZE,
             thin=True,
+            encrypted=False,
             affinity_group=AG_PARAM,
         ),
     )
@@ -102,6 +109,7 @@ def one_affinity_group_volume_with_2_replica_published_on_node_a():
             replicas=2,
             size=VOLUME_SIZE,
             thin=True,
+            encrypted=False,
             affinity_group=AG_PARAM,
         ),
     )
@@ -223,6 +231,7 @@ def create_affinity_group():
                 replicas=2,
                 size=VOLUME_SIZE,
                 thin=True,
+                encrypted=False,
                 affinity_group=AG_PARAM,
             ),
         )

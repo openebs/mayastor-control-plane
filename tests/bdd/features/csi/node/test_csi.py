@@ -101,7 +101,7 @@ def volumes(setup):
     for n in range(5):
         uuid = get_uuid(n)
         volume = ApiClient.volumes_api().put_volume(
-            uuid, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False)
+            uuid, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False, False)
         )
         volumes.append(volume)
     yield volumes

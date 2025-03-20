@@ -115,7 +115,7 @@ def background():
         POOL_NODE, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=100"])
     )
     ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False)
+        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False, False)
     )
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,

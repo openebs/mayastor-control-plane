@@ -57,7 +57,7 @@ def init(num_volumes):
         ApiClient.volumes_api().put_volume(
             volume_uuid,
             CreateVolumeBody(
-                VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False
+                VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
             ),
         )
     num_volumes[NUM_VOLUMES_KEY] = len(ApiClient.volumes_api().get_volumes().entries)

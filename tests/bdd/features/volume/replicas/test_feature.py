@@ -74,7 +74,9 @@ def init_resources(disks):
     )
     ApiClient.volumes_api().put_volume(
         VOLUME_UUID,
-        CreateVolumeBody(VolumePolicy(True), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False),
+        CreateVolumeBody(
+            VolumePolicy(True), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
+        ),
     )
     ApiClient.pools_api().put_node_pool(
         NODE_3_NAME, POOL_3_UUID, CreatePoolBody([disks[2]])

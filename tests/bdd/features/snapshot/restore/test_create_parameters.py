@@ -80,6 +80,7 @@ def a_request_to_create_a_new_volume_with_the_snapshot_as_its_source():
         replicas=1,
         size=20 * 1024 * 1024,
         thin=True,
+        encrypted=False,
     )
 
 
@@ -93,6 +94,7 @@ def a_valid_snapshot_of_a_single_replica_volume():
             replicas=1,
             size=20 * 1024 * 1024,
             thin=False,
+            encrypted=False,
         ),
     )
     ApiClient.snapshots_api().put_volume_snapshot(VOLUME_UUID, SNAPSHOT_UUID)

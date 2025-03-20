@@ -62,7 +62,7 @@ def init(create_pool_disk_images):
 
     # Create and publish a volume on node 1
     request = CreateVolumeBody(
-        VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False
+        VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
     )
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     ApiClient.volumes_api().put_volume_target(

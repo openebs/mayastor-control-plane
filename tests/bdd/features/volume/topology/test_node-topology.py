@@ -578,6 +578,7 @@ def create_volume_body(
         int(replica),
         VOLUME_SIZE,
         False,
+        False,
         topology=topology,
     )
 

@@ -106,7 +106,7 @@ def there_are_4_overcommitted_thin_volumes():
         volume = ApiClient.volumes_api().put_volume(
             str(uuid.uuid4()),
             create_volume_body=CreateVolumeBody(
-                VolumePolicy(True), 2, size * 1024 * 1024, True
+                VolumePolicy(True), 2, size * 1024 * 1024, True, False
             ),
         )
         volume = ApiClient.volumes_api().put_volume_target(
