@@ -67,8 +67,11 @@ impl Etcd {
             .map_err(|error| Error::NotReady {
                 reason: format!("Platform not ready: {error}"),
             })?;
-
-        let client = Client::connect(endpoints, None).await.context(Connect {})?;
+        let options =
+            etcd_client::ConnectOptions::new().with_keep_alive(lease_time, lease_time * 3);
+        let client = Client::connect(endpoints, Some(options))
+            .await
+            .context(Connect {})?;
 
         let lease_info = EtcdSingletonLock::start(client.clone(), service_kind, lease_time).await?;
         Ok(Self::from(&client, Some(lease_info)))
