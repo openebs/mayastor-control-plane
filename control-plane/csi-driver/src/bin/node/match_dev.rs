@@ -79,7 +79,8 @@ pub(super) fn match_nvmf_device<'a>(device: &'a Device, key: &str) -> Option<&'a
 pub(super) fn match_nvmf_device_valid<'a>(
     device: &'a Device,
     key: &str,
+    multipath: Option<bool>,
 ) -> Result<Option<&'a str>, DeviceError> {
     let cell = std::sync::atomic::AtomicBool::new(true);
-    super::dev::nvmf::match_device(device, key, &cell)
+    super::dev::nvmf::match_device(device, key, multipath, &cell)
 }

@@ -21,13 +21,10 @@ pub(crate) async fn patch_k8s_node(
         )
         .await
     {
-        Ok(_) => trace!("Patched node: {} with patch: {}", node_name, node_patch),
-        Err(error) => anyhow::bail!(
-            "Failed to patch node: {} with patch: {}. {}",
-            node_name,
-            node_patch,
-            error
-        ),
+        Ok(_) => trace!("Patched node: {node_name} with patch: {node_patch}"),
+        Err(error) => {
+            anyhow::bail!("Failed to patch node: {node_name} with patch: {node_patch}. {error}")
+        }
     }
     Ok(())
 }
