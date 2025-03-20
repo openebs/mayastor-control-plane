@@ -5,6 +5,7 @@ use crate::{
         openapi::models,
         store::{
             definitions::{ObjectKey, StorableObject, StorableObjectType},
+            nexus_persistence::VolumeHealthKey,
             AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{
@@ -15,7 +16,6 @@ use crate::{
     },
     IntoOption,
 };
-
 use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -438,6 +438,11 @@ impl VolumeSpec {
             return Some(id);
         }
         self.target_config.as_ref().map(|c| &c.target.nexus)
+    }
+    /// Get the [`VolumeHealthKey`] for the [`Self::health_info_id`].
+    pub fn health_info_key(&self) -> Option<VolumeHealthKey> {
+        self.health_info_id()
+            .map(|target| VolumeHealthKey::new(self.uuid.clone(), target.clone()))
     }
     /// Set the content source.
     pub fn set_content_source(&mut self, content_source: Option<VolumeContentSource>) {

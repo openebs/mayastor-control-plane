@@ -30,10 +30,10 @@ use stor_port::{
         openapi::{models, models::NodeStatus},
         store::nexus_persistence::{NexusInfo, NexusInfoKey},
         transport::{
-            Child, ChildState, CreateVolume, DestroyVolume, Filter, GetNexuses, GetReplicas,
+            self, Child, ChildState, CreateVolume, DestroyVolume, Filter, GetNexuses, GetReplicas,
             GetVolumes, Nexus, NodeId, PublishVolume, SetVolumeReplica, ShareVolume, Topology,
-            UnpublishVolume, UnshareVolume, Volume, VolumeId, VolumeShareProtocol, VolumeState,
-            VolumeStatus,
+            UnpublishVolume, UnshareVolume, Volume, VolumeHealth, VolumeId, VolumeShareProtocol,
+            VolumeState, VolumeStatus,
         },
     },
 };
@@ -1120,4 +1120,221 @@ async fn offline_node(cluster: &Cluster) {
             assert_eq!(err.kind, ReplyErrorKind::ResourceExhausted)
         }
     }
+}
+
+#[tokio::test]
+async fn health() {
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_io_engines(3)
+        .with_tmpfs_pool(100 * 1024 * 1024)
+        .with_cache_period("150ms")
+        .with_reconcile_period(Duration::from_secs(100), Duration::from_secs(100))
+        .build()
+        .await
+        .unwrap();
+
+    let volume_client = cluster.grpc_client().volume();
+    let volume = volume_client
+        .create(
+            &CreateVolume {
+                uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
+                size: 5242880,
+                replicas: 3,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let volume = volume_client
+        .publish(
+            &PublishVolume::new(
+                volume.spec().uuid.clone(),
+                Some(cluster.node(0)),
+                None,
+                HashMap::new(),
+                vec![],
+            ),
+            None,
+        )
+        .await
+        .unwrap();
+
+    cluster.composer().kill(&cluster.node(2)).await.unwrap();
+
+    wait_for_health(
+        &volume.state(),
+        &volume_client,
+        Duration::from_secs(2),
+        |h| {
+            h.healthy_replicas == 2
+                && !h.clean_shutdown
+                && h.online_clean_replicas == 1
+                && h.clean_replicas == 1
+                && h.live_healthy_replicas == 2
+                && h.online_healthy_replicas == 2
+        },
+    )
+    .await
+    .unwrap();
+
+    let volume = volume_client
+        .unpublish(
+            &UnpublishVolume::new(&volume.spec().uuid, false, vec![]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    wait_for_health(
+        &volume.state(),
+        &volume_client,
+        Duration::from_secs(2),
+        |h| {
+            h.healthy_replicas == 2
+                && h.clean_shutdown
+                && h.online_clean_replicas == 2
+                && h.clean_replicas == 2
+                && h.live_healthy_replicas == 0
+                && h.online_healthy_replicas == 2
+        },
+    )
+    .await
+    .unwrap();
+
+    cluster.composer().stop(&cluster.node(1)).await.unwrap();
+
+    wait_for_health(
+        &volume.state(),
+        &volume_client,
+        Duration::from_secs(2),
+        |h| {
+            h.healthy_replicas == 2
+                && h.clean_shutdown
+                && h.online_clean_replicas == 1
+                && h.clean_replicas == 2
+                && h.live_healthy_replicas == 0
+                && h.online_healthy_replicas == 1
+        },
+    )
+    .await
+    .unwrap();
+
+    cluster.composer().stop(&cluster.node(0)).await.unwrap();
+
+    wait_for_health(
+        &volume.state(),
+        &volume_client,
+        Duration::from_secs(2),
+        |h| {
+            h.healthy_replicas == 2
+                && h.clean_shutdown
+                && h.online_clean_replicas == 0
+                && h.clean_replicas == 2
+                && h.live_healthy_replicas == 0
+                && h.online_healthy_replicas == 0
+        },
+    )
+    .await
+    .unwrap();
+
+    cluster.composer().start(&cluster.node(1)).await.unwrap();
+    cluster
+        .wait_node_status(cluster.node(1), transport::NodeStatus::Online)
+        .await
+        .unwrap();
+    cluster.wait_pool_online(cluster.pool(1, 0)).await.unwrap();
+
+    let volume = volume_client
+        .publish(
+            &PublishVolume::new(
+                volume.spec().uuid.clone(),
+                Some(cluster.node(1)),
+                None,
+                HashMap::new(),
+                vec![],
+            ),
+            None,
+        )
+        .await
+        .unwrap();
+
+    wait_for_health(
+        &volume.state(),
+        &volume_client,
+        Duration::from_secs(2),
+        |h| {
+            h.healthy_replicas == 1
+                && !h.clean_shutdown
+                && h.online_clean_replicas == 1
+                && h.clean_replicas == 1
+                && h.live_healthy_replicas == 1
+                && h.online_healthy_replicas == 1
+        },
+    )
+    .await
+    .unwrap();
+
+    cluster.composer().start(&cluster.node(2)).await.unwrap();
+    wait_for_health(
+        &volume.state(),
+        &volume_client,
+        Duration::from_secs(2),
+        |h| {
+            h.healthy_replicas == 2
+                && !h.clean_shutdown
+                && h.online_clean_replicas == 1
+                && h.clean_replicas == 1
+                && h.live_healthy_replicas == 2
+                && h.online_healthy_replicas == 2
+        },
+    )
+    .await
+    .unwrap();
+
+    // a stop is a clean shutdown and should be so marked in the health info!
+    cluster.composer().stop(&cluster.node(1)).await.unwrap();
+    cluster
+        .wait_node_status(cluster.node(1), transport::NodeStatus::Unknown)
+        .await
+        .unwrap();
+
+    wait_for_health(
+        &volume.state(),
+        &volume_client,
+        Duration::from_secs(2),
+        |h| {
+            h.healthy_replicas == 2
+                && h.clean_shutdown
+                && h.online_clean_replicas == 1
+                && h.clean_replicas == 2
+                && h.live_healthy_replicas == 0
+                && h.online_healthy_replicas == 1
+        },
+    )
+    .await
+    .unwrap();
+}
+
+async fn wait_for_health<F: FnMut(&VolumeHealth) -> bool>(
+    volume: &VolumeState,
+    client: &dyn VolumeOperations,
+    timeout: std::time::Duration,
+    mut cb: F,
+) -> Result<VolumeState, Option<VolumeHealth>> {
+    let now = std::time::Instant::now();
+    let mut health = None;
+    while now.elapsed() < timeout {
+        let volume = get_volume(volume, client).await;
+        health = volume.state().health;
+        if let Some(health) = &health {
+            if cb(health) {
+                return Ok(volume.state());
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    Err(health)
 }

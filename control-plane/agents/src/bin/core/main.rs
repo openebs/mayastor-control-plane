@@ -138,6 +138,10 @@ pub(crate) struct CliArgs {
     /// Use ANSI colors for the logs.
     #[clap(long, default_value_t = true, action = clap::ArgAction::Set)]
     ansi_colors: bool,
+
+    /// Disable volume health reporting which uses pstor watchers.
+    #[clap(long)]
+    no_volume_health: bool,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -214,6 +218,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         cli_args.thin_args,
         cli_args.disable_ha,
         cli_args.etcd_page_limit as i64,
+        cli_args.no_volume_health,
     )
     .await?;
 

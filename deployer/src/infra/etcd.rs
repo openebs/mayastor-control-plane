@@ -6,11 +6,16 @@ use stor_port::pstor::etcd::Etcd as EtcdStore;
 impl ComponentAction for Etcd {
     fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         Ok(if !options.no_etcd {
+            let etcd_data = if options.persistent_etcd {
+                "/host-tmp/etcd-data"
+            } else {
+                "/tmp/etcd-data"
+            };
             let container_spec = ContainerSpec::from_binary(
                 "etcd",
                 Binary::from_path("etcd").with_args(vec![
                     "--data-dir",
-                    "/tmp/etcd-data",
+                    etcd_data,
                     "--advertise-client-urls",
                     "http://[::]:2379",
                     "--listen-client-urls",
@@ -22,6 +27,11 @@ impl ComponentAction for Etcd {
             )
             .with_portmap("2379", "2379")
             .with_portmap("2380", "2380");
+            let container_spec = if options.persistent_etcd {
+                container_spec.with_bind("/tmp/", "/host-tmp")
+            } else {
+                container_spec
+            };
 
             #[cfg(target_arch = "aarch64")]
             let container_spec = container_spec.with_env("ETCD_UNSUPPORTED_ARCH", "arm64");

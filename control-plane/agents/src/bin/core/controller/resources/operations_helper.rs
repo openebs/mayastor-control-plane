@@ -974,23 +974,10 @@ impl ResourceSpecsLocked {
     where
         T: DeserializeOwned,
     {
-        let specs: Vec<Result<T, serde_json::Error>> = values
-            .iter()
-            .map(|v| serde_json::from_value(v.clone()))
-            .collect();
-
-        let mut result = vec![];
-        for spec in specs {
-            match spec {
-                Ok(s) => {
-                    result.push(s);
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
-        }
-        Ok(result)
+        values
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<Result<Vec<_>, serde_json::Error>>()
     }
 
     /// Populate the resource specs with data from the persistent store.
@@ -1015,7 +1002,7 @@ impl ResourceSpecsLocked {
             .map_err(|e| SpecError::StoreGet {
                 source: Box::new(e),
             })?;
-        let store_values = store_entries.iter().map(|e| e.1.clone()).collect();
+        let store_values = store_entries.into_iter().map(|e| e.1).collect();
 
         let mut resource_specs = self.0.write();
         match spec_type {
@@ -1024,6 +1011,7 @@ impl ResourceSpecsLocked {
                     Self::deserialise_specs::<VolumeSpec>(store_values).context(Deserialise {
                         obj_type: StorableObjectType::VolumeSpec,
                     })?;
+                // Add the volume watch here for all the specs OR after this call.
                 let ag_specs = get_affinity_group_specs(&specs);
                 resource_specs.volumes.populate(specs);
                 // Load the ag specs in memory, ag specs are not persisted in memory so we don't
