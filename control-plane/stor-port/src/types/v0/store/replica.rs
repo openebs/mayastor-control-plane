@@ -99,6 +99,7 @@ pub struct ReplicaSpec {
     #[serde(default, skip_serializing_if = "super::is_opt_default")]
     pub kind: Option<ReplicaKind>,
     /// Data encryption.
+    #[serde(default)]
     pub encrypted: bool,
 }
 

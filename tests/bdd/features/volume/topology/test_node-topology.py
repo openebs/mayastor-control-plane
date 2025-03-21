@@ -639,6 +639,7 @@ def expected_volume_spec(replica, toplogy):
         VolumePolicy(False),
         False,
         0,
+        False,
         topology=toplogy,
     )
 

@@ -482,6 +482,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object_with_topology(
         VolumePolicy(False),
         False,
         0,
+        False,
         topology=Topology(
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(
@@ -514,6 +515,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object_without_pool_to
         VolumePolicy(False),
         False,
         0,
+        False,
     )
 
     # Check the volume object returned is as expected

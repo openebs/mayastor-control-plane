@@ -41,7 +41,9 @@ def init(disks):
     )
     # Add some used space here
     ApiClient.replicas_api().put_pool_replica(
-        POOL_UUID, REPL_UUID, CreateReplicaBody(size=VOLUME_SIZE, thin=False)
+        POOL_UUID,
+        REPL_UUID,
+        CreateReplicaBody(size=VOLUME_SIZE, thin=False, encrypted=False),
     )
 
     yield

@@ -151,7 +151,9 @@ def data_is_written_to_the_volume_which_exceeds_the_free_space_on_one_of_the_poo
 
     # Fill up a pool with other data
     ApiClient.replicas_api().put_pool_replica(
-        POOL_UUID_1, REPL_UUID, CreateReplicaBody(size=int(VOLUME_SIZE / 2), thin=False)
+        POOL_UUID_1,
+        REPL_UUID,
+        CreateReplicaBody(size=int(VOLUME_SIZE / 2), thin=False, encrypted=False),
     )
 
     volume = pytest.volume

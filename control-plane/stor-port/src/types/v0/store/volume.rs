@@ -210,6 +210,7 @@ pub struct VolumeSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_snapshots: Option<u32>,
     /// Data encryption.
+    #[serde(default)]
     pub encrypted: bool,
 }
 
