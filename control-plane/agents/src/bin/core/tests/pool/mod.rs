@@ -122,6 +122,7 @@ async fn pool() {
             status: ReplicaStatus::Online,
             allowed_hosts: vec![],
             kind: Default::default(),
+            encrypted: Some(false),
         }
     );
 

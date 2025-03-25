@@ -119,7 +119,7 @@ impl From<CreateReplica> for CreateReplicaBody {
             thin: create.thin,
             share: create.share,
             allowed_hosts: create.allowed_hosts.into_vec(),
-            encrypted: create.encrypted,
+            encrypted: create.encrypted.unwrap_or_default(),
         }
     }
 }
@@ -140,7 +140,7 @@ impl CreateReplicaBody {
             owners: Default::default(),
             allowed_hosts: self.allowed_hosts,
             kind: None,
-            encrypted: self.encrypted,
+            encrypted: Some(self.encrypted),
         }
     }
 }

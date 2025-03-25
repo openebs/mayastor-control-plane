@@ -33,6 +33,8 @@ message Replica {
   ReplicaKind kind = 12;
   // Id of the entity which owns replica, If set.
   optional string entity_id = 13;
+  // Data Encryption.
+  optional bool encrypted = 14;
 }
 
 // Multiple replicas

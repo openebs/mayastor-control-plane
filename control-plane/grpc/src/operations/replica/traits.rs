@@ -80,6 +80,7 @@ impl From<Replica> for replica::Replica {
             status: status as i32,
             space: replica.space.into_opt(),
             kind: replica::ReplicaKind::from(replica.kind).into(),
+            encrypted: replica.encrypted,
         }
     }
 }
@@ -178,6 +179,7 @@ impl TryFrom<replica::Replica> for Replica {
             kind: replica::ReplicaKind::try_from(replica.kind)
                 .unwrap_or_default()
                 .into(),
+            encrypted: replica.encrypted,
         })
     }
 }
@@ -327,7 +329,7 @@ pub trait CreateReplicaInfo: Send + Sync + std::fmt::Debug {
     /// List of host nqn allowed to connect to the target.
     fn allowed_hosts(&self) -> Vec<HostNqn>;
     /// Data encryption.
-    fn encrypted(&self) -> bool;
+    fn encrypted(&self) -> Option<bool>;
 }
 
 impl CreateReplicaInfo for CreateReplica {
@@ -379,7 +381,7 @@ impl CreateReplicaInfo for CreateReplica {
         self.allowed_hosts.clone()
     }
 
-    fn encrypted(&self) -> bool {
+    fn encrypted(&self) -> Option<bool> {
         self.encrypted
     }
 }
@@ -445,8 +447,8 @@ impl CreateReplicaInfo for ValidatedCreateReplicaRequest {
         self.allowed_hosts.clone()
     }
 
-    fn encrypted(&self) -> bool {
-        self.inner.encrypted.unwrap_or_default()
+    fn encrypted(&self) -> Option<bool> {
+        self.inner.encrypted
     }
 }
 
@@ -933,7 +935,7 @@ impl From<&dyn CreateReplicaInfo> for CreateReplicaRequest {
             managed: data.managed(),
             owners: Some(data.owners().into()),
             allowed_hosts: data.allowed_hosts().into_vec(),
-            encrypted: Some(data.encrypted()),
+            encrypted: data.encrypted(),
         }
     }
 }

@@ -212,7 +212,7 @@ pub(crate) async fn volume_replica_candidates(
                 owners: ReplicaOwners::from_volume(&request.uuid),
                 allowed_hosts: vec![],
                 kind: None,
-                encrypted: request.encrypted,
+                encrypted: Some(request.encrypted),
             }
         })
         .collect::<Vec<_>>())
@@ -261,7 +261,7 @@ pub(crate) async fn volume_move_replica_candidates(
                 owners: ReplicaOwners::from_volume(&request.uuid),
                 allowed_hosts: vec![],
                 kind: None,
-                encrypted: request.encrypted,
+                encrypted: Some(request.encrypted),
             }
         })
         .collect::<Vec<_>>())

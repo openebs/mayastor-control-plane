@@ -78,7 +78,7 @@ message VolumeSpec {
   }
 
   // Data encryption.
-  optional bool encrypted = 15;
+  optional bool encrypted = 14;
 }
 
 message Metadata {

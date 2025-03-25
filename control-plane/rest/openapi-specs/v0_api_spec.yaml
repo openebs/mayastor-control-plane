@@ -3180,6 +3180,9 @@ components:
             $ref: '#/components/schemas/HostNqn'
         kind:
           $ref: '#/components/schemas/ReplicaKind'
+        encrypted:
+          description: Data encryption.
+          type: boolean
       required:
         - node
         - pool

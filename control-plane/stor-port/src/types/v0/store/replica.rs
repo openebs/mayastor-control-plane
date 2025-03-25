@@ -395,7 +395,7 @@ impl From<&CreateReplica> for ReplicaSpec {
             operation: None,
             allowed_hosts: request.allowed_hosts.clone(),
             kind: request.kind.clone(),
-            encrypted: request.encrypted,
+            encrypted: request.encrypted.unwrap_or_default(),
         }
     }
 }
@@ -434,7 +434,7 @@ impl From<&SnapshotCloneSpecParams> for CreateReplica {
             owners: ReplicaOwners::from_volume(value.uuid()),
             allowed_hosts: vec![],
             kind: Some(ReplicaKind::SnapshotClone),
-            encrypted: false,
+            encrypted: None,
         }
     }
 }

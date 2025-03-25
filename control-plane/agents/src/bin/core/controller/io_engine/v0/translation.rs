@@ -124,6 +124,7 @@ impl TryIoEngineToAgent for v0::ReplicaV2 {
                 })
                 .collect(),
             kind: ReplicaKind::Regular,
+            encrypted: None,
         })
     }
 }

@@ -205,6 +205,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             pool_uuid: replica.pool_uuid,
             allowed_hosts: None,
             kind: ReplicaKind::Regular,
+            encrypted: Some(false),
         }
     );
     assert_eq!(
