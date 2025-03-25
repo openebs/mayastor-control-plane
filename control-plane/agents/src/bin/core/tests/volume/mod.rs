@@ -3,6 +3,7 @@
 mod affinity_group;
 mod capacity;
 mod capacity_limit;
+mod format_options;
 mod garbage_collection;
 mod helpers;
 mod hotspare;
