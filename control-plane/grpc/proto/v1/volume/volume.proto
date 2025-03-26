@@ -246,6 +246,8 @@ message ReplicaTopology {
   optional uint32 rebuild_progress = 7;
   // if the replica marked as healthy on the pstor.
   optional bool healthy = 8;
+  // data encryption.
+  optional bool encrypted = 9;
 }
 
 // Volume Replica usage information

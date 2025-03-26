@@ -506,6 +506,7 @@ impl TryFrom<volume::ReplicaTopology> for ReplicaTopology {
                 .and_then(|s| nexus::ChildStateReason::try_from(s).ok().into_opt()),
             topology.rebuild_progress.and_then(|r| u8::try_from(r).ok()),
             topology.healthy,
+            topology.encrypted,
         ))
     }
 }
@@ -538,6 +539,7 @@ impl From<ReplicaTopology> for volume::ReplicaTopology {
                 .map(|s| crate::nexus::ChildStateReason::from(s).into()),
             rebuild_progress: replica_topology.rebuild_progress().map(|r| r as u32),
             healthy: replica_topology.healthy(),
+            encrypted: replica_topology.encrypted(),
         }
     }
 }

@@ -250,6 +250,7 @@ impl Registry {
                     child.map(|c| c.state_reason.clone()),
                     child.and_then(|c| c.rebuild_progress),
                     healthy,
+                    state.encrypted,
                 )
             }
             Err(_) => {
@@ -268,6 +269,8 @@ impl Registry {
                             Some(child.state_reason.clone()),
                             child.rebuild_progress,
                             healthy,
+                            // If state is not available show from spec?
+                            Some(spec.encrypted),
                         );
                     }
                 }
@@ -280,6 +283,8 @@ impl Registry {
                     None,
                     None,
                     healthy,
+                    // If state is not available show from spec?
+                    Some(spec.encrypted),
                 )
             }
         }

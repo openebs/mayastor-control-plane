@@ -59,6 +59,7 @@ impl CreateRow for openapi::models::Pool {
             ::utils::bytes::into_human(state.used),
             ::utils::bytes::into_human(free),
             optional_cell(state.committed.map(::utils::bytes::into_human)),
+            state.encrypted
         ]
     }
 }
