@@ -54,6 +54,10 @@ impl PoolBaseFilters {
             false => item.pool.free_space() > request.size,
         }
     }
+    /// Should only attempt to use encrypted pools.
+    pub(crate) fn encrypted(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+        request.encrypted() == item.pool.encrypted
+    }
     /// Return true if the pool has enough capacity to resize the replica by the requested
     /// value.
     pub(crate) fn min_free_space_repl_resize(

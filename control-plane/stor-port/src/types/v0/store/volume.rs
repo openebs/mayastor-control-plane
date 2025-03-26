@@ -209,6 +209,9 @@ pub struct VolumeSpec {
     /// Max snapshots limit per volume.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_snapshots: Option<u32>,
+    /// Data encryption.
+    #[serde(default)]
+    pub encrypted: bool,
 }
 
 /// Volume Content Source i.e the snapshot or a volume.
@@ -752,6 +755,7 @@ impl From<&CreateVolume> for VolumeSpec {
             publish_context: None,
             affinity_group: request.affinity_group.clone(),
             max_snapshots: request.max_snapshots,
+            encrypted: request.encrypted,
             ..Default::default()
         }
     }
@@ -810,6 +814,7 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.content_source.into_opt(),
             src.num_snapshots,
             src.max_snapshots,
+            src.encrypted,
         )
     }
 }

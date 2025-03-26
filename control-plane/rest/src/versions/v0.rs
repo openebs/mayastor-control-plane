@@ -43,6 +43,8 @@ pub struct CreateReplicaBody {
     pub share: Protocol,
     /// Host nqn's allowed to connect to the target.
     pub allowed_hosts: Vec<HostNqn>,
+    /// Data encryption.
+    pub encrypted: bool,
 }
 
 impl TryFrom<models::CreateReplicaBody> for CreateReplicaBody {
@@ -62,6 +64,7 @@ impl TryFrom<models::CreateReplicaBody> for CreateReplicaBody {
                 .map(TryInto::try_into)
                 .collect::<Result<Vec<_>, HostNqnParseError>>()
                 .map_err(ReplyError::from)?,
+            encrypted: src.encrypted,
         })
     }
 }
@@ -116,6 +119,7 @@ impl From<CreateReplica> for CreateReplicaBody {
             thin: create.thin,
             share: create.share,
             allowed_hosts: create.allowed_hosts.into_vec(),
+            encrypted: create.encrypted.unwrap_or_default(),
         }
     }
 }
@@ -136,6 +140,7 @@ impl CreateReplicaBody {
             owners: Default::default(),
             allowed_hosts: self.allowed_hosts,
             kind: None,
+            encrypted: Some(self.encrypted),
         }
     }
 }
@@ -201,6 +206,8 @@ pub struct CreateVolumeBody {
     pub affinity_group: Option<AffinityGroup>,
     /// Max snapshot limit per volume.
     pub max_snapshots: Option<u32>,
+    /// Data encryption.
+    pub encryption: bool,
 }
 impl From<models::CreateVolumeBody> for CreateVolumeBody {
     fn from(src: models::CreateVolumeBody) -> Self {
@@ -213,6 +220,7 @@ impl From<models::CreateVolumeBody> for CreateVolumeBody {
             thin: src.thin,
             affinity_group: src.affinity_group.map(|ag| ag.into()),
             max_snapshots: src.max_snapshots,
+            encryption: src.encrypted,
         }
     }
 }
@@ -227,6 +235,7 @@ impl From<CreateVolume> for CreateVolumeBody {
             thin: create.thin,
             affinity_group: create.affinity_group,
             max_snapshots: create.max_snapshots,
+            encryption: create.encrypted,
         }
     }
 }
@@ -244,6 +253,7 @@ impl CreateVolumeBody {
             affinity_group: self.affinity_group.clone(),
             cluster_capacity_limit: None,
             max_snapshots: self.max_snapshots,
+            encrypted: self.encryption,
         }
     }
     /// Convert into rpc request type.

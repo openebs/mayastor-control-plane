@@ -2524,9 +2524,13 @@ components:
         thin:
           description: thin provisioning
           type: boolean
+        encrypted:
+          description: Data Encryption.
+          type: boolean
       required:
         - size
         - thin
+        - encrypted
     PoolTopology:
       example:
         explicit: null
@@ -3176,6 +3180,9 @@ components:
             $ref: '#/components/schemas/HostNqn'
         kind:
           $ref: '#/components/schemas/ReplicaKind'
+        encrypted:
+          description: Data encryption.
+          type: boolean
       required:
         - node
         - pool
@@ -3533,6 +3540,9 @@ components:
           format: uuid
         kind:
           $ref: '#/components/schemas/ReplicaKind'
+        encrypted:
+          description: Data Encryption.
+          type: boolean
       required:
         - managed
         - owners
@@ -3542,6 +3552,7 @@ components:
         - status
         - thin
         - uuid
+        - encrypted
     VolumeSpec:
       example:
         num_replicas: 2
@@ -3631,6 +3642,9 @@ components:
           type: integer
           format: int32
           minimum: 0
+        encrypted:
+          description: Data Encryption.
+          type: boolean
       required:
         - num_paths
         - num_replicas
@@ -3641,6 +3655,7 @@ components:
         - policy
         - thin
         - num_snapshots
+        - encrypted
     VolumeTarget:
       example:
         node: io-engine-1

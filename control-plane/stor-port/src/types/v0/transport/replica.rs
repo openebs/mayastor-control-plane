@@ -90,6 +90,8 @@ pub struct Replica {
     pub allowed_hosts: Vec<HostNqn>,
     /// Type of replica, example regular or snapshot.
     pub kind: ReplicaKind,
+    /// Data Encryption.
+    pub encrypted: Option<bool>,
 }
 impl Replica {
     /// Check if the replica is online.
@@ -379,6 +381,7 @@ impl From<Replica> for models::Replica {
             *src.uuid.uuid(),
             None::<Vec<String>>,
             src.kind,
+            src.encrypted,
         )
     }
 }
@@ -441,6 +444,8 @@ pub struct CreateReplica {
     pub allowed_hosts: Vec<HostNqn>,
     /// The replica kind, eg: regular or clone.
     pub kind: Option<ReplicaKind>,
+    /// Data encryption.
+    pub encrypted: Option<bool>,
 }
 
 /// Replica owners which is a volume or none and a list of nexuses.

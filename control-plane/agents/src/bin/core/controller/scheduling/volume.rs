@@ -97,6 +97,10 @@ impl GetSuitablePoolsContext {
     pub fn as_thin(&self) -> bool {
         self.spec.as_thin() || self.snap_repl()
     }
+    /// Data encryption.
+    pub fn encrypted(&self) -> bool {
+        self.spec.encrypted
+    }
     /// Helper util for overcommit checks.
     pub(crate) fn overcommit(&self, allowed_commit_percent: u64, pool: &PoolWrapper) -> bool {
         let max_cap_allowed = allowed_commit_percent * pool.capacity;

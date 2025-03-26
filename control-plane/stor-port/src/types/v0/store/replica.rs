@@ -98,6 +98,9 @@ pub struct ReplicaSpec {
     pub allowed_hosts: Vec<HostNqn>,
     #[serde(default, skip_serializing_if = "super::is_opt_default")]
     pub kind: Option<ReplicaKind>,
+    /// Data encryption.
+    #[serde(default)]
+    pub encrypted: bool,
 }
 
 impl ReplicaSpec {
@@ -183,6 +186,7 @@ mod tests_deserializer {
                     operation: None,
                     allowed_hosts: vec![],
                     kind: None,
+                    encrypted: false,
                 },
             },
             Test {
@@ -207,6 +211,7 @@ mod tests_deserializer {
                     operation: None,
                     allowed_hosts: vec![],
                     kind: None,
+                    encrypted: false,
                 },
             },
         ];
@@ -242,6 +247,7 @@ impl From<ReplicaSpec> for models::ReplicaSpec {
             src.thin,
             openapi::apis::Uuid::from(src.uuid),
             src.kind.into_opt(),
+            src.encrypted,
         )
     }
 }
@@ -389,6 +395,7 @@ impl From<&CreateReplica> for ReplicaSpec {
             operation: None,
             allowed_hosts: request.allowed_hosts.clone(),
             kind: request.kind.clone(),
+            encrypted: request.encrypted.unwrap_or_default(),
         }
     }
 }
@@ -427,6 +434,7 @@ impl From<&SnapshotCloneSpecParams> for CreateReplica {
             owners: ReplicaOwners::from_volume(value.uuid()),
             allowed_hosts: vec![],
             kind: Some(ReplicaKind::SnapshotClone),
+            encrypted: None,
         }
     }
 }
@@ -447,6 +455,7 @@ impl From<&SnapshotCloneSpecParams> for ReplicaSpec {
             operation: None,
             allowed_hosts: vec![],
             kind: Some(ReplicaKind::SnapshotClone),
+            encrypted: false,
         }
     }
 }

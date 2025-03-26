@@ -76,6 +76,9 @@ message VolumeSpec {
     google.protobuf.StringValue snapshot = 1;
     google.protobuf.StringValue snap_source_vol = 2;
   }
+
+  // Data encryption.
+  optional bool encrypted = 14;
 }
 
 message Metadata {
@@ -291,6 +294,8 @@ message CreateVolumeRequest {
   optional uint64 cluster_capacity_limit = 10;
   // Max snapshots limit per volume.
   optional uint32 max_snapshots = 11;
+  // Data encryption.
+  optional bool encrypted = 12;
 }
 
 // Publish a volume on a node

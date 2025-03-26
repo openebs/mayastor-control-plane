@@ -26,6 +26,7 @@ async fn allowed_hosts() {
                 allowed_hosts: Some(vec![cluster.node_nqn(1).to_string()]),
                 size,
                 thin: false,
+                encrypted: false,
             },
         )
         .await
