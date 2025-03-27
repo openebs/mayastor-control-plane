@@ -4201,6 +4201,9 @@ components:
         healthy:
           description: Indicates if the replica is marked as healthy
           type: boolean
+        encrypted:
+          description: Data encryption.
+          type: boolean
       required:
         - state
     ReplicaUsage:

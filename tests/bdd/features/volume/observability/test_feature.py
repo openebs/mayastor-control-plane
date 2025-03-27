@@ -97,6 +97,7 @@ def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
         expected_replica_toplogy[key] = ReplicaTopology(
             ReplicaState("Online"),
             node="io-engine-1",
+            encrypted=False,
             pool=POOL_UUID,
             usage=volume.state.replica_topology[key].usage,
         )

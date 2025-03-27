@@ -260,6 +260,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object(create_request)
         expected_replica_toplogy[key] = ReplicaTopology(
             ReplicaState("Online"),
             node="io-engine-1",
+            encrypted=False,
             pool=POOL_UUID,
             usage=volume.state.replica_topology[key].usage,
         )

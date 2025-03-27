@@ -12,6 +12,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::prelude::*;
+use openapi::models::ReplicaState;
 use openapi::{
     apis::StatusCode,
     models::{SetVolumePropertyBody, VolumeContentSource},
@@ -47,6 +48,11 @@ impl CreateRow for openapi::models::Volume {
             None if self.spec.target.is_some() => Some("<missing>".to_string()),
             None => None,
         };
+        let all_healthy_replicas = state
+            .replica_topology
+            .values()
+            .all(|replica| replica.state == ReplicaState::Online);
+
         row![
             state.uuid,
             self.spec.num_replicas,
@@ -71,7 +77,12 @@ impl CreateRow for openapi::models::Volume {
                     VolumeContentSource::snapshot(_) => "Snapshot",
                 }
             })),
-            optional_cell(state.health.as_ref().map(|h| h.clean_shutdown))
+            optional_cell(state.health.as_ref().map(|h| h.clean_shutdown)),
+            match self.spec.encrypted {
+                false => "false",
+                true if all_healthy_replicas => "true",
+                true => "true (requires rebuild)",
+            },
         ]
     }
 }
@@ -405,13 +416,14 @@ impl CreateRows for HashMap<String, openapi::models::ReplicaTopology> {
                     optional_cell(topology.node.as_ref()),
                     optional_cell(topology.pool.as_ref()),
                     topology.state,
+                    optional_cell(topology.encrypted),
                     optional_cell(usage.map(|u| ::utils::bytes::into_human(u.capacity))),
                     optional_cell(usage.map(|u| ::utils::bytes::into_human(u.allocated))),
                     optional_cell(usage.map(|u| ::utils::bytes::into_human(u.allocated_snapshots))),
                     optional_cell(topology.child_status.as_ref().map(|s| s.to_string())),
                     optional_cell(topology.child_status_reason.as_ref().map(|s| s.to_string())),
                     optional_cell(topology.rebuild_progress.map(|p| format!("{p}%"))),
-                    optional_cell(topology.healthy),
+                    optional_cell(topology.healthy)
                 ]
             })
             .collect()

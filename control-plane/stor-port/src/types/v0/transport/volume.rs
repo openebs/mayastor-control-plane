@@ -864,6 +864,8 @@ pub struct ReplicaTopology {
     rebuild_progress: Option<u8>,
     /// True if the replica marked as healthy on the pstor.
     healthy: Option<bool>,
+    /// Data Encryption.
+    encrypted: Option<bool>,
 }
 
 impl ReplicaTopology {
@@ -878,6 +880,7 @@ impl ReplicaTopology {
         child_status_reason: Option<ChildStateReason>,
         rebuild_progress: Option<u8>,
         healthy: Option<bool>,
+        encrypted: Option<bool>,
     ) -> Self {
         Self {
             node,
@@ -888,6 +891,7 @@ impl ReplicaTopology {
             child_status_reason,
             rebuild_progress,
             healthy,
+            encrypted,
         }
     }
 
@@ -930,6 +934,10 @@ impl ReplicaTopology {
     pub fn healthy(&self) -> Option<bool> {
         self.healthy
     }
+    /// Data encryption.
+    pub fn encrypted(&self) -> Option<bool> {
+        self.encrypted
+    }
 }
 
 impl From<&ReplicaTopology> for models::ReplicaTopology {
@@ -946,6 +954,7 @@ impl From<&ReplicaTopology> for models::ReplicaTopology {
             replica_topology.usage.as_ref().into_opt(),
             replica_topology.rebuild_progress.into_opt(),
             replica_topology.healthy,
+            replica_topology.encrypted,
         )
     }
 }

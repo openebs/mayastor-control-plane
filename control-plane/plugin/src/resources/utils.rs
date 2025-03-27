@@ -29,6 +29,7 @@ lazy_static! {
         "SNAPSHOTS",
         "SOURCE",
         "CLEAN-SHUTDOWN",
+        "ENCRYPTED"
     ];
     pub static ref SNAPSHOT_HEADERS: Row = row![
         "ID",
@@ -49,7 +50,8 @@ lazy_static! {
         "CAPACITY",
         "ALLOCATED",
         "AVAILABLE",
-        "COMMITTED"
+        "COMMITTED",
+        "ENCRYPTED"
     ];
     pub static ref NODE_HEADERS: Row = row!["ID", "GRPC ENDPOINT", "STATUS", "VERSION"];
     pub static ref REPLICA_TOPOLOGIES_PREFIX: Row = row!["VOLUME-ID"];
@@ -58,13 +60,14 @@ lazy_static! {
         "NODE",
         "POOL",
         "STATUS",
+        "ENCRYPTED",
         "CAPACITY",
         "ALLOCATED",
         "SNAPSHOTS",
         "CHILD-STATUS",
         "REASON",
         "REBUILD",
-        "HEALTHY",
+        "HEALTHY"
     ];
     pub static ref SNAPSHOT_TOPOLOGY_PREFIX: Row = row!["SNAPSHOT-ID"];
     pub static ref SNAPSHOT_TOPOLOGY_HEADERS: Row = row![
