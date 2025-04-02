@@ -128,7 +128,9 @@ impl TryFrom<&Url> for NvmfAttach {
         let hostnqn = hash_query.get("hostnqn").map(ToString::to_string);
 
         Ok(NvmfAttach::new(
-            host.to_string(),
+            host.trim_start_matches("[")
+                .trim_end_matches("]")
+                .to_string(),
             port,
             transport,
             uuid,
