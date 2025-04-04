@@ -107,8 +107,8 @@ def the_pool_creation_should_fail_with_error_already_exists(pool_attempt):
 @then('the pool creation should fail with error "InvalidArgument"')
 def the_pool_creation_should_fail_with_error_internal_error(pool_attempt):
     """the pool creation should fail with error InvalidArgument"."""
-    assert pool_attempt.status == http.HTTPStatus.BAD_REQUEST
-    assert ApiClient.exception_to_error(pool_attempt).kind == "InvalidArgument"
+    assert pool_attempt.status == http.HTTPStatus.CONFLICT
+    assert ApiClient.exception_to_error(pool_attempt).kind == "InUse"
 
 
 @then("the pool creation should succeed")

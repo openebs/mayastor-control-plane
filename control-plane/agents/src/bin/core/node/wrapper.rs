@@ -1,3 +1,4 @@
+use crate::controller::io_engine::HostApi;
 use crate::{
     controller::{
         io_engine::{
@@ -15,8 +16,11 @@ use crate::{
     NumRebuilds,
 };
 use agents::{errors::SvcError, eventing::EventWithMeta};
+use async_trait::async_trait;
 use events_api::event::{EventAction, EventCategory, EventMessage, EventMeta, EventSource};
 use grpc::operations::snapshot::SnapshotInfo;
+use stor_port::transport_api::v0::BlockDevices;
+use stor_port::types::v0::transport::GetBlockDevices;
 use stor_port::{
     transport_api::{Message, MessageId, ResourceKind},
     types::v0::{
@@ -36,7 +40,6 @@ use stor_port::{
     },
 };
 
-use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::{future::Future, ops::DerefMut, sync::Arc};
 use tracing::{debug, trace, warn};
@@ -1752,5 +1755,18 @@ impl ReplicaSnapshotApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
 impl From<&NodeWrapper> for NodeState {
     fn from(node: &NodeWrapper) -> Self {
         node.node_state().clone()
+    }
+}
+
+#[async_trait]
+impl HostApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
+    async fn liveness_probe(&self) -> Result<Register, SvcError> {
+        let dataplane = self.read().await.grpc_client().await?;
+        dataplane.liveness_probe().await
+    }
+
+    async fn list_blockdevices(&self, request: &GetBlockDevices) -> Result<BlockDevices, SvcError> {
+        let dataplane = self.read().await.grpc_client().await?;
+        dataplane.list_blockdevices(request).await
     }
 }

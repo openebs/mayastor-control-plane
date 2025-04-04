@@ -57,6 +57,12 @@ impl ComponentAction for IoEngine {
             .with_bind(&host_tmp, "/host/tmp")
             .with_bind("/var/run/dpdk", "/var/run/dpdk");
 
+            if options.mount_host_dev_udev {
+                spec = spec
+                    .with_bind("/dev", "/dev")
+                    .with_bind("/run/udev", "/run/udev");
+            }
+
             let core_list = match options.io_engine_isolate {
                 true => {
                     let cores = 1.max(options.io_engine_cores);

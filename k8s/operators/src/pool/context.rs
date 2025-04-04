@@ -1,17 +1,18 @@
+use super::v1beta3_api;
 use super::{
     diskpool::crd::v1beta3::{CrPoolState, DiskPool, DiskPoolStatus},
     error::Error,
 };
-use super::{normalize_disk, v1beta3_api};
+use crate::diskpool::crd::v1beta3::EncryptionSource;
 use openapi::models::{Encryption, EncryptionSecret};
 use openapi::{
     apis::StatusCode,
     clients,
     models::{CreatePoolBody, Pool},
 };
-use utils::dsp_created_by_key;
+use tracing::{debug, error, info};
+use utils::{disk::normalize_disk, dsp_created_by_key};
 
-use crate::diskpool::crd::v1beta3::EncryptionSource;
 use chrono::Utc;
 use k8s_openapi::{api::core::v1::Event, apimachinery::pkg::apis::meta::v1::MicroTime};
 use kube::api::{Patch, PostParams};
@@ -27,7 +28,6 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-use tracing::{debug, error, info};
 
 const WHO_AM_I: &str = "DiskPool Operator";
 const WHO_AM_I_SHORT: &str = "dsp-operator";

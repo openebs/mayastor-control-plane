@@ -988,6 +988,11 @@ impl ClusterBuilder {
         self.opts = self.opts.with_eventing(enabled);
         self
     }
+    /// Specify whether host's mount dev and udev is needed or not.
+    pub fn with_mount_host_dev_udev(mut self, enabled: bool) -> Self {
+        self.opts = self.opts.with_mount_host_dev_udev(enabled);
+        self
+    }
     /// Build into the resulting Cluster using a composer closure, eg:
     /// .compose_build(|c| c.with_logs(false)).
     pub async fn compose_build<F>(mut self, set: F) -> Result<Cluster, Error>

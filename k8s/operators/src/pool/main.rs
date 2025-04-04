@@ -11,6 +11,7 @@ mod mayastorpool;
 use crate::diskpool::client::{
     create_crd, create_missing_cr, create_v1beta3_cr, get_api_version, v1beta3_api,
 };
+
 use context::OperatorContext;
 use diskpool::crd::{
     migration::ensure_and_migrate_crd,
@@ -19,6 +20,7 @@ use diskpool::crd::{
 use error::Error;
 use mayastorpool::client::{check_crd, delete, list};
 use openapi::clients::{self, tower::Url};
+use tracing::{error, info, trace, warn};
 use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
 use chrono::Utc;
@@ -33,7 +35,6 @@ use kube::{
     Client, ResourceExt,
 };
 use std::{collections::HashMap, sync::Arc, time::Duration};
-use tracing::{error, info, trace, warn};
 
 const PAGINATION_LIMIT: u32 = 100;
 const BACKOFF_PERIOD: u64 = 20;
@@ -310,18 +311,6 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Normalize the disks if they have a schema, we dont want to change anything
-/// or do any error checking -- the loop will converge to the error state eventually
-fn normalize_disk(disk: &str) -> String {
-    Url::parse(disk).map_or(disk.to_string(), |u| {
-        u.to_file_path()
-            .unwrap_or_else(|_| disk.into())
-            .as_path()
-            .display()
-            .to_string()
-    })
-}
-
 /// Migrate from MayastorPool.
 pub(crate) async fn migrate_and_clean_msps(k8s: &Client, namespace: &str) -> Result<(), Error> {
     // Check if the MayastorPool CRD is present, and migrate from it if it is.
@@ -375,15 +364,16 @@ mod test {
 
     #[test]
     fn normalize_disk() {
-        use super::*;
         let disks = [
             "aio:///dev/null",
             "uring:///dev/null",
             "uring://dev/null", // this URL is invalid
+            "pcie:///0000:01:00.0",
         ];
 
-        assert_eq!(normalize_disk(disks[0]), "/dev/null");
-        assert_eq!(normalize_disk(disks[1]), "/dev/null");
-        assert_eq!(normalize_disk(disks[2]), "uring://dev/null");
+        assert_eq!(utils::disk::normalize_disk(disks[0]), "/dev/null");
+        assert_eq!(utils::disk::normalize_disk(disks[1]), "/dev/null");
+        assert_eq!(utils::disk::normalize_disk(disks[2]), "uring://dev/null");
+        assert_eq!(utils::disk::normalize_disk(disks[3]), "/0000:01:00.0");
     }
 }

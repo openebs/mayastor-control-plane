@@ -7,8 +7,8 @@ use crate::controller::{
         OperationGuardArc,
     },
 };
+use crate::pool::operations_helper::devlink_preflight_checks;
 use agents::errors::{SvcError, SvcError::CordonedNode};
-use std::collections::HashMap;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
@@ -17,6 +17,8 @@ use stor_port::{
     },
 };
 use utils::dsp_created_by_key;
+
+use std::collections::HashMap;
 
 #[async_trait::async_trait]
 impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
@@ -35,6 +37,7 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
                 node_id: request.node.to_string(),
             });
         }
+
         if request.disks.len() != 1 {
             return Err(SvcError::InvalidPoolDeviceNum {
                 disks: request.disks.clone(),
@@ -57,6 +60,9 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
                 node: request.node.clone(),
             });
         }
+
+        // If the devlink for a device is used for multiple pools, reject new creation.
+        devlink_preflight_checks(request, node.clone(), registry).await?;
 
         let mut pool = specs
             .get_or_create_pool(request)

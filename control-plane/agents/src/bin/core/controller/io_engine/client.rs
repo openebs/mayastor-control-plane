@@ -85,10 +85,6 @@ impl GrpcContext {
         self.lock.clone().lock_owned().await
     }
     /// Use this context to connect a grpc client and return it.
-    pub(crate) async fn connect(&self) -> Result<GrpcClient, SvcError> {
-        GrpcClient::new(self).await
-    }
-    /// Use this context to connect a grpc client and return it.
     /// This client differs from `GrpcClient` from `Self::connect` in that it ensures only 1 request
     /// is sent at a time among all `GrpcClientLocked` clients.
     pub(crate) async fn connect_locked(

@@ -1,3 +1,5 @@
+use crate::controller::io_engine::HostApi;
+use crate::node::wrapper::NodeWrapper;
 use crate::{
     controller::{
         io_engine::PoolApi,
@@ -11,8 +13,8 @@ use crate::{
     node::wrapper::GetterOps,
 };
 use agents::{errors, errors::SvcError};
-use snafu::OptionExt;
-use std::ops::Deref;
+use stor_port::transport_api::ResourceKind;
+use stor_port::types::v0::transport::{GetBlockDevices, PoolDeviceUri};
 use stor_port::types::v0::{
     store::{
         pool::PoolSpec,
@@ -20,6 +22,13 @@ use stor_port::types::v0::{
     },
     transport::{CreatePool, DestroyReplica, NodeId, ReplicaOwners},
 };
+
+use itertools::Itertools;
+use snafu::OptionExt;
+use std::collections::HashSet;
+use std::ops::Deref;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 impl OperationGuardArc<PoolSpec> {
     /// Retries the creation of the pool which is being done in the background by the io-engine.
@@ -129,4 +138,87 @@ impl OperationGuardArc<ReplicaSpec> {
             disowners: by,
         }
     }
+}
+
+pub(crate) async fn devlink_preflight_checks(
+    request: &CreatePool,
+    node: Arc<RwLock<NodeWrapper>>,
+    registry: &Registry,
+) -> Result<(), SvcError> {
+    let request_disks: HashSet<String> = request
+        .disks
+        .iter()
+        .map(|disk| utils::disk::normalize_disk(disk.as_str()))
+        .collect();
+
+    let node_pools = registry
+        .get_node_opt_pools(Some(request.node.clone()))
+        .await?;
+
+    if !node_pools.is_empty() {
+        let node_pools_disks: Vec<PoolDeviceUri> = node_pools
+            .into_iter()
+            .filter_map(|pool| pool.spec().map(|spec| spec.disks))
+            .flatten()
+            .collect();
+
+        let node_pools_disks_normalized: HashSet<String> = node_pools_disks
+            .iter()
+            .map(|disk| utils::disk::normalize_disk(disk.as_str()))
+            .collect();
+
+        let common_disks: HashSet<_> = request_disks
+            .intersection(&node_pools_disks_normalized)
+            .cloned()
+            .collect();
+
+        // Same devpaths or devlinks should be rejected.
+        if !common_disks.is_empty() {
+            return Err(SvcError::InUse {
+                kind: ResourceKind::Block,
+                id: common_disks.iter().join(","),
+            });
+        }
+
+        let node_block_devices = node
+            .list_blockdevices(&GetBlockDevices {
+                node: request.node.clone(),
+                all: true,
+            })
+            .await?
+            .into_inner();
+
+        let matched_devices: Vec<_> = node_block_devices
+            .iter()
+            .filter(|device| {
+                request_disks.contains(&device.devname)
+                    || request_disks.contains(&device.devpath)
+                    || device
+                        .devlinks
+                        .iter()
+                        .any(|link| request_disks.contains(link))
+            })
+            .collect();
+
+        // If the requested disk was not found, that could be because it could be a malloc or a file,
+        // in that case ignore and move ahead to allow tests. If it is an actual disk that was not
+        // detected by blockdevice api then the disk might not be visible to io-engine, so let it fail from io-engine
+        // rather than bailing out from control-plane to keep the behaviour as before.
+        if !matched_devices.is_empty() {
+            if let Some(conflict) = matched_devices.iter().find(|bd| {
+                node_pools_disks_normalized.contains(&bd.devname)
+                    || node_pools_disks_normalized.contains(&bd.devpath)
+                    || bd
+                        .devlinks
+                        .iter()
+                        .any(|link| node_pools_disks_normalized.contains(link))
+            }) {
+                return Err(SvcError::InUse {
+                    kind: ResourceKind::Block,
+                    id: conflict.devname.clone(),
+                });
+            }
+        }
+    }
+    Ok(())
 }
