@@ -68,6 +68,12 @@ pub enum Parameters {
     NodeHasTopologyKey,
     #[strum(serialize = "nodeSpreadTopologyKey")]
     NodeSpreadTopologyKey,
+    #[strum(serialize = "encrypted")]
+    Encrypted,
+    #[strum(serialize = "formatOptions")]
+    FormatOptions,
+    #[strum(serialize = "overrideGlobalFormatOpts")]
+    OverrideGlobalFormatOpts,
 }
 impl Parameters {
     fn parse_human_time(
@@ -239,6 +245,16 @@ impl Parameters {
     /// Parse the value for `Self::MaxSnapshots`.
     pub fn max_snapshots(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
         Self::parse_u32(value)
+    }
+    /// Parse the value for `Self::Encrypted`.
+    pub fn encrypted(value: Option<&String>) -> Result<Option<bool>, ParseBoolError> {
+        Self::parse_bool(value)
+    }
+    /// Parse the value for `Self::OverrideGlobalFormatOpts`
+    pub fn override_global_format_opts(
+        value: Option<&String>,
+    ) -> Result<Option<bool>, ParseBoolError> {
+        Self::parse_bool(value)
     }
 }
 

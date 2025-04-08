@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use deployer_cluster::{Cluster, ClusterBuilder};
+use std::collections::HashMap;
 use std::time::Duration;
 use stor_port::types::v0::openapi::models;
 
@@ -257,9 +258,14 @@ async fn preflight_failure(cluster: &Cluster, volume: &models::Volume) {
         .await
         .expect("Failed to get volume");
 
-    node.node_stage_volume_fs(&volume, "ext4", publish_result.publish_context.clone())
-        .await
-        .expect("Failed to stage volume");
+    node.node_stage_volume_fs(
+        &volume,
+        "ext4",
+        publish_result.publish_context.clone(),
+        HashMap::new(),
+    )
+    .await
+    .expect("Failed to stage volume");
     node.node_publish_volume_fs(&volume, "ext4", publish_result.publish_context)
         .await
         .expect("Failed to publish volume");

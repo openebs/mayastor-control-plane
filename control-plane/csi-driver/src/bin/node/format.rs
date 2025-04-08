@@ -1,7 +1,7 @@
 //! Utility function for formatting a device with filesystem
 use crate::filesystem_ops::FileSystem;
 
-use tracing::debug;
+use tracing::{debug, info};
 use uuid::Uuid;
 
 /// Prepare the filesystem before mount, change parameters if requested.
@@ -11,6 +11,7 @@ pub(crate) async fn prepare_device(
     staging_path: &str,
     options: &[String],
     fs_id: &Option<Uuid>,
+    format_options: &str,
 ) -> Result<(), String> {
     debug!("Probing device {}", device);
     let fs = FileSystem::property(device, "TYPE");
@@ -27,6 +28,6 @@ pub(crate) async fn prepare_device(
         }
         return Ok(());
     }
-    debug!("Creating new filesystem ({}) on device {}", fstype, device);
-    fs_ops.create(device).await
+    info!(%format_options, "Formatting device {device} with filesystem {fstype}");
+    fs_ops.create(device, format_options).await
 }
