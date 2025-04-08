@@ -263,8 +263,8 @@ impl Cluster {
             let node = node_cli
                 .get(Filter::Node(node_id.clone()), true, None)
                 .await
-                .expect("Cant get node object");
-            if let Some(node) = node.0.get(0) {
+                .expect("To get node object");
+            if let Some(node) = node.0.first() {
                 if node.state().map(|n| &n.status) == Some(&status) {
                     return Ok(());
                 }
@@ -396,7 +396,7 @@ impl Cluster {
     pub async fn remove_store_lock(&self, name: ControlPlaneService) {
         let mut store = etcd_client::Client::connect(["0.0.0.0:2379"], None)
             .await
-            .expect("Failed to connect to etcd.");
+            .expect("To connect to etcd.");
         store
             .delete(
                 StoreLeaseLockKey::new(&name).key(),
@@ -1229,11 +1229,18 @@ impl CsiNodeClient {
         volume: &Volume,
         fs_type: &str,
         publish_context: HashMap<String, String>,
+        volume_context: HashMap<String, String>,
     ) -> Result<NodeStageVolumeResponse, Error> {
         let mut context = std::collections::HashMap::new();
         context.insert(
             "uri".into(),
-            volume.state.target.as_ref().unwrap().device_uri.to_string(),
+            volume
+                .state
+                .target
+                .as_ref()
+                .expect("volume target to exist")
+                .device_uri
+                .to_string(),
         );
         context.extend(publish_context);
         let request = rpc::csi::NodeStageVolumeRequest {
@@ -1253,7 +1260,7 @@ impl CsiNodeClient {
                 )),
             }),
             secrets: Default::default(),
-            volume_context: Default::default(),
+            volume_context,
         };
         let response = self.csi.node_stage_volume(request).await?;
         Ok(response.into_inner())
