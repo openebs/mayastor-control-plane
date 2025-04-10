@@ -404,6 +404,11 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
                 let volume = match volume_content_source {
                     Some(snapshot_uuid) => {
+                        // This is to determine if user has passed `thin` arg.
+                        // This will help us not restore into thin volume if user has passed
+                        // thin:false explicitly.
+                        let thin_arg_passed = args.parameters.contains_key("thin");
+                        let thin = !thin_arg_passed || thin;
                         RestApiClient::get_client()
                             .create_snapshot_volume(
                                 &parsed_vol_uuid,
