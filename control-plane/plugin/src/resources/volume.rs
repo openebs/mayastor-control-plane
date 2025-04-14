@@ -40,10 +40,15 @@ pub struct VolumesArgs {
 impl CreateRow for openapi::models::Volume {
     fn row(&self) -> Row {
         let state = &self.state;
+        let target_node = match state.target.clone().map(|t| t.node) {
+            Some(node) => Some(node),
+            None if self.spec.target.is_some() => Some("<missing>".to_string()),
+            None => None,
+        };
         row![
             state.uuid,
             self.spec.num_replicas,
-            optional_cell(state.target.clone().map(|t| t.node)),
+            optional_cell(target_node),
             optional_cell(state.target.as_ref().and_then(target_protocol)),
             state.status.clone(),
             ::utils::bytes::into_human(state.size),
@@ -64,6 +69,7 @@ impl CreateRow for openapi::models::Volume {
                     VolumeContentSource::snapshot(_) => "Snapshot",
                 }
             })),
+            optional_cell(state.health.as_ref().map(|h| h.clean_shutdown))
         ]
     }
 }
@@ -382,6 +388,7 @@ impl CreateRows for HashMap<String, openapi::models::ReplicaTopology> {
                     optional_cell(topology.child_status.as_ref().map(|s| s.to_string())),
                     optional_cell(topology.child_status_reason.as_ref().map(|s| s.to_string())),
                     optional_cell(topology.rebuild_progress.map(|p| format!("{p}%"))),
+                    optional_cell(topology.healthy),
                 ]
             })
             .collect()

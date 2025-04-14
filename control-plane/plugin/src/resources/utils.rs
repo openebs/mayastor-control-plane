@@ -28,6 +28,7 @@ lazy_static! {
         "ALLOCATED",
         "SNAPSHOTS",
         "SOURCE",
+        "CLEAN-SHUTDOWN",
     ];
     pub static ref SNAPSHOT_HEADERS: Row = row![
         "ID",
@@ -62,7 +63,8 @@ lazy_static! {
         "SNAPSHOTS",
         "CHILD-STATUS",
         "REASON",
-        "REBUILD"
+        "REBUILD",
+        "HEALTHY",
     ];
     pub static ref SNAPSHOT_TOPOLOGY_PREFIX: Row = row!["SNAPSHOT-ID"];
     pub static ref SNAPSHOT_TOPOLOGY_HEADERS: Row = row![

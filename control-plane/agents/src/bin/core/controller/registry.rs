@@ -16,7 +16,9 @@
 use super::{resources::operations_helper::*, wrapper::NodeWrapper};
 use crate::{
     controller::{
+        pstor_cache::PStorCache,
         reconciler::ReconcilerControl,
+        resources::VolumeHealthWatcher,
         task_poller::{PollEvent, PollTriggerEvent},
         wrapper::InternalOps,
     },
@@ -36,7 +38,7 @@ use stor_port::{
     },
     types::v0::{
         store::{
-            nexus_persistence::delete_all_v1_nexus_info,
+            nexus_persistence::{delete_all_v1_nexus_info, NexusInfo},
             registry::{ControlPlaneService, CoreRegistryConfig, NodeRegistration},
             volume::InitiatorAC,
         },
@@ -74,6 +76,7 @@ pub(crate) struct RegistryInner<S: Store> {
     nodes: NodesMapLocked,
     /// spec (aka desired state) of the various resources.
     specs: ResourceSpecsLocked,
+    health: Option<VolumeHealthWatcher>,
     /// period to refresh the cache.
     cache_period: std::time::Duration,
     store: Arc<Mutex<S>>,
@@ -136,6 +139,7 @@ impl Registry {
         thin_args: ThinArgs,
         ha_enabled: bool,
         etcd_max_page_size: i64,
+        no_volume_health: bool,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -165,6 +169,11 @@ impl Registry {
             inner: Arc::new(RegistryInner {
                 nodes: Default::default(),
                 specs: ResourceSpecsLocked::new(),
+                health: if no_volume_health {
+                    None
+                } else {
+                    Some(VolumeHealthWatcher::new(&store))
+                },
                 cache_period,
                 store: Arc::new(Mutex::new(store.clone())),
                 store_timeout,
@@ -322,6 +331,19 @@ impl Registry {
     pub(crate) fn specs(&self) -> &ResourceSpecsLocked {
         &self.specs
     }
+    /// Get a reference to the volume health watcher.
+    pub(crate) fn health(&self) -> Option<&VolumeHealthWatcher> {
+        self.health.as_ref()
+    }
+    /// Retain health info as per the given retain closure.
+    pub(crate) fn health_retain<F: FnMut(&uuid::Uuid, &mut Arc<NexusInfo>) -> bool>(
+        &self,
+        retain: F,
+    ) {
+        if let Some(h) = self.health() {
+            h.retain(retain)
+        }
+    }
 
     /// Serialized write to the persistent store.
     pub(crate) async fn store_obj<O: StorableObject>(&self, object: &O) -> Result<(), SvcError> {
@@ -367,6 +389,32 @@ impl Registry {
         match tokio::time::timeout(self.store_timeout, async move {
             let mut store = store.lock().await;
             Self::op_with_threshold(async move { store.delete_kv(key).await }).await
+        })
+        .await
+        {
+            Ok(result) => match result {
+                Ok(_) => Ok(()),
+                // already deleted, no problem
+                Err(StoreError::MissingEntry { .. }) => {
+                    tracing::warn!("Entry with key {} missing from store.", key.to_string());
+                    Ok(())
+                }
+                Err(error) => Err(SvcError::from(error)),
+            },
+            Err(_) => Err(SvcError::from(StoreError::Timeout {
+                operation: "Delete".to_string(),
+                timeout: self.store_timeout,
+            })),
+        }
+    }
+
+    /// Serialized delete to the persistent store, with a prefix.
+    pub(crate) async fn delete_kv_prefix<K: StoreKey>(&self, key: &K) -> Result<(), SvcError> {
+        let store = self.store.clone();
+        match tokio::time::timeout(self.store_timeout, async move {
+            let mut store = store.lock().await;
+            let key = key.to_string();
+            Self::op_with_threshold(async move { store.delete_values_prefix(&key).await }).await
         })
         .await
         {
@@ -437,14 +485,46 @@ impl Registry {
 
     /// Initialise the registry with the content of the persistent store.
     async fn init(&self) -> Result<(), SvcError> {
+        {
+            let store = self.store.clone();
+            let mut store = store.lock().await;
+            self.specs
+                .init(
+                    store.deref_mut(),
+                    self.legacy_prefix_present,
+                    self.etcd_max_page_size,
+                )
+                .await?;
+        }
+        self.init_health().await?;
+
+        Ok(())
+    }
+
+    async fn init_health(&self) -> Result<(), SvcError> {
+        let Some(health) = &self.health else {
+            return Ok(());
+        };
+        health.init().await?;
         let mut store = self.store.lock().await;
-        self.specs
-            .init(
-                store.deref_mut(),
-                self.legacy_prefix_present,
-                self.etcd_max_page_size,
-            )
-            .await?;
+        let mut pstor_cache = PStorCache::new(
+            store.deref_mut(),
+            self.etcd_max_page_size,
+            health.key_prefix(),
+        )
+        .await?;
+        for volume in self.specs.volumes_rsc() {
+            let Some(nexus_info_key) = volume.immutable_ref().health_info_key() else {
+                continue;
+            };
+            let nexus_info_key = nexus_info_key.nexus_info_key();
+            let Ok(mut info) = pstor_cache.get_obj::<NexusInfo>(&nexus_info_key).await else {
+                continue;
+            };
+            info.uuid = nexus_info_key.nexus_id().clone();
+            info.volume_uuid = Some(volume.uuid().clone());
+            health.if_empty_insert(info);
+        }
         Ok(())
     }
 

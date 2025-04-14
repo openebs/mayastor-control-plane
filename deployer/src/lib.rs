@@ -261,6 +261,10 @@ pub struct StartOptions {
     #[clap(long)]
     pub no_etcd: bool,
 
+    /// Make the etcd service data persistent across etcd restarts.
+    #[clap(long)]
+    pub persistent_etcd: bool,
+
     /// The period at which the registry updates its cache of all
     /// resources from all nodes.
     #[clap(long)]
