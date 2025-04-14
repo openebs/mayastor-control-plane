@@ -23,6 +23,7 @@ use agents::errors::{NotEnough, SvcError, SvcError::ReplicaRemovalNoCandidates};
 
 use grpc::operations::volume::traits::PublishVolumeInfo;
 use stor_port::{
+    pstor::ObjectKey,
     transport_api::ErrorChain,
     types::v0::{
         store::{
@@ -42,8 +43,41 @@ use stor_port::{
 };
 
 use http::Uri;
+use stor_port::types::v0::store::nexus_persistence::VolumeHealthPrefix;
 
 impl OperationGuardArc<VolumeSpec> {
+    /// Prune volume health from older targets.
+    pub(crate) fn prune_health(&self, registry: &Registry) {
+        let Some(target) = self.lock().health_info_id().cloned() else {
+            return;
+        };
+        let volume_uuid = self.uuid();
+        registry.health_retain(|k, v| {
+            let Some(vol_entry) = &v.volume_uuid else {
+                // we're not interested in these test nexuses
+                return false;
+            };
+            if vol_entry != volume_uuid {
+                // only interested in the given volume
+                return true;
+            }
+            // remove older targets
+            k == target.uuid()
+        });
+    }
+
+    /// Remove volume health from this volume.
+    pub(crate) fn remove_health(&self, registry: &Registry) {
+        let volume_uuid = self.uuid();
+        registry.health_retain(|_k, v| {
+            let Some(vol_entry) = &v.volume_uuid else {
+                // we're not interested in these test nexuses
+                return false;
+            };
+            vol_entry != volume_uuid
+        });
+    }
+
     /// Check if the volume is published.
     pub(super) fn published(&self) -> bool {
         self.as_ref().target().is_some()
@@ -810,7 +844,36 @@ impl OperationGuardArc<VolumeSpec> {
         }
     }
 
+    /// Check if volume has snapshots.
     pub fn has_snapshots(&self) -> bool {
         self.as_ref().metadata.has_snapshots()
+    }
+
+    /// Delete all NexusInfo keys from the persistent store.
+    /// If deletion fails we just log it and continue.
+    pub(super) async fn delete_all_nexusinfo(&self, registry: &Registry) {
+        // this allows us to skip this procedure if we never published, even once.
+        if self.as_ref().health_info_id().is_none() {
+            return;
+        }
+
+        let info = VolumeHealthPrefix::new(self.uuid().clone());
+        match registry.delete_kv_prefix(&info.key()).await {
+            Ok(_) => {
+                tracing::trace!(
+                    volume.uuid = %self.uuid(),
+                    "Deleted NexusInfo entry from persistent store",
+                );
+            }
+            Err(error) => {
+                tracing::error!(
+                    %error,
+                    volume.uuid = %self.uuid(),
+                    "Failed to delete volume NexusInfo entry from persistent store",
+                );
+            }
+        }
+
+        self.remove_health(registry);
     }
 }

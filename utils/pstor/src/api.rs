@@ -44,12 +44,20 @@ pub trait StoreKv: Sync + Send + Clone {
     ) -> Result<Vec<(String, Value)>, Error>;
     /// Deletes all key values from a given prefix.
     async fn delete_values_prefix(&mut self, key_prefix: &str) -> Result<(), Error>;
+    /// Get a StoreKv watcher.
+    fn kv_watcher<
+        Ctx: Send + Sync + 'static,
+        W: Fn(WatchCbArg<Ctx>) -> WatchResult + Send + Sync + 'static,
+    >(
+        &self,
+        ctx_cb: W,
+    ) -> impl StoreKvWatcher<Ctx> + 'static;
 }
 
 /// Trait defining the operations that can be performed on a key-value store using object semantics.
 /// It allows for abstracting the key component into the `StorableObject` itself.
 #[async_trait]
-pub trait StoreObj: StoreKv + Sync + Send + Clone {
+pub trait StoreObj: Sync + Send + Clone {
     /// Puts the given `O` object into the store.
     async fn put_obj<O: StorableObject>(&mut self, object: &O) -> Result<(), Error>;
     /// Gets the object `O` through its `O::Key`.
@@ -58,6 +66,58 @@ pub trait StoreObj: StoreKv + Sync + Send + Clone {
     /// Returns a channel which is signalled when an event occurs.
     /// # Warning: Events may be lost if we are restarted.
     async fn watch_obj<K: ObjectKey>(&mut self, key: &K) -> Result<StoreWatchReceiver, Error>;
+}
+
+/// Watch key used to register a watch for a given key prefix.
+pub struct WatchKey {
+    /// The key prefix to watch for.
+    pub(crate) prefix: String,
+    /// The revision number to watch from, if set.
+    pub(crate) rev: Option<i64>,
+}
+impl WatchKey {
+    /// Create a new `Self` with the given key prefix.
+    pub fn new(prefix: impl Into<String>) -> Self {
+        Self {
+            prefix: prefix.into(),
+            rev: None,
+        }
+    }
+    /// Specify the revision to start the watch from.
+    pub fn with_rev(self, rev: Option<i64>) -> Self {
+        Self { rev, ..self }
+    }
+}
+
+/// Callback may request for the respective registrant key to be unwatched.
+pub enum WatchResult {
+    /// Continue watching for further updates.
+    Continue,
+    /// Remove this key from the watch.
+    Remove,
+}
+/// Callback arguments.
+pub struct WatchCbArg<'a, Ctx> {
+    /// The registered key prefix.
+    pub key_prefix: &'a str,
+    /// The registered per-callback context.
+    pub cb_ctx: &'a Ctx,
+    /// The actual key which was updated (which contains the prefix of `key_prefix`).
+    pub updated_key: &'a str,
+    /// The latest value returned by the watch event.
+    pub value: &'a str,
+}
+
+/// Trait defining the operations that can be performed on a key-value store using object semantics.
+/// It allows for abstracting the key component into the `StorableObject` itself.
+pub trait StoreKvWatcher<Ctx: Send + Sync + 'static = ()>: Send + Sync {
+    /// Watch for the key prefix specified in the [`WatchKey`].
+    /// Callbacks are received by the global [`WatchCallback`].
+    fn watch(&self, key: WatchKey, ctx: Ctx) -> Result<(), Error>;
+    /// Stop watching the previously registered Watch.
+    fn unwatch(&self, key: WatchKey) -> Result<(), Error>;
+    /// Cancel all watches.
+    fn abort(self);
 }
 
 /// Store keys type trait.

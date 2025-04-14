@@ -1,10 +1,15 @@
 use crate::{
-    api::{ObjectKey, StorableObject, Store, StoreKey, StoreKv, StoreObj, StoreValue, WatchEvent},
+    api::{
+        ObjectKey, StorableObject, Store, StoreKey, StoreKv, StoreKvWatcher, StoreObj, StoreValue,
+        WatchCbArg, WatchEvent,
+    },
     error::{
         Connect, Delete, DeletePrefix, DeserialiseValue, Error, Get, GetPrefix, KeyString, Put,
         SerialiseValue, ValueString, Watch,
     },
     etcd_keep_alive::{ControlPlaneService, EtcdSingletonLock, LeaseLockInfo},
+    etcd_watcher::EtcdWatcher,
+    WatchResult,
 };
 use async_trait::async_trait;
 use etcd_client::{
@@ -62,8 +67,11 @@ impl Etcd {
             .map_err(|error| Error::NotReady {
                 reason: format!("Platform not ready: {error}"),
             })?;
-
-        let client = Client::connect(endpoints, None).await.context(Connect {})?;
+        let options =
+            etcd_client::ConnectOptions::new().with_keep_alive(lease_time, lease_time * 3);
+        let client = Client::connect(endpoints, Some(options))
+            .await
+            .context(Connect {})?;
 
         let lease_info = EtcdSingletonLock::start(client.clone(), service_kind, lease_time).await?;
         Ok(Self::from(&client, Some(lease_info)))
@@ -317,6 +325,16 @@ impl StoreKv for Etcd {
         };
 
         Ok(())
+    }
+
+    fn kv_watcher<
+        Ctx: Send + Sync + 'static,
+        W: Fn(WatchCbArg<Ctx>) -> WatchResult + Send + Sync + 'static,
+    >(
+        &self,
+        ctx_cb: W,
+    ) -> impl StoreKvWatcher<Ctx> + 'static {
+        EtcdWatcher::new(self.client.clone(), ctx_cb)
     }
 }
 
