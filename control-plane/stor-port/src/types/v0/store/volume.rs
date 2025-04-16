@@ -529,6 +529,9 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                     VolumeProperty::MaxSnapshots(max_snapshots) => {
                         self.max_snapshots = Some(max_snapshots);
                     }
+                    VolumeProperty::Encrypted(encrypted) => {
+                        self.encrypted = encrypted;
+                    }
                 },
             }
         }

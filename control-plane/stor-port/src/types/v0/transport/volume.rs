@@ -110,6 +110,8 @@ impl From<VolumeHealth> for models::VolumeHealth {
 pub enum VolumeProperty {
     /// Max number of snapshots allowed per volume.
     MaxSnapshots(u32),
+    /// Volume is required to be encrypted.
+    Encrypted(bool),
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
