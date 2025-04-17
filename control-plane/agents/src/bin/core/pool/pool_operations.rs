@@ -44,7 +44,8 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
             });
         }
 
-        if let Ok(pool) = registry.specs().pool(&request.id) {
+        let pool_get_result = registry.specs().pool(&request.id);
+        if let Ok(pool) = &pool_get_result {
             if pool.status.created() {
                 return Err(SvcError::AlreadyExists {
                     kind: ResourceKind::Pool,
@@ -61,8 +62,10 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
             });
         }
 
-        // If the devlink for a device is used for multiple pools, reject new creation.
-        devlink_preflight_checks(request, node.clone(), registry).await?;
+        if pool_get_result.is_err() {
+            // If the devlink for a device is used for multiple pools, reject new creation.
+            devlink_preflight_checks(request, node.clone(), registry).await?
+        }
 
         let mut pool = specs
             .get_or_create_pool(request)

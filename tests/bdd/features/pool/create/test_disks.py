@@ -125,7 +125,9 @@ def disks():
 
 @pytest.fixture
 def attempt_create_pool_nonexistent_disk(context, attempt_create_pool):
-    context["attempt"] = attempt_create_pool(POOL_NAME, POOL_NODE, ["/dev/no_there"])
+    context["attempt"] = attempt_create_pool(
+        POOL_NAME, POOL_NODE, ["/dev/disk/by-id/no_there"]
+    )
 
 
 @pytest.fixture

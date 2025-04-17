@@ -7,6 +7,7 @@ use grpc::{
     },
 };
 use itertools::Itertools;
+use regex::Regex;
 use std::{collections::HashMap, convert::TryFrom, thread::sleep, time::Duration};
 use stor_port::types::v0::store::pool::{Encryption, EncryptionSecret};
 use stor_port::types::v0::transport::{GetBlockDevices, NodeStatus};
@@ -1345,5 +1346,36 @@ async fn reject_devlink_reuse() {
                 });
             }
         }
+    }
+}
+
+#[tokio::test]
+async fn persistent_devlink_regex() {
+    fn is_persistent_devlink(pattern: &str) -> bool {
+        let re = Regex::new(utils::DEVLINK_REGEX).expect("DEVLINK_REGEX should be valid");
+        re.is_match(pattern)
+    }
+
+    let test_suite = [
+        ("/dev/some/path", false),
+        ("/dev/mapper/some/path", false),
+        ("/dev/disk/some/path", false),
+        ("/dev/disk/by-something/path", false),
+        ("/devil/disk/by-something/path", false),
+        ("/dev/diskxyz/by-something/path", false),
+        ("/dev/disk/something-by/path", false),
+        ("/dev/disk/by-/path", false),
+        ("something", false),
+        ("/dev/somevg/lv0", false), // LVM Paths are to be used via the /dev/mapper or by /dev/disk/by-id
+        ("/dev/disk/by-id/somepath", true),
+        ("/dev/disk/by-path/somepath", true),
+        ("/dev/disk/by-label/somepath", true),
+        ("/dev/disk/by-partuuid/somepath", true),
+        ("/dev/disk/by-partlabel/somepath", true),
+        ("/dev/mapper/dm0", true),
+    ];
+
+    for test in test_suite {
+        assert_eq!(is_persistent_devlink(test.0), test.1);
     }
 }

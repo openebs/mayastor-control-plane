@@ -58,6 +58,7 @@ tracing = "0.1.40"
 nix = { version = "0.29.0", default-features = false }
 prost-types = "0.13.3"
 url = "2.5.4"
+regex = "1.11.1"
 
 grpc = { path = "../grpc" }
 shutdown = { path = "../../utils/shutdown" }

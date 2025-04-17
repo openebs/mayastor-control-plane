@@ -184,3 +184,7 @@ pub fn nvme_controller_model_id() -> String {
 
 /// Max limit for etcd pagination.
 pub const ETCD_MAX_PAGE_LIMIT: &str = "500";
+
+/// Regex to match persistent disks.
+pub const DEVLINK_REGEX: &str =
+    r"^(/dev/(disk/by-(id|uuid|label|path|partuuid|partlabel)/[^/\s]+|mapper/[^/\s]+))$";

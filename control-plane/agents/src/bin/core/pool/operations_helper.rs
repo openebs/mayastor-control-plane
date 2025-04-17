@@ -24,6 +24,7 @@ use stor_port::types::v0::{
 };
 
 use itertools::Itertools;
+use regex::Regex;
 use snafu::OptionExt;
 use std::collections::HashSet;
 use std::ops::Deref;
@@ -150,6 +151,22 @@ pub(crate) async fn devlink_preflight_checks(
         .iter()
         .map(|disk| utils::disk::normalize_disk(disk.as_str()))
         .collect();
+
+    if !registry.allow_non_persistent_devlinks() {
+        fn is_persistent_devlink(pattern: &str) -> Result<bool, SvcError> {
+            let re = Regex::new(utils::DEVLINK_REGEX).map_err(|_| SvcError::InvalidArguments {})?;
+            Ok(re.is_match(pattern))
+        }
+
+        if request_disks
+            .iter()
+            // Only attempt to validate if it starts with "/dev".
+            .filter(|disk| disk.starts_with("/dev"))
+            .any(|disk| !is_persistent_devlink(disk).is_ok_and(|val| val))
+        {
+            return Err(SvcError::InvalidDevlink {});
+        }
+    }
 
     let node_pools = registry
         .get_node_opt_pools(Some(request.node.clone()))

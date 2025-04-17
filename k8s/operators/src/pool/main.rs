@@ -369,11 +369,13 @@ mod test {
             "uring:///dev/null",
             "uring://dev/null", // this URL is invalid
             "pcie:///0000:01:00.0",
+            "pcie:///00:01:00.0",
         ];
 
         assert_eq!(utils::disk::normalize_disk(disks[0]), "/dev/null");
         assert_eq!(utils::disk::normalize_disk(disks[1]), "/dev/null");
         assert_eq!(utils::disk::normalize_disk(disks[2]), "uring://dev/null");
         assert_eq!(utils::disk::normalize_disk(disks[3]), "/0000:01:00.0");
+        assert_eq!(utils::disk::normalize_disk(disks[4]), "/0000:01:00.0");
     }
 }
