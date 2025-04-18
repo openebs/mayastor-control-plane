@@ -277,33 +277,38 @@ impl SetProperty for Volume {
         property: &Self::Property,
         output: &utils::OutputFormat,
     ) -> PluginResult {
-        match property {
+        let property_body = match property {
             SetVolumeProperties::MaxSnapshots { max_snapshots } => {
-                let property_body = SetVolumePropertyBody::max_snapshots(*max_snapshots);
-                match RestClient::client()
-                    .volumes_api()
-                    .put_volume_property(id, property_body.clone())
-                    .await
-                {
-                    Ok(volume) => match output {
-                        OutputFormat::Yaml | OutputFormat::Json => {
-                            // Print json or yaml based on output format.
-                            utils::print_table(output, volume.into_body());
-                        }
-                        OutputFormat::None => {
-                            // In case the output format is not specified, show a success message.
-                            println!("Volume {id} property {:?} set successfully", property_body);
-                        }
-                    },
-                    Err(e) => {
-                        return Err(Error::SetVolumePropertyError {
-                            id: id.to_string(),
-                            source: e,
-                        });
-                    }
+                SetVolumePropertyBody::max_snapshots(*max_snapshots)
+            }
+            SetVolumeProperties::Encryption { enabled } => {
+                SetVolumePropertyBody::encrypted(*enabled)
+            }
+        };
+
+        match RestClient::client()
+            .volumes_api()
+            .put_volume_property(id, property_body.clone())
+            .await
+        {
+            Ok(volume) => match output {
+                OutputFormat::Yaml | OutputFormat::Json => {
+                    // Print json or yaml based on output format.
+                    utils::print_table(output, volume.into_body());
                 }
+                OutputFormat::None => {
+                    // In case the output format is not specified, show a success message.
+                    println!("Volume {id} property {:?} set successfully", property_body);
+                }
+            },
+            Err(e) => {
+                return Err(Error::SetVolumePropertyError {
+                    id: id.to_string(),
+                    source: e,
+                });
             }
         }
+
         Ok(())
     }
 }
