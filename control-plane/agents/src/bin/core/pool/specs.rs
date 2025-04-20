@@ -13,6 +13,7 @@ use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
         store::{
+            node::NodeSpec,
             pool::{PoolLabelOp, PoolOperation, PoolSpec, PoolUnLabelOp},
             replica::{ReplicaOperation, ReplicaSpec},
             SpecStatus, SpecTransaction,
@@ -342,6 +343,16 @@ impl ResourceSpecsLocked {
         let specs = self.read();
         let replica = specs.replicas.get(id)?;
         specs.replica_spec_node(replica.immutable_ref())
+    }
+
+    /// Get the node where the replica `id` resides on, if it exists.
+    pub(crate) fn replica_node_spec(&self, id: &ReplicaId) -> Option<NodeSpec> {
+        let node_id = self.replica_id_node(id);
+        if let Some(node_id) = node_id {
+            let specs = self.read();
+            return specs.nodes.get(&node_id).map(|n| n.lock().clone());
+        };
+        None
     }
 
     /// Get or Create the resourced PoolSpec for the given request.

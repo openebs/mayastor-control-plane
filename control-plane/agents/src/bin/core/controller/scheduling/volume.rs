@@ -297,6 +297,7 @@ impl GetChildForRemovalContext {
         let replica_states = self.registry.replicas().await;
         replicas
             .map(|replica_spec| {
+                let replica_node_spec = self.registry.specs().replica_node_spec(&replica_spec.uuid);
                 let ag_rep_count = pool_ag_rep
                     .as_ref()
                     .and_then(|map| map.get(replica_spec.pool_name()).cloned());
@@ -347,6 +348,7 @@ impl GetChildForRemovalContext {
                             .cloned()
                     }),
                     ag_rep_count,
+                    replica_node_spec,
                 )
                 .with_node_topology({
                     Some(NodeFilters::topology_replica(
