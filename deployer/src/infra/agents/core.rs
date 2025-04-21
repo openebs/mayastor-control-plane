@@ -71,6 +71,9 @@ impl ComponentAction for CoreAgent {
         if let Some(max_rebuilds) = &options.max_rebuilds {
             binary = binary.with_args(vec!["--max-rebuilds", &max_rebuilds.to_string()]);
         }
+        if options.allow_non_persistent_devlink {
+            binary = binary.with_args(vec!["--allow-non-persistent-devlink"]);
+        }
         Ok(cfg.add_container_spec(
             ContainerSpec::from_binary(name, binary).with_portmap("50051", "50051"),
         ))

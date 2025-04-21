@@ -1059,6 +1059,7 @@ async fn slow_create() {
     {
         let cluster = ClusterBuilder::builder()
             .with_io_engines(1)
+            .with_allow_non_persistent_devlink(true)
             .with_reconcile_period(Duration::from_millis(250), Duration::from_millis(250))
             .with_cache_period("200ms")
             .with_options(|o| o.with_io_engine_devices(vec![lvol.path()]))
@@ -1176,6 +1177,7 @@ async fn reject_devlink_reuse() {
             .await
             .expect("Failed to build cluster");
 
+        let dev_path = lvol.path();
         let client = cluster.grpc_client();
 
         let bds = client
@@ -1191,17 +1193,29 @@ async fn reject_devlink_reuse() {
             .expect("Failed to get block devices")
             .into_inner();
 
-        let dev_path = lvol.path();
         let matched_device = bds
             .iter()
             .find(|bd| {
-                bd.devlinks.iter().any(|link| link == &dev_path.to_string())
-                    || bd.devname == dev_path
-                    || bd.devpath == dev_path
+                let dev_path_str = dev_path.to_string();
+                bd.devname == dev_path_str
+                    || bd.devpath == dev_path_str
+                    || bd.devlinks.iter().any(|link| link == &dev_path_str)
             })
             .expect("Block device should exist");
 
-        let device_devlinks = &matched_device.devlinks;
+        let device_devlinks: Vec<&str> = matched_device
+            .devlinks
+            .iter()
+            .filter_map(|link| link.strip_prefix("/dev/disk/by-"))
+            .map(|s| {
+                &matched_device
+                    .devlinks
+                    .iter()
+                    .find(|l| l.ends_with(s))
+                    .unwrap()[..]
+            })
+            .collect();
+
         assert!(
             device_devlinks.len() >= 2,
             "Expected at least 2 devlinks, found {}",
@@ -1214,6 +1228,7 @@ async fn reject_devlink_reuse() {
             disks: vec![device_devlinks
                 .first()
                 .expect("At least one devlink should be present")
+                .to_string()
                 .into()],
             labels: None,
             encryption: Some(Encryption::Secret(EncryptionSecret {
@@ -1233,6 +1248,7 @@ async fn reject_devlink_reuse() {
             disks: vec![device_devlinks
                 .get(1)
                 .expect("Another devlink should be present")
+                .to_string()
                 .into()],
             labels: None,
             encryption: Some(Encryption::Secret(EncryptionSecret {

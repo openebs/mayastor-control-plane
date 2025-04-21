@@ -354,6 +354,9 @@ pub struct StartOptions {
     /// Mount host dev and udev.
     #[clap(long)]
     mount_host_dev_udev: bool,
+    /// Allow non persistent devlink for pool creation.
+    #[clap(long)]
+    allow_non_persistent_devlink: bool,
 }
 
 /// List of KeyValues
@@ -604,6 +607,12 @@ impl StartOptions {
     /// Specify whether host's mount dev and udev is needed or not.
     pub fn with_mount_host_dev_udev(mut self, enabled: bool) -> Self {
         self.mount_host_dev_udev = enabled;
+        self
+    }
+
+    /// Specify whether allow non peristent devlink is needed or not.
+    pub fn with_allow_non_persistent_devlink(mut self, enabled: bool) -> Self {
+        self.allow_non_persistent_devlink = enabled;
         self
     }
 
