@@ -2726,12 +2726,17 @@ components:
       oneOf:
         - required:
             - max_snapshots
+        - required:
+            - encrypted
       properties:
         max_snapshots:
           description: Max Snapshots limit per volume.
           type: integer
           format: int32
           minimum: 0
+        encrypted:
+          description: Volume is required to be encrypted.
+          type: boolean
     AffinityGroup:
       example:
         id: "ag"

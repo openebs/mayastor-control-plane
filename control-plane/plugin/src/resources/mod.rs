@@ -91,6 +91,13 @@ pub enum SetPropertyResources {
 pub enum SetVolumeProperties {
     /// Max snapshot limit per volume.
     MaxSnapshots { max_snapshots: u32 },
+    #[clap(
+        about = "Encryption required for volume.\n\x1b[31m\x1b[1mCAUTION:\x1b[0m Use carefully during for example non-encrypted to encrypted pool migration. Refer to documentation for more details."
+    )]
+    Encryption {
+        #[clap(action = clap::ArgAction::Set)]
+        enabled: bool,
+    },
 }
 
 /// The types of resources that support cordoning.

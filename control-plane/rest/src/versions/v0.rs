@@ -286,6 +286,9 @@ impl From<models::SetVolumePropertyBody> for SetVolumePropertyBody {
             models::SetVolumePropertyBody::max_snapshots(x) => Self {
                 property: VolumeProperty::MaxSnapshots(x),
             },
+            models::SetVolumePropertyBody::encrypted(b) => Self {
+                property: VolumeProperty::Encrypted(b),
+            },
         }
     }
 }

@@ -391,6 +391,7 @@ message SetVolumePropertyRequest {
 message VolumeProperty {
   oneof attr {
     MaxSnapshotValue max_snapshots = 1;
+    bool encrypted = 2;
   }
 }
 // Max snapshots limit per volume.

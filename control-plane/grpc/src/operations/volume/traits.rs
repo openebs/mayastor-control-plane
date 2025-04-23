@@ -1829,6 +1829,7 @@ impl From<SetVolumePropertyRequest> for Option<VolumeProperty> {
                 volume::volume_property::Attr::MaxSnapshots(volume::MaxSnapshotValue { value }) => {
                     VolumeProperty::MaxSnapshots(value)
                 }
+                volume::volume_property::Attr::Encrypted(value) => VolumeProperty::Encrypted(value),
             })
         })
     }
@@ -1841,6 +1842,9 @@ impl From<VolumeProperty> for volume::VolumeProperty {
                 attr: Some(volume::volume_property::Attr::MaxSnapshots(
                     volume::MaxSnapshotValue { value },
                 )),
+            },
+            VolumeProperty::Encrypted(value) => volume::VolumeProperty {
+                attr: Some(volume::volume_property::Attr::Encrypted(value)),
             },
         }
     }
