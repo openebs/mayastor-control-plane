@@ -168,6 +168,7 @@ impl ChildSorters {
         match Self::sort_by_health(a, b) {
             Ordering::Equal => match Self::sort_by_child(a, b) {
                 Ordering::Equal => {
+                    // Remove replicas from nodes which are cordoned with most priority.
                     // remove mismatched topology replicas first
                     if let (Some(a), Some(b)) = (a.valid_node_topology(), b.valid_node_topology()) {
                         match a.cmp(b) {
@@ -181,6 +182,15 @@ impl ChildSorters {
                             Ordering::Equal => {}
                             _else => return _else,
                         }
+                    }
+
+                    match if let (Some(a), Some(b)) = (a.node_spec(), b.node_spec()) {
+                        b.cordoned().cmp(&a.cordoned())
+                    } else {
+                        a.node_spec().is_some().cmp(&b.node_spec().is_some())
+                    } {
+                        Ordering::Equal => {}
+                        _else => return _else,
                     }
 
                     let childa_is_local = !a.spec().share.shared();

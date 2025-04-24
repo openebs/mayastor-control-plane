@@ -7,6 +7,7 @@ use stor_port::types::v0::{
     store::{
         nexus_child::NexusChild,
         nexus_persistence::{ChildInfo, NexusInfo},
+        node::NodeSpec,
         replica::ReplicaSpec,
         snapshots::replica::ReplicaSnapshot,
         volume::VolumeSpec,
@@ -178,10 +179,12 @@ pub(crate) struct ReplicaItem {
     ag_replicas_on_pool: Option<u64>,
     valid_pool_topology: Option<bool>,
     valid_node_topology: Option<bool>,
+    node_spec: Option<NodeSpec>,
 }
 
 impl ReplicaItem {
     /// Create new `Self` from the provided arguments.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         replica: ReplicaSpec,
         replica_state: Option<&Replica>,
@@ -190,6 +193,7 @@ impl ReplicaItem {
         child_spec: Option<NexusChild>,
         child_info: Option<ChildInfo>,
         ag_replicas_on_pool: Option<u64>,
+        node_spec: Option<NodeSpec>,
     ) -> Self {
         Self {
             replica_spec: replica,
@@ -201,6 +205,7 @@ impl ReplicaItem {
             ag_replicas_on_pool,
             valid_pool_topology: None,
             valid_node_topology: None,
+            node_spec,
         }
     }
     /// Set the validity of the replica's node topology.
@@ -220,6 +225,10 @@ impl ReplicaItem {
     /// Get a reference to the node topology validity flag.
     pub(crate) fn valid_node_topology(&self) -> &Option<bool> {
         &self.valid_node_topology
+    }
+    /// Get a reference to the node topology validity flag.
+    pub(crate) fn node_spec(&self) -> &Option<NodeSpec> {
+        &self.node_spec
     }
     /// Get a reference to the pool topology validity flag.
     pub(crate) fn valid_pool_topology(&self) -> &Option<bool> {
