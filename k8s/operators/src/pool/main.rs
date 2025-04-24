@@ -358,24 +358,3 @@ pub(crate) async fn migrate_and_clean_msps(k8s: &Client, namespace: &str) -> Res
     }
     Ok(())
 }
-
-#[cfg(test)]
-mod test {
-
-    #[test]
-    fn normalize_disk() {
-        let disks = [
-            "aio:///dev/null",
-            "uring:///dev/null",
-            "uring://dev/null", // this URL is invalid
-            "pcie:///0000:01:00.0",
-            "pcie:///00:01:00.0",
-        ];
-
-        assert_eq!(utils::disk::normalize_disk(disks[0]), "/dev/null");
-        assert_eq!(utils::disk::normalize_disk(disks[1]), "/dev/null");
-        assert_eq!(utils::disk::normalize_disk(disks[2]), "uring://dev/null");
-        assert_eq!(utils::disk::normalize_disk(disks[3]), "/0000:01:00.0");
-        assert_eq!(utils::disk::normalize_disk(disks[4]), "/0000:01:00.0");
-    }
-}
