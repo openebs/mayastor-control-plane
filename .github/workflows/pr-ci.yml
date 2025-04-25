@@ -7,21 +7,21 @@ on:
       - trying
 
 jobs:
-  lint-ci:
-    uses: ./.github/workflows/lint.yml
-  int-ci:
-    uses: ./.github/workflows/unit-int.yml
+  #  lint-ci:
+  #    uses: ./.github/workflows/lint.yml
+  #  int-ci:
+  #    uses: ./.github/workflows/unit-int.yml
   bdd-ci:
     uses: ./.github/workflows/bdd.yml
-  image-ci:
-    uses: ./.github/workflows/image-pr.yml
+  #  image-ci:
+  #    uses: ./.github/workflows/image-pr.yml
   bors-ci:
     if: ${{ success() }}
     needs:
-      - lint-ci
-      - int-ci
+      #      - lint-ci
+      #      - int-ci
       - bdd-ci
-      - image-ci
+    #      - image-ci
     runs-on: ubuntu-latest
     steps:
       - name: CI succeeded

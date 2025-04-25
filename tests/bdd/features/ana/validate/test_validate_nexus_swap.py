@@ -190,6 +190,7 @@ def connect_to_node_2(publish_to_node_2):
     uri = urlparse(publish_to_node_2)
     for p in subsystem["Paths"]:
         if uri.hostname not in p["Address"]:
+            print("DEBUG")
             assert p["State"] == "connecting", "Degraded I/O path has incorrect state"
             broken_path_checked = True
         else:

@@ -56,7 +56,7 @@ mkdir -p "$CI_REPORT"
 
 # Extra arguments will be provided directly to pytest, otherwise the bdd folder will be tested with default arguments
 if [ $# -eq 0 ]; then
-  pytest "$BDD_TEST_DIR" --durations=20 --junit-xml="$REPORT"
+  pytest "$BDD_TEST_DIR" --exitfirst --durations=20 --junit-xml="$REPORT"
 else
-  pytest "$@" --junit-xml="$REPORT"
+  pytest "$@" --exitfirst --junit-xml="$REPORT"
 fi

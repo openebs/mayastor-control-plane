@@ -49,7 +49,7 @@ jobs:
           name: ci-report-bdd
           path: ./ci-report/ci-report.tar.gz
       - name: Pytest BDD Report
-        if: always()
+        if:
         uses: pmeier/pytest-results-action@main
         with:
           path: ci-report/bdd-report.xml
@@ -58,7 +58,7 @@ jobs:
           fail-on-empty: true
           title: Test results
       # debugging
-      # - name: Setup tmate session
-      #   if: ${{ failure() }}
-      #   timeout-minutes: 240
-      #   uses: mxschmitt/action-tmate@v3
+      - name: Setup tmate session
+        if: always()
+        timeout-minutes: 240
+        uses: mxschmitt/action-tmate@v3
