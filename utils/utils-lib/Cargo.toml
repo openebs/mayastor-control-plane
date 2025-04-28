@@ -23,6 +23,7 @@ url = "2.5.4"
 strum = "0.26.3"
 strum_macros = "0.26.4"
 heck = "0.5.0"
+regex = "1.11.1"
 
 version-info = { path = "../dependencies/version-info", default-features = false }
 git-version-macro = { path = "../dependencies/git-version-macro" }

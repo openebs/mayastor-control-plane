@@ -41,6 +41,7 @@ class StartOptions:
     rust_log: str = None
     rust_log_silence: str = None
     rest_core_health_freq: str = None
+    mount_host_dev_udev: bool = False
 
     def args(self):
         args = [
@@ -115,6 +116,9 @@ class StartOptions:
             if self.ha_cluster_agent_fast is not None:
                 args.append(f"--cluster-fast-requeue={self.ha_cluster_agent_fast}")
 
+        if self.mount_host_dev_udev:
+            args.append("--mount-host-dev-udev")
+
         args.append(agent_arg)
 
         return args
@@ -150,6 +154,7 @@ class Deployer(object):
         rust_log: str = None,
         rust_log_silence: str = None,
         rest_core_health_freq: str = None,
+        mount_host_dev_udev=False,
     ):
         options = StartOptions(
             io_engines,
@@ -178,6 +183,7 @@ class Deployer(object):
             rust_log=rust_log,
             rust_log_silence=rust_log_silence,
             rest_core_health_freq=rest_core_health_freq,
+            mount_host_dev_udev=mount_host_dev_udev,
         )
         pytest.deployer_options = options
         Deployer.start_with_opts(options)

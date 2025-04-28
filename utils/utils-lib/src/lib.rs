@@ -13,6 +13,8 @@ pub use version_info::{version_info as version_info_inner, VersionInfo};
 
 /// Byte conversion helpers.
 pub mod bytes;
+/// Dev path normalizer helpers.
+pub mod disk;
 
 /// Check for the presence of nvme ana multipath.
 pub fn check_nvme_core_ana() -> Result<bool, std::io::Error> {

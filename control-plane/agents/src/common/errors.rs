@@ -420,6 +420,8 @@ pub enum SvcError {
         replica: String,
         source: tonic::Status,
     },
+    #[snafu(display("Invalid devlink, use a persistent devlink for pool creation"))]
+    InvalidDevlink {},
 }
 
 impl SvcError {
@@ -1108,6 +1110,12 @@ impl From<SvcError> for ReplyError {
             SvcError::ReplicaSetPropertyFailed { .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPersist,
                 resource: ResourceKind::Replica,
+                source,
+                extra,
+            },
+            SvcError::InvalidDevlink { .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::Block,
                 source,
                 extra,
             },

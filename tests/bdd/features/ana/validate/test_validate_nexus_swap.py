@@ -10,6 +10,7 @@ from pytest_bdd import (
 )
 import pytest
 import subprocess
+from retrying import retry
 
 from common.deployer import Deployer
 from common.apiclient import ApiClient
@@ -179,6 +180,7 @@ def publish_to_node_2(background):
 
 
 @pytest.fixture
+@retry(wait_fixed=10, stop_max_attempt_number=200)
 def connect_to_node_2(publish_to_node_2):
     device = nvme_connect(publish_to_node_2)
     desc = nvme_list_subsystems(device)

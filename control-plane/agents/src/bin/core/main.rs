@@ -142,6 +142,10 @@ pub(crate) struct CliArgs {
     /// Disable volume health reporting which uses pstor watchers.
     #[clap(long)]
     no_volume_health: bool,
+
+    /// Allow pools to be created using non persistent devlinks.
+    #[clap(long)]
+    allow_non_persistent_devlink: bool,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -219,6 +223,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         cli_args.disable_ha,
         cli_args.etcd_page_limit as i64,
         cli_args.no_volume_health,
+        cli_args.allow_non_persistent_devlink,
     )
     .await?;
 

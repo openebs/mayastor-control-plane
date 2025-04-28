@@ -13,6 +13,7 @@ use stor_port::types::v0::transport::{
     Deregister, Filter, Node, NodeId, NodeState, NodeStatus, Register,
 };
 
+use crate::controller::io_engine::HostApi;
 use crate::controller::wrapper::InternalOps;
 use grpc::{
     context::Context,
@@ -367,9 +368,7 @@ impl Service {
     ) -> Result<BlockDevices, SvcError> {
         let node = self.registry.node_wrapper(&request.node).await?;
 
-        let grpc = node.read().await.grpc_context()?;
-        let client = grpc.connect().await?;
-        client.list_blockdevices(request).await
+        node.list_blockdevices(request).await
     }
 
     /// Cordon the specified node.

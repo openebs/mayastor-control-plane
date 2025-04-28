@@ -114,6 +114,8 @@ pub(crate) struct RegistryInner<S: Store> {
     ha_disabled: bool,
     /// Etcd max page size.
     etcd_max_page_size: i64,
+    /// Allow pool creation using non-persistent devlinks.
+    allow_non_persistent_devlinks: bool,
 }
 
 impl Registry {
@@ -140,6 +142,7 @@ impl Registry {
         ha_enabled: bool,
         etcd_max_page_size: i64,
         no_volume_health: bool,
+        allow_non_persistent_devlinks: bool,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -199,6 +202,7 @@ impl Registry {
                 thin_args,
                 ha_disabled: ha_enabled,
                 etcd_max_page_size,
+                allow_non_persistent_devlinks,
             }),
         };
         registry.init().await?;
@@ -228,6 +232,11 @@ impl Registry {
     /// Check if the HA feature is disabled.
     pub(crate) fn ha_disabled(&self) -> bool {
         self.ha_disabled
+    }
+
+    /// Check if pool creation using non-persistent devlink is allowed.
+    pub(crate) fn allow_non_persistent_devlinks(&self) -> bool {
+        self.allow_non_persistent_devlinks
     }
 
     /// Check if the partial rebuilds are disabled.

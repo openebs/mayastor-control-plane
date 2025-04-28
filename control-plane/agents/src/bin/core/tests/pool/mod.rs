@@ -8,6 +8,8 @@ use grpc::{
 };
 use itertools::Itertools;
 use std::{collections::HashMap, convert::TryFrom, thread::sleep, time::Duration};
+use stor_port::types::v0::store::pool::{Encryption, EncryptionSecret};
+use stor_port::types::v0::transport::{GetBlockDevices, NodeStatus};
 use stor_port::{
     pstor::{etcd::Etcd, StoreObj},
     transport_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
@@ -1056,6 +1058,7 @@ async fn slow_create() {
     {
         let cluster = ClusterBuilder::builder()
             .with_io_engines(1)
+            .with_allow_non_persistent_devlink(true)
             .with_reconcile_period(Duration::from_millis(250), Duration::from_millis(250))
             .with_cache_period("200ms")
             .with_options(|o| o.with_io_engine_devices(vec![lvol.path()]))
@@ -1128,5 +1131,235 @@ async fn slow_create() {
 
         let pool = client.pool().create(&create, None).await.unwrap();
         assert!(pool.spec().unwrap().status.created());
+    }
+}
+
+/// Tests that a different devlink for same device cannot be used across multiple storage pools.
+///
+/// The test performs the following steps:
+/// 1. Writes a secret file containing encryption config.
+/// 2. Creates a volume group and a logical volume so that we have devlinks.
+/// 3. Verifies that the block device has at least two devlinks.
+/// 4. Creates "pool-1" using the first devlink with encryption enabled (expected to succeed).
+/// 5. Attempts to create "pool-2" using a second devlink from the same device with encryption enabled (expected to fail).
+/// 6. Destroys "pool-1" and attempts to destroy "pool-2" (expected to fail since it wasn't created).
+/// 7. Recreates "pool-2" after releasing the devlink(by destroying pool-1) (expected to succeed).
+/// 8. Restarts the cluster and verifies that creating "pool-3" without encryption using an already used devlink(since pool-2 is imported) with aio prefix (expected to fail).
+/// 9. Finally, attempts to destroy "pool-3" (expected to fail as it was never created).
+#[tokio::test]
+async fn reject_devlink_reuse() {
+    use serde_json::json;
+    use std::env;
+    use std::path::PathBuf;
+    use tokio::fs::File;
+    use tokio::io::AsyncWriteExt;
+
+    const SECRETFILE: &str = "secretfile";
+
+    let _file = SecretFileCreator::new()
+        .await
+        .expect("Failed to create secret file");
+
+    const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
+    let vg = deployer_cluster::lvm::VolGroup::new("reject-devlink-vg", POOL_SIZE_BYTES)
+        .expect("Failed to create volume group");
+    let lvol = vg
+        .create_lvol("reject-devlink-lv", POOL_SIZE_BYTES / 2)
+        .expect("Failed to create logical volume");
+
+    {
+        let cluster = ClusterBuilder::builder()
+            .with_io_engines(1)
+            .with_mount_host_dev_udev(true)
+            .with_options(|o| o.with_io_engine_devices(vec![lvol.path()]))
+            .compose_build(|b| b.with_clean(true))
+            .await
+            .expect("Failed to build cluster");
+
+        let dev_path = lvol.path();
+        let client = cluster.grpc_client();
+
+        let bds = client
+            .node()
+            .get_block_devices(
+                &GetBlockDevices {
+                    node: cluster.node(0),
+                    all: false,
+                },
+                None,
+            )
+            .await
+            .expect("Failed to get block devices")
+            .into_inner();
+
+        let matched_device = bds
+            .iter()
+            .find(|bd| {
+                let dev_path_str = dev_path.to_string();
+                bd.devname == dev_path_str
+                    || bd.devpath == dev_path_str
+                    || bd.devlinks.iter().any(|link| link == &dev_path_str)
+            })
+            .expect("Block device should exist");
+
+        let device_devlinks: Vec<&str> = matched_device
+            .devlinks
+            .iter()
+            .filter_map(|link| link.strip_prefix("/dev/disk/by-"))
+            .map(|s| {
+                &matched_device
+                    .devlinks
+                    .iter()
+                    .find(|l| l.ends_with(s))
+                    .unwrap()[..]
+            })
+            .collect();
+
+        assert!(
+            device_devlinks.len() >= 2,
+            "Expected at least 2 devlinks, found {}",
+            device_devlinks.len()
+        );
+
+        let create_pool_1_request = CreatePool {
+            node: cluster.node(0),
+            id: "pool-1".into(),
+            disks: vec![device_devlinks
+                .first()
+                .expect("At least one devlink should be present")
+                .to_string()
+                .into()],
+            labels: None,
+            encryption: Some(Encryption::Secret(EncryptionSecret {
+                name: SECRETFILE.to_string(),
+            })),
+        };
+
+        client
+            .pool()
+            .create(&create_pool_1_request, None)
+            .await
+            .expect("Pool-1 creation should succeed");
+
+        let create_pool_2_request = CreatePool {
+            node: cluster.node(0),
+            id: "pool-2".into(),
+            disks: vec![device_devlinks
+                .get(1)
+                .expect("Another devlink should be present")
+                .to_string()
+                .into()],
+            labels: None,
+            encryption: Some(Encryption::Secret(EncryptionSecret {
+                name: SECRETFILE.to_string(),
+            })),
+        };
+
+        client
+            .pool()
+            .create(&create_pool_2_request, None)
+            .await
+            .expect_err("Pool-2 creation should fail");
+
+        let destroy = DestroyPool::from(create_pool_1_request.clone());
+        client
+            .pool()
+            .destroy(&destroy, None)
+            .await
+            .expect("Pool-1 destruction should succeed");
+
+        let destroy = DestroyPool::from(create_pool_2_request.clone());
+        client
+            .pool()
+            .destroy(&destroy, None)
+            .await
+            .expect_err("Pool-2 destruction should fail");
+
+        client
+            .pool()
+            .create(&create_pool_2_request, None)
+            .await
+            .expect("Pool-2 creation should succeed now");
+
+        cluster
+            .composer()
+            .restart(&cluster.node(0))
+            .await
+            .expect("Cluster restart failed");
+        cluster
+            .wait_node_status(cluster.node(0), NodeStatus::Online)
+            .await
+            .expect("Node service liveness check failed");
+
+        let create_pool_3_request = CreatePool {
+            node: cluster.node(0),
+            id: "pool-3".into(),
+            disks: vec![format!(
+                "aio://{}",
+                device_devlinks
+                    .first()
+                    .expect("At least one devlink should be present")
+            )
+            .into()],
+            labels: None,
+            encryption: None,
+        };
+
+        client
+            .pool()
+            .create(&create_pool_3_request, None)
+            .await
+            .expect_err("Creating pool-3 with pool-1 devlink should fail");
+
+        client
+            .pool()
+            .destroy(&DestroyPool::from(create_pool_2_request.clone()), None)
+            .await
+            .expect("Destroying pool-2 should succeed");
+
+        client
+            .pool()
+            .destroy(&DestroyPool::from(create_pool_3_request.clone()), None)
+            .await
+            .expect_err("Destroying pool-3 should fail");
+    }
+
+    pub struct SecretFileCreator {
+        file_path: Option<PathBuf>,
+    }
+
+    impl SecretFileCreator {
+        pub async fn new() -> std::io::Result<Self> {
+            let root = env::var("WORKSPACE_ROOT").expect("WORKSPACE_ROOT is not set");
+            let path = PathBuf::from(&root).join(".tmp");
+
+            let data = json!({
+                "cipher": "AesXts",
+                "key": "2b7e151628aed2a6abf7158809cf4f3c",
+                "key_len": 128,
+                "key2": "2b7e151628aed2a6abf7158809cf4f3d",
+                "key2_len": 128
+            });
+
+            let file_path = path.join(SECRETFILE);
+            let mut file = File::create(&file_path).await?;
+            file.write_all(data.to_string().as_bytes()).await?;
+
+            Ok(Self {
+                file_path: Some(file_path),
+            })
+        }
+    }
+
+    impl Drop for SecretFileCreator {
+        fn drop(&mut self) {
+            if let Some(ref path) = self.file_path {
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    let _ = std::fs::remove_file(path);
+                    println!("Removed secretfile");
+                });
+            }
+        }
     }
 }

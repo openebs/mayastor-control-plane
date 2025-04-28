@@ -351,6 +351,12 @@ pub struct StartOptions {
     /// Add custom RUST_LOG_SILENCE env to all containers.
     #[clap(long)]
     rust_log_silence: Option<String>,
+    /// Mount host dev and udev.
+    #[clap(long)]
+    mount_host_dev_udev: bool,
+    /// Allow non persistent devlink for pool creation.
+    #[clap(long)]
+    allow_non_persistent_devlink: bool,
 }
 
 /// List of KeyValues
@@ -595,6 +601,18 @@ impl StartOptions {
     /// Specify whether eventing is enabled or not.
     pub fn with_eventing(mut self, enabled: bool) -> Self {
         self.eventing = enabled;
+        self
+    }
+
+    /// Specify whether host's mount dev and udev is needed or not.
+    pub fn with_mount_host_dev_udev(mut self, enabled: bool) -> Self {
+        self.mount_host_dev_udev = enabled;
+        self
+    }
+
+    /// Specify whether allow non peristent devlink is needed or not.
+    pub fn with_allow_non_persistent_devlink(mut self, enabled: bool) -> Self {
+        self.allow_non_persistent_devlink = enabled;
         self
     }
 
