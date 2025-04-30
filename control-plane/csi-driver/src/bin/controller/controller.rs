@@ -294,6 +294,11 @@ impl VolumeTopologyMapper {
     }
 }
 
+enum VolumeContentSourceInfo {
+    Snapshot(Uuid),
+    Volume(Uuid),
+}
+
 #[tonic::async_trait]
 impl rpc::csi::controller_server::Controller for CsiControllerSvc {
     #[instrument(err, fields(volume.uuid = tracing::field::Empty), skip(self))]
@@ -301,178 +306,454 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         &self,
         request: tonic::Request<CreateVolumeRequest>,
     ) -> Result<tonic::Response<CreateVolumeResponse>, tonic::Status> {
-        let args = request.into_inner();
+        let request = request.into_inner();
+        debug!("create_volume parameters: {:#?}", request);
 
-        let _permit = self.create_volume_permit().await?;
+        let name = request.name.clone();
+        if name.is_empty() {
+            return Err(Status::invalid_argument(
+                "Volume name not provided".to_owned(),
+            ));
+        }
 
-        // k8s uses names pvc-{uuid} and we use uuid further as ID in SPDK so we
-        // must require it.
-        let re = Regex::new(VOLUME_NAME_PATTERN).unwrap();
-        let volume_uuid = match re.captures(&args.name) {
-            Some(captures) => captures.get(1).unwrap().as_str().to_string(),
-            None => {
-                return Err(Status::invalid_argument(format!(
-                    "Expected the volume name in pvc-<UUID> format: {}",
-                    args.name
-                )))
-            }
-        };
-        tracing::Span::current().record("volume.uuid", volume_uuid.as_str());
+        // Validate volume capabilities
+        let mut volume_capabilities = request.volume_capabilities.clone();
+        if volume_capabilities.is_empty() {
+            return Err(Status::invalid_argument(
+                "Invalid volume capabilities requested, no volume capabilities provided"
+                    .to_owned(),
+            ));
+        }
+        let volume_capability = volume_capabilities.remove(0);
+        if !Self::validate_volume_capability(&volume_capability) {
+            return Err(Status::invalid_argument(
+                "Invalid volume capabilities requested".to_owned(),
+            ));
+        }
 
-        let req = csi_driver::trace::CsiRequest::new_info("Create Volume");
-
-        let volume_content_source = if let Some(source) = &args.volume_content_source {
-            match &source.r#type {
-                Some(Type::Snapshot(snapshot_source)) => {
-                    let snapshot_uuid =
-                        Uuid::parse_str(&snapshot_source.snapshot_id).map_err(|_e| {
-                            Status::invalid_argument(format!(
-                                "Malformed snapshot UUID: {}",
-                                snapshot_source.snapshot_id
-                            ))
-                        })?;
-                    Some(snapshot_uuid)
-                }
-                Some(Type::Volume(_)) => {
-                    return Err(Status::invalid_argument(
-                        "Volume creation from volume source is not supported",
-                    ));
-                }
-                _ => {
-                    return Err(Status::invalid_argument(
-                        "Invalid source type for create volume",
-                    ));
+        // Create uuid for the volume to be created
+        let uuid = if let Ok(prefix) = env::var("CSI_UUID_PREFIX") {
+            let mut uuid_string = prefix;
+            uuid_string.push_str(&extract_uuid_from_pvc_name(&name).to_string());
+            // We should not be receiving invalid UUID as CSI interface
+            // ensures that each name is unique for PVC
+            match Uuid::parse_str(&uuid_string) {
+                Ok(uuid) => uuid,
+                Err(error) => {
+                    error!("cannot generate uuid from provided name: {}", error);
+                    return Err(Status::internal(format!(
+                        "Cannot generate UUID from volume name {}: {}",
+                        name, error
+                    )));
                 }
             }
         } else {
-            None
+            extract_uuid_from_pvc_name(&name)
         };
 
-        check_volume_capabilities(&args.volume_capabilities)?;
-
-        // Check volume size.
-        let size = match args.capacity_range {
-            Some(range) => {
-                if range.required_bytes <= 0 {
-                    return Err(Status::invalid_argument(
-                        "Volume size must be a non-negative number",
-                    ));
-                }
-                range.required_bytes as u64
-            }
-            None => {
-                return Err(Status::invalid_argument(
-                    "Volume capacity range is not provided",
-                ))
-            }
+        // Volume size validation
+        let size = match Self::validate_capacity_range(request.capacity_range.clone()) {
+            Ok(size) => size,
+            Err(status) => return Err(status),
         };
 
-        let context = CreateParams::try_from(&args.parameters)?;
-        let replica_count = context.replica_count();
+        // Do we have any parameters?
+        let mut replicacount = 1_u8;
+        let mut protocol = Protocol::None;
 
-        let parsed_vol_uuid = Uuid::parse_str(&volume_uuid).map_err(|_e| {
-            Status::invalid_argument(format!("Malformed volume UUID: {volume_uuid}"))
-        })?;
-        let _guard = csi_driver::limiter::VolumeOpGuard::new(parsed_vol_uuid)?;
-
-        let vt_mapper = VolumeTopologyMapper::init().await?;
-
-        let thin = match args.parameters.get("thin") {
-            Some(value) => value == "true",
-            None => false,
-        };
-
-        let mut volume_context = args.parameters.clone();
-
-        // First check if the volume already exists.
-        match RestApiClient::get_client()
-            .get_volume_for_create(&parsed_vol_uuid)
-            .await
-        {
-            Ok(volume) => {
-                check_existing_volume(&volume, replica_count, size, thin)?;
-                debug!(
-                    "Volume {volume_uuid} already exists and is compatible with requested config"
-                );
-            }
-            // If the volume doesn't exist, create it.
-            Err(ApiClientError::ResourceNotExists(_)) => {
-                let volume_topology = context_into_topology(&context);
-
-                let sts_affinity_group_name = context.sts_affinity_group();
-                let max_snapshots = context.max_snapshots();
-                let encrypted = context.encrypted().unwrap_or_default();
-
-                let volume = match volume_content_source {
-                    Some(snapshot_uuid) => {
-                        // This is to determine if user has passed `thin` arg.
-                        // This will help us not restore into thin volume if user has passed
-                        // thin:false explicitly.
-                        let thin_arg_passed = args.parameters.contains_key("thin");
-                        let thin = !thin_arg_passed || thin;
-                        RestApiClient::get_client()
-                            .create_snapshot_volume(
-                                &parsed_vol_uuid,
-                                &snapshot_uuid,
-                                replica_count,
-                                size,
-                                volume_topology,
-                                thin,
-                                sts_affinity_group_name.clone().map(AffinityGroup::new),
-                                max_snapshots,
-                                encrypted,
-                            )
-                            .await?
+        let params = request.parameters;
+        for (k, v) in params.iter() {
+            match k.as_str() {
+                "repl" => match v.parse::<u8>() {
+                    Ok(val) => replicacount = val,
+                    Err(error) => {
+                        warn!("Invalid replica count passed: {}: {}", v, error);
+                        return Err(Status::invalid_argument(format!(
+                            "Invalid replica count passed: {}: {}",
+                            v, error
+                        )));
                     }
-                    None => {
-                        RestApiClient::get_client()
-                            .create_volume(
-                                &parsed_vol_uuid,
-                                replica_count,
-                                size,
-                                volume_topology,
-                                thin,
-                                sts_affinity_group_name.clone().map(AffinityGroup::new),
-                                max_snapshots,
-                                encrypted,
-                            )
-                            .await?
+                },
+                "prot" | "protocol" => match v.as_str() {
+                    "nvmf" => protocol = Protocol::Nvmf,
+                    "iscsi" => protocol = Protocol::Iscsi,
+                    _ => {
+                        warn!("Invalid protocol passed: {}", v);
+                        return Err(Status::invalid_argument(format!(
+                            "Invalid protocol passed: {}",
+                            v
+                        )));
                     }
-                };
-
-                // Append the 'fsId' : 'volume id' to the context if change was requested for the
-                // clone.
-                if volume.spec.content_source.is_some()
-                    && context.clone_fs_id_as_volume_id().unwrap_or(false)
-                {
-                    volume_context.insert("fsId".to_string(), volume_uuid.clone());
-                }
-
-                if let Some(ag_name) = sts_affinity_group_name {
-                    debug!(
-                        volume.uuid = volume_uuid,
-                        volume.affinity_group = ag_name,
-                        "Volume successfully created"
-                    );
-                } else {
-                    debug!(volume.uuid = volume_uuid, "Volume successfully created");
+                },
+                _ => {
+                    debug!("Unknown parameter passed: {}={}", k, v)
                 }
             }
-            Err(e) => return Err(e.into()),
         }
 
-        let volume = rpc::csi::Volume {
-            capacity_bytes: size as i64,
-            volume_id: volume_uuid,
-            volume_context,
-            content_source: args.volume_content_source,
-            accessible_topology: vt_mapper.volume_accessible_topology(),
-        };
+        // Process topology requirements
+        let (preferred_cluster_nodes, allowed_cluster_nodes) =
+            self.process_topology_requirements(request.accessible_topology_requirements);
 
-        req.info_ok();
-        Ok(Response::new(CreateVolumeResponse {
-            volume: Some(volume),
-        }))
+        // Process the volume content source if present
+        let volume_content_source: Option<VolumeContentSourceInfo> =
+            if let Some(content_source) = request.volume_content_source {
+                match content_source.r#type {
+                    // Content source is a snapshot
+                    Some(volume_content_source::Type::Snapshot(snapshot_source)) => {
+                        let snapshot_id = match Uuid::parse_str(&snapshot_source.snapshot_id) {
+                            Ok(uuid) => uuid,
+                            Err(error) => {
+                                error!(
+                                    "Invalid snapshot_id provided in content source: {}",
+                                    error
+                                );
+                                return Err(Status::invalid_argument(format!(
+                                    "Invalid snapshot_id provided in content source: {}",
+                                    error
+                                )));
+                            }
+                        };
+                        Some(VolumeContentSourceInfo::Snapshot(snapshot_id))
+                    }
+                    // Content source is a volume
+                    Some(volume_content_source::Type::Volume(volume_source)) => {
+                        let source_volume_id = match Uuid::parse_str(&volume_source.volume_id) {
+                            Ok(uuid) => uuid,
+                            Err(error) => {
+                                error!(
+                                    "Invalid volume_id provided in content source: {}",
+                                    error
+                                );
+                                return Err(Status::invalid_argument(format!(
+                                    "Invalid volume_id provided in content source: {}",
+                                    error
+                                )));
+                            }
+                        };
+                        Some(VolumeContentSourceInfo::Volume(source_volume_id))
+                    }
+                    None => None,
+                }
+            } else {
+                None
+            };
+
+        // Check if the volume with the same name already exists
+        match RestApiClient::get_client().get_volume(&uuid).await {
+            Ok(vol) => {
+                info!("Volume with the same name already exists.");
+                debug!("Existing volume: {:?}", vol);
+
+                // Validate the properties match
+                if vol.spec.size != size {
+                    error!(
+                        "Existing volume size {} is different from the requested size {}",
+                        vol.spec.size, size
+                    );
+                    return Err(Status::already_exists(
+                        "Volume with same name but different parameters already exists".to_owned(),
+                    ));
+                }
+
+                // Validate content source matches
+                if let Some(vol_content_source) = vol.spec.content_source {
+                    match volume_content_source {
+                        Some(VolumeContentSourceInfo::Snapshot(snapshot_uuid)) => {
+                            if vol_content_source.source_snapshot_id != Some(snapshot_uuid) {
+                                error!(
+                                    "Existing volume source snapshot {} is different from the requested snapshot {}",
+                                    vol_content_source.source_snapshot_id.unwrap_or_default(),
+                                    snapshot_uuid
+                                );
+                                return Err(Status::already_exists(
+                                    "Volume with same name but different content source already exists".to_owned(),
+                                ));
+                            }
+                        }
+                        Some(VolumeContentSourceInfo::Volume(source_volume_uuid)) => {
+                            if vol_content_source.source_volume_id != Some(source_volume_uuid) {
+                                error!(
+                                    "Existing volume source volume {} is different from the requested source volume {}",
+                                    vol_content_source.source_volume_id.unwrap_or_default(),
+                                    source_volume_uuid
+                                );
+                                return Err(Status::already_exists(
+                                    "Volume with same name but different content source already exists".to_owned(),
+                                ));
+                            }
+                        }
+                        None => {
+                            if vol_content_source.source_snapshot_id.is_some()
+                                || vol_content_source.source_volume_id.is_some()
+                            {
+                                error!("Existing volume has a content source but none was requested");
+                                return Err(Status::already_exists(
+                                    "Volume with same name but different content source already exists".to_owned(),
+                                ));
+                            }
+                        }
+                    }
+                } else if volume_content_source.is_some() {
+                    error!("Requested volume has a content source but existing volume has none");
+                    return Err(Status::already_exists(
+                        "Volume with same name but different content source already exists"
+                            .to_owned(),
+                    ));
+                }
+
+                // Validate replica count matches
+                if vol.spec.num_replicas != replicacount {
+                    error!(
+                        "Existing volume replica count {} is different from the requested count {}",
+                        vol.spec.num_replicas, replicacount
+                    );
+                    return Err(Status::already_exists(
+                        "Volume with same name but different parameters already exists".to_owned(),
+                    ));
+                }
+
+                // All validation passed, returns the volume already created with the same name and same properties
+                return Ok(Response::new(CreateVolumeResponse {
+                    volume: Some(Volume {
+                        capacity_bytes: size as i64,
+                        volume_id: vol.spec.uuid.to_string(),
+                        content_source: request.volume_content_source,
+                        volume_context: std::collections::HashMap::new(),
+                        accessible_topology: Vec::new(),
+                    }),
+                }));
+            }
+            Err(RestError::NotFound(_)) => {
+                // Volume does not exist, continuing with creation
+            }
+            Err(error) => {
+                error!("Error when checking if the volume exists: {}", error);
+                return Err(Status::internal(format!(
+                    "Error when checking if the volume exists: {}",
+                    error
+                )));
+            }
+        }
+
+        // Process the content source to create the volume
+        match volume_content_source {
+            Some(VolumeContentSourceInfo::Snapshot(snapshot_uuid)) => {
+                // Creating volume from a snapshot
+                debug!(
+                    "Creating volume {} from snapshot {}",
+                    uuid, snapshot_uuid
+                );
+
+                match RestApiClient::get_client()
+                    .get_volume_snapshot(&snapshot_uuid)
+                    .await
+                {
+                    Ok(snapshot) => {
+                        // Ensure snapshot source volume exists
+                        let source_volume_uuid = match snapshot.spec.source_volume_id {
+                            Some(vol_uuid) => vol_uuid,
+                            None => {
+                                error!("Snapshot does not have a source volume");
+                                return Err(Status::invalid_argument(
+                                    "Snapshot does not have a source volume".to_owned(),
+                                ));
+                            }
+                        };
+
+                        // Create volume from snapshot
+                        let req = models::RestoreSnapshot {
+                            uuid,
+                            size,
+                            preferred_cluster_nodes,
+                            allowed_cluster_nodes,
+                            num_replicas: replicacount,
+                            content_source: Some(models::VolumeContentSource {
+                                source_snapshot_id: Some(snapshot_uuid),
+                                source_volume_id: None,
+                            }),
+                        };
+
+                        debug!("Create volume from snapshot request: {:?}", req);
+
+                        match RestApiClient::get_client()
+                            .restore_volume_snapshot(&snapshot_uuid, &req)
+                            .await
+                        {
+                            Ok(vol) => {
+                                debug!("Volume created from snapshot: {:?}", vol);
+                                let response = CreateVolumeResponse {
+                                    volume: Some(Volume {
+                                        capacity_bytes: size as i64,
+                                        volume_id: uuid.to_string(),
+                                        content_source: request.volume_content_source,
+                                        volume_context: std::collections::HashMap::new(),
+                                        accessible_topology: Vec::new(),
+                                    }),
+                                };
+                                return Ok(Response::new(response));
+                            }
+                            Err(error) => {
+                                error!("Error creating volume from snapshot: {}", error);
+                                return Err(Status::internal(format!(
+                                    "Error creating volume from snapshot: {}",
+                                    error
+                                )));
+                            }
+                        }
+                    }
+                    Err(RestError::NotFound(_)) => {
+                        error!("Snapshot {} not found", snapshot_uuid);
+                        return Err(Status::not_found(format!(
+                            "Snapshot {} not found",
+                            snapshot_uuid
+                        )));
+                    }
+                    Err(error) => {
+                        error!("Error checking if snapshot exists: {}", error);
+                        return Err(Status::internal(format!(
+                            "Error checking if snapshot exists: {}",
+                            error
+                        )));
+                    }
+                }
+            }
+            Some(VolumeContentSourceInfo::Volume(source_volume_uuid)) => {
+                // Create volume from another volume (clone)
+                debug!(
+                    "Creating volume clone {} from source volume {}",
+                    uuid, source_volume_uuid
+                );
+
+                // Check if source volume exists
+                match RestApiClient::get_client().get_volume(&source_volume_uuid).await {
+                    Ok(_source_volume) => {
+                        // Create a temporary snapshot of the source volume
+                        let temp_snapshot_id = Uuid::new_v4();
+
+                        // Create the temporary snapshot
+                        let snapshot = match RestApiClient::get_client()
+                            .create_volume_snapshot(&source_volume_uuid, &temp_snapshot_id)
+                            .await 
+                        {
+                            Ok(snapshot) => snapshot,
+                            Err(error) => {
+                                error!("Error creating temporary snapshot for volume clone: {}", error);
+                                return Err(Status::internal(format!(
+                                    "Error creating temporary snapshot for volume clone: {}",
+                                    error
+                                )));
+                            }
+                        };
+
+                        // Create volume from the temporary snapshot
+                        let req = models::RestoreSnapshot {
+                            uuid,
+                            size,
+                            preferred_cluster_nodes,
+                            allowed_cluster_nodes,
+                            num_replicas: replicacount,
+                            content_source: Some(models::VolumeContentSource {
+                                source_snapshot_id: None,
+                                source_volume_id: Some(source_volume_uuid),
+                            }),
+                        };
+
+                        debug!("Create volume from temporary snapshot request: {:?}", req);
+
+                        let volume_result = RestApiClient::get_client()
+                            .restore_volume_snapshot(&temp_snapshot_id, &req)
+                            .await;
+
+                        // Delete the temporary snapshot regardless of volume creation result
+                        match RestApiClient::get_client()
+                            .delete_volume_snapshot(&temp_snapshot_id)
+                            .await 
+                        {
+                            Ok(_) => debug!("Temporary snapshot {} deleted", temp_snapshot_id),
+                            Err(error) => warn!("Error deleting temporary snapshot: {}", error),
+                        }
+
+                        // Now handle the volume creation result
+                        match volume_result {
+                            Ok(vol) => {
+                                debug!("Volume clone created: {:?}", vol);
+                                let response = CreateVolumeResponse {
+                                    volume: Some(Volume {
+                                        capacity_bytes: size as i64,
+                                        volume_id: uuid.to_string(),
+                                        content_source: request.volume_content_source,
+                                        volume_context: std::collections::HashMap::new(),
+                                        accessible_topology: Vec::new(),
+                                    }),
+                                };
+                                return Ok(Response::new(response));
+                            }
+                            Err(error) => {
+                                error!("Error creating volume clone: {}", error);
+                                return Err(Status::internal(format!(
+                                    "Error creating volume clone: {}",
+                                    error
+                                )));
+                            }
+                        }
+                    }
+                    Err(RestError::NotFound(_)) => {
+                        error!("Source volume {} not found", source_volume_uuid);
+                        return Err(Status::not_found(format!(
+                            "Source volume {} not found",
+                            source_volume_uuid
+                        )));
+                    }
+                    Err(error) => {
+                        error!("Error checking if source volume exists: {}", error);
+                        return Err(Status::internal(format!(
+                            "Error checking if source volume exists: {}",
+                            error
+                        )));
+                    }
+                }
+            }
+            None => {
+                // Creating a new volume without a content source
+                debug!("Creating volume {}", uuid);
+
+                let req = models::CreateVolume {
+                    uuid,
+                    size,
+                    preferred_cluster_nodes,
+                    allowed_cluster_nodes,
+                    num_replicas: replicacount,
+                    thin: false,
+                    protocol,
+                };
+
+                debug!("Create volume request: {:?}", req);
+
+                match RestApiClient::get_client().create_volume(&req).await {
+                    Ok(vol) => {
+                        debug!("Volume created: {:?}", vol);
+                        let response = CreateVolumeResponse {
+                            volume: Some(Volume {
+                                capacity_bytes: size as i64,
+                                volume_id: uuid.to_string(),
+                                content_source: None,
+                                volume_context: std::collections::HashMap::new(),
+                                accessible_topology: Vec::new(),
+                            }),
+                        };
+                        return Ok(Response::new(response));
+                    }
+                    Err(error) => {
+                        error!("Error creating volume: {}", error);
+                        return Err(Status::internal(format!(
+                            "Error creating volume: {}",
+                            error
+                        )));
+                    }
+                }
+            }
+        }
     }
     #[instrument(err, fields(volume.uuid = %request.get_ref().volume_id), skip(self))]
     async fn delete_volume(
@@ -677,186 +958,6 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         req.info_ok();
         Ok(Response::new(ControllerUnpublishVolumeResponse {}))
-    }
-
-    #[instrument(err, fields(volume.uuid = %request.get_ref().volume_id), skip(self))]
-    async fn validate_volume_capabilities(
-        &self,
-        request: tonic::Request<ValidateVolumeCapabilitiesRequest>,
-    ) -> Result<tonic::Response<ValidateVolumeCapabilitiesResponse>, tonic::Status> {
-        let args = request.into_inner();
-        let _ = csi_driver::trace::CsiRequest::new_dbg("Validate Volume Capabilities");
-
-        let volume_uuid = Uuid::parse_str(&args.volume_id).map_err(|_e| {
-            Status::invalid_argument(format!("Malformed volume UUID: {}", args.volume_id))
-        })?;
-        let _guard = csi_driver::limiter::VolumeOpGuard::new(volume_uuid)?;
-        let _volume = RestApiClient::get_client()
-            .get_volume(&volume_uuid)
-            .await
-            .map_err(|_e| Status::unimplemented("Not implemented"))?;
-
-        let caps: Vec<VolumeCapability> = args
-            .volume_capabilities
-            .into_iter()
-            .filter(|cap| {
-                if let Some(access_mode) = cap.access_mode.as_ref() {
-                    if access_mode.mode
-                        == volume_capability::access_mode::Mode::SingleNodeWriter as i32
-                    {
-                        return true;
-                    }
-                }
-                false
-            })
-            .collect();
-
-        let response = if !caps.is_empty() {
-            ValidateVolumeCapabilitiesResponse {
-                confirmed: Some(validate_volume_capabilities_response::Confirmed {
-                    volume_context: HashMap::new(),
-                    parameters: HashMap::new(),
-                    volume_capabilities: caps,
-                }),
-                message: "".to_string(),
-            }
-        } else {
-            ValidateVolumeCapabilitiesResponse {
-                confirmed: None,
-                message: "The only supported capability is SINGLE_NODE_WRITER".to_string(),
-            }
-        };
-
-        Ok(Response::new(response))
-    }
-
-    #[instrument(err, skip(self))]
-    async fn list_volumes(
-        &self,
-        request: tonic::Request<ListVolumesRequest>,
-    ) -> Result<tonic::Response<ListVolumesResponse>, tonic::Status> {
-        let args = request.into_inner();
-        let req = csi_driver::trace::CsiRequest::new_trace("List Volumes");
-        let max_entries = args.max_entries;
-        if max_entries < 0 {
-            return Err(Status::invalid_argument("max_entries can't be negative"));
-        }
-
-        let vt_mapper = VolumeTopologyMapper::init().await?;
-
-        let volumes = RestApiClient::get_client()
-            .list_volumes(max_entries, ListToken::String(args.starting_token))
-            .await
-            .map_err(|e| Status::internal(format!("Failed to list volumes, error = {e:?}")))?;
-
-        let entries = volumes
-            .entries
-            .into_iter()
-            .map(|v| {
-                let volume = rpc::csi::Volume {
-                    volume_id: v.spec.uuid.to_string(),
-                    capacity_bytes: v.spec.size as i64,
-                    volume_context: HashMap::new(),
-                    content_source: None,
-                    accessible_topology: vt_mapper.volume_accessible_topology(),
-                };
-
-                list_volumes_response::Entry {
-                    volume: Some(volume),
-                    status: None,
-                }
-            })
-            .collect();
-
-        tracing::trace!(?entries, "{}", req.log_str());
-        Ok(Response::new(ListVolumesResponse {
-            entries,
-            next_token: volumes.next_token.map_or("".to_string(), |v| v.to_string()),
-        }))
-    }
-
-    #[instrument(err, skip(self))]
-    async fn get_capacity(
-        &self,
-        request: tonic::Request<GetCapacityRequest>,
-    ) -> Result<tonic::Response<GetCapacityResponse>, tonic::Status> {
-        let args = request.into_inner();
-        let _ = csi_driver::trace::CsiRequest::new_trace("Get Node(s) Capacity");
-
-        // Check capabilities.
-        check_volume_capabilities(&args.volume_capabilities)?;
-
-        // Determine target node, if requested.
-        let node: Option<&String> = if let Some(topology) = args.accessible_topology.as_ref() {
-            topology.segments.get(&csi_driver::node_name_topology_key())
-        } else {
-            None
-        };
-
-        let pools: Vec<Pool> = if let Some(node) = node {
-            debug!("Calculating pool capacity for node {node}");
-            RestApiClient::get_client()
-                .get_node_pools(node)
-                .await
-                .map_err(|e| {
-                    Status::internal(format!(
-                        "Failed to list pools for node {node}, error = {e:?}",
-                    ))
-                })?
-        } else {
-            debug!("Calculating overall pool capacity");
-            RestApiClient::get_client()
-                .list_pools()
-                .await
-                .map_err(|e| Status::internal(format!("Failed to list all pools, error = {e:?}")))?
-        };
-
-        let available_capacity: i64 = pools.into_iter().fold(0, |acc, p| match p.state {
-            Some(state) => match state.status {
-                PoolStatus::Online | PoolStatus::Degraded => acc + state.capacity as i64,
-                _ => {
-                    warn!(
-                        "Pool {} on node {} is in '{:?}' state, not accounting it for capacity",
-                        p.id, state.node, state.status,
-                    );
-                    acc
-                }
-            },
-            None => 0,
-        });
-
-        Ok(Response::new(GetCapacityResponse {
-            available_capacity,
-            maximum_volume_size: None,
-            minimum_volume_size: None,
-        }))
-    }
-
-    #[instrument(err, skip(self))]
-    async fn controller_get_capabilities(
-        &self,
-        _request: tonic::Request<ControllerGetCapabilitiesRequest>,
-    ) -> Result<tonic::Response<ControllerGetCapabilitiesResponse>, tonic::Status> {
-        let capabilities = vec![
-            controller_service_capability::rpc::Type::CreateDeleteVolume,
-            controller_service_capability::rpc::Type::PublishUnpublishVolume,
-            controller_service_capability::rpc::Type::ListVolumes,
-            controller_service_capability::rpc::Type::GetCapacity,
-            controller_service_capability::rpc::Type::CreateDeleteSnapshot,
-            controller_service_capability::rpc::Type::ListSnapshots,
-            controller_service_capability::rpc::Type::ExpandVolume,
-        ];
-
-        Ok(Response::new(ControllerGetCapabilitiesResponse {
-            capabilities: capabilities
-                .into_iter()
-                .map(|c| ControllerServiceCapability {
-                    r#type: Some(controller_service_capability::Type::Rpc(
-                        controller_service_capability::Rpc { r#type: c as i32 },
-                    )),
-                })
-                .collect(),
-        }))
     }
 
     #[instrument(err, fields(volume.uuid = request.get_ref().source_volume_id, snapshot.source_uuid = request.get_ref().source_volume_id, snapshot.uuid), skip(self))]
@@ -1098,6 +1199,40 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             capacity_bytes: vol.spec.size as i64,
             node_expansion_required,
         }))
+    }
+
+    #[instrument(err, skip(self))]
+    async fn controller_get_capabilities(
+        &self,
+        _request: tonic::Request<ControllerGetCapabilitiesRequest>,
+    ) -> Result<tonic::Response<ControllerGetCapabilitiesResponse>, tonic::Status> {
+        debug!("controller_get_capabilities");
+
+        let capabilities = vec![
+            controller_service_capability::rpc::Type::CreateDeleteVolume,
+            controller_service_capability::rpc::Type::PublishUnpublishVolume,
+            controller_service_capability::rpc::Type::ListVolumes,
+            controller_service_capability::rpc::Type::GetCapacity,
+            controller_service_capability::rpc::Type::CreateDeleteSnapshot,
+            controller_service_capability::rpc::Type::ListSnapshots,
+            controller_service_capability::rpc::Type::ExpandVolume,
+            controller_service_capability::rpc::Type::CloneVolume,
+        ];
+
+        let response = ControllerGetCapabilitiesResponse {
+            capabilities: capabilities
+                .iter()
+                .map(|capability| ControllerServiceCapability {
+                    r#type: Some(controller_service_capability::Type::Rpc(
+                        controller_service_capability::Rpc {
+                            r#type: *capability as i32,
+                        },
+                    )),
+                })
+                .collect(),
+        };
+
+        Ok(Response::new(response))
     }
 
     #[instrument(err, skip(self))]
