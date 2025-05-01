@@ -16,7 +16,7 @@ pub fn into_human(bytes: u64) -> String {
 
     let floor = base.floor() as usize;
     match SUFFIX.get(floor) {
-        Some(units) => format!("{human_size_prefix}{units}"),
+        Some(units) => format!("{human_size_prefix} {units}"),
         None => format!("{bytes} B"),
     }
 }
