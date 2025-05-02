@@ -128,12 +128,13 @@ pub(crate) async fn migrate_to_v1beta3(
                 let name = dsp.name_any();
                 let node = dsp.spec.node();
                 let disk = dsp.spec.disks();
+                let topology = dsp.spec.topology();
                 replace_with_v1beta3(
                     &k8s,
                     &name,
                     ns,
                     Some(res_ver.clone()),
-                    DiskPoolSpec::new(node, disk, None, None),
+                    DiskPoolSpec::new(node, disk, topology, None),
                 )
                 .await?;
                 info!(crd = ?dsp.name_any(), "CR creation successful");
