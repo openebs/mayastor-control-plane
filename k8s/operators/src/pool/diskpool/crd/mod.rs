@@ -1,4 +1,5 @@
 pub(crate) mod migration;
+pub mod quantity;
 /// The DiskPool custom resource definition.
 pub(crate) mod v1alpha1;
 pub(crate) mod v1beta1;

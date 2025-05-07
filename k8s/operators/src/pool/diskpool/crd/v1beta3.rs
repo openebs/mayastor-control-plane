@@ -6,6 +6,8 @@ use std::collections::HashMap;
 #[cfg(feature = "openapi")]
 use openapi::models::{pool_status::PoolStatus as RestPoolStatus, Pool};
 
+use super::quantity::Quantity;
+
 #[derive(
     CustomResource, Serialize, Deserialize, Default, Debug, Eq, PartialEq, Clone, JsonSchema,
 )]
@@ -24,9 +26,9 @@ use openapi::models::{pool_status::PoolStatus as RestPoolStatus, Pool};
     printcolumn = r#"{ "name":"state", "type":"string", "description":"dsp cr state", "jsonPath":".status.cr_state"}"#,
     printcolumn = r#"{ "name":"pool_status", "type":"string", "description":"Control plane pool status", "jsonPath":".status.pool_status"}"#,
     printcolumn = r#"{ "name":"encrypted", "type":"boolean", "description":"encryption enabled", "jsonPath":".status.encrypted"}"#,
-    printcolumn = r#"{ "name":"capacity", "type":"integer", "format": "int64", "minimum" : "0", "description":"total bytes", "jsonPath":".status.capacity"}"#,
-    printcolumn = r#"{ "name":"used", "type":"integer", "format": "int64", "minimum" : "0", "description":"used bytes", "jsonPath":".status.used"}"#,
-    printcolumn = r#"{ "name":"available", "type":"integer", "format": "int64", "minimum" : "0", "description":"available bytes", "jsonPath":".status.available"}"#
+    printcolumn = r#"{ "name":"capacity", "type":"string", "nullable": "true", "description":"total bytes", "jsonPath":".status.capacity_q"}"#,
+    printcolumn = r#"{ "name":"used", "type":"string", "nullable": "true", "description":"used bytes", "jsonPath":".status.used_q"}"#,
+    printcolumn = r#"{ "name":"available", "type":"string", "nullable": "true", "description":"available bytes", "jsonPath":".status.available_q"}"#
 )]
 /// The pool spec which contains the parameters we use when creating the pool
 pub struct DiskPoolSpec {
@@ -143,6 +145,12 @@ pub struct DiskPoolStatus {
     pub used: u64,
     /// Available number of bytes.
     pub available: u64,
+    /// Total capacity.
+    pub capacity_q: Option<Quantity>,
+    /// Used capacity.
+    pub used_q: Option<Quantity>,
+    /// Available capacity.
+    pub available_q: Option<Quantity>,
     /// Encryption enabled.
     pub encrypted: Option<bool>,
 }
@@ -155,6 +163,9 @@ impl Default for DiskPoolStatus {
             capacity: 0,
             used: 0,
             available: 0,
+            capacity_q: None,
+            used_q: None,
+            available_q: None,
             encrypted: None,
         }
     }
@@ -186,6 +197,9 @@ impl DiskPoolStatus {
             used: state.used,
             available: free,
             encrypted: Some(state.encrypted),
+            capacity_q: Some(Quantity::from_bytes(state.capacity)),
+            used_q: Some(Quantity::from_bytes(state.used)),
+            available_q: Some(Quantity::from_bytes(free)),
         }
     }
 
@@ -236,6 +250,9 @@ impl From<Pool> for DiskPoolStatus {
                 used: state.used,
                 available: free,
                 encrypted: Some(state.encrypted),
+                capacity_q: Some(Quantity::from_bytes(state.capacity)),
+                used_q: Some(Quantity::from_bytes(state.used)),
+                available_q: Some(Quantity::from_bytes(free)),
             }
         } else {
             Self {

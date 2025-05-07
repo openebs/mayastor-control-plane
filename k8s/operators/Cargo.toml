@@ -38,3 +38,4 @@ snafu = { version = "0.8.5", optional = true }
 tokio = { version = "1.41.0", features = ["full"], optional = true }
 humantime = { version = "2.1.0", optional = true }
 tracing = { version = "0.1.40", optional = true }
+parse-size = "1.1.0"

@@ -2529,6 +2529,7 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "openapi",
+ "parse-size",
  "schemars",
  "serde",
  "serde_json",
