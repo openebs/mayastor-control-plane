@@ -89,6 +89,10 @@ struct Cli {
     #[clap(long, short)]
     events_url: Option<url::Url>,
 
+    /// Replication factor for the events jetstream.
+    #[clap(long)]
+    events_replicas: Option<usize>,
+
     /// Formatting style to be used while logging.
     #[clap(default_value = FmtStyle::Pretty.as_ref(), short, long)]
     fmt_style: FmtStyle,
@@ -140,7 +144,7 @@ async fn main() -> anyhow::Result<()> {
         .with_style(cli_args.fmt_style)
         .with_colours(cli_args.ansi_colors)
         .with_jaeger(cli_args.jaeger.clone())
-        .with_events_url(cli_args.events_url.clone())
+        .with_events(cli_args.events_url.clone(), cli_args.events_replicas)
         .with_tracing_tags(cli_args.tracing_tags.clone())
         .init("agent-ha-node");
 

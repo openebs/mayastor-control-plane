@@ -51,6 +51,10 @@ struct Cli {
     #[clap(long, short)]
     events_url: Option<url::Url>,
 
+    /// Replication factor for the events jetstream.
+    #[clap(long)]
+    events_replicas: Option<usize>,
+
     /// Formatting style to be used while logging.
     #[clap(default_value = FmtStyle::Pretty.as_ref(), short, long)]
     fmt_style: FmtStyle,
@@ -82,7 +86,7 @@ fn initialize_tracing(args: &Cli) {
         .with_style(args.fmt_style)
         .with_colours(args.ansi_colors)
         .with_jaeger(args.jaeger.clone())
-        .with_events_url(args.events_url.clone())
+        .with_events(args.events_url.clone(), args.events_replicas)
         .with_tracing_tags(args.tracing_tags.clone())
         .init("agent-ha-cluster");
 }

@@ -73,6 +73,7 @@ pub struct TracingTelemetry {
     colours: bool,
     jaeger: Option<String>,
     events_url: Option<url::Url>,
+    events_replicas: Option<usize>,
     tracing_tags: Vec<KeyValue>,
 }
 
@@ -85,6 +86,7 @@ impl TracingTelemetry {
             colours: true,
             jaeger: None,
             events_url: None,
+            events_replicas: None,
             tracing_tags: Vec::new(),
         }
     }
@@ -106,9 +108,17 @@ impl TracingTelemetry {
         TracingTelemetry { jaeger, ..self }
     }
 
-    /// Specify the events url, If any.
-    pub fn with_events_url(self, events_url: Option<url::Url>) -> TracingTelemetry {
-        TracingTelemetry { events_url, ..self }
+    /// Specify the events url and replicas, If any.
+    pub fn with_events(
+        self,
+        events_url: Option<url::Url>,
+        events_replicas: Option<usize>,
+    ) -> TracingTelemetry {
+        TracingTelemetry {
+            events_url,
+            events_replicas,
+            ..self
+        }
     }
 
     /// Specify the tracing tags, If any.
@@ -177,7 +187,8 @@ impl TracingTelemetry {
         // Get the optional eventing layer.
         let events_layer = self.events_url.map(|url| {
             let target = filter::Targets::new().with_target(EVENT_BUS, Level::INFO);
-            EventHandle::init(url.to_string(), service_name).with_filter(target)
+            EventHandle::init(url.to_string(), service_name, self.events_replicas)
+                .with_filter(target)
         });
 
         let subscriber = Registry::default()
