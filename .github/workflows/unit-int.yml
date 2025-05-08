@@ -10,47 +10,77 @@ env:
 jobs:
   int-tests:
     runs-on: ubuntu-latest-16-cores
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: 'recursive'
+
       - run: echo "CI_REPORT_START_DATE=$(date +"%Y-%m-%d %H:%M:%S")" >> $GITHUB_ENV
+
+      - uses: cachix/install-nix-action@v31.3.0
+        with:
+          github_access_token: ''
+
+      - name: Inject github token to nix config
+        run: |
+          cat <<EOF | sudo tee -a /etc/nix/nix.conf
+          access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+          trusted-users = root runner
+          EOF
+
+      - name: Restart Nix daemon
+        run: sudo systemctl restart nix-daemon
+
       - uses: cachix/install-nix-action@v31.3.0
       - name: Pre-populate nix-shell
         run: |
           export NIX_PATH=nixpkgs=$(jq '.nixpkgs.url' nix/sources.json -r)
           echo "NIX_PATH=$NIX_PATH" >> $GITHUB_ENV
           nix-shell --run "echo" shell.nix
+
       - name: Handle Rust dependencies caching
         uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ startsWith(github.ref_name, 'release/') || github.ref_name == 'develop' }}
+
       - name: Build rust binaries
         run: nix-shell --run "cargo build --bins"
+
       - name: Build the tests
         run: nix-shell --run "./scripts/rust/test.sh --no-run"
+
       - name: Setup Test Pre-Requisites
         run: |
+          sudo debconf-communicate <<< "set man-db/auto-update false" || true
+          sudo dpkg-reconfigure man-db || true
           sudo sysctl -w vm.nr_hugepages=2560
           sudo apt-get install linux-modules-extra-$(uname -r)
           sudo modprobe nvme_tcp
+
       - name: Run Tests
         run: |
           # pre-pull the required container images
           nix-shell --run "deployer start --image-pull-policy always -w 60s && deployer stop"
           # includes both unit and integration tests
           nix-shell --run "./scripts/rust/test.sh"
+
       - name: Cleanup
         if: always()
         run: |
           nix-shell --run "./scripts/ci-report.sh"
           nix-shell --run "./scripts/rust/deployer-cleanup.sh"
+
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: ci-report-int
           path: ./ci-report/ci-report.tar.gz
+
       # debugging
       # - name: Setup tmate session
       #   if: ${{ failure() }}
