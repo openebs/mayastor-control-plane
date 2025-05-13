@@ -717,6 +717,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     volume_context: HashMap::new(),
                     parameters: HashMap::new(),
                     volume_capabilities: caps,
+                    mutable_parameters: HashMap::new(),
                 }),
                 message: "".to_string(),
             }
@@ -1107,6 +1108,13 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
     ) -> Result<tonic::Response<ControllerGetVolumeResponse>, tonic::Status> {
         Err(Status::unimplemented("Not implemented"))
     }
+
+    async fn controller_modify_volume(
+        &self,
+        _request: Request<ControllerModifyVolumeRequest>,
+    ) -> Result<Response<ControllerModifyVolumeResponse>, Status> {
+        Err(Status::unimplemented("Not implemented"))
+    }
 }
 
 fn snapshot_to_csi(snapshot: models::VolumeSnapshot) -> Snapshot {
@@ -1121,6 +1129,7 @@ fn snapshot_to_csi(snapshot: models::VolumeSnapshot) -> Snapshot {
             .and_then(|t| prost_types::Timestamp::from_str(&t).ok()),
         // Seems like csi, doesn't really care what the state is after successful creation.
         ready_to_use: snapshot.definition.metadata.status == models::SpecStatus::Created,
+        group_snapshot_id: "".to_string(),
     }
 }
 
