@@ -122,6 +122,10 @@ pub(crate) struct CliArgs {
     #[clap(long, short)]
     events_url: Option<url::Url>,
 
+    /// Replication factor for the events jetstream.
+    #[clap(long)]
+    events_replicas: Option<usize>,
+
     /// Disable the HA/Failover feature.
     /// This is useful when the frontend nodes do not support the NVMe ANA feature.
     #[clap(long, env = "HA_DISABLED")]
@@ -193,7 +197,7 @@ async fn main() -> anyhow::Result<()> {
         .with_style(cli_args.fmt_style)
         .with_colours(cli_args.ansi_colors)
         .with_jaeger(cli_args.jaeger.clone())
-        .with_events_url(cli_args.events_url.clone())
+        .with_events(cli_args.events_url.clone(), cli_args.events_replicas)
         .with_tracing_tags(cli_args.tracing_tags.clone())
         .init("agent-core");
     server(cli_args).await
