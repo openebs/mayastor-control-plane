@@ -44,8 +44,7 @@ impl ResourcePolicy<AddVolumeReplica> for SimplePolicy {
             .filter(affinity_group::SingleReplicaPolicy::replica_anti_affinity)
             .filter_param(&self, SimplePolicy::min_free_space)
             .filter_param(&self, SimplePolicy::pool_overcommit)
-            // sort pools in order of total weight of certain field values.
-            .sort_ctx(SimplePolicy::sort_by_weights)
+            .sort_ctx(SimplePolicy::sort_pools)
     }
 }
 
@@ -127,6 +126,31 @@ impl SimplePolicy {
             |item| item.pool().over_commitment().into(),
         )
     }
+
+    /// A note about sort upon encryption status:
+    /// If encrypted_pools_soft_scheduling is set in registry, it means system is under some
+    /// kind of migration for volumes from non-encrypted to encrypted pools. In such case,
+    /// give preference to encrypted pool if available. During such migration, volume can
+    /// possibly have some replicas on encrypted pool and some on non-encrypted.
+    pub(crate) fn sort_pools(
+        request: &GetSuitablePoolsContext,
+        a: &PoolItem,
+        b: &PoolItem,
+    ) -> std::cmp::Ordering {
+        match request.registry().encryption_preference_soft() {
+            true => match b.pool.encrypted().partial_cmp(&a.pool.encrypted()) {
+                Some(Ordering::Greater) => Ordering::Greater,
+                Some(Ordering::Less) => Ordering::Less,
+                None | Some(Ordering::Equal) => {
+                    // sort pools in order of total weight of certain field values.
+                    SimplePolicy::sort_by_weights(request, a, b)
+                }
+            },
+            // sort pools in order of total weight of certain field values.
+            false => SimplePolicy::sort_by_weights(request, a, b),
+        }
+    }
+
     /// Sort pools using weights between:
     /// 1. number of replicas or number of replicas of a ag (N_REPL_WEIGHT %)
     /// 2. free space         (FREE_SPACE_WEIGHT %)

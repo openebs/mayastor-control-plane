@@ -116,6 +116,8 @@ pub(crate) struct RegistryInner<S: Store> {
     etcd_max_page_size: i64,
     /// Allow pool creation using non-persistent devlinks.
     allow_non_persistent_devlinks: bool,
+    /// Prefer encrypted pools for volume replicas.
+    encrypted_pools_soft_scheduling: bool,
 }
 
 impl Registry {
@@ -143,6 +145,7 @@ impl Registry {
         etcd_max_page_size: i64,
         no_volume_health: bool,
         allow_non_persistent_devlinks: bool,
+        encrypted_pools_soft_scheduling: bool,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -203,6 +206,7 @@ impl Registry {
                 ha_disabled: ha_enabled,
                 etcd_max_page_size,
                 allow_non_persistent_devlinks,
+                encrypted_pools_soft_scheduling,
             }),
         };
         registry.init().await?;
@@ -352,6 +356,11 @@ impl Registry {
         if let Some(h) = self.health() {
             h.retain(retain)
         }
+    }
+    /// If we should enforce encrypted pool requirement softly, i.e. if encrypted pool not
+    /// found, go ahead with non-encrypted one.
+    pub(crate) fn encryption_preference_soft(&self) -> bool {
+        self.encrypted_pools_soft_scheduling
     }
 
     /// Serialized write to the persistent store.
