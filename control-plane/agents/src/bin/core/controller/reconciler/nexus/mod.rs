@@ -162,9 +162,9 @@ pub(super) async fn handle_faulted_children(
     Ok(PollerState::Idle)
 }
 
-/// Handles faulted nexus children.
+/// Handles faulted nexus child.
 /// Depending on the fault policy it either waits for specified duration until the child comes back
-/// or it opts for a full rebuilding by faulting the child instead.
+/// or it opts for a full rebuild by removing child from the nexus instead.
 async fn handle_faulted_child(
     nexus_spec: &mut OperationGuardArc<NexusSpec>,
     volume: &mut Option<&mut OperationGuardArc<VolumeSpec>>,
@@ -201,14 +201,25 @@ async fn handle_faulted_child(
         let child_uuid = child_uuid.clone();
         tracing::info!(%child.uri, child.uuid=%child_uuid, ?child.state_reason, "Child's replica is back online within the partial rebuild window");
         if let Err(error) = online_nexus_child(nexus_spec, &child.uri, context).await {
-            tracing::warn!(
-                %child.uri,
-                child.uuid=%child_uuid,
-                ?child.state_reason,
-                %error,
-                "Failed to online child, a full rebuild is required"
-            );
-            faulted_children_remover(nexus_spec, volume, child, context).await?;
+            // Check if online_nexus_child failed due to max_rebuild limit being hit.
+            // If no, initiate Full rebuild of the child.
+            if error.tonic_code() != tonic::Code::ResourceExhausted {
+                tracing::warn!(
+                    %child.uri,
+                    child.uuid=%child_uuid,
+                    ?child.state_reason,
+                    %error,
+                    "Failed to online child, a full rebuild is required"
+                );
+                faulted_children_remover(nexus_spec, volume, child, context).await?;
+            } else {
+                tracing::info!(
+                    %child.uri,
+                    child.uuid=%child_uuid,
+                    %error,
+                    "Did not online child as we've hit max concurrent rebuild limit. Will be tried later."
+                );
+            }
         }
     } else if let Some(elapsed) =
         wait_duration_elapsed(&child.uri, child_uuid, faulted_at, wait_duration)
