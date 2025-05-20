@@ -1,20 +1,24 @@
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{registry::traits::RegistryOperations, volume::traits::VolumeOperations};
-use stor_port::types::v0::transport::{AffinityGroup, CreateVolume, GetSpecs, VolumeId};
+use stor_port::types::v0::transport::{
+    AffinityGroup, CreateVolume, DestroyVolume, GetSpecs, SetVolumeReplica, VolumeId,
+};
 use tracing::info;
 
 #[tokio::test]
 async fn affinity_group() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
-        .with_io_engines(2)
-        .with_pools(2)
+        .with_agents(vec!["core"])
+        .with_io_engines(3)
+        .with_pools(3)
         .with_cache_period("1s")
         .build()
         .await
         .unwrap();
 
     startup_test(&cluster).await;
+    scale_up_test(&cluster).await;
 }
 
 async fn startup_test(cluster: &Cluster) {
@@ -30,7 +34,7 @@ async fn startup_test(cluster: &Cluster) {
 
     // Create all the volumes.
     for &item in &vols {
-        let _ = volume_client
+        volume_client
             .create(
                 &CreateVolume {
                     uuid: VolumeId::try_from(item.1).unwrap(),
@@ -41,7 +45,8 @@ async fn startup_test(cluster: &Cluster) {
                 },
                 None,
             )
-            .await;
+            .await
+            .expect("Volume creation should succeed");
     }
 
     // Restart the core-agent.
@@ -84,5 +89,108 @@ async fn startup_test(cluster: &Cluster) {
             }
             _ => {}
         }
+    }
+
+    // Create all the volumes.
+    for &item in &vols {
+        volume_client
+            .destroy(
+                &DestroyVolume {
+                    uuid: VolumeId::try_from(item.1).unwrap(),
+                },
+                None,
+            )
+            .await
+            .expect("Volume deletion should succeed");
+    }
+}
+
+async fn scale_up_test(cluster: &Cluster) {
+    let vols = vec![
+        (Some("ag1"), "eba487d9-0b57-407b-8b48-0b631a372183"),
+        (Some("ag1"), "359b7e1a-b724-443b-98b4-e6d97fabbb60"),
+        (Some("ag1"), "f2296d6a-77a6-401d-aad3-ccdc247b0a56"),
+    ];
+
+    let registry_client = cluster.grpc_client().registry();
+
+    // The Affinity Group specs should now have been loaded in memory.
+    // Fetch the specs.
+    let specs = registry_client
+        .get_specs(&GetSpecs {}, None)
+        .await
+        .expect("Should be able to fetch specs");
+
+    // Fail if there are affinity group specs from previous test lingering around.
+    assert_eq!(specs.affinity_groups.len(), 0);
+
+    let volume_client = cluster.grpc_client().volume();
+
+    for &item in &vols {
+        volume_client
+            .create(
+                &CreateVolume {
+                    uuid: VolumeId::try_from(item.1).unwrap(),
+                    size: 5242880,
+                    replicas: 1,
+                    affinity_group: item.0.map(|val| AffinityGroup::new(val.to_string())),
+                    ..Default::default()
+                },
+                None,
+            )
+            .await
+            .expect("Volume creation should succeed");
+    }
+
+    for &item in &vols {
+        volume_client
+            .set_replica(
+                &SetVolumeReplica {
+                    uuid: VolumeId::try_from(item.1).unwrap(),
+                    replicas: 2,
+                },
+                None,
+            )
+            .await
+            .expect("Scale up should not fail");
+    }
+
+    for &item in &vols {
+        volume_client
+            .set_replica(
+                &SetVolumeReplica {
+                    uuid: VolumeId::try_from(item.1).unwrap(),
+                    replicas: 3,
+                },
+                None,
+            )
+            .await
+            .expect("Scale up should not fail");
+    }
+
+    for &item in &vols {
+        volume_client
+            .set_replica(
+                &SetVolumeReplica {
+                    uuid: VolumeId::try_from(item.1).unwrap(),
+                    replicas: 2,
+                },
+                None,
+            )
+            .await
+            .expect("Scale down should not fail");
+    }
+
+    for &item in &vols {
+        volume_client
+            .set_replica(
+                &SetVolumeReplica {
+                    uuid: VolumeId::try_from(item.1).unwrap(),
+                    replicas: 1,
+                },
+                None,
+            )
+            .await
+            .expect_err("Scale down should fail");
     }
 }
