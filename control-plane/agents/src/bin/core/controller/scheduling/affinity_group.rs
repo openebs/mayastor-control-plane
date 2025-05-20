@@ -1,7 +1,7 @@
 use crate::controller::{registry::Registry, resources::ResourceUid};
 use std::collections::HashMap;
 use stor_port::types::v0::{
-    store::volume::{AffinityGroupSpec, VolumeSpec},
+    store::volume::{AffinityGroupSpec, VolumeOperation, VolumeSpec},
     transport::{NodeId, PoolId},
 };
 
@@ -12,32 +12,34 @@ pub(crate) fn get_restricted_nodes(
     affinity_group_spec: &AffinityGroupSpec,
     registry: &Registry,
 ) -> Vec<NodeId> {
-    let mut restricted_nodes: Vec<NodeId> = Vec::new();
-    if volume_spec.num_replicas == 1 {
-        let specs = registry.specs();
-        // Get the list of volumes being part of the Affinity Group.
-        let affinity_group_volumes = affinity_group_spec.volumes();
-        // Remove the current volume from the list, as it is under creation.
-        let affinity_group_volumes: Vec<_> = affinity_group_volumes
-            .iter()
-            .filter(|volume_id| *volume_id != volume_spec.uid())
-            .collect();
-        // List of restricted nodes, which already has replicas from the volumes of the
-        // Affinity Group.
-        for volume in &affinity_group_volumes {
-            // Fetch the list of nodes where the volume replicas are placed. If some
-            // volume doesn't exist yet, this list will be empty
-            // for that volume.
-            let node_ids = specs.volume_replica_nodes(volume);
-            // Add a new node in the list if it doesn't already exist.
-            let filtered_nodes: Vec<NodeId> = node_ids
-                .into_iter()
-                .filter(|id| !restricted_nodes.contains(id))
-                .collect();
-            restricted_nodes.extend(filtered_nodes);
-        }
+    // Since num_replicas in VolumeSpec is equal to 1 when scaling up from 1 replica to 2 replicas
+    // for the volume of an affinity group, if the number of nodes in cluster is equal to number of
+    // volumes in the affinity group we will exhaust nodes for scale up. This early exit relaxes the
+    // restriction for the first scale up (only support 1 replica add at a time).
+    if matches!(
+        volume_spec
+            .operation
+            .as_ref()
+            .map(|op| op.operation.clone()),
+        Some(VolumeOperation::SetReplica(2))
+    ) || volume_spec.num_replicas != 1
+    {
+        return Vec::new();
     }
-    restricted_nodes
+
+    let specs = registry.specs();
+    // List of restricted nodes, which already host replicas from the volumes of the affinity group
+    affinity_group_spec
+        .volumes()
+        .iter()
+        .filter(|&vid| vid != volume_spec.uid())
+        .flat_map(|vid| specs.volume_replica_nodes(vid))
+        .fold(Vec::new(), |mut acc, node_id| {
+            if !acc.contains(&node_id) {
+                acc.push(node_id);
+            }
+            acc
+        })
 }
 
 /// Get the map of pool to the number of the Affinity Group replica on the pool.
