@@ -1,4 +1,7 @@
 use crate::filesystem::FileSystem;
+use k8s_openapi::api::core::v1::PersistentVolumeClaim;
+use kube::api::{Patch, PatchParams};
+use kube::{Api, Client};
 use regex::Regex;
 use std::{
     collections::HashMap,
@@ -6,9 +9,11 @@ use std::{
     num::ParseIntError,
     str::{FromStr, ParseBoolError},
 };
+use stor_port::platform;
 use stor_port::types::v0::openapi::models::VolumeShareProtocol;
 use strum_macros::{AsRefStr, Display, EnumString};
 use tracing::log::warn;
+use tracing::{debug, trace};
 use utils::K8S_STS_PVC_NAMING_REGEX;
 
 use uuid::{Error as UuidError, Uuid};
@@ -472,6 +477,8 @@ pub(crate) fn validate_topology_params(
     Ok(())
 }
 
+const ANNOTATION_KEY: &str = "openebs.io/stsAffinityGroup";
+
 /// Volume Creation parameters.
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -479,10 +486,12 @@ pub struct CreateParams {
     publish_params: PublishParams,
     share_protocol: VolumeShareProtocol,
     replica_count: u8,
-    sts_affinity_group: Option<String>,
+    sts_affinity_group: Option<bool>,
     clone_fs_id_as_volume_id: Option<bool>,
     max_snapshots: Option<u32>,
     encrypted: Option<bool>,
+    pvc_name: Option<String>,
+    pvc_namespace: Option<String>,
 }
 impl CreateParams {
     /// Get the `Parameters::PublishParams` value.
@@ -497,11 +506,6 @@ impl CreateParams {
     pub fn replica_count(&self) -> u8 {
         self.replica_count
     }
-    /// Get the final affinity group name, using the `Parameters::PvcName, Parameters::PvcNamespace,
-    /// Parameters::AffinityGroup` values.
-    pub fn sts_affinity_group(&self) -> &Option<String> {
-        &self.sts_affinity_group
-    }
     /// Get the `Parameters::CloneFsIdAsVolumeId` value.
     pub fn clone_fs_id_as_volume_id(&self) -> &Option<bool> {
         &self.clone_fs_id_as_volume_id
@@ -514,7 +518,124 @@ impl CreateParams {
     pub fn encrypted(&self) -> Option<bool> {
         self.encrypted
     }
+    /// Get the sts_affinity_group name from annotations if exists else generate it.
+    pub async fn sts_affinity_group(&self) -> Result<Option<StsAffinityGroupInfo>, tonic::Status> {
+        if !self.sts_affinity_group.unwrap_or(false) {
+            return Ok(None);
+        }
+
+        if platform::current_platform_type() != platform::PlatformType::K8s {
+            debug!("Detected non-K8s platform, skipping annotation fetch for STS affinity group");
+            return Ok(None);
+        }
+
+        let pvc_name = self
+            .pvc_name
+            .as_ref()
+            .ok_or_else(|| tonic::Status::invalid_argument("PVC name is missing"))?;
+        let pvc_namespace = self
+            .pvc_namespace
+            .as_ref()
+            .ok_or_else(|| tonic::Status::invalid_argument("PVC namespace is missing"))?;
+
+        let client = Client::try_default()
+            .await
+            .map_err(|e| tonic::Status::aborted(e.to_string()))?;
+        let pvc_api: Api<PersistentVolumeClaim> = Api::namespaced(client, pvc_namespace);
+
+        let pvc = pvc_api
+            .get(pvc_name)
+            .await
+            .map_err(|e| tonic::Status::aborted(e.to_string()))?;
+
+        let annotation_value = pvc
+            .metadata
+            .annotations
+            .as_ref()
+            .and_then(|a| a.get(ANNOTATION_KEY))
+            .map(|val| val.to_string());
+
+        let generated_value = generate_sts_affinity_group_name(pvc_name, pvc_namespace);
+
+        // 1. If the annotation was set and the generated name is different, we should use the annotation value, this can happen at the point of restore, so we will just stick to the set value.
+        // 2. If the annotation was set and the generated name is same, we should use the annotation value, this can happen at the point of import of the same volume.
+        // 3. If the annotation was not set and the generated name is not None, we should use the generated value to patch, this would be at the first creation
+        let (annotation_exists, final_name) = match (&annotation_value, &generated_value) {
+            (Some(a_val), Some(gen_val)) => {
+                if a_val != gen_val {
+                    warn!(
+                        "Conflicting STS affinity group names: annotation = {a_val}, generated = {gen_val}"
+                    );
+                }
+                (true, a_val)
+            }
+            (Some(a_val), None) => (true, a_val),
+            (None, Some(gen_val)) => (false, gen_val),
+            (None, None) => return Ok(None),
+        };
+
+        Ok(Some(StsAffinityGroupInfo {
+            pvc_name: pvc_name.to_string(),
+            pvc_namespace: pvc_namespace.to_string(),
+            name: final_name.to_string(),
+            annotation_exists,
+        }))
+    }
 }
+
+/// Information about the STS affinity group.
+pub struct StsAffinityGroupInfo {
+    pvc_name: String,
+    pvc_namespace: String,
+    name: String,
+    annotation_exists: bool,
+}
+
+impl StsAffinityGroupInfo {
+    /// If sts_affinity_group was requested we should patch pvc with it.
+    pub async fn set_sts_affinity_annotation(&self) -> Result<(), tonic::Status> {
+        if self.annotation_exists {
+            trace!(pvc.name=%self.pvc_name, pvc.stsAffinityGroup=%self.name(), "Annotation for STS affinity group already present, skipping patch");
+            return Ok(());
+        }
+        let client = Client::try_default()
+            .await
+            .map_err(|e| tonic::Status::aborted(e.to_string()))?;
+
+        let pvc_api: Api<PersistentVolumeClaim> = Api::namespaced(client, &self.pvc_namespace);
+
+        let patch = serde_json::json!({
+            "metadata": {
+                "annotations": {
+                    ANNOTATION_KEY: self.name()
+                }
+            }
+        });
+
+        pvc_api
+            .patch(
+                &self.pvc_name,
+                &PatchParams::default(),
+                &Patch::Merge(&patch),
+            )
+            .await
+            .map_err(|e| tonic::Status::internal(format!("Failed to patch PVC: {e}")))?;
+
+        trace!(
+            "Patched annotation: {ANNOTATION_KEY}: {} on the pvc {} in namespace {}",
+            self.name(),
+            self.pvc_name,
+            self.pvc_namespace
+        );
+
+        Ok(())
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+}
+
 impl TryFrom<&HashMap<String, String>> for CreateParams {
     type Error = tonic::Status;
 
@@ -547,14 +668,14 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
                     )
                 })?;
 
-        let sts_affinity_group_name = if sts_affinity_group.unwrap_or(false) {
-            generate_sts_affinity_group_name(
-                &args.get(Parameters::PvcName.as_ref()).cloned(),
-                &args.get(Parameters::PvcNamespace.as_ref()).cloned(),
-            )
-        } else {
-            None
-        };
+        let pvc_name = args.get(Parameters::PvcName.as_ref()).cloned();
+        let pvc_namespace = args.get(Parameters::PvcNamespace.as_ref()).cloned();
+
+        if sts_affinity_group == Some(true) && (pvc_name.is_none() || pvc_namespace.is_none()) {
+            return Err(tonic::Status::invalid_argument(
+                "`pvcName` and `pvcNamespace` must be present when `stsAffinityGroup` is true",
+            ));
+        }
 
         let clone_fs_id_as_volume_id = Parameters::clone_fs_id_as_volume_id(
             args.get(Parameters::CloneFsIdAsVolumeId.as_ref()),
@@ -575,10 +696,12 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
             publish_params,
             share_protocol,
             replica_count,
-            sts_affinity_group: sts_affinity_group_name,
+            sts_affinity_group,
             clone_fs_id_as_volume_id,
             max_snapshots,
             encrypted,
+            pvc_name,
+            pvc_namespace,
         })
     }
 }
@@ -586,30 +709,20 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
 // Generate a affinity group name from the parameters.
 // 1. Both pvc name and ns should be valid.
 // 2. Pvc name should follow the sts pvc naming convention.
-fn generate_sts_affinity_group_name(
-    pvc_name: &Option<String>,
-    pvc_ns: &Option<String>,
-) -> Option<String> {
-    match (pvc_name, pvc_ns) {
-        (Some(pvc_name), Some(pvc_ns)) => {
-            let re = Regex::from_str(K8S_STS_PVC_NAMING_REGEX);
-            if let Ok(regex) = re {
-                if regex.is_match(pvc_name.as_str()) {
-                    if let Some(captures) = regex.captures(pvc_name.as_str()) {
-                        if let Some(common_binding) = captures.get(1) {
-                            return Some(format!("{pvc_ns}/{}", common_binding.as_str()));
-                        }
-                    }
+fn generate_sts_affinity_group_name(pvc_name: &String, pvc_ns: &String) -> Option<String> {
+    let re = Regex::from_str(K8S_STS_PVC_NAMING_REGEX);
+    if let Ok(regex) = re {
+        if regex.is_match(pvc_name.as_str()) {
+            if let Some(captures) = regex.captures(pvc_name.as_str()) {
+                if let Some(common_binding) = captures.get(1) {
+                    let name = format!("{pvc_ns}/{}", common_binding.as_str());
+                    return Some(name);
                 }
             }
-            warn!("PVC Name: {pvc_name} is not a valid statefulset pvc naming format, not triggering statefulset volume replica anti-affinity");
-            None
-        }
-        _ => {
-            warn!("Invalid PVC Name: {pvc_name:?} or PVC Namespace: {pvc_ns:?}, not triggering statefulset volume replica anti-affinity");
-            None
         }
     }
+    warn!("PVC Name: {pvc_name} is not a valid statefulset pvc naming format, not triggering statefulset volume replica anti-affinity");
+    None
 }
 
 #[derive(EnumString, Clone, Debug, Eq, PartialEq)]
@@ -651,16 +764,16 @@ mod tests {
     use crate::context::generate_sts_affinity_group_name;
 
     struct VolGrpTestEntry {
-        pvc_name: Option<String>,
-        pvc_namespace: Option<String>,
+        pvc_name: String,
+        pvc_namespace: String,
         result: Option<String>,
     }
 
     impl VolGrpTestEntry {
-        fn new(pvc_name: Option<&str>, pvc_namespace: Option<&str>, result: Option<&str>) -> Self {
+        fn new(pvc_name: &str, pvc_namespace: &str, result: Option<&str>) -> Self {
             Self {
-                pvc_name: pvc_name.map(|s| s.to_string()),
-                pvc_namespace: pvc_namespace.map(|s| s.to_string()),
+                pvc_name: pvc_name.to_string(),
+                pvc_namespace: pvc_namespace.to_string(),
                 result: result.map(|s| s.to_string()),
             }
         }
@@ -669,25 +782,21 @@ mod tests {
     #[test]
     fn ag_name_generator() {
         let vol_grp_test_entries: Vec<VolGrpTestEntry> = vec![
+            VolGrpTestEntry::new("mongo-db-0", "default", Some("default/mongo-db")),
+            VolGrpTestEntry::new("", "default", None),
+            VolGrpTestEntry::new("mongo-db-0", "", Some("/mongo-db")),
+            VolGrpTestEntry::new("", "", None),
             VolGrpTestEntry::new(
-                Some("mongo-db-0"),
-                Some("default"),
-                Some("default/mongo-db"),
-            ),
-            VolGrpTestEntry::new(None, Some("default"), None),
-            VolGrpTestEntry::new(Some("mongo-db-0"), None, None),
-            VolGrpTestEntry::new(None, None, None),
-            VolGrpTestEntry::new(
-                Some("mongo-db-2424"),
-                Some("mayastor-123"),
+                "mongo-db-2424",
+                "mayastor-123",
                 Some("mayastor-123/mongo-db"),
             ),
             VolGrpTestEntry::new(
-                Some("mongo-db-123-abcd-2"),
-                Some("default"),
+                "mongo-db-123-abcd-2",
+                "default",
                 Some("default/mongo-db-123-abcd"),
             ),
-            VolGrpTestEntry::new(Some("mongo-db-123-abcd"), Some("xyz-12"), None),
+            VolGrpTestEntry::new("mongo-db-123-abcd", "xyz-12", None),
         ];
 
         for test_entry in vol_grp_test_entries {
