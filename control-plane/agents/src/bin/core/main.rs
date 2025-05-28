@@ -150,6 +150,12 @@ pub(crate) struct CliArgs {
     /// Allow pools to be created using non persistent devlinks.
     #[clap(long)]
     allow_non_persistent_devlink: bool,
+
+    /// Prefer to use encrypted pools for volume replicas if the this is set in addition to
+    /// encryption on volume spec. Applicable if the volume was initially provisioned via
+    /// a non-encryption storage class.
+    #[clap(long)]
+    encrypted_pools_soft_scheduling: bool,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -228,6 +234,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         cli_args.etcd_page_limit as i64,
         cli_args.no_volume_health,
         cli_args.allow_non_persistent_devlink,
+        cli_args.encrypted_pools_soft_scheduling,
     )
     .await?;
 

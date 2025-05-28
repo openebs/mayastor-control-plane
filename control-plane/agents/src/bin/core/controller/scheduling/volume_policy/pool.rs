@@ -56,7 +56,11 @@ impl PoolBaseFilters {
     }
     /// Should only attempt to use encrypted pools.
     pub(crate) fn encrypted(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        request.encrypted() == item.pool.encrypted
+        let use_this = request.encrypted() == item.pool.encrypted;
+        if !use_this && request.encrypted() && request.registry().encryption_preference_soft() {
+            return !use_this;
+        }
+        use_this
     }
     /// Return true if the pool has enough capacity to resize the replica by the requested
     /// value.

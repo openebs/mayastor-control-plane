@@ -110,6 +110,11 @@ impl PoolWrapper {
         self.free_space
     }
 
+    /// Get the pool's encryption status.
+    pub(crate) fn encrypted(&self) -> bool {
+        self.encrypted
+    }
+
     /// Set pool state as unknown.
     #[allow(dead_code)]
     pub(crate) fn set_unknown(&mut self) {
