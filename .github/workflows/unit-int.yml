@@ -36,7 +36,6 @@ jobs:
       - name: Restart Nix daemon
         run: sudo systemctl restart nix-daemon
 
-      - uses: cachix/install-nix-action@v31.3.0
       - name: Pre-populate nix-shell
         run: |
           export NIX_PATH=nixpkgs=$(jq '.nixpkgs.url' nix/sources.json -r)
@@ -59,6 +58,7 @@ jobs:
           sudo debconf-communicate <<< "set man-db/auto-update false" || true
           sudo dpkg-reconfigure man-db || true
           sudo sysctl -w vm.nr_hugepages=2560
+          sudo apt-get update
           sudo apt-get install linux-modules-extra-$(uname -r)
           sudo modprobe nvme_tcp
 
