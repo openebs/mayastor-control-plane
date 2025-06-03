@@ -130,6 +130,7 @@ pub(crate) static RDMA_CONNECT_CHECK: OnceCell<CheckAndFallbackNvmeConnect> = On
 /// the readonly status
 fn check_access_mode(
     volume_capability: &Option<VolumeCapability>,
+    access_type: &AccessType,
     readonly: bool,
 ) -> Result<(), String> {
     match volume_capability {
@@ -137,6 +138,9 @@ fn check_access_mode(
             Some(access) => match Mode::try_from(access.mode) {
                 Ok(mode) => match mode {
                     Mode::SingleNodeWriter | Mode::MultiNodeSingleWriter => Ok(()),
+                    Mode::MultiNodeMultiWriter if matches!(access_type, AccessType::Block(_)) => {
+                        Ok(())
+                    }
                     Mode::SingleNodeReaderOnly | Mode::MultiNodeReaderOnly => {
                         if readonly {
                             return Ok(());
@@ -296,7 +300,16 @@ impl node_server::Node for Node {
             ));
         }
 
-        if let Err(error) = check_access_mode(&msg.volume_capability, msg.readonly) {
+        let access_type = get_access_type(&msg.volume_capability).map_err(|error| {
+            failure!(
+                Code::InvalidArgument,
+                "Failed to publish volume {}: {}",
+                &msg.volume_id,
+                error
+            )
+        })?;
+
+        if let Err(error) = check_access_mode(&msg.volume_capability, access_type, msg.readonly) {
             return Err(failure!(
                 Code::InvalidArgument,
                 "Failed to publish volume {}: {}",
@@ -328,14 +341,7 @@ impl node_server::Node for Node {
             ));
         }
 
-        match get_access_type(&msg.volume_capability).map_err(|error| {
-            failure!(
-                Code::InvalidArgument,
-                "Failed to publish volume {}: {}",
-                &msg.volume_id,
-                error
-            )
-        })? {
+        match access_type {
             AccessType::Mount(mnt) => {
                 publish_fs_volume(&msg, mnt, &self.filesystems).await?;
             }
@@ -676,19 +682,6 @@ impl node_server::Node for Node {
             ));
         }
 
-        if let Err(error) = check_access_mode(
-            &msg.volume_capability,
-            // relax the check a bit by pretending all stage mounts are ro
-            true,
-        ) {
-            return Err(failure!(
-                Code::InvalidArgument,
-                "Failed to stage volume {}: {}",
-                &msg.volume_id,
-                error
-            ));
-        };
-
         let access_type = match get_access_type(&msg.volume_capability) {
             Ok(accesstype) => accesstype,
             Err(error) => {
@@ -699,6 +692,20 @@ impl node_server::Node for Node {
                     error
                 ));
             }
+        };
+
+        if let Err(error) = check_access_mode(
+            &msg.volume_capability,
+            access_type,
+            // relax the check a bit by pretending all stage mounts are ro
+            true,
+        ) {
+            return Err(failure!(
+                Code::InvalidArgument,
+                "Failed to stage volume {}: {}",
+                &msg.volume_id,
+                error
+            ));
         };
 
         let uuid = Uuid::parse_str(&msg.volume_id).map_err(|error| {

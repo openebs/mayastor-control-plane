@@ -42,9 +42,11 @@ use stor_port::{
             Volume,
         },
     },
+    HostAccessControl,
 };
 
 use std::{fmt::Debug, ops::Deref};
+use stor_port::types::v0::{store::volume::UnpublishOperation, transport::VolumeShareProtocol};
 
 #[async_trait::async_trait]
 impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
@@ -320,6 +322,46 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         request: &Self::Publish,
     ) -> Result<Self::PublishOutput, SvcError> {
         let state = registry.volume_state(&request.uuid).await?;
+
+        if let Some(target_cfg) = self.as_ref().target_cfg() {
+            let target = target_cfg.target();
+
+            let host_acl =
+                registry.host_acl_nodename(HostAccessControl::Nexuses, &request.frontend_nodes);
+            if target_cfg.frontend().needs_update(&host_acl) {
+                let mut nexus = registry.specs().nexus(target.nexus()).await?;
+                let nexus_state = registry.nexus(target.nexus()).await?;
+
+                let mut target_cfg = target_cfg.clone();
+
+                target_cfg.frontend_mut().add_acls(host_acl);
+                let operation = VolumeOperation::Publish(PublishOperation::new(
+                    target_cfg.clone(),
+                    request.publish_context.clone(),
+                ));
+                let spec_clone = self.start_update(registry, &state, operation).await?;
+
+                let result = nexus
+                    .share(
+                        registry,
+                        &ShareNexus::new(
+                            &nexus_state,
+                            VolumeShareProtocol::Nvmf,
+                            target_cfg.frontend().node_nqns(),
+                        ),
+                    )
+                    .await;
+
+                self.complete_update(registry, result, spec_clone).await?;
+
+                let volume = registry.volume(&request.uuid).await?;
+                registry
+                    .notify_if_degraded(&volume, PollTriggerEvent::VolumeDegraded)
+                    .await;
+                return Ok(volume);
+            }
+        }
+
         let nexus_node = self
             .next_target_node(registry, request, &state, false)
             .await?;
@@ -401,9 +443,10 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 
         let state = registry.volume_state(&request.uuid).await?;
 
-        let spec_clone = self
-            .start_update(registry, &state, VolumeOperation::Unpublish)
-            .await?;
+        let host_acls =
+            registry.host_acl_nodename(HostAccessControl::Nexuses, &request.frontend_nodes);
+        let op = VolumeOperation::Unpublish(UnpublishOperation::new(host_acls));
+        let spec_clone = self.start_update(registry, &state, op).await?;
 
         let volume_target = spec_clone.target().expect("already validated");
         let frontend_nodes = &request.frontend_nodes;
@@ -425,10 +468,14 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
                 }
             }
         }
+        let last_node = spec_clone
+            .active_config()
+            .map(|c| c.frontend().nodes_info().len() == 1)
+            .unwrap_or_default();
 
         let result = match specs.nexus_opt(volume_target.nexus()).await? {
             None => Ok(()),
-            Some(mut nexus) => {
+            Some(mut nexus) if last_node => {
                 let nexus_clone = nexus.lock().clone();
                 let destroy = DestroyNexus::from(&nexus_clone).with_disown(&request.uuid);
                 // Destroy the Nexus
@@ -454,6 +501,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
                     }
                 }
             }
+            _ => Ok(()),
         };
 
         self.complete_update(registry, result, spec_clone).await

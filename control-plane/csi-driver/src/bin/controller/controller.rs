@@ -64,7 +64,10 @@ impl CsiControllerSvc {
 fn check_volume_capabilities(capabilities: &[VolumeCapability]) -> Result<(), tonic::Status> {
     for c in capabilities {
         if let Some(access_mode) = c.access_mode.as_ref() {
-            if access_mode.mode != volume_capability::access_mode::Mode::SingleNodeWriter as i32 {
+            if access_mode.mode != volume_capability::access_mode::Mode::SingleNodeWriter as i32
+                && access_mode.mode
+                    != volume_capability::access_mode::Mode::MultiNodeMultiWriter as i32
+            {
                 return Err(Status::invalid_argument(format!(
                     "Invalid volume access mode: {:?}",
                     access_mode.mode
@@ -73,6 +76,34 @@ fn check_volume_capabilities(capabilities: &[VolumeCapability]) -> Result<(), to
         }
     }
     Ok(())
+}
+
+fn check_volume_capability(
+    capability: &VolumeCapability,
+) -> Result<volume_capability::access_mode::Mode, tonic::Status> {
+    let Some(access_mode) = capability.access_mode.as_ref() else {
+        return Err(tonic::Status::invalid_argument("missing access_mode"));
+    };
+    let access_mode = volume_capability::access_mode::Mode::try_from(access_mode.mode)
+        .map_err(|error| tonic::Status::invalid_argument(error.to_string()))?;
+    let Some(access_type) = capability.access_type.as_ref() else {
+        return Err(tonic::Status::invalid_argument("missing access_type"));
+    };
+    match access_mode {
+        volume_capability::access_mode::Mode::SingleNodeWriter => Ok(access_mode),
+        volume_capability::access_mode::Mode::MultiNodeMultiWriter => {
+            if matches!(access_type, AccessType::Block(_)) {
+                Ok(access_mode)
+            } else {
+                Err(Status::invalid_argument(format!(
+                    "{access_mode:?} only allowed with access_type of Block",
+                )))
+            }
+        }
+        _ => Err(Status::invalid_argument(format!(
+            "Invalid volume access mode: {access_mode:?}",
+        ))),
+    }
 }
 
 /// Parse string protocol into REST API protocol enum.
@@ -541,12 +572,10 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         })?;
         let _guard = csi_driver::limiter::VolumeOpGuard::new(volume_id)?;
 
-        match args.volume_capability {
-            Some(c) => check_volume_capabilities(&[c])?,
-            None => {
-                return Err(Status::invalid_argument("Missing volume capability"));
-            }
-        }
+        let access_mode = match args.volume_capability {
+            Some(c) => check_volume_capability(&c),
+            None => Err(Status::invalid_argument("Missing volume capability")),
+        }?;
 
         // Check if the volume is already published.
         let volume = RestApiClient::get_client().get_volume(&volume_id).await?;
@@ -576,11 +605,29 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                                 "Volume {volume_id} is only accessible to nodes: {allowed:?}, and not to {node_id}"
                             );
                             error!("{m}");
-                            return Err(Status::failed_precondition(m));
-                        }
 
-                        debug!("Volume {volume_id} already published for {node_id} on {node} => {uri}");
-                        uri
+                            if access_mode == volume_capability::access_mode::Mode::SingleNodeWriter {
+                                return Err(Status::failed_precondition(m));
+                            }
+
+                            let v = RestApiClient::get_client()
+                                .publish_volume(&volume_id, Some(&node), protocol, args.node_id.clone(), &publish_context)
+                                .await?;
+
+                            if let Some((node, uri)) = get_volume_share_location(&v) {
+                                debug!("Volume {volume_id} successfully published on node {node} via {uri}");
+                                uri
+                            } else {
+                                let m = format!(
+                                    "Volume {volume_id} has been successfully published but URI is not available"
+                                );
+                                error!("{}", m);
+                                return Err(Status::internal(m));
+                            }
+                        } else {
+                            debug!("Volume {volume_id} already published for {node_id} on {node} => {uri}");
+                            uri
+                        }
                     } else {
                         let m = format!(
                             "Volume {volume_id} reports no info about its publishing status"
@@ -681,11 +728,14 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             .unpublish_volume(&volume_uuid, true, Some(args.node_id.as_str()))
             .await
         {
-            if !matches!(error, ApiClientError::NotAcceptable(_)) {
-                return Err(Status::not_found(format!(
-                    "Failed to unpublish volume {}, error = {error:?}",
-                    &args.volume_id
-                )));
+            match error {
+                ApiClientError::NotAcceptable(_) => {}
+                _ => {
+                    return Err(Status::not_found(format!(
+                        "Failed to unpublish volume {}, error = {error:?}",
+                        &args.volume_id
+                    )))
+                }
             }
         }
 
@@ -717,6 +767,11 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 if let Some(access_mode) = cap.access_mode.as_ref() {
                     if access_mode.mode
                         == volume_capability::access_mode::Mode::SingleNodeWriter as i32
+                    {
+                        return true;
+                    }
+                    if access_mode.mode
+                        == volume_capability::access_mode::Mode::MultiNodeMultiWriter as i32
                     {
                         return true;
                     }

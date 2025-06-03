@@ -51,11 +51,11 @@ impl SpecOperationsHelper for NexusSpec {
         op: Self::UpdateOp,
     ) -> Result<(), SvcError> {
         match &op {
-            NexusOperation::Share(_, _) if state.share.shared() => Err(SvcError::AlreadyShared {
-                kind: ResourceKind::Nexus,
-                id: self.uuid_str(),
-                share: state.share.to_string(),
-            }),
+            // NexusOperation::Share(_, _) if state.share.shared() => Err(SvcError::AlreadyShared {
+            //     kind: ResourceKind::Nexus,
+            //     id: self.uuid_str(),
+            //     share: state.share.to_string(),
+            // }),
             NexusOperation::Share(_, _) => Ok(()),
             NexusOperation::Unshare if !state.share.shared() => Err(SvcError::NotShared {
                 kind: ResourceKind::Nexus,
