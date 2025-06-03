@@ -7,7 +7,10 @@ use stor_port::types::v0::{
         node::NodeSpec,
         pool::{PoolSpec, PoolSpecStatus},
         replica::{PoolRef, ReplicaSpec, ReplicaSpecStatus},
-        volume::{TargetConfig, VolumeSpec, VolumeSpecStatus, VolumeTarget},
+        volume::{
+            TargetConfig, VolumeOperation, VolumeOperationState, VolumeSpec, VolumeSpecStatus,
+            VolumeTarget,
+        },
     },
     transport::{
         ChildUri, ExplicitNodeTopology, LabelledTopology, NexusId, NexusStatus, NodeTopology,
@@ -233,6 +236,30 @@ fn test_deserialization_v1_to_v2() {
             }),
         }
     ];
+
+    validate_deserialization(&test_entries);
+}
+
+#[test]
+fn test_deserialization_changes() {
+    let test_entries = vec![TestEntry {
+        json_str: r#"{"uuid":"359b7e1a-b724-443b-98b4-e6d97fabbb40","size":5242880,"labels":null,"num_replicas":2,"status":{"Created":"Online"},"policy":{"self_heal":true},"topology":null,"last_nexus_id":null,"operation":{"operation":"Unpublish","result":null},"thin":false,"target":null,"publish_context":null,"affinity_group":null,"encrypted":false,"cluster_size":4194304}"#,
+        expected: Expected::VolumeSpec(VolumeSpec {
+            uuid: VolumeId::try_from("359b7e1a-b724-443b-98b4-e6d97fabbb40").unwrap(),
+            size: 5242880,
+            labels: None,
+            num_replicas: 2,
+            status: VolumeSpecStatus::Created(VolumeStatus::Online),
+            policy: VolumePolicy { self_heal: true },
+            target_config: None,
+            operation: Some(VolumeOperationState {
+                operation: VolumeOperation::UnpublishOld,
+                result: None,
+            }),
+            cluster_size: 4194304,
+            ..Default::default()
+        }),
+    }];
 
     validate_deserialization(&test_entries);
 }

@@ -64,7 +64,10 @@ impl CsiControllerSvc {
 fn check_volume_capabilities(capabilities: &[VolumeCapability]) -> Result<(), tonic::Status> {
     for c in capabilities {
         if let Some(access_mode) = c.access_mode.as_ref() {
-            if access_mode.mode != volume_capability::access_mode::Mode::SingleNodeWriter as i32 {
+            if access_mode.mode != volume_capability::access_mode::Mode::SingleNodeWriter as i32
+                && access_mode.mode
+                    != volume_capability::access_mode::Mode::MultiNodeMultiWriter as i32
+            {
                 return Err(Status::invalid_argument(format!(
                     "Invalid volume access mode: {:?}",
                     access_mode.mode
@@ -73,6 +76,34 @@ fn check_volume_capabilities(capabilities: &[VolumeCapability]) -> Result<(), to
         }
     }
     Ok(())
+}
+
+fn check_volume_capability(
+    capability: &VolumeCapability,
+) -> Result<volume_capability::access_mode::Mode, tonic::Status> {
+    let Some(access_mode) = capability.access_mode.as_ref() else {
+        return Err(tonic::Status::invalid_argument("missing access_mode"));
+    };
+    let access_mode = volume_capability::access_mode::Mode::try_from(access_mode.mode)
+        .map_err(|error| tonic::Status::invalid_argument(error.to_string()))?;
+    let Some(access_type) = capability.access_type.as_ref() else {
+        return Err(tonic::Status::invalid_argument("missing access_type"));
+    };
+    match access_mode {
+        volume_capability::access_mode::Mode::SingleNodeWriter => Ok(access_mode),
+        volume_capability::access_mode::Mode::MultiNodeMultiWriter => {
+            if matches!(access_type, AccessType::Block(_)) {
+                Ok(access_mode)
+            } else {
+                Err(Status::invalid_argument(format!(
+                    "{access_mode:?} only allowed with access_type of Block",
+                )))
+            }
+        }
+        _ => Err(Status::invalid_argument(format!(
+            "Invalid volume access mode: {access_mode:?}",
+        ))),
+    }
 }
 
 /// Parse string protocol into REST API protocol enum.
@@ -541,12 +572,10 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         })?;
         let _guard = csi_driver::limiter::VolumeOpGuard::new(volume_id)?;
 
-        match args.volume_capability {
-            Some(c) => check_volume_capabilities(&[c])?,
-            None => {
-                return Err(Status::invalid_argument("Missing volume capability"));
-            }
-        }
+        let access_mode = match args.volume_capability {
+            Some(c) => check_volume_capability(&c),
+            None => Err(Status::invalid_argument("Missing volume capability")),
+        }?;
 
         // Check if the volume is already published.
         let volume = RestApiClient::get_client().get_volume(&volume_id).await?;
@@ -562,34 +591,60 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 Some(target) => {
                     if target.protocol != Some(protocol) {
                         let m = format!(
-                            "Volume {volume_id} already shared via different protocol: {:?}",
+                            "Volume already shared via different protocol: {:?}",
                             target.protocol,
                         );
-                        error!("{}", m);
+                        error!("{m}");
                         return Err(Status::failed_precondition(m));
                     }
 
                     if let Some((node, uri)) = get_volume_share_location(&volume) {
                         // Make sure volume is accessible from the same app node.
                         if let Err(allowed) = frontend_nodes_allowed(target, &node_id) {
-                            let m = format!(
-                                "Volume {volume_id} is only accessible to nodes: {allowed:?}, and not to {node_id}"
-                            );
-                            error!("{m}");
-                            return Err(Status::failed_precondition(m));
-                        }
 
-                        debug!("Volume {volume_id} already published for {node_id} on {node} => {uri}");
-                        uri
+                            if access_mode == volume_capability::access_mode::Mode::SingleNodeWriter {
+                                let m = format!(
+                                    "Volume {volume_id} is only accessible to nodes: {allowed:?}, and not to {node_id}"
+                                );
+                                tracing::error!("{m}");
+                                return Err(Status::failed_precondition(m));
+                            }
+                            tracing::info!("Volume is already published to nodes: {allowed:?} - publishing to {node_id}");
+
+                            // Issue a cleanup rpc to csi node to ensure the subsystem doesn't have any
+                            // path present before publishing
+                            if self.force_unstage_volume {
+                                let app_node = RestApiClient::get_client().get_app_node(&args.node_id).await?;
+                                force_unstage(app_node, volume_id.to_string()).await?;
+                            }
+
+                            let v = RestApiClient::get_client()
+                                .publish_volume(&volume_id, Some(&node), protocol, args.node_id.clone(), &publish_context)
+                                .await?;
+
+                            if let Some((node, uri)) = get_volume_share_location(&v) {
+                                debug!("Volume successfully published on node {node} via {uri}");
+                                uri
+                            } else {
+                                let m = format!(
+                                    "Volume {volume_id} has been successfully published but URI is not available"
+                                );
+                                error!("{m}");
+                                return Err(Status::internal(m));
+                            }
+                        } else {
+                            debug!("Volume already published for {node_id} on {node} => {uri}");
+                            uri
+                        }
                     } else {
                         let m = format!(
                             "Volume {volume_id} reports no info about its publishing status"
                         );
-                        error!("{}", m);
+                        error!("{m}");
                         return Err(Status::internal(m));
                     }
                 }
-                _ => {
+                None => {
                     // Check for node being cordoned.
                     fn cordon_check(spec: Option<&NodeSpec>) -> bool {
                         if let Some(spec) = spec {
@@ -626,7 +681,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                         .await?;
 
                     if let Some((node, uri)) = get_volume_share_location(&v) {
-                        debug!("Volume {volume_id} successfully published on node {node} via {uri}");
+                        debug!("Volume successfully published on node {node} via {uri}");
                         uri
                     } else {
                         let m = format!(
@@ -661,7 +716,8 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let volume = match RestApiClient::get_client().get_volume(&volume_uuid).await {
             Ok(volume) => volume,
             Err(ApiClientError::ResourceNotExists { .. }) => {
-                debug!("Volume {} does not exist, not unpublishing", args.volume_id);
+                // todo: shouldn't this be a grpc NOT_FOUND?
+                debug!("Volume does not exist, not unpublishing");
                 return Ok(Response::new(ControllerUnpublishVolumeResponse {}));
             }
             Err(e) => return Err(Status::from(e)),
@@ -669,10 +725,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         if volume.spec.target.is_none() {
             // Volume is not published, bail out.
-            debug!(
-                "Volume {} is not published, not unpublishing",
-                args.volume_id
-            );
+            debug!("Volume is not published, not unpublishing");
             return Ok(Response::new(ControllerUnpublishVolumeResponse {}));
         }
 
@@ -708,23 +761,22 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let _volume = RestApiClient::get_client()
             .get_volume(&volume_uuid)
             .await
+            // todo: this seems wrong...
             .map_err(|_e| Status::unimplemented("Not implemented"))?;
 
+        use volume_capability::access_mode::Mode;
+        let supported_caps = vec![Mode::SingleNodeWriter, Mode::MultiNodeMultiWriter];
         let caps: Vec<VolumeCapability> = args
             .volume_capabilities
             .into_iter()
             .filter(|cap| {
-                if let Some(access_mode) = cap.access_mode.as_ref() {
-                    if access_mode.mode
-                        == volume_capability::access_mode::Mode::SingleNodeWriter as i32
-                    {
-                        return true;
-                    }
-                }
-                false
+                let cap_mode = cap.access_mode.as_ref();
+                let access_mode = cap_mode.map(|m| m.mode()).unwrap_or_default();
+                supported_caps.contains(&access_mode)
             })
             .collect();
 
+        // todo: this seems wrong? See https://github.com/container-storage-interface/spec/blob/e981e2a057ca10f4a7f81289c97a4e829fd69152/spec.md?plain=1#L1502
         let response = if !caps.is_empty() {
             ValidateVolumeCapabilitiesResponse {
                 confirmed: Some(validate_volume_capabilities_response::Confirmed {
@@ -738,7 +790,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         } else {
             ValidateVolumeCapabilitiesResponse {
                 confirmed: None,
-                message: "The only supported capability is SINGLE_NODE_WRITER".to_string(),
+                message: format!("The only supported capabilities are {supported_caps:?}"),
             }
         };
 
@@ -771,6 +823,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 let volume = rpc::csi::Volume {
                     volume_id: v.spec.uuid.to_string(),
                     capacity_bytes: v.spec.size as i64,
+                    // todo: these 2 seem wrong?
                     volume_context: HashMap::new(),
                     content_source: None,
                     accessible_topology: vt_mapper.volume_accessible_topology(),
@@ -801,6 +854,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         // Check capabilities.
         check_volume_capabilities(&args.volume_capabilities)?;
 
+        // todo: this seems to be conflating app node vs storage node?
         // Determine target node, if requested.
         let node: Option<&String> = if let Some(topology) = args.accessible_topology.as_ref() {
             topology.segments.get(&csi_driver::node_name_topology_key())
@@ -828,6 +882,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         let available_capacity: i64 = pools.into_iter().fold(0, |acc, p| match p.state {
             Some(state) => match state.status {
+                // todo: missing node/pool cordon checks...
                 PoolStatus::Online | PoolStatus::Degraded => acc + state.capacity as i64,
                 _ => {
                     warn!(

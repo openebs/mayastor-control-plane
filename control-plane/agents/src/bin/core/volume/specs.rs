@@ -978,7 +978,8 @@ impl SpecOperationsHelper for VolumeSpec {
         if !matches!(
             &operation,
             VolumeOperation::Publish(..)
-                | VolumeOperation::Unpublish
+                | VolumeOperation::UnpublishOld
+                | VolumeOperation::Unpublish(..)
                 | VolumeOperation::Republish(..)
                 | VolumeOperation::CreateSnapshot(..)
                 | VolumeOperation::DestroySnapshot(..)
@@ -1030,11 +1031,15 @@ impl SpecOperationsHelper for VolumeSpec {
                 Some(protocol) => match protocol {
                     VolumeShareProtocol::Nvmf => {
                         if let Some(target) = self.target() {
-                            Err(SvcError::VolumeAlreadyPublished {
-                                vol_id: self.uuid_str(),
-                                node: target.node().to_string(),
-                                protocol: format!("{:?}", target.protocol()),
-                            })
+                            if self.publish_context == Some(args.publish_context()) {
+                                Ok(())
+                            } else {
+                                Err(SvcError::VolumeAlreadyPublished {
+                                    vol_id: self.uuid_str(),
+                                    node: target.node().to_string(),
+                                    protocol: format!("{:?}", target.protocol()),
+                                })
+                            }
                         } else {
                             self.publish_context = Some(args.publish_context());
                             Ok(())
@@ -1055,12 +1060,14 @@ impl SpecOperationsHelper for VolumeSpec {
                     share: format!("{:?}", args.protocol()),
                 }),
             },
-            VolumeOperation::Unpublish if self.target().is_none() => {
+            VolumeOperation::UnpublishOld | VolumeOperation::Unpublish(_)
+                if self.target().is_none() =>
+            {
                 Err(SvcError::VolumeNotPublished {
                     vol_id: self.uuid_str(),
                 })
             }
-            VolumeOperation::Unpublish => {
+            VolumeOperation::UnpublishOld | VolumeOperation::Unpublish(_) => {
                 self.publish_context = None;
                 Ok(())
             }

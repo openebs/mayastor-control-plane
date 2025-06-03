@@ -32,16 +32,20 @@ use stor_port::{
         store::{
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
-            volume::{PublishOperation, RepublishOperation, VolumeOperation, VolumeSpec},
+            volume::{
+                PublishOperation, RepublishOperation, UnpublishOperation, VolumeOperation,
+                VolumeSpec,
+            },
         },
         transport::{
             CreateReplica, CreateVolume, DestroyNexus, DestroyReplica, DestroyShutdownTargets,
             DestroyVolume, NodeTopology, Protocol, PublishVolume, Replica, ReplicaId,
             ReplicaOwners, RepublishVolume, ResizeVolume, SetVolumeProperty, SetVolumeReplica,
             ShareNexus, ShareVolume, ShutdownNexus, UnpublishVolume, UnshareNexus, UnshareVolume,
-            Volume,
+            Volume, VolumeShareProtocol,
         },
     },
+    HostAccessControl,
 };
 
 use itertools::Itertools;
@@ -321,6 +325,46 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         request: &Self::Publish,
     ) -> Result<Self::PublishOutput, SvcError> {
         let state = registry.volume_state(&request.uuid).await?;
+
+        if let Some(target_cfg) = self.as_ref().target_cfg() {
+            let target = target_cfg.target();
+
+            let host_acl =
+                registry.host_acl_nodename(HostAccessControl::Nexuses, &request.frontend_nodes);
+            if target_cfg.frontend().needs_update(&host_acl) {
+                let mut nexus = registry.specs().nexus(target.nexus()).await?;
+                let nexus_state = registry.nexus(target.nexus()).await?;
+
+                let mut target_cfg = target_cfg.clone();
+                target_cfg.frontend_mut().add_acls(host_acl);
+
+                let operation = VolumeOperation::Publish(PublishOperation::new(
+                    target_cfg.clone(),
+                    request.publish_context.clone(),
+                ));
+                let spec_clone = self.start_update(registry, &state, operation).await?;
+
+                let result = nexus
+                    .share(
+                        registry,
+                        &ShareNexus::new(
+                            &nexus_state,
+                            VolumeShareProtocol::Nvmf,
+                            target_cfg.frontend().node_nqns(),
+                        ),
+                    )
+                    .await;
+
+                self.complete_update(registry, result, spec_clone).await?;
+
+                let volume = registry.volume(&request.uuid).await?;
+                registry
+                    .notify_if_degraded(&volume, PollTriggerEvent::VolumeDegraded)
+                    .await;
+                return Ok(volume);
+            }
+        }
+
         let nexus_node = self
             .next_target_node(registry, request, &state, false)
             .await?;
@@ -400,36 +444,47 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
     ) -> Result<(), SvcError> {
         let specs = registry.specs();
 
-        let state = registry.volume_state(&request.uuid).await?;
-
-        let spec_clone = self
-            .start_update(registry, &state, VolumeOperation::Unpublish)
-            .await?;
-
-        let volume_target = spec_clone.target().expect("already validated");
-        let frontend_nodes = &request.frontend_nodes;
-        tracing::debug!("unpublish_volume: frontend nodes {frontend_nodes:?}");
-        if !frontend_nodes.is_empty() {
-            if let Some(tgt_cfg) = spec_clone.active_config() {
-                for unode in frontend_nodes {
-                    if !tgt_cfg.frontend().nodename_allowed(unode.as_str()) {
-                        self.validate_update_step(
-                            registry,
-                            Err(SvcError::FrontendNodeNotAllowed {
-                                node: unode.to_string(),
-                                vol_id: request.uuid.to_string(),
-                            }),
-                            &spec_clone,
-                        )
-                        .await?;
+        let mut host_acls =
+            registry.host_acl_nodename(HostAccessControl::Nexuses, &request.frontend_nodes);
+        if !host_acls.is_empty() {
+            let volume = self.lock();
+            if let Some(tgt_cfg) = volume.active_config() {
+                let mut disallowed = vec![];
+                let mut removing = vec![];
+                for initiator in host_acls {
+                    if tgt_cfg.frontend().nodename_allowed(initiator.node_name()) {
+                        removing.push(initiator);
+                    } else {
+                        disallowed.push(initiator);
                     }
+                }
+                host_acls = removing;
+                if host_acls.is_empty() {
+                    let node = disallowed.first().map(|n| n.node_name().to_string());
+                    return Err(SvcError::FrontendNodeNotAllowed {
+                        node: node.unwrap_or_default(),
+                        vol_id: request.uuid.to_string(),
+                    });
                 }
             }
         }
 
+        let op = VolumeOperation::Unpublish(UnpublishOperation::new(host_acls.clone()));
+        let state = registry.volume_state(&request.uuid).await?;
+        let spec_clone = self.start_update(registry, &state, op).await?;
+
+        let volume_target = spec_clone.target().expect("already validated");
+
+        let mut current_acs = spec_clone
+            .active_config()
+            .map(|t| t.frontend().nodes_info().clone())
+            .unwrap_or_default();
+        current_acs.retain(|f| !host_acls.contains(f));
+        let last_node = current_acs.is_empty() || host_acls.is_empty();
+
         let result = match specs.nexus_opt(volume_target.nexus()).await? {
             None => Ok(()),
-            Some(mut nexus) => {
+            Some(mut nexus) if last_node => {
                 let nexus_clone = nexus.lock().clone();
                 let destroy = DestroyNexus::from(&nexus_clone).with_disown(&request.uuid);
                 // Destroy the Nexus
@@ -453,6 +508,23 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
                             Err(error)
                         }
                     }
+                }
+            }
+            Some(mut nexus) => {
+                if let Some(state) = state.target.as_ref() {
+                    let shared = nexus.lock().share.shared();
+                    if shared {
+                        let nqns = current_acs
+                            .iter()
+                            .map(|n| n.node_nqn().clone())
+                            .collect::<Vec<_>>();
+                        let share = ShareNexus::new(state, VolumeShareProtocol::Nvmf, nqns);
+                        nexus.share(registry, &share).await.map(|_| ())
+                    } else {
+                        Ok(())
+                    }
+                } else {
+                    Ok(())
                 }
             }
         };

@@ -400,7 +400,8 @@ def do_publish_volume(volume_id, node_id, protocol=None):
         volume_capability={
             "access_mode": pb.VolumeCapability.AccessMode(
                 mode=pb.VolumeCapability.AccessMode.Mode.SINGLE_NODE_WRITER
-            )
+            ),
+            "mount": pb.VolumeCapability.MountVolume(),
         },
     )
     return csi_rpc_handle().controller.ControllerPublishVolume(req)
@@ -446,7 +447,8 @@ def validate_non_single_node_writer_capability():
             {
                 "access_mode": pb.VolumeCapability.AccessMode(
                     mode=pb.VolumeCapability.AccessMode.Mode.MULTI_NODE_SINGLE_WRITER
-                )
+                ),
+                "mount": pb.VolumeCapability.MountVolume(),
             }
         ],
     )
@@ -475,7 +477,8 @@ def validate_single_node_writer_capability():
             {
                 "access_mode": pb.VolumeCapability.AccessMode(
                     mode=pb.VolumeCapability.AccessMode.Mode.SINGLE_NODE_WRITER
-                )
+                ),
+                "mount": pb.VolumeCapability.MountVolume(),
             }
         ],
     )

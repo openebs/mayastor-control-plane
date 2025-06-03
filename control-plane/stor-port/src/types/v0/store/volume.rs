@@ -56,6 +56,22 @@ impl FrontendConfig {
     pub fn from_acls(host_acl: Vec<InitiatorAC>) -> Self {
         Self { host_acl }
     }
+    /// Extend the existing host list.
+    pub fn add_acls(&mut self, host_acl: Vec<InitiatorAC>) {
+        for host in host_acl {
+            // todo: consider initiator from same node with different nqn?
+            if !self.host_acl.contains(&host) {
+                self.host_acl.push(host);
+            }
+        }
+    }
+    /// Extend the existing host list.
+    pub fn remove_acls(&mut self, host_acl: Vec<InitiatorAC>) {
+        if host_acl.is_empty() {
+            self.host_acl.drain(..);
+        }
+        self.host_acl.retain(|h| !host_acl.contains(h));
+    }
     /// Check if the nodename is allowed.
     pub fn nodename_allowed(&self, nodename: &str) -> bool {
         self.host_acl.is_empty() || self.host_acl.iter().any(|n| n.node_name() == nodename)
@@ -75,6 +91,10 @@ impl FrontendConfig {
     /// Get the frontend nodes information reference.
     pub fn nodes_info(&self) -> &Vec<InitiatorAC> {
         &self.host_acl
+    }
+    /// Check if the given initiators are already allowed.
+    pub fn needs_update(&self, hosts: &[InitiatorAC]) -> bool {
+        hosts.iter().any(|h| !self.host_acl.contains(h))
     }
 }
 
@@ -339,6 +359,10 @@ impl TargetConfig {
     pub fn frontend(&self) -> &FrontendConfig {
         &self.frontend
     }
+    /// Get a mutable reference to the frontend configuration.
+    pub fn frontend_mut(&mut self) -> &mut FrontendConfig {
+        &mut self.frontend
+    }
     /// Get the uuid of the target.
     pub fn uuid(&self) -> &NexusId {
         &self.target.nexus
@@ -389,14 +413,15 @@ impl VolumeSpec {
     }
     /// Get the currently active target.
     pub fn target(&self) -> Option<&VolumeTarget> {
-        self.target_config
-            .as_ref()
-            .filter(|t| t.active)
-            .map(|t| &t.target)
+        self.target_cfg().map(|t| &t.target)
     }
     /// Get the currently active target uuid.
     pub fn target_uuid(&self) -> Option<&NexusId> {
         self.target().map(|t| &t.nexus)
+    }
+    /// Get a reference to the active target configuration.
+    pub fn target_cfg(&self) -> Option<&TargetConfig> {
+        self.target_config.as_ref().filter(|t| t.active)
     }
     /// Get the target.
     pub fn target_mut(&mut self) -> Option<&mut VolumeTarget> {
@@ -517,8 +542,16 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                     self.last_nexus_id = None;
                     self.target_config = Some(args.config);
                 }
-                VolumeOperation::Unpublish => {
+                VolumeOperation::UnpublishOld => {
                     self.deactivate_target();
+                }
+                VolumeOperation::Unpublish(args) => {
+                    if let Some(target_config) = &mut self.target_config {
+                        target_config.frontend_mut().remove_acls(args.host_acls);
+                        if target_config.frontend().nodes_info().is_empty() {
+                            self.deactivate_target();
+                        }
+                    }
                 }
                 VolumeOperation::CreateSnapshot(snapshot) => {
                     self.metadata.insert_snapshot(snapshot);
@@ -596,7 +629,10 @@ pub enum VolumeOperation {
     #[serde(rename = "Publish2")]
     Publish(PublishOperation),
     Republish(RepublishOperation),
-    Unpublish,
+    #[serde(rename = "Unpublish")]
+    UnpublishOld,
+    #[serde(rename = "Unpublish2")]
+    Unpublish(UnpublishOperation),
     RemoveUnusedReplica(ReplicaId),
     CreateSnapshot(SnapshotId),
     DestroySnapshot(SnapshotId),
@@ -663,6 +699,18 @@ impl PublishOperation {
     }
 }
 
+/// Unpublish a volume from the specified hosts.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct UnpublishOperation {
+    host_acls: Vec<InitiatorAC>,
+}
+impl UnpublishOperation {
+    /// Create a new `Self` from the given initiators.
+    pub fn new(host_acls: Vec<InitiatorAC>) -> Self {
+        Self { host_acls }
+    }
+}
+
 /// Volume Republish Operation parameters.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RepublishOperation {
@@ -690,7 +738,8 @@ impl From<VolumeOperation> for models::volume_spec_operation::Operation {
             VolumeOperation::PublishOld(_) => models::volume_spec_operation::Operation::Publish,
             VolumeOperation::Publish(_) => models::volume_spec_operation::Operation::Publish,
             VolumeOperation::Republish(_) => models::volume_spec_operation::Operation::Republish,
-            VolumeOperation::Unpublish => models::volume_spec_operation::Operation::Unpublish,
+            VolumeOperation::UnpublishOld => models::volume_spec_operation::Operation::Unpublish,
+            VolumeOperation::Unpublish(_) => models::volume_spec_operation::Operation::Unpublish,
             VolumeOperation::RemoveUnusedReplica(_) => {
                 models::volume_spec_operation::Operation::RemoveUnusedReplica
             }

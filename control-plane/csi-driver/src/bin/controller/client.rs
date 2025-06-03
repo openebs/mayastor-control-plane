@@ -1,4 +1,5 @@
 use crate::CsiControllerConfig;
+use stor_port::types::v0::openapi::{client::Error, models::rest_json_error::Kind};
 use stor_port::types::v0::openapi::{
     clients,
     clients::tower::StatusCode,
@@ -437,11 +438,22 @@ impl RestApiClient {
             None,
             frontend_node,
         );
-        let volume = self
+        let volume = match self
             .rest_client
             .volumes_api()
             .put_volume_target(volume_id, publish_volume_body)
-            .await?;
+            .await
+        {
+            Ok(volume) => Ok(volume),
+            Err(Error::Response(error))
+                if error.status() == StatusCode::PRECONDITION_FAILED
+                    && error.error_body().map(|e| e.kind == Kind::AlreadyPublished)
+                        == Some(true) =>
+            {
+                self.rest_client.volumes_api().get_volume(volume_id).await
+            }
+            Err(error) => Err(error),
+        }?;
         Ok(volume.into_body())
     }
 

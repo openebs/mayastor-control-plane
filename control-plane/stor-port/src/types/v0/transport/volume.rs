@@ -31,6 +31,11 @@ impl Volume {
         self.spec.clone()
     }
 
+    /// Get a ref to the volume spec.
+    pub fn spec_ref(&self) -> &VolumeSpec {
+        &self.spec
+    }
+
     /// Get the volume's uuid.
     pub fn uuid(&self) -> &VolumeId {
         &self.spec.uuid
