@@ -136,7 +136,7 @@ fn test_deserialization_v1_to_v2() {
             }),
         },
         TestEntry {
-            json_str: r#"{"node":"mayastor-node1","id":"pool-1-on-mayastor-node1","disks":["/dev/sdb"],"status":{"Created":"Online"},"labels":{"org.com/created-by":"msp-operator"},"operation":null}"#,
+            json_str: r#"{"node":"mayastor-node1","id":"pool-1-on-mayastor-node1","disks":["/dev/sdb"],"status":{"Created":"Online"},"labels":{"org.com/created-by":"msp-operator"},"operation":null, "cluster_size": 4194304}"#,
             expected: Expected::PoolSpec(PoolSpec {
                 node: "mayastor-node1".into(),
                 id: "pool-1-on-mayastor-node1".into(),
@@ -155,6 +155,7 @@ fn test_deserialization_v1_to_v2() {
                 creat_tsc: None,
                 encryption: None,
                 cordon_drain: None,
+                cluster_size: 4194304,
             }),
         },
         TestEntry {

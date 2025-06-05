@@ -51,8 +51,12 @@ impl PoolOperations for Service {
         pool: &dyn CreatePoolInfo,
         _ctx: Option<Context>,
     ) -> Result<Pool, ReplyError> {
-        let req = pool.into();
+        let mut req: CreatePool = pool.into();
         let service = self.clone();
+        // Set the cluster_size which is potentially configured via cli args.
+        // Setting it as early as possible otherwise we'll have to make CreatePool
+        // request mutable in the ResourceLifecycle trait.
+        req.cluster_size = pool.cluster_size().or(self.registry.pool_bs_cluster_size());
         let pool = Context::spawn(async move { service.create_pool(&req).await }).await??;
         Ok(pool)
     }

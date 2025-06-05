@@ -59,6 +59,7 @@ async fn pool() {
                 disks: vec!["malloc:///disk0?size_mb=100".into()],
                 labels: None,
                 encryption: None,
+                cluster_size: None,
             },
             None,
         )
@@ -72,11 +73,13 @@ async fn pool() {
                 disks: vec!["malloc:///disk1?size_mb=100".into()],
                 labels: None,
                 encryption: None,
+                cluster_size: None,
             },
             None,
         )
         .await
         .unwrap();
+
     tracing::info!("Pools: {:?}", pool);
 
     let pools = pool_client.get(Filter::None, None).await.unwrap();
@@ -268,6 +271,64 @@ async fn pool() {
         .unwrap()
         .0
         .is_empty());
+}
+
+// Tests creation and import of pool with larger blobstore cluster size.
+// Create a few replicas, restart the node. Pool should import again without issue.
+#[tokio::test]
+async fn pool_larger_cluster_size() {
+    let cluster = ClusterBuilder::builder()
+        .with_rest(false)
+        .with_tmpfs_pool(POOL_SIZE_BYTES)
+        .with_options(|o| o.with_pool_bs_cluster_size(Some(POOL_BS_CLUSTER_SIZE as u32)))
+        .build()
+        .await
+        .unwrap();
+
+    let node_client = cluster.grpc_client().node();
+    let pool_client = cluster.grpc_client().pool();
+    let rep_client = cluster.grpc_client().replica();
+
+    let io_engine = cluster.node(0);
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
+    tracing::info!("Nodes: {:?}", nodes);
+    let pools = pool_client.get(Filter::None, None).await.unwrap();
+    let poolid = pools.0[0].id();
+
+    for repl_idx in 1..=2 {
+        let _ = rep_client
+            .create(
+                &CreateReplica {
+                    node: io_engine.clone(),
+                    uuid: ReplicaId::new(),
+                    entity_id: None,
+                    pool_id: poolid.clone(),
+                    pool_uuid: None,
+                    size: 52428800, // 50MiB. Actual will be 64MiB(2 clusters)
+                    thin: repl_idx % 2 == 0,
+                    share: Protocol::None,
+                    name: None,
+                    ..Default::default()
+                },
+                None,
+            )
+            .await
+            .unwrap();
+    }
+
+    cluster.composer().stop("io-engine-1").await.unwrap();
+    cluster
+        .wait_node_status(NodeId::from("io-engine-1"), NodeStatus::Unknown)
+        .await
+        .unwrap();
+    cluster.composer().start("io-engine-1").await.unwrap();
+    cluster.wait_pool_online(poolid.clone()).await.unwrap();
+    let replicas = rep_client.get(Filter::None, None).await.unwrap();
+    replicas.into_inner().iter().all(|r| {
+        assert!(r.online());
+        assert_eq!(r.space.as_ref().unwrap().cluster_size, POOL_BS_CLUSTER_SIZE);
+        true
+    });
 }
 
 /// The tests below revolve around transactions and are dependent on the core agent's command line
@@ -542,7 +603,8 @@ async fn replica_transaction_store() {
 const RECONCILE_TIMEOUT_SECS: u64 = 7;
 const POOL_FILE_NAME: &str = "disk1.img";
 const POOL_FILE_NAME_2: &str = "disk2.img";
-const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
+const POOL_SIZE_BYTES: u64 = 200 * 1024 * 1024;
+const POOL_BS_CLUSTER_SIZE: u64 = 33554432;
 
 /// Creates a pool on a io_engine instance, which will have both spec and state.
 /// Stops/Kills the io_engine container. At some point we will have no pool state, because the node
@@ -1040,6 +1102,7 @@ async fn destroy_after_restart() {
         disks: pool.state().cloned().unwrap().disks,
         labels: None,
         encryption: None,
+        cluster_size: None,
     };
 
     client.pool().destroy(&destroy, None).await.unwrap();
@@ -1075,6 +1138,7 @@ async fn slow_create() {
             disks: vec![lvol.path().into()],
             labels: Some(PoolLabel::from([("a".into(), "b".into())])),
             encryption: None,
+            cluster_size: None,
         };
 
         let result = client.pool().create(&create, None).await;
@@ -1233,6 +1297,7 @@ async fn reject_devlink_reuse() {
             encryption: Some(Encryption::Secret(EncryptionSecret {
                 name: SECRETFILE.to_string(),
             })),
+            cluster_size: None,
         };
 
         client
@@ -1253,6 +1318,7 @@ async fn reject_devlink_reuse() {
             encryption: Some(Encryption::Secret(EncryptionSecret {
                 name: SECRETFILE.to_string(),
             })),
+            cluster_size: None,
         };
 
         client
@@ -1303,6 +1369,7 @@ async fn reject_devlink_reuse() {
             .into()],
             labels: None,
             encryption: None,
+            cluster_size: None,
         };
 
         client

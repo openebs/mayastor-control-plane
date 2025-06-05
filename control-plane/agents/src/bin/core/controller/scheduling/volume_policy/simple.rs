@@ -266,7 +266,10 @@ mod tests {
         cmp::Ordering,
         net::{IpAddr, Ipv4Addr},
     };
-    use stor_port::types::v0::transport::{NodeState, NodeStatus, PoolState, PoolStatus, Replica};
+    use stor_port::types::v0::{
+        store::pool::POOL_BS_CLUSTER_SIZE_DEFAULT,
+        transport::{NodeState, NodeStatus, PoolState, PoolStatus, Replica},
+    };
 
     fn make_node(name: &str) -> NodeWrapper {
         let state = NodeState::new(
@@ -298,6 +301,7 @@ mod tests {
             used,
             committed: None,
             encrypted: false,
+            cluster_size: POOL_BS_CLUSTER_SIZE_DEFAULT,
         };
         let replica = Replica::default();
         let pool = PoolWrapper::new(

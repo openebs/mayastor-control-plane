@@ -14,7 +14,7 @@ use stor_port::{
     types::v0::{
         store::pool::{
             CordonDrainState, CordonedState, Encryption, EncryptionSecret, PoolLabel, PoolSpec,
-            PoolSpecStatus,
+            PoolSpecStatus, POOL_BS_CLUSTER_SIZE_DEFAULT,
         },
         transport::{
             CreatePool, CtrlPoolState, DestroyPool, Filter, LabelPool, NodeId, Pool, PoolDeviceUri,
@@ -120,6 +120,9 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
                 },
                 None => None,
             },
+            cluster_size: pool_spec
+                .cluster_size
+                .unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
         })
     }
 }
@@ -146,6 +149,9 @@ impl TryFrom<pool::PoolState> for PoolState {
             used: pool_state.used,
             committed: pool_state.committed,
             encrypted: pool_state.encrypted.unwrap_or_default(),
+            cluster_size: pool_state
+                .cluster_size
+                .unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
         })
     }
 }
@@ -208,6 +214,7 @@ impl From<PoolSpec> for pool::PoolDefinition {
                     }
                     None => None,
                 },
+                cluster_size: Some(pool_spec.cluster_size),
             }),
             metadata: Some(pool::Metadata {
                 uuid: None,
@@ -228,6 +235,7 @@ impl From<PoolState> for pool::PoolState {
             used: pool_state.used,
             committed: pool_state.committed,
             encrypted: Some(pool_state.encrypted),
+            cluster_size: Some(pool_state.cluster_size),
         }
     }
 }
@@ -300,6 +308,8 @@ pub trait CreatePoolInfo: Send + Sync + std::fmt::Debug {
     fn labels(&self) -> Option<PoolLabel>;
     /// Encryption parameters for the pool.
     fn encryption(&self) -> Option<Encryption>;
+    /// Requested cluster size for blobstore.
+    fn cluster_size(&self) -> Option<u32>;
 }
 
 /// DestroyPoolInfo trait for the pool deletion to be implemented by entities which want to avail
@@ -330,6 +340,10 @@ impl CreatePoolInfo for CreatePool {
 
     fn encryption(&self) -> Option<Encryption> {
         self.encryption.clone()
+    }
+
+    fn cluster_size(&self) -> Option<u32> {
+        self.cluster_size
     }
 }
 
@@ -363,6 +377,10 @@ impl CreatePoolInfo for ValidatedCreatePoolRequest {
     fn encryption(&self) -> Option<Encryption> {
         self.encryption.clone()
     }
+
+    fn cluster_size(&self) -> Option<u32> {
+        self.inner.cluster_size
+    }
 }
 
 impl ValidateRequestTypes for CreatePoolRequest {
@@ -392,6 +410,7 @@ impl From<&dyn CreatePoolInfo> for CreatePoolRequest {
                 .labels()
                 .map(|labels| crate::common::StringMapValue { value: labels }),
             encryption: data.encryption().into_opt(),
+            cluster_size: data.cluster_size(),
         }
     }
 }
@@ -404,6 +423,7 @@ impl From<&dyn CreatePoolInfo> for CreatePool {
             disks: data.disks(),
             labels: data.labels(),
             encryption: data.encryption(),
+            cluster_size: data.cluster_size(),
         }
     }
 }

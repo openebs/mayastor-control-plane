@@ -156,6 +156,12 @@ pub(crate) struct CliArgs {
     /// a non-encryption storage class.
     #[clap(long)]
     encrypted_pools_soft_scheduling: bool,
+
+    /// Blobstore cluster size(in bytes) required for pool creation. This is
+    /// not configurable per-pool here. However, the create pool request can be used
+    /// to configure cluster size per-pool.
+    #[clap(long)]
+    pool_bs_cluster_size: Option<u32>,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -235,6 +241,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         cli_args.no_volume_health,
         cli_args.allow_non_persistent_devlink,
         cli_args.encrypted_pools_soft_scheduling,
+        cli_args.pool_bs_cluster_size,
     )
     .await?;
 

@@ -659,6 +659,7 @@ impl IoEngineToAgent for v1::pool::Pool {
                 Some(self.committed)
             },
             encrypted: self.encrypted.unwrap_or_default(),
+            cluster_size: self.cluster_size,
         }
     }
 }
@@ -672,7 +673,7 @@ impl AgentToIoEngine for transport::CreatePool {
             disks: self.disks.iter().map(|d| d.to_string()).collect(),
             uuid: None,
             pooltype: v1::pool::PoolType::Lvs as i32,
-            cluster_size: None,
+            cluster_size: self.cluster_size,
             md_args: None,
             encryption: self
                 .encryption
