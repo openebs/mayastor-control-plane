@@ -394,12 +394,21 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 debug!(
                     "Volume {volume_uuid} already exists and is compatible with requested config"
                 );
+                let sts_affinity_group_name = context.sts_affinity_group().await?;
+                if let Some(info) = sts_affinity_group_name {
+                    info.set_sts_affinity_annotation().await?;
+                    debug!(
+                        volume.uuid = volume_uuid,
+                        "Volume successfully patched with affinity group annotation"
+                    );
+                }
             }
             // If the volume doesn't exist, create it.
             Err(ApiClientError::ResourceNotExists(_)) => {
                 let volume_topology = context_into_topology(&context);
 
-                let sts_affinity_group_name = context.sts_affinity_group();
+                let sts_affinity_group_info = context.sts_affinity_group().await?;
+                let affinity_group_name = sts_affinity_group_info.as_ref().map(|info| info.name());
                 let max_snapshots = context.max_snapshots();
                 let encrypted = context.encrypted().unwrap_or_default();
 
@@ -418,7 +427,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                                 size,
                                 volume_topology,
                                 thin,
-                                sts_affinity_group_name.clone().map(AffinityGroup::new),
+                                affinity_group_name.map(AffinityGroup::new),
                                 max_snapshots,
                                 encrypted,
                             )
@@ -432,7 +441,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                                 size,
                                 volume_topology,
                                 thin,
-                                sts_affinity_group_name.clone().map(AffinityGroup::new),
+                                affinity_group_name.map(AffinityGroup::new),
                                 max_snapshots,
                                 encrypted,
                             )
@@ -448,12 +457,13 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     volume_context.insert("fsId".to_string(), volume_uuid.clone());
                 }
 
-                if let Some(ag_name) = sts_affinity_group_name {
+                if let Some(info) = sts_affinity_group_info {
                     debug!(
                         volume.uuid = volume_uuid,
-                        volume.affinity_group = ag_name,
+                        volume.affinity_group = info.name(),
                         "Volume successfully created"
                     );
+                    info.set_sts_affinity_annotation().await?;
                 } else {
                     debug!(volume.uuid = volume_uuid, "Volume successfully created");
                 }
