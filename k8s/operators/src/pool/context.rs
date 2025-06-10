@@ -3,7 +3,7 @@ use super::{
     diskpool::crd::v1beta3::{CrPoolState, DiskPool, DiskPoolStatus},
     error::Error,
 };
-use crate::diskpool::crd::v1beta3::EncryptionSource;
+use crate::diskpool::crd::v1beta3::{EncryptionSecretConfig, EncryptionSource};
 use openapi::models::{Encryption, EncryptionSecret};
 use openapi::{
     apis::StatusCode,
@@ -188,6 +188,11 @@ impl ResourceContext {
         v1beta3_api(&self.ctx.k8s, &self.namespace().unwrap())
     }
 
+    /// Construct an API handle for the k8s secret
+    fn secret_api(&self) -> Api<k8s_openapi::api::core::v1::Secret> {
+        Api::namespaced(self.ctx.k8s.clone(), &self.namespace().unwrap())
+    }
+
     /// Control plane pool handler.
     fn pools_api(&self) -> &dyn openapi::apis::pools_api::tower::client::Pools {
         self.ctx.http.pools_api()
@@ -267,9 +272,7 @@ impl ResourceContext {
             None => None,
             Some(config) => match config.source {
                 EncryptionSource::Secret(secret_config) => {
-                    Some(Encryption::secret(EncryptionSecret {
-                        name: secret_config.name,
-                    }))
+                    Some(self.validate_encryption_secret(secret_config).await?)
                 }
             },
         };
@@ -617,5 +620,27 @@ impl ResourceContext {
         .await
         .map_err(|e| error!(?e));
         Ok(Action::await_change())
+    }
+
+    async fn validate_encryption_secret(
+        &self,
+        config: EncryptionSecretConfig,
+    ) -> Result<Encryption, Error> {
+        if let Err(error) = self.secret_api().get(&config.name).await {
+            self.k8s_notify(
+                "Create or Import Failure",
+                "Failure",
+                format!(
+                    "Failed to get k8s secret for encryption {}, error: {error}",
+                    &config.name
+                )
+                .as_str(),
+                "Critical",
+            )
+            .await;
+            return Err(Error::Kube { source: error });
+        }
+
+        Ok(Encryption::secret(EncryptionSecret { name: config.name }))
     }
 }
