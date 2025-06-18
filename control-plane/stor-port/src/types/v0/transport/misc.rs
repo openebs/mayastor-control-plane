@@ -67,6 +67,11 @@ macro_rules! rpc_impl_string_id_inner {
                 write!(f, "{}", self.0)
             }
         }
+        impl AsRef<$Name> for $Name {
+            fn as_ref(&self) -> &$Name {
+                &self
+            }
+        }
 
         impl $Name {
             /// Build Self from a string trait id.

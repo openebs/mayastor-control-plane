@@ -256,7 +256,12 @@ impl Cluster {
     }
 
     /// Wait till the node is in the given status.
-    pub async fn wait_node_status(&self, node_id: NodeId, status: NodeStatus) -> Result<(), ()> {
+    pub async fn wait_node_status<I: AsRef<NodeId>>(
+        &self,
+        node_id: I,
+        status: NodeStatus,
+    ) -> Result<(), ()> {
+        let node_id = node_id.as_ref();
         let timeout = Duration::from_secs(2);
         let node_cli = self.grpc_client().node();
         let start = std::time::Instant::now();
