@@ -338,6 +338,7 @@ paths:
           required: true
           schema:
             type: string
+          x-actix-tail-match: true
           description: |-
             The key of the label to be added.
         - in: path
@@ -345,6 +346,7 @@ paths:
           required: true
           schema:
             type: string
+          x-actix-tail-match: true
           description: |-
             The value of the label to be added.
         - in: query
@@ -1338,6 +1340,7 @@ paths:
           required: true
           schema:
             type: string
+          x-actix-tail-match: true
           description: |-
             The key of the label to be added.
         - in: path
@@ -1345,6 +1348,7 @@ paths:
           required: true
           schema:
             type: string
+          x-actix-tail-match: true
           description: |-
             The value of the label to be added.
         - in: query
