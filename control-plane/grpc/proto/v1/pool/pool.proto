@@ -48,6 +48,10 @@ message PoolSpec {
   optional common.StringMapValue labels = 5;
   // Encryption details
   optional common.EncryptionSecret secret = 6;
+  // Cordon Drain state
+  oneof CordonDrain {
+    CordonedState cordoned = 7;
+  }
 }
 
 // Pool information
@@ -170,6 +174,28 @@ message UnlabelPoolReply {
   }
 }
 
+message CordonPoolRequest {
+  optional string node_id = 1;
+  string pool_id = 2;
+  bool replicas = 3;
+  bool snapshots = 4;
+  bool restores = 5;
+}
+message CordonPoolReply {
+  oneof reply {
+    Pool pool = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+message CordonedState {
+  // New replicas can't be created
+  bool replicas = 1;
+  // New snapshots can't be created
+  bool snapshots = 2;
+  // New restores can't be created
+  bool restores = 3;
+}
 
 // Service for managing storage pools
 service PoolGrpc {
@@ -178,4 +204,6 @@ service PoolGrpc {
   rpc GetPools (GetPoolsRequest) returns (GetPoolsReply) {}
   rpc LabelPool (LabelPoolRequest) returns (LabelPoolReply) {}
   rpc UnlabelPool (UnlabelPoolRequest) returns (UnlabelPoolReply) {}
+  rpc CordonPool (CordonPoolRequest) returns (CordonPoolReply) {}
+  rpc UncordonPool (CordonPoolRequest) returns (CordonPoolReply) {}
 }

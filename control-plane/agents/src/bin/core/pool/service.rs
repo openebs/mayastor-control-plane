@@ -35,6 +35,7 @@ use stor_port::{
     },
 };
 
+use grpc::operations::pool::traits::PoolCordonInfo;
 use snafu::OptionExt;
 
 #[derive(Debug, Clone)]
@@ -100,6 +101,14 @@ impl PoolOperations for Service {
         }
         let pool = Context::spawn(async move { service.unlabel(&req).await }).await??;
         Ok(pool)
+    }
+
+    async fn cordon(&self, _info: PoolCordonInfo) -> Result<Pool, ReplyError> {
+        todo!()
+    }
+
+    async fn uncordon(&self, _info: PoolCordonInfo) -> Result<Pool, ReplyError> {
+        todo!()
     }
 }
 

@@ -1,19 +1,18 @@
-use crate::misc::traits::ValidateRequestTypes;
 use crate::{
+    misc::traits::ValidateRequestTypes,
     operations::pool::traits::PoolOperations,
     pool,
     pool::{
-        create_pool_reply, get_pools_reply, label_pool_reply,
+        cordon_pool_reply, create_pool_reply, get_pools_reply, label_pool_reply,
         pool_grpc_server::{PoolGrpc, PoolGrpcServer},
-        unlabel_pool_reply, CreatePoolReply, CreatePoolRequest, DestroyPoolReply,
-        DestroyPoolRequest, GetPoolsReply, GetPoolsRequest, LabelPoolReply, LabelPoolRequest,
-        UnlabelPoolReply, UnlabelPoolRequest,
+        unlabel_pool_reply, CordonPoolReply, CordonPoolRequest, CreatePoolReply, CreatePoolRequest,
+        DestroyPoolReply, DestroyPoolRequest, GetPoolsReply, GetPoolsRequest, LabelPoolReply,
+        LabelPoolRequest, UnlabelPoolReply, UnlabelPoolRequest,
     },
 };
-use stor_port::types::v0::transport::Filter;
-
 use std::sync::Arc;
-use tonic::{Request, Response};
+use stor_port::types::v0::transport::Filter;
+use tonic::{Request, Response, Status};
 
 /// gRPC Pool Server
 #[derive(Clone)]
@@ -117,6 +116,34 @@ impl PoolGrpc for PoolServer {
             })),
             Err(err) => Ok(Response::new(UnlabelPoolReply {
                 reply: Some(unlabel_pool_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn cordon_pool(
+        &self,
+        request: Request<CordonPoolRequest>,
+    ) -> Result<Response<CordonPoolReply>, Status> {
+        match self.service.cordon(request.into_inner().into()).await {
+            Ok(node) => Ok(Response::new(CordonPoolReply {
+                reply: Some(cordon_pool_reply::Reply::Pool(node.into())),
+            })),
+            Err(err) => Ok(Response::new(CordonPoolReply {
+                reply: Some(cordon_pool_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn uncordon_pool(
+        &self,
+        request: Request<CordonPoolRequest>,
+    ) -> Result<Response<CordonPoolReply>, Status> {
+        match self.service.uncordon(request.into_inner().into()).await {
+            Ok(node) => Ok(Response::new(CordonPoolReply {
+                reply: Some(cordon_pool_reply::Reply::Pool(node.into())),
+            })),
+            Err(err) => Ok(Response::new(CordonPoolReply {
+                reply: Some(cordon_pool_reply::Reply::Error(err.into())),
             })),
         }
     }

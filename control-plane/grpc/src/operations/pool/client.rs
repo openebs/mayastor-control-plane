@@ -1,10 +1,11 @@
+use super::traits::UnlabelPoolInfo;
 use crate::{
     common::{CommonFilter, NodeFilter, NodePoolFilter, PoolFilter},
     context::{Client, Context, TracedChannel},
     operations::pool::traits::{CreatePoolInfo, DestroyPoolInfo, LabelPoolInfo, PoolOperations},
     pool::{
-        create_pool_reply, get_pools_reply, get_pools_request, label_pool_reply,
-        pool_grpc_client::PoolGrpcClient, unlabel_pool_reply, GetPoolsRequest,
+        cordon_pool_reply, create_pool_reply, get_pools_reply, get_pools_request, label_pool_reply,
+        pool_grpc_client::PoolGrpcClient, unlabel_pool_reply, CordonPoolRequest, GetPoolsRequest,
     },
 };
 use std::{convert::TryFrom, ops::Deref};
@@ -13,8 +14,6 @@ use stor_port::{
     types::v0::transport::{Filter, MessageIdVs, Pool},
 };
 use tonic::transport::Uri;
-
-use super::traits::UnlabelPoolInfo;
 
 /// RPC Pool Client
 #[derive(Clone)]
@@ -137,6 +136,36 @@ impl PoolOperations for PoolClient {
             Some(unlabel_pool_reply) => match unlabel_pool_reply {
                 unlabel_pool_reply::Reply::Pool(pool) => Ok(Pool::try_from(pool)?),
                 unlabel_pool_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
+        }
+    }
+
+    async fn cordon(
+        &self,
+        info: crate::operations::pool::traits::PoolCordonInfo,
+    ) -> Result<Pool, ReplyError> {
+        let request = CordonPoolRequest::from(info);
+        let response = self.client().cordon_pool(request).await?.into_inner();
+        match response.reply {
+            Some(reply) => match reply {
+                cordon_pool_reply::Reply::Pool(pool) => Ok(Pool::try_from(pool)?),
+                cordon_pool_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
+        }
+    }
+
+    async fn uncordon(
+        &self,
+        info: crate::operations::pool::traits::PoolCordonInfo,
+    ) -> Result<Pool, ReplyError> {
+        let request = CordonPoolRequest::from(info);
+        let response = self.client().uncordon_pool(request).await?.into_inner();
+        match response.reply {
+            Some(reply) => match reply {
+                cordon_pool_reply::Reply::Pool(pool) => Ok(Pool::try_from(pool)?),
+                cordon_pool_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
         }
