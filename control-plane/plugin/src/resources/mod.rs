@@ -105,6 +105,14 @@ pub enum SetVolumeProperties {
 pub enum CordonResources {
     /// Cordon the node with the given ID by applying the cordon label to that node.
     Node { id: NodeId, label: String },
+    /// Cordon the pool with the given ID by applying the cordon constraints to that pool{n}
+    /// By default all resources are cordoned. Otherwise you may individually select specific constraints.
+    Pool {
+        /// Id of the pool to cordon.
+        id: PoolId,
+        #[clap(flatten)]
+        resources: Option<pool::CordonReq>,
+    },
 }
 
 /// The types of resources that support uncordoning.
@@ -113,16 +121,28 @@ pub enum UnCordonResources {
     /// Removes the cordon label from the node.
     /// When the node has no more cordon labels, it is effectively uncordoned.
     Node { id: NodeId, label: String },
+    /// Removes the cordon constraints from the pool.
+    /// When the pool has no more cordon labels, it is effectively uncordoned{n}
+    /// By default all resources are cordoned. Otherwise you may individually select specific constraints removal.
+    Pool {
+        /// Id of the pool to uncordon.
+        id: PoolId,
+        #[clap(flatten)]
+        resources: Option<pool::UncordonReq>,
+    },
 }
 
 /// The types of resources that support the 'get cordon' operation.
 #[derive(clap::Subcommand, Debug)]
 pub enum GetCordonArgs {
     /// Get the cordon for the node with the given ID.
-    Node {
-        id: NodeId,
-    },
+    Node { id: NodeId },
+    /// Get all nodes which are cordoned.
     Nodes,
+    /// Get the cordon for the pool with the given ID.
+    Pool { id: PoolId },
+    /// Get all pools which are cordoned.
+    Pools,
 }
 
 /// The types of resources that support the 'drain' operation.

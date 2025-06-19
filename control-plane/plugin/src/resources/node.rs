@@ -248,7 +248,7 @@ impl GetWithArgs for Node {
 }
 
 /// Get the cordon labels from whichever state.
-fn cordon_labels_from_state(ds: &CordonDrainState) -> Vec<String> {
+pub(super) fn cordon_labels_from_state(ds: &CordonDrainState) -> Vec<String> {
     match ds {
         CordonDrainState::cordonedstate(state) => state.cordonlabels.clone(),
         CordonDrainState::drainingstate(state) => state.cordonlabels.clone(),
@@ -256,7 +256,7 @@ fn cordon_labels_from_state(ds: &CordonDrainState) -> Vec<String> {
     }
 }
 
-fn drain_labels_from_state(ds: &CordonDrainState) -> Vec<String> {
+pub(super) fn drain_labels_from_state(ds: &CordonDrainState) -> Vec<String> {
     match ds {
         CordonDrainState::cordonedstate(_) => Vec::<String>::new(),
         CordonDrainState::drainingstate(state) => state.drainlabels.clone(),
@@ -267,6 +267,9 @@ fn drain_labels_from_state(ds: &CordonDrainState) -> Vec<String> {
 #[async_trait(?Send)]
 impl Cordoning for Node {
     type ID = NodeId;
+    type CREQ = str;
+    type UREQ = str;
+
     async fn cordon(id: &Self::ID, label: &str, output: &OutputFormat) -> PluginResult {
         // is node already cordoned with the label?
         let already_has_cordon_label: bool =

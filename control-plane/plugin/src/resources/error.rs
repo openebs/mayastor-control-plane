@@ -23,6 +23,12 @@ pub enum Error {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
+    /// Error when pool cordon request fails.
+    #[snafu(display("Failed to cordon pool {id}. Error {source}"))]
+    PoolCordonError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
     #[snafu(display("Invalid label format: {source}"))]
     NodeLabelFormat { source: TopologyError },
     #[snafu(display("{source}"))]
@@ -31,10 +37,15 @@ pub enum Error {
     PoolLabelFormat { source: TopologyError },
     #[snafu(display("{source}"))]
     PoolLabel { source: OpError },
-
     /// Error when node uncordon request fails.
     #[snafu(display("Failed to uncordon node {id}. Error {source}"))]
     NodeUncordonError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
+    /// Error when node uncordon request fails.
+    #[snafu(display("Failed to uncordon pool {id}. Error {source}"))]
+    PoolUncordonError {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },

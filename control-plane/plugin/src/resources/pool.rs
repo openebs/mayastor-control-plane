@@ -1,7 +1,7 @@
 extern crate utils as external_utils;
 use super::VolumeId;
 use crate::{
-    operations::{GetWithArgs, Label, ListWithArgs, PluginResult},
+    operations::{Cordoning, GetWithArgs, Label, ListWithArgs, PluginResult},
     resources::{
         error::{Error, LabelAssignSnafu, OpError, TopologyError},
         utils,
@@ -15,15 +15,21 @@ use crate::{
 };
 
 use async_trait::async_trait;
-use openapi::apis::StatusCode;
+use openapi::{apis::StatusCode, models, models::PoolCordonDrain};
 use prettytable::{Cell, Row};
 use serde::Serialize;
 use snafu::ResultExt;
 use std::collections::HashMap;
+use strum_macros::{AsRefStr, Display, EnumString};
 
 /// Pools resource.
 #[derive(clap::Args, Debug)]
 pub struct Pools {}
+
+#[derive(AsRefStr, EnumString, Display)]
+enum PoolCordonDrainState {
+    Cordoned,
+}
 
 impl CreateRow for openapi::models::Pool {
     fn row(&self) -> Row {
@@ -49,12 +55,18 @@ impl CreateRow for openapi::models::Pool {
             0
         };
         let disks = state.disks.join(", ");
+        let statuses = match spec.cordon_drain {
+            None => format!("{:?}", state.status),
+            Some(_) => {
+                format!("{:?}, {}", state.status, PoolCordonDrainState::Cordoned)
+            }
+        };
         row![
             self.id,
             disks,
             managed,
             state.node,
-            state.status,
+            statuses,
             ::utils::bytes::into_human(state.capacity),
             ::utils::bytes::into_human(state.used),
             ::utils::bytes::into_human(free),
@@ -80,6 +92,9 @@ pub struct GetPoolArgs {
     /// Show the labels of the pool.
     #[clap(long, default_value = "false")]
     show_labels: bool,
+    /// Show the cordoned resources.
+    #[clap(long)]
+    show_cordons: bool,
 }
 
 impl GetPoolArgs {
@@ -90,6 +105,10 @@ impl GetPoolArgs {
     /// Return whether to show the labels of the pool.
     pub fn show_labels(&self) -> bool {
         self.show_labels
+    }
+    /// Return whether to show the cordoned resources of the pool.
+    pub fn show_cordons(&self) -> bool {
+        self.show_cordons
     }
 }
 
@@ -113,6 +132,10 @@ pub struct GetPoolsArgs {
     /// Show the labels of the pool.
     #[clap(long, default_value = "false")]
     show_labels: bool,
+
+    /// Show the cordoned resources.
+    #[clap(long)]
+    show_cordons: bool,
 }
 
 impl GetPoolsArgs {
@@ -134,6 +157,11 @@ impl GetPoolsArgs {
     /// Return whether to show the labels of the pool.
     pub fn show_labels(&self) -> bool {
         self.show_labels
+    }
+
+    /// Return whether to show the cordoned resources of the pool.
+    pub fn show_cordons(&self) -> bool {
+        self.show_cordons
     }
 }
 
@@ -168,7 +196,8 @@ impl ListWithArgs for Pools {
             None => true,
         });
 
-        let pools_display = PoolDisplay::new_pools(pools.clone(), args.show_labels());
+        let pools_display =
+            PoolDisplay::new_pools(pools.clone(), args.show_labels, args.show_cordons);
         match output {
             OutputFormat::Yaml | OutputFormat::Json => {
                 print_table(output, pools_display.inner);
@@ -199,7 +228,7 @@ impl GetWithArgs for Pool {
                 OutputFormat::None => {
                     print_table(
                         output,
-                        PoolDisplay::new(pool.into_body(), args.show_labels()),
+                        PoolDisplay::new(pool.into_body(), args.show_labels, args.show_cordons),
                     );
                 }
             },
@@ -343,22 +372,30 @@ pub struct PoolDisplay {
     pub inner: Vec<openapi::models::Pool>,
     #[serde(skip)]
     show_labels: bool,
+    #[serde(skip)]
+    show_cordons: bool,
 }
 
 impl PoolDisplay {
     /// Create a new `PoolDisplay` instance.
-    pub(crate) fn new(pool: openapi::models::Pool, show_labels: bool) -> Self {
+    pub(crate) fn new(pool: openapi::models::Pool, show_labels: bool, show_cordons: bool) -> Self {
         let vec: Vec<openapi::models::Pool> = vec![pool];
         Self {
             inner: vec,
             show_labels,
+            show_cordons,
         }
     }
     /// Create a new `PoolDisplay` instance from a vector of pools.
-    pub(crate) fn new_pools(pools: Vec<openapi::models::Pool>, show_labels: bool) -> Self {
+    pub(crate) fn new_pools(
+        pools: Vec<openapi::models::Pool>,
+        show_labels: bool,
+        show_cordons: bool,
+    ) -> Self {
         Self {
             inner: pools,
             show_labels,
+            show_cordons,
         }
     }
 
@@ -371,7 +408,7 @@ impl PoolDisplay {
             if let Some(ds) = &spec.labels {
                 pools_labels = ds
                     .iter()
-                    // Dont return the created_by_dsp label for the gets
+                    // Don't return the created_by_dsp label for the gets
                     .filter(|(key, _)| *key != &internal_label)
                     .map(|(key, value)| format!("{}={}", key, value))
                     .collect();
@@ -388,6 +425,9 @@ impl GetHeaderRow for PoolDisplay {
         if self.show_labels {
             header.extend(vec!["LABELS"]);
         }
+        if self.show_cordons {
+            header.extend(vec!["CORDONS"]);
+        }
         header
     }
 }
@@ -402,8 +442,180 @@ impl CreateRows for PoolDisplay {
                 // Add the pool labels to each row.
                 row.add_cell(Cell::new(&labelstring));
             }
+            if self.show_cordons {
+                row.add_cell(Cell::new(&pool_cordon_resources(pool)));
+            }
             rows.push(row);
         }
         rows
+    }
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct CordonReq {
+    /// No new replicas can be created on the pool.
+    #[clap(long)]
+    pub replicas: bool,
+    /// No new snapshots can be created on the pool.
+    #[clap(long)]
+    pub snapshots: bool,
+    /// No new restores can be created on the pool.
+    #[clap(long)]
+    pub restores: bool,
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct UncordonReq {
+    /// New replicas can be created on the pool.
+    #[clap(long)]
+    pub replicas: bool,
+    /// New snapshots can be created on the pool.
+    #[clap(long)]
+    pub snapshots: bool,
+    /// New restores can be created on the pool.
+    #[clap(long)]
+    pub restores: bool,
+}
+
+#[async_trait(?Send)]
+impl Cordoning for Pool {
+    type ID = PoolId;
+    type CREQ = Option<CordonReq>;
+    type UREQ = Option<UncordonReq>;
+
+    async fn cordon(id: &Self::ID, resources: &Self::CREQ, output: &OutputFormat) -> PluginResult {
+        let resources = resources.clone().unwrap_or(CordonReq {
+            replicas: true,
+            snapshots: false,
+            restores: true,
+        });
+        let body = models::PoolCordonReq::new_all(
+            resources.replicas,
+            resources.snapshots,
+            resources.restores,
+        );
+        match RestClient::client()
+            .pools_api()
+            .put_pool_cordon(id, body)
+            .await
+        {
+            Ok(node) => match output {
+                OutputFormat::Yaml | OutputFormat::Json => {
+                    // Print json or yaml based on output format.
+                    utils::print_table(output, node.into_body());
+                }
+                OutputFormat::None => {
+                    // In case the output format is not specified, show a success message.
+                    println!("Pool {id} cordoned successfully")
+                }
+            },
+            Err(source) => {
+                if source.error_body().map(|b| b.kind)
+                    == Some(models::rest_json_error::Kind::AlreadyExists)
+                {
+                    println!("Pool {id} already cordoned");
+                } else {
+                    return Err(Error::PoolCordonError {
+                        id: id.to_string(),
+                        source,
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn uncordon(
+        id: &Self::ID,
+        resources: &Self::UREQ,
+        output: &OutputFormat,
+    ) -> PluginResult {
+        let resources = resources.clone().unwrap_or(UncordonReq {
+            replicas: true,
+            snapshots: true,
+            restores: true,
+        });
+        let body = models::PoolCordonReq::new_all(
+            resources.replicas,
+            resources.snapshots,
+            resources.restores,
+        );
+        let (failed, pool) = match RestClient::client()
+            .pools_api()
+            .del_pool_cordon(id, body)
+            .await
+        {
+            Ok(pool) => Ok((false, pool)),
+            Err(source)
+                if source.error_body().map(|b| b.kind)
+                    == Some(models::rest_json_error::Kind::AlreadyExists) =>
+            {
+                RestClient::client()
+                    .pools_api()
+                    .get_pool(id)
+                    .await
+                    .map_err(|source| Error::GetPoolError {
+                        id: id.to_string(),
+                        source,
+                    })
+                    .map(|p| (true, p))
+            }
+            Err(source) => Err(Error::PoolUncordonError {
+                id: id.to_string(),
+                source,
+            }),
+        }?;
+        match output {
+            OutputFormat::Yaml | OutputFormat::Json => {
+                // Print json or yaml based on output format.
+                utils::print_table(output, pool.into_body());
+            }
+            OutputFormat::None => {
+                // In case the output format is not specified, show a success message.
+                let resources = pool_cordon_resources(&pool.into_body());
+                if failed {
+                    if resources.is_empty() {
+                        println!("Pool {id} already uncordoned");
+                    } else {
+                        println!("Pool {id} already partially uncordoned. Remaining cordoned resources: {resources:?}");
+                    }
+                } else if resources.is_empty() {
+                    println!("Pool {id} successfully uncordoned");
+                } else {
+                    println!("Pool {id} partially uncordoned. Remaining cordoned resources: {resources:?}");
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn resource(yes: bool, name: &str) -> &str {
+    if yes {
+        name
+    } else {
+        ""
+    }
+}
+fn cordon_resources(rsc: &models::PoolCordon) -> String {
+    [
+        resource(rsc.replicas, "replicas"),
+        resource(rsc.snapshots, "snapshots"),
+        resource(rsc.restores, "restores"),
+    ]
+    .into_iter()
+    .filter(|s| !s.is_empty())
+    .collect::<Vec<&str>>()
+    .join(",")
+}
+fn pool_cordon_resources(pool: &models::Pool) -> String {
+    match &pool.spec {
+        Some(spec) => match &spec.cordon_drain {
+            Some(cds) => match cds {
+                PoolCordonDrain::cordoned(rsc) => cordon_resources(rsc),
+            },
+            None => String::new(),
+        },
+        None => String::new(),
     }
 }
