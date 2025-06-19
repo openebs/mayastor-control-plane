@@ -103,6 +103,30 @@ impl SpecOperationsHelper for PoolSpec {
                     Ok(())
                 }
             }
+            PoolOperation::Cordon(cordon) => {
+                if !self.cordon_would_modify(cordon) {
+                    Err(SvcError::CordonResources {
+                        kind: ResourceKind::Pool,
+                        id: self.id().to_string(),
+                        resources: cordon.resources(),
+                    })
+                } else {
+                    self.start_op(op);
+                    Ok(())
+                }
+            }
+            PoolOperation::Uncordon(uncordon) => {
+                if !self.uncordon_would_modify(uncordon) {
+                    Err(SvcError::UncordonResources {
+                        kind: ResourceKind::Pool,
+                        id: self.id().to_string(),
+                        resources: uncordon.resources(),
+                    })
+                } else {
+                    self.start_op(op);
+                    Ok(())
+                }
+            }
             _ => {
                 self.start_op(op);
                 Ok(())

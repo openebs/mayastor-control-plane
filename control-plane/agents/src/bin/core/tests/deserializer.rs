@@ -154,6 +154,7 @@ fn test_deserialization_v1_to_v2() {
                 operation: None,
                 creat_tsc: None,
                 encryption: None,
+                cordon_drain: None,
             }),
         },
         TestEntry {

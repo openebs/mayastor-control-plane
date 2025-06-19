@@ -12,7 +12,10 @@ use std::{collections::HashMap, convert::TryFrom};
 use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind},
     types::v0::{
-        store::pool::{Encryption, EncryptionSecret, PoolLabel, PoolSpec, PoolSpecStatus},
+        store::pool::{
+            CordonDrainState, CordonedState, Encryption, EncryptionSecret, PoolLabel, PoolSpec,
+            PoolSpecStatus,
+        },
         transport::{
             CreatePool, CtrlPoolState, DestroyPool, Filter, LabelPool, NodeId, Pool, PoolDeviceUri,
             PoolId, PoolState, PoolStatus, UnlabelPool, VolumeId,
@@ -104,6 +107,18 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
             encryption: pool_spec
                 .secret
                 .map(|details| Encryption::Secret(EncryptionSecret { name: details.name })),
+            cordon_drain: match pool_spec.cordon_drain {
+                Some(state) => match state {
+                    pool::pool_spec::CordonDrain::Cordoned(state) => {
+                        Some(CordonDrainState::Cordoned(CordonedState {
+                            replicas: state.replicas,
+                            snapshots: state.snapshots,
+                            restores: state.restores,
+                        }))
+                    }
+                },
+                None => None,
+            },
         })
     }
 }
@@ -178,7 +193,19 @@ impl From<PoolSpec> for pool::PoolDefinition {
                         }
                     },
                 },
-                cordon_drain: None,
+                cordon_drain: match pool_spec.cordon_drain {
+                    Some(cordon_drain) => {
+                        let co = match cordon_drain {
+                            CordonDrainState::Cordoned(state) => pool::CordonedState {
+                                replicas: state.replicas,
+                                snapshots: state.snapshots,
+                                restores: state.restores,
+                            },
+                        };
+                        Some(pool::pool_spec::CordonDrain::Cordoned(co))
+                    }
+                    None => None,
+                },
             }),
             metadata: Some(pool::Metadata {
                 uuid: None,
@@ -588,6 +615,7 @@ impl From<common::EncryptionSecret> for EncryptionSecret {
 }
 
 /// Pool cordon and uncordon information.
+#[derive(Debug)]
 pub struct PoolCordonRequest {
     /// Node ID of where the pool resides on.
     /// This is optional and may be used for stricter checks.

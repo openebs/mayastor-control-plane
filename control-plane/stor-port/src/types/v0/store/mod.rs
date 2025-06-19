@@ -85,7 +85,7 @@ pub trait SpecTransaction<Operation> {
         false
     }
     /// Check if an operation needs to be performed as a transaction
-    /// (ie if we need to log the opertion to the pstor before attempting to perform it)
+    /// (ie if we need to log the operation to the pstor before attempting to perform it)
     /// and if we need to update pstor on completion.
     fn log_op(&self, _operation: &Operation) -> (bool, bool) {
         (true, true)

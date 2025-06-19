@@ -17,6 +17,7 @@ use std::collections::HashMap;
 impl ResourceCordon for OperationGuardArc<NodeSpec> {
     type CordonOutput = NodeSpec;
     type UncordonOutput = NodeSpec;
+    type Request = String;
 
     /// Cordon a node via operation guard functions.
     async fn cordon(

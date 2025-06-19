@@ -8,18 +8,19 @@ use stor_port::types::v0::store::volume::VolumeSpec;
 pub(crate) trait ResourceCordon {
     type CordonOutput: Sync + Send + Sized;
     type UncordonOutput: Sync + Send + Sized;
+    type Request: Sync + Send + Sized;
 
     /// Cordon the resource.
     async fn cordon(
         &mut self,
         registry: &Registry,
-        label: String,
+        request: Self::Request,
     ) -> Result<Self::CordonOutput, SvcError>;
     /// Uncordon the resource.
     async fn uncordon(
         &mut self,
         registry: &Registry,
-        label: String,
+        request: Self::Request,
     ) -> Result<Self::UncordonOutput, SvcError>;
 }
 

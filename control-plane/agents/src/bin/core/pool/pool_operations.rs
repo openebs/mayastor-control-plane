@@ -1,24 +1,26 @@
-use crate::controller::{
-    io_engine::PoolApi,
-    registry::Registry,
-    resources::{
-        operations::{ResourceLabel, ResourceLifecycle},
-        operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
-        OperationGuardArc,
+use crate::{
+    controller::{
+        io_engine::PoolApi,
+        registry::Registry,
+        resources::{
+            operations::{ResourceCordon, ResourceLabel, ResourceLifecycle},
+            operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
+            OperationGuardArc,
+        },
     },
+    pool::operations_helper::devlink_preflight_checks,
 };
-use crate::pool::operations_helper::devlink_preflight_checks;
 use agents::errors::{SvcError, SvcError::CordonedNode};
+use grpc::operations::pool::traits::PoolCordonRequest;
+use std::collections::HashMap;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
-        store::pool::{PoolOperation, PoolSpec},
+        store::pool::{PoolCordonOp, PoolOperation, PoolSpec},
         transport::{CreatePool, CtrlPoolState, DestroyPool, Pool},
     },
 };
 use utils::dsp_created_by_key;
-
-use std::collections::HashMap;
 
 #[async_trait::async_trait]
 impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
@@ -188,6 +190,52 @@ impl ResourceLabel for OperationGuardArc<PoolSpec> {
                 &cloned_pool_spec,
                 PoolOperation::Unlabel(label_key.into()),
             )
+            .await?;
+
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
+    }
+}
+
+/// Resource Cordon Operations.
+#[async_trait::async_trait]
+impl ResourceCordon for OperationGuardArc<PoolSpec> {
+    type CordonOutput = PoolSpec;
+    type UncordonOutput = PoolSpec;
+    type Request = PoolCordonRequest;
+
+    async fn cordon(
+        &mut self,
+        registry: &Registry,
+        request: PoolCordonRequest,
+    ) -> Result<Self::CordonOutput, SvcError> {
+        let request = PoolCordonOp {
+            replicas: request.replicas,
+            snapshots: request.snapshots,
+            restores: request.restores,
+        };
+        let spec_clone = self.lock().clone();
+        let spec_clone = self
+            .start_update(registry, &spec_clone, PoolOperation::Cordon(request))
+            .await?;
+
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
+    }
+
+    async fn uncordon(
+        &mut self,
+        registry: &Registry,
+        request: PoolCordonRequest,
+    ) -> Result<Self::UncordonOutput, SvcError> {
+        let request = PoolCordonOp {
+            replicas: request.replicas,
+            snapshots: request.snapshots,
+            restores: request.restores,
+        };
+        let spec_clone = self.lock().clone();
+        let spec_clone = self
+            .start_update(registry, &spec_clone, PoolOperation::Uncordon(request))
             .await?;
 
         self.complete_update(registry, Ok(()), spec_clone).await?;

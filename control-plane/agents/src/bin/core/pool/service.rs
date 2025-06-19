@@ -35,6 +35,7 @@ use stor_port::{
     },
 };
 
+use crate::controller::resources::{operations::ResourceCordon, ResourceUid};
 use grpc::operations::pool::traits::PoolCordonRequest;
 use snafu::OptionExt;
 
@@ -103,12 +104,16 @@ impl PoolOperations for Service {
         Ok(pool)
     }
 
-    async fn cordon(&self, _info: PoolCordonRequest) -> Result<Pool, ReplyError> {
-        todo!()
+    async fn cordon(&self, info: PoolCordonRequest) -> Result<Pool, ReplyError> {
+        let service = self.clone();
+        let pool = Context::spawn(async move { service.cordon(info).await }).await??;
+        Ok(pool)
     }
 
-    async fn uncordon(&self, _info: PoolCordonRequest) -> Result<Pool, ReplyError> {
-        todo!()
+    async fn uncordon(&self, info: PoolCordonRequest) -> Result<Pool, ReplyError> {
+        let service = self.clone();
+        let pool = Context::spawn(async move { service.uncordon(info).await }).await??;
+        Ok(pool)
     }
 }
 
@@ -396,6 +401,24 @@ impl Service {
             .unlabel(&self.registry, request.label_key())
             .await?;
         let state = self.registry.ctrl_pool_state(&request.pool_id).await.ok();
+        Ok(Pool::new(spec, state))
+    }
+
+    /// Cordon the specified pool.
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %request.pool_id))]
+    async fn cordon(&self, request: PoolCordonRequest) -> Result<Pool, SvcError> {
+        let mut guarded_pool = self.specs().guarded_pool(&request.pool_id).await?;
+        let spec = guarded_pool.cordon(&self.registry, request).await?;
+        let state = self.registry.ctrl_pool_state(guarded_pool.uid()).await.ok();
+        Ok(Pool::new(spec, state))
+    }
+
+    /// Uncordon the specified pool.
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %request.pool_id))]
+    async fn uncordon(&self, request: PoolCordonRequest) -> Result<Pool, SvcError> {
+        let mut guarded_pool = self.specs().guarded_pool(&request.pool_id).await?;
+        let spec = guarded_pool.uncordon(&self.registry, request).await?;
+        let state = self.registry.ctrl_pool_state(guarded_pool.uid()).await.ok();
         Ok(Pool::new(spec, state))
     }
 }
