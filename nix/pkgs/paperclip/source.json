@@ -1,11 +1,11 @@
 {
   "owner": "paperclip-rs",
   "repo": "paperclip",
-  "rev": "v0.9.4",
+  "rev": "v0.9.6",
   "hash": {
-    "x86_64-unknown-linux-musl": "0mg4jz3wsyx0ldfbky4w59i3rzgmdbbn9zc6mg878kkqvb9px2qc",
-    "aarch64-unknown-linux-musl": "1jzgijiglb6l0wdci2zadcrajgasdrir9kvg48va2hfzca9rv1lm",
-    "x86_64-apple-darwin": "1vbv237qgxgqsrrwhpl0j7zs2qwab7wb6670syb2ym89al1z8k6m",
-    "aarch64-apple-darwin": "0hhkhpvsk75bxsd34nv6g01hn9wbxfrrdjjcw7sf2b9r97n90xpj"
+    "x86_64-unknown-linux-musl": "sha256:4151b70acc301d21d122c6a42b32dd00c27537c5c5b1c23a8d98efe268004baf",
+    "aarch64-unknown-linux-musl": "sha256:6ac9b9e90e6c56504c958a16af521889582e3a81af41768075bc186915a84403",
+    "x86_64-apple-darwin": "sha256:a12a263d8d7cadc4018c20dcded64914384464118240d7c632885e168a13b193",
+    "aarch64-apple-darwin": "sha256:dc60f986cef855837210b3637f7243b3c9a4b7842655518276414c0f61d9fcba"
   }
 }
