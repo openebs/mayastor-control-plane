@@ -143,7 +143,7 @@ impl PoolOperations for PoolClient {
 
     async fn cordon(
         &self,
-        info: crate::operations::pool::traits::PoolCordonInfo,
+        info: crate::operations::pool::traits::PoolCordonRequest,
     ) -> Result<Pool, ReplyError> {
         let request = CordonPoolRequest::from(info);
         let response = self.client().cordon_pool(request).await?.into_inner();
@@ -158,7 +158,7 @@ impl PoolOperations for PoolClient {
 
     async fn uncordon(
         &self,
-        info: crate::operations::pool::traits::PoolCordonInfo,
+        info: crate::operations::pool::traits::PoolCordonRequest,
     ) -> Result<Pool, ReplyError> {
         let request = CordonPoolRequest::from(info);
         let response = self.client().uncordon_pool(request).await?.into_inner();

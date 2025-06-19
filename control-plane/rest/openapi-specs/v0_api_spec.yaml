@@ -1403,6 +1403,65 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  '/pools/{pool_id}/cordon':
+    put:
+      tags:
+        - Pools
+      operationId: put_pool_cordon
+      parameters:
+        - in: path
+          name: pool_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoolCordonReq'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pool'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
+    delete:
+      tags:
+        - Pools
+      operationId: del_pool_cordon
+      parameters:
+        - in: path
+          name: pool_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoolCordonReq'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pool'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   /replicas:
     get:
       tags:
@@ -3462,6 +3521,10 @@ components:
           oneOf:
             - required:
                 - secret
+        cordonDrain:
+          description: the cordon and drain state
+          allOf:
+            - $ref: '#/components/schemas/PoolCordonDrain'
       required:
         - disks
         - id
@@ -4256,8 +4319,48 @@ components:
         - allocated
         - allocated_snapshots
         - allocated_all_snapshots
+    PoolCordonDrain:
+      description: The cordon and drain for a pool
+      type: object
+      properties:
+        cordoned:
+          $ref: '#/components/schemas/PoolCordon'
+      oneOf:
+        - required:
+            - cordoned
+    PoolCordonReq:
+      description: Cordon or uncordon the following resources
+      type: object
+      properties:
+        replicas:
+          type: boolean
+        snapshots:
+          type: boolean
+        restores:
+          type: boolean
+      required:
+        - replicas
+        - snapshots
+        - restores
+    PoolCordon:
+      description: The pool is cordoned with the following resource constraints
+      type: object
+      properties:
+        replicas:
+          description: No new replicas can be created on this pool
+          type: boolean
+        snapshots:
+          description: No new snapshots can be created on this pool
+          type: boolean
+        restores:
+          description: No new restores can be created on this pool
+          type: boolean
+      required:
+        - replicas
+        - snapshots
+        - restores
     CordonDrainState:
-      description: The drain state
+      description: The cordon and drain state
       type: object
       properties:
         cordonedstate:

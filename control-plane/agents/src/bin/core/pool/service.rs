@@ -35,7 +35,7 @@ use stor_port::{
     },
 };
 
-use grpc::operations::pool::traits::PoolCordonInfo;
+use grpc::operations::pool::traits::PoolCordonRequest;
 use snafu::OptionExt;
 
 #[derive(Debug, Clone)]
@@ -103,11 +103,11 @@ impl PoolOperations for Service {
         Ok(pool)
     }
 
-    async fn cordon(&self, _info: PoolCordonInfo) -> Result<Pool, ReplyError> {
+    async fn cordon(&self, _info: PoolCordonRequest) -> Result<Pool, ReplyError> {
         todo!()
     }
 
-    async fn uncordon(&self, _info: PoolCordonInfo) -> Result<Pool, ReplyError> {
+    async fn uncordon(&self, _info: PoolCordonRequest) -> Result<Pool, ReplyError> {
         todo!()
     }
 }

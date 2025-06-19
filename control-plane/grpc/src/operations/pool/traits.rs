@@ -51,10 +51,10 @@ pub trait PoolOperations: Send + Sync {
         ctx: Option<Context>,
     ) -> Result<Pool, ReplyError>;
     /// Cordon the pool with the given info and associate the label with the cordoned pool.
-    async fn cordon(&self, info: PoolCordonInfo) -> Result<Pool, ReplyError>;
+    async fn cordon(&self, info: PoolCordonRequest) -> Result<Pool, ReplyError>;
     /// Uncordon the pool with the given info by removing the associated label.
     /// All cordon labels must be removed in order to uncordon the node.
-    async fn uncordon(&self, info: PoolCordonInfo) -> Result<Pool, ReplyError>;
+    async fn uncordon(&self, info: PoolCordonRequest) -> Result<Pool, ReplyError>;
 }
 
 impl TryFrom<pool::PoolDefinition> for PoolSpec {
@@ -588,18 +588,21 @@ impl From<common::EncryptionSecret> for EncryptionSecret {
 }
 
 /// Pool cordon and uncordon information.
-pub struct PoolCordonInfo {
+pub struct PoolCordonRequest {
     /// Node ID of where the pool resides on.
     /// This is optional and may be used for stricter checks.
     pub node_id: Option<NodeId>,
     /// The ID of the pool to cordon/uncordon.
     pub pool_id: PoolId,
-    replicas: bool,
-    snapshots: bool,
-    restores: bool,
+    /// Cordon or uncordon replicas.
+    pub replicas: bool,
+    /// Cordon or uncordon snapshots.
+    pub snapshots: bool,
+    /// Cordon or uncordon restores.
+    pub restores: bool,
 }
 
-impl From<CordonPoolRequest> for PoolCordonInfo {
+impl From<CordonPoolRequest> for PoolCordonRequest {
     fn from(value: CordonPoolRequest) -> Self {
         Self {
             node_id: value.node_id.map(Into::into),
@@ -610,8 +613,8 @@ impl From<CordonPoolRequest> for PoolCordonInfo {
         }
     }
 }
-impl From<PoolCordonInfo> for CordonPoolRequest {
-    fn from(value: PoolCordonInfo) -> Self {
+impl From<PoolCordonRequest> for CordonPoolRequest {
+    fn from(value: PoolCordonRequest) -> Self {
         Self {
             pool_id: value.pool_id.into(),
             node_id: value.node_id.map(Into::into),

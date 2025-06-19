@@ -1,14 +1,12 @@
 //! Definition of pool types that can be saved to the persistent store.
 
-use crate::types::v0::transport::ImportPool;
 use crate::types::v0::{
-    openapi::models,
-    openapi::models::PoolSpecEncryption,
+    openapi::{models, models::PoolSpecEncryption},
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
     },
-    transport::{self, CreatePool, NodeId, PoolDeviceUri, PoolId},
+    transport::{self, CreatePool, ImportPool, NodeId, PoolDeviceUri, PoolId},
 };
 
 // PoolLabel is the type for the labels
@@ -209,7 +207,7 @@ impl From<PoolSpec> for models::PoolSpec {
             },
         };
         Self::new_all(
-            src.disks, src.id, src.labels, src.node, src.status, encryption,
+            src.disks, src.id, src.labels, src.node, src.status, encryption, None,
         )
     }
 }
