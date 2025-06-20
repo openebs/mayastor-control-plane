@@ -13,8 +13,11 @@ from common.docker import Docker
 from common.fio import Fio
 from openapi.exceptions import NotFoundException
 from openapi.model.node_status import NodeStatus
+from openapi.model.pool_status import PoolStatus
+from openapi.model.volume_status import VolumeStatus
 from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.model.pool_cordon import PoolCordon
 
 
 class Pool(object):
@@ -35,6 +38,48 @@ class Pool(object):
                 all_deleted = False
                 pass
         return all_deleted
+
+    @staticmethod
+    def delete(pool):
+        try:
+            if hasattr(pool, "id"):
+                Pool.__pools_api().del_pool(pool.id)
+            else:
+                Pool.__pools_api().del_pool(pool)
+        except NotFoundException:
+            pass
+
+    @staticmethod
+    def cleanup(pool):
+        if Cluster.fixture_cleanup():
+            try:
+                Pool.delete(pool)
+            except openapi.exceptions.ApiException:
+                pass
+
+    @staticmethod
+    def label_parts(label):
+        try:
+            key, value = label.split("=")
+            return key, value
+        except ValueError:
+            return label, ""
+
+    @staticmethod
+    def cordon(pool, replicas=True, snapshots=False, restores=True):
+        rsc = PoolCordon(replicas, snapshots, restores)
+        return Pool.__pools_api().put_pool_cordon(pool.id, pool_cordon_req=rsc)
+
+    @staticmethod
+    def uncordon(pool, replicas=True, snapshots=True, restores=True):
+        rsc = PoolCordon(replicas, snapshots, restores)
+        return Pool.__pools_api().del_pool_cordon(pool.id, pool_cordon_req=rsc)
+
+    @staticmethod
+    def update(pool, cached=True):
+        if not cached:
+            Cluster.wait_cache_update()
+        return Pool.__pools_api().get_pool(pool.id)
 
 
 class Volume(object):
@@ -166,6 +211,11 @@ class Cluster(object):
         time.sleep(cache + slack)
 
     @staticmethod
+    def wait_update(slack=0.1):
+        cache = common.human_time_to_float(Deployer.update_period())
+        time.sleep(cache + slack)
+
+    @staticmethod
     def restart_node(node_name):
         Deployer.restart_node(node_name)
 
@@ -175,9 +225,32 @@ def wait_node_online(node_id):
     assert ApiClient.nodes_api().get_node(node_id).state.status == NodeStatus("Online")
 
 
+@retry(wait_fixed=10, stop_max_attempt_number=200)
+def wait_node_status(node_id, expected):
+    status = ApiClient.nodes_api().get_node(node_id).state.status
+    if isinstance(expected, list):
+        assert status in expected
+    else:
+        assert status == expected
+
+
+@retry(wait_fixed=10, stop_max_attempt_number=200)
+def wait_pool_online(pool):
+    assert ApiClient.pools_api().get_pool(pool.id).state.status == PoolStatus("Online")
+
+
 @retry(wait_fixed=10, stop_max_attempt_number=100)
 def wait_core_online():
     assert ApiClient.specs_api().get_specs()
+
+
+@retry(wait_fixed=10, stop_max_attempt_number=200)
+def wait_volume_status(volume, status):
+    if isinstance(status, str):
+        status = VolumeStatus(status)
+    volume = ApiClient.volumes_api().get_volume(volume.spec.uuid)
+    assert volume.state.status == status
+    return volume
 
 
 @retry(wait_fixed=100, stop_max_attempt_number=100)
