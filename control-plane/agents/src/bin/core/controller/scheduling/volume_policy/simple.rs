@@ -308,7 +308,7 @@ mod tests {
                 .take(replicas)
                 .collect::<Vec<_>>(),
         );
-        PoolItem::new(node_state, pool, ag_replica_count)
+        PoolItem::new(node_state, pool, ag_replica_count, None)
     }
     fn ag_sort_comparator(a: &PoolItem, b: &PoolItem) -> Ordering {
         let builder = SortBuilder::new();

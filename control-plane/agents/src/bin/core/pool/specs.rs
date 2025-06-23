@@ -404,6 +404,18 @@ impl ResourceSpecsLocked {
                 pool_id: id.to_owned(),
             })
     }
+    /// Run the given closure with the specified pool resource.
+    pub(crate) fn pool_with<R>(
+        &self,
+        id: &PoolId,
+        run: impl Fn(&ResourceMutex<PoolSpec>) -> R,
+    ) -> Result<R, SvcError> {
+        let specs = self.read();
+        let pool = specs.pools.get(id).ok_or(PoolNotFound {
+            pool_id: id.to_owned(),
+        })?;
+        Ok(run(pool))
+    }
     /// Get a pools's node from its spec for the given pool `id`, if it exists.
     pub(crate) fn spec_pool_node(&self, id: &PoolId) -> Option<NodeId> {
         let specs = self.read();

@@ -215,9 +215,11 @@ impl PoolSpec {
         self.resolve();
     }
 
-    /// Returns whether the node is cordoned.
-    pub fn cordoned(&self) -> bool {
-        self.cordon_drain.is_some()
+    /// Returns whether the pool is cordoned and its state.
+    pub fn cordoned(&self) -> Option<&CordonedState> {
+        self.cordon_drain.as_ref().map(|s| match s {
+            CordonDrainState::Cordoned(cordoned) => cordoned,
+        })
     }
 
     /// Returns true if all labels are already present.
@@ -490,7 +492,7 @@ impl From<models::Encryption> for Encryption {
 }
 
 /// Data relating to the cordoning of a pool.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Default, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CordonedState {
     // todo: or should these be negated, ie: by default all blocked?
     /// No new replicas can be created on this pool
