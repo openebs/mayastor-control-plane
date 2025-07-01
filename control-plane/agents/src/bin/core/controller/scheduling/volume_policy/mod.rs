@@ -29,6 +29,7 @@ impl DefaultBasePolicy {
     fn filter_pools(request: AddVolumeReplica) -> AddVolumeReplica {
         request
             .filter(pool::PoolBaseFilters::usable)
+            .filter(pool::PoolBaseFilters::uncordoned_repl)
             .filter(pool::PoolBaseFilters::capacity)
             .filter(pool::PoolBaseFilters::min_free_space)
             .filter(pool::PoolBaseFilters::topology)
@@ -44,6 +45,7 @@ impl DefaultBasePolicy {
     fn filter_snapshot_pools(request: SnapshotVolumeReplica) -> SnapshotVolumeReplica {
         request
             .filter(pool::PoolBaseFilters::usable)
+            .filter(pool::PoolBaseFilters::uncordoned_snaps)
             .filter(pool::PoolBaseFilters::capacity)
             .filter(pool::PoolBaseFilters::min_free_space)
     }
@@ -58,6 +60,7 @@ impl DefaultBasePolicy {
     fn filter_clone_pools(request: CloneVolumeSnapshot) -> CloneVolumeSnapshot {
         request
             .filter(pool::PoolBaseFilters::usable)
+            .filter(pool::PoolBaseFilters::uncordoned_rest)
             .filter(pool::PoolBaseFilters::capacity)
             .filter(pool::PoolBaseFilters::min_free_space)
     }

@@ -90,6 +90,19 @@ impl PoolBaseFilters {
         item.pool.status != PoolStatus::Faulted && item.pool.status != PoolStatus::Unknown
     }
 
+    /// Should only attempt to use uncordoned pools.
+    pub(crate) fn uncordoned_repl(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+        !item.cordoned().replicas
+    }
+    /// Should only attempt to use uncordoned pools.
+    pub(crate) fn uncordoned_snaps(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+        !item.cordoned().snapshots
+    }
+    /// Should only attempt to use uncordoned pools.
+    pub(crate) fn uncordoned_rest(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+        !item.cordoned().restores
+    }
+
     /// Should only attempt to use pools having specific creation label if topology has it.
     pub(crate) fn topology(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         Self::topology_(request, request.registry(), &item.pool.id)

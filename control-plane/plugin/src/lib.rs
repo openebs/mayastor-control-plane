@@ -149,7 +149,11 @@ impl ExecuteOperation for GetResources {
                 GetCordonArgs::Node { id: node_id } => {
                     cordon::NodeCordon::get(node_id, &cli_args.output).await
                 }
-                GetCordonArgs::Nodes => cordon::NodeCordons::list(&cli_args.output).await,
+                GetCordonArgs::Nodes => cordon::NodeCordon::list(&cli_args.output).await,
+                GetCordonArgs::Pool { id: pool_id } => {
+                    cordon::PoolCordon::get(pool_id, &cli_args.output).await
+                }
+                GetCordonArgs::Pools => cordon::PoolCordon::list(&cli_args.output).await,
             },
             GetResources::Drain(get_drain_resource) => match get_drain_resource {
                 GetDrainArgs::Node { id: node_id } => {
@@ -241,6 +245,9 @@ impl ExecuteOperation for CordonResources {
             CordonResources::Node { id, label } => {
                 node::Node::cordon(id, label, &cli_args.output).await
             }
+            CordonResources::Pool { id, resources } => {
+                pool::Pool::cordon(id, resources, &cli_args.output).await
+            }
         }
     }
 }
@@ -253,6 +260,9 @@ impl ExecuteOperation for UnCordonResources {
         match self {
             UnCordonResources::Node { id, label } => {
                 node::Node::uncordon(id, label, &cli_args.output).await
+            }
+            UnCordonResources::Pool { id, resources } => {
+                pool::Pool::uncordon(id, resources, &cli_args.output).await
             }
         }
     }

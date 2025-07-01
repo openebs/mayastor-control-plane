@@ -1,19 +1,18 @@
 //! Definition of pool types that can be saved to the persistent store.
 
-use crate::types::v0::transport::ImportPool;
 use crate::types::v0::{
-    openapi::models,
-    openapi::models::PoolSpecEncryption,
+    openapi::{models, models::PoolSpecEncryption},
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
     },
-    transport::{self, CreatePool, NodeId, PoolDeviceUri, PoolId},
+    transport::{self, CreatePool, ImportPool, NodeId, PoolDeviceUri, PoolId},
 };
 
 // PoolLabel is the type for the labels
-pub type PoolLabel = std::collections::HashMap<String, String>;
+pub type PoolLabel = HashMap<String, String>;
 
+use crate::IntoOption;
 use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, convert::From, fmt::Debug};
@@ -56,6 +55,7 @@ impl From<&CreatePool> for PoolSpec {
             operation: None,
             creat_tsc: None,
             encryption: request.encryption.clone(),
+            cordon_drain: None,
         }
     }
 }
@@ -107,17 +107,23 @@ pub struct PoolSpec {
     /// status of the pool
     pub status: PoolSpecStatus,
     /// labels to be set on the pool
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub labels: Option<PoolLabel>,
     /// Update in progress
     #[serde(skip)]
     pub sequencer: OperationSequence,
     /// Record of the operation in progress
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub operation: Option<PoolOperationState>,
     /// Last modification timestamp.
     #[serde(skip)]
     pub creat_tsc: Option<std::time::SystemTime>,
     /// Use to create/import encrypted pool
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub encryption: Option<Encryption>,
+    /// Cordon/drain state.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cordon_drain: Option<CordonDrainState>,
 }
 
 impl PoolSpec {
@@ -174,6 +180,63 @@ impl PoolSpec {
 
         (existing_conflicts, conflict)
     }
+
+    /// Ensure the state is consistent.
+    pub fn resolve(&mut self) {
+        if let Some(ds) = &mut self.cordon_drain {
+            match ds {
+                CordonDrainState::Cordoned(state) => {
+                    if !state.cordoned() {
+                        self.cordon_drain = None;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Cordon the pool.
+    pub fn cordon(&mut self, op: PoolCordonOp) {
+        match &mut self.cordon_drain {
+            Some(ds) => {
+                ds.add_cordon(op);
+            }
+            None => {
+                self.cordon_drain = Some(CordonDrainState::Cordoned(CordonedState::from(op)));
+            }
+        }
+        self.resolve();
+    }
+
+    /// Uncordon the pool.
+    pub fn uncordon(&mut self, op: PoolCordonOp) {
+        if let Some(ds) = &mut self.cordon_drain {
+            ds.rm_cordon(op);
+        }
+        self.resolve();
+    }
+
+    /// Returns whether the pool is cordoned and its state.
+    pub fn cordoned(&self) -> Option<&CordonedState> {
+        self.cordon_drain.as_ref().map(|s| match s {
+            CordonDrainState::Cordoned(cordoned) => cordoned,
+        })
+    }
+
+    /// Returns true if all labels are already present.
+    pub fn cordon_would_modify(&self, op: &PoolCordonOp) -> bool {
+        match &self.cordon_drain {
+            Some(ds) => ds.would_modify(op, true),
+            None => true,
+        }
+    }
+
+    /// Returns true if all labels are already present.
+    pub fn uncordon_would_modify(&self, op: &PoolCordonOp) -> bool {
+        match &self.cordon_drain {
+            Some(ds) => ds.would_modify(op, false),
+            None => false,
+        }
+    }
 }
 
 impl From<&PoolSpec> for ImportPool {
@@ -209,7 +272,13 @@ impl From<PoolSpec> for models::PoolSpec {
             },
         };
         Self::new_all(
-            src.disks, src.id, src.labels, src.node, src.status, encryption,
+            src.disks,
+            src.id,
+            src.labels,
+            src.node,
+            src.status,
+            encryption,
+            src.cordon_drain.into_opt(),
         )
     }
 }
@@ -242,6 +311,12 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
                 PoolOperation::Unlabel(PoolUnLabelOp { label_key }) => {
                     self.unlabel(&label_key);
                 }
+                PoolOperation::Cordon(op) => {
+                    self.cordon(op);
+                }
+                PoolOperation::Uncordon(op) => {
+                    self.uncordon(op);
+                }
             }
         }
         self.clear_op();
@@ -271,8 +346,15 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
         self.operation.as_ref().map(|o| &o.operation)
     }
 
-    fn log_op(&self, _operation: &PoolOperation) -> (bool, bool) {
-        (false, true)
+    fn log_op(&self, operation: &PoolOperation) -> (bool, bool) {
+        match operation {
+            PoolOperation::Create => (true, true),
+            PoolOperation::Destroy => (true, true),
+            PoolOperation::Label(_) => (false, true),
+            PoolOperation::Unlabel(_) => (false, true),
+            PoolOperation::Cordon(_) => (false, true),
+            PoolOperation::Uncordon(_) => (false, true),
+        }
     }
 }
 
@@ -283,6 +365,40 @@ pub enum PoolOperation {
     Destroy,
     Label(PoolLabelOp),
     Unlabel(PoolUnLabelOp),
+    Cordon(PoolCordonOp),
+    Uncordon(PoolCordonOp),
+}
+
+/// Parameter for adding/removing pool cordons.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PoolCordonOp {
+    /// No new replicas can be created on this pool
+    pub replicas: bool,
+    /// No new snapshots can be created on this pool
+    pub snapshots: bool,
+    /// No new restores can be created on this pool
+    pub restores: bool,
+}
+impl PoolCordonOp {
+    fn resource(yes: bool, name: &str) -> &str {
+        if yes {
+            name
+        } else {
+            ""
+        }
+    }
+    /// Convert cordon resources to a comma separated string.
+    pub fn resources(&self) -> String {
+        [
+            Self::resource(self.replicas, "replicas"),
+            Self::resource(self.snapshots, "snapshots"),
+            Self::resource(self.restores, "restores"),
+        ]
+        .into_iter()
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<&str>>()
+        .join(",")
+    }
 }
 
 /// Parameter for adding pool labels.
@@ -371,6 +487,113 @@ impl From<models::Encryption> for Encryption {
     fn from(value: models::Encryption) -> Self {
         match value {
             models::Encryption::secret(secret_name) => Self::Secret(secret_name.into()),
+        }
+    }
+}
+
+/// Data relating to the cordoning of a pool.
+#[derive(Clone, Default, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CordonedState {
+    // todo: or should these be negated, ie: by default all blocked?
+    /// No new replicas can be created on this pool
+    pub replicas: bool,
+    /// No new snapshots can be created on this pool
+    pub snapshots: bool,
+    /// No new restores can be created on this pool
+    pub restores: bool,
+}
+impl CordonedState {
+    fn cordoned(&self) -> bool {
+        self.replicas || self.snapshots || self.restores
+    }
+}
+
+impl From<PoolCordonOp> for CordonedState {
+    fn from(value: PoolCordonOp) -> Self {
+        Self {
+            replicas: value.replicas,
+            snapshots: value.snapshots,
+            restores: value.restores,
+        }
+    }
+}
+
+impl CordonedState {
+    fn set_if(ifset: bool, set: &mut bool, val: bool) {
+        if ifset {
+            *set = val;
+        }
+    }
+    /// Add cordon resources.
+    pub fn add_cordon(&mut self, op: PoolCordonOp) {
+        Self::set_if(op.replicas, &mut self.replicas, true);
+        Self::set_if(op.snapshots, &mut self.snapshots, true);
+        Self::set_if(op.restores, &mut self.restores, true);
+    }
+    /// Remove cordon resources.
+    pub fn rm_cordon(&mut self, op: PoolCordonOp) {
+        Self::set_if(op.replicas, &mut self.replicas, false);
+        Self::set_if(op.snapshots, &mut self.snapshots, false);
+        Self::set_if(op.restores, &mut self.restores, false);
+    }
+    fn if_modify(current: bool, op: bool, cordon: bool) -> bool {
+        if cordon {
+            !current && op
+        } else {
+            current && op
+        }
+    }
+    /// Returns whether the operation would yield changes.
+    pub fn would_modify(&self, op: &PoolCordonOp, cordon: bool) -> bool {
+        Self::if_modify(self.replicas, op.replicas, cordon)
+            || Self::if_modify(self.snapshots, op.snapshots, cordon)
+            || Self::if_modify(self.restores, op.restores, cordon)
+    }
+}
+
+/// Enum variant encompassing data related to a cordoned or draining pool.
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub enum CordonDrainState {
+    /// The pool is being cordoned.
+    Cordoned(CordonedState),
+}
+
+impl CordonDrainState {
+    /// Update cordon with the given options.
+    pub fn add_cordon(&mut self, cordon: PoolCordonOp) {
+        match self {
+            CordonDrainState::Cordoned(state) => {
+                state.add_cordon(cordon);
+            }
+        }
+    }
+    /// Update cordon with the given options.
+    pub fn rm_cordon(&mut self, cordon: PoolCordonOp) {
+        match self {
+            CordonDrainState::Cordoned(state) => {
+                state.rm_cordon(cordon);
+            }
+        }
+    }
+    /// Returns whether the state has all the specified cordon labels.
+    pub fn would_modify(&self, op: &PoolCordonOp, cordon: bool) -> bool {
+        match self {
+            CordonDrainState::Cordoned(state) => state.would_modify(op, cordon),
+        }
+    }
+}
+
+impl From<CordonDrainState> for models::PoolCordonDrain {
+    fn from(node_ds: CordonDrainState) -> Self {
+        match node_ds {
+            CordonDrainState::Cordoned(state) => {
+                let cs = models::PoolCordon {
+                    replicas: state.replicas,
+                    snapshots: state.snapshots,
+                    restores: state.restores,
+                };
+                Self::cordoned(cs)
+            }
         }
     }
 }

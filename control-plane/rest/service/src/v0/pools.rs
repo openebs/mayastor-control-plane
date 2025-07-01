@@ -1,5 +1,5 @@
 use super::*;
-use grpc::operations::pool::traits::PoolOperations;
+use grpc::operations::pool::traits::{PoolCordonRequest, PoolOperations};
 use rest_client::versions::v0::apis::Uuid;
 use std::collections::HashMap;
 use stor_port::{
@@ -131,6 +131,36 @@ impl apis::actix_server::Pools for RestApi {
         };
 
         let pool = client().unlabel(&unlabel_pool_request, None).await?;
+        Ok(pool.into())
+    }
+
+    async fn put_pool_cordon(
+        Path(pool_id): Path<String>,
+        Body(body): Body<models::PoolCordonReq>,
+    ) -> Result<models::Pool, RestError<RestJsonError>> {
+        let request = PoolCordonRequest {
+            node_id: None,
+            pool_id: pool_id.into(),
+            replicas: body.replicas,
+            snapshots: body.snapshots,
+            restores: body.restores,
+        };
+        let pool = client().cordon(request).await?;
+        Ok(pool.into())
+    }
+
+    async fn del_pool_cordon(
+        Path(pool_id): Path<String>,
+        Body(body): Body<models::PoolCordonReq>,
+    ) -> Result<models::Pool, RestError<RestJsonError>> {
+        let request = PoolCordonRequest {
+            node_id: None,
+            pool_id: pool_id.into(),
+            replicas: body.replicas,
+            snapshots: body.snapshots,
+            restores: body.restores,
+        };
+        let pool = client().uncordon(request).await?;
         Ok(pool.into())
     }
 }

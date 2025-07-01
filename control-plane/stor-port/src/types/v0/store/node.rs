@@ -38,7 +38,11 @@ impl CordonedState {
     }
     /// Remove a cordon label from a CordonedState object.
     pub fn remove_label(&mut self, label: &str) {
-        self.cordonlabels.retain(|l| l != label)
+        self.cordonlabels.retain(|l| l != label);
+    }
+    /// Remove cordon labels from a CordonedState object.
+    pub fn remove_labels(&mut self, labels: &[String]) {
+        self.cordonlabels.retain(|l| !labels.contains(l));
     }
 }
 
@@ -64,6 +68,11 @@ impl DrainState {
         self.cordonlabels.retain(|l| l != label);
         self.drainlabels.retain(|l| l != label);
     }
+    /// Remove labels from a DrainState object.
+    pub fn remove_labels(&mut self, labels: &[String]) {
+        self.cordonlabels.retain(|l| !labels.contains(l));
+        self.drainlabels.retain(|l| !labels.contains(l));
+    }
     /// Add a drain label to a DrainState object.
     pub fn add_drain_label(&mut self, label: &str) {
         self.drainlabels.push(label.to_string());
@@ -82,17 +91,23 @@ pub enum CordonDrainState {
 }
 
 impl CordonDrainState {
+    /// Add the given labels to the cordon labels.
+    pub fn add_cordon_labels(&mut self, labels: Vec<String>) {
+        for label in labels {
+            self.add_cordon_label(label)
+        }
+    }
     /// Add the given label to the cordon labels.
-    pub fn add_cordon_label(&mut self, label: &str) {
+    pub fn add_cordon_label(&mut self, label: String) {
         match self {
-            CordonDrainState::Draining(state) => state.cordonlabels.push(label.to_string()),
-            CordonDrainState::Drained(state) => state.cordonlabels.push(label.to_string()),
-            CordonDrainState::Cordoned(state) => state.cordonlabels.push(label.to_string()),
+            CordonDrainState::Draining(state) => state.cordonlabels.push(label),
+            CordonDrainState::Drained(state) => state.cordonlabels.push(label),
+            CordonDrainState::Cordoned(state) => state.cordonlabels.push(label),
         }
     }
     /// Returns a new Cordoned enum with the given cordon label.
-    pub fn cordon(label: &str) -> Self {
-        CordonDrainState::Cordoned(CordonedState::new(vec![String::from(label)]))
+    pub fn cordon(labels: Vec<String>) -> Self {
+        CordonDrainState::Cordoned(CordonedState::new(labels))
     }
 
     /// Returns whether the state has the specified cordon label.
@@ -297,11 +312,11 @@ impl NodeSpec {
     pub fn cordon(&mut self, label: String) {
         match &mut self.cordon_drain_state {
             Some(ds) => {
-                ds.add_cordon_label(&label);
+                ds.add_cordon_label(label);
             }
             None => {
                 //add the label and set the state to cordoned
-                self.cordon_drain_state = Some(CordonDrainState::cordon(&label));
+                self.cordon_drain_state = Some(CordonDrainState::cordon(vec![label]));
             }
         }
         self.resolve();

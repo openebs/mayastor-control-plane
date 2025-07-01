@@ -8,6 +8,7 @@ use stor_port::types::v0::{
         nexus_child::NexusChild,
         nexus_persistence::{ChildInfo, NexusInfo},
         node::NodeSpec,
+        pool::CordonedState,
         replica::ReplicaSpec,
         snapshots::replica::ReplicaSnapshot,
         volume::VolumeSpec,
@@ -29,15 +30,22 @@ pub(crate) struct PoolItem {
     /// a Affinity Group and the already created volumes have replicas
     /// on this pool.
     pub(crate) ag_replica_count: Option<u64>,
+    cordoned: CordonedState,
 }
 
 impl PoolItem {
     /// Create a new `Self`.
-    pub(crate) fn new(node: NodeWrapper, pool: PoolWrapper, ag_replica_count: Option<u64>) -> Self {
+    pub(crate) fn new(
+        node: NodeWrapper,
+        pool: PoolWrapper,
+        ag_replica_count: Option<u64>,
+        cordoned: Option<CordonedState>,
+    ) -> Self {
         Self {
             node,
             pool,
             ag_replica_count,
+            cordoned: cordoned.unwrap_or_default(),
         }
     }
     /// Get the number of replicas in the pool.
@@ -51,6 +59,10 @@ impl PoolItem {
     /// Get a reference to the inner `PoolWrapper`.
     pub(crate) fn pool(&self) -> &PoolWrapper {
         &self.pool
+    }
+    /// Get the pool cordon.
+    pub(crate) fn cordoned(&self) -> &CordonedState {
+        &self.cordoned
     }
     /// Collect the item into a pool.
     pub(crate) fn collect(self) -> PoolWrapper {
@@ -75,37 +87,45 @@ impl PoolItemLister {
         registry: &Registry,
         pool_ag_rep: &Option<HashMap<PoolId, u64>>,
     ) -> Vec<PoolItem> {
-        let pools = Self::nodes(registry)
+        Self::nodes(registry)
             .await
-            .iter()
+            .into_iter()
             .flat_map(|n| {
                 n.pool_wrappers()
-                    .iter()
-                    .filter(|p| registry.specs().pool(&p.id).is_ok())
-                    .map(|p| {
+                    .into_iter()
+                    .filter_map(|p| {
+                        let cordoned = registry
+                            .specs()
+                            .pool_with(&p.id, |p| p.lock().cordoned().cloned());
+                        let cordoned = cordoned.ok()?;
                         let ag_rep_count =
                             pool_ag_rep.as_ref().and_then(|map| map.get(&p.id).cloned());
 
-                        PoolItem::new(n.clone(), p.clone(), ag_rep_count)
+                        Some(PoolItem::new(n.clone(), p, ag_rep_count, cordoned))
                     })
                     .collect::<Vec<_>>()
             })
-            .collect();
-        pools
+            .collect()
     }
     /// Get a list of pool items to create a snapshot on.
     pub(crate) async fn list_for_snaps(registry: &Registry, items: &[ChildItem]) -> Vec<PoolItem> {
         let nodes = Self::nodes(registry).await;
-        let pool_items = items
+        items
             .iter()
             .filter_map(|item| {
                 nodes
                     .iter()
                     .find(|node| node.id() == item.node())
-                    .map(|node| PoolItem::new(node.clone(), item.pool().clone(), None))
+                    .and_then(|node| {
+                        let cordoned = registry
+                            .specs()
+                            .pool_with(&item.pool().id, |p| p.lock().cordoned().cloned());
+                        let pool =
+                            PoolItem::new(node.clone(), item.pool().clone(), None, cordoned.ok()?);
+                        Some(pool)
+                    })
             })
-            .collect();
-        pool_items
+            .collect()
     }
     /// Get a list of replicas wrapped as ChildItem, for resize.
     pub(crate) async fn list_for_resize(registry: &Registry, spec: &VolumeSpec) -> Vec<ChildItem> {
@@ -147,17 +167,22 @@ impl PoolItemLister {
         let mut pool_items = vec![];
         for snapshot in snapshots {
             let pool_id = snapshot.spec().source_id().pool_id();
-            let Ok(pool_spec) = registry.specs().pool(pool_id) else {
+            let Some(pool_spec) = registry.specs().pool_rsc(pool_id) else {
                 continue;
             };
-            let Ok(node) = registry.node_wrapper(&pool_spec.node).await else {
+            let (node, cordoned) = {
+                let pool_spec = pool_spec.lock();
+                (pool_spec.node.clone(), pool_spec.cordoned().cloned())
+            };
+            let Ok(node) = registry.node_wrapper(&node).await else {
                 continue;
             };
+
             let Some(pool) = node.pool_wrapper(pool_id).await else {
                 continue;
             };
             let node = node.read().await.deref().clone();
-            pool_items.push(PoolItem::new(node, pool, None));
+            pool_items.push(PoolItem::new(node, pool, None, cordoned));
         }
         pool_items
     }

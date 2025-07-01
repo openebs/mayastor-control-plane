@@ -48,6 +48,18 @@ pub enum SvcError {
     CordonLabel { node_id: String, label: String },
     #[snafu(display("Node {node_id} does not have a cordon label '{label}'"))]
     UncordonLabel { node_id: String, label: String },
+    #[snafu(display("{kind} {id} is already cordoned with resources '{resources}'"))]
+    CordonResources {
+        kind: ResourceKind,
+        id: String,
+        resources: String,
+    },
+    #[snafu(display("{kind} {id} does not have any of the cordon resources '{resources}'"))]
+    UncordonResources {
+        kind: ResourceKind,
+        id: String,
+        resources: String,
+    },
     #[snafu(display(
         "Timed out after '{:?}' attempting to connect to node '{}' via gRPC endpoint '{}'",
         timeout,
@@ -610,6 +622,20 @@ impl From<SvcError> for ReplyError {
             SvcError::CordonLabel { .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::Node,
+                source,
+                extra,
+            },
+
+            SvcError::CordonResources { kind, .. } => ReplyError {
+                kind: ReplyErrorKind::AlreadyExists,
+                resource: kind,
+                source,
+                extra,
+            },
+
+            SvcError::UncordonResources { kind, .. } => ReplyError {
+                kind: ReplyErrorKind::AlreadyExists,
+                resource: kind,
                 source,
                 extra,
             },

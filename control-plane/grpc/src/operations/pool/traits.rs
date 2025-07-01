@@ -4,14 +4,18 @@ use crate::{
     misc::traits::{StringValue, ValidateRequestTypes},
     pool,
     pool::{
-        get_pools_request, CreatePoolRequest, DestroyPoolRequest, LabelPoolRequest,
-        UnlabelPoolRequest,
+        get_pools_request, CordonPoolRequest, CreatePoolRequest, DestroyPoolRequest,
+        LabelPoolRequest, UnlabelPoolRequest,
     },
 };
+use std::{collections::HashMap, convert::TryFrom};
 use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind},
     types::v0::{
-        store::pool::{Encryption, EncryptionSecret, PoolLabel, PoolSpec, PoolSpecStatus},
+        store::pool::{
+            CordonDrainState, CordonedState, Encryption, EncryptionSecret, PoolLabel, PoolSpec,
+            PoolSpecStatus,
+        },
         transport::{
             CreatePool, CtrlPoolState, DestroyPool, Filter, LabelPool, NodeId, Pool, PoolDeviceUri,
             PoolId, PoolState, PoolStatus, UnlabelPool, VolumeId,
@@ -19,8 +23,6 @@ use stor_port::{
     },
     IntoOption,
 };
-
-use std::{collections::HashMap, convert::TryFrom};
 
 /// Trait implemented by services which support pool operations.
 #[tonic::async_trait]
@@ -51,6 +53,11 @@ pub trait PoolOperations: Send + Sync {
         pool: &dyn UnlabelPoolInfo,
         ctx: Option<Context>,
     ) -> Result<Pool, ReplyError>;
+    /// Cordon the pool with the given info and associate the label with the cordoned pool.
+    async fn cordon(&self, info: PoolCordonRequest) -> Result<Pool, ReplyError>;
+    /// Uncordon the pool with the given info by removing the associated label.
+    /// All cordon labels must be removed in order to uncordon the node.
+    async fn uncordon(&self, info: PoolCordonRequest) -> Result<Pool, ReplyError>;
 }
 
 impl TryFrom<pool::PoolDefinition> for PoolSpec {
@@ -100,6 +107,18 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
             encryption: pool_spec
                 .secret
                 .map(|details| Encryption::Secret(EncryptionSecret { name: details.name })),
+            cordon_drain: match pool_spec.cordon_drain {
+                Some(state) => match state {
+                    pool::pool_spec::CordonDrain::Cordoned(state) => {
+                        Some(CordonDrainState::Cordoned(CordonedState {
+                            replicas: state.replicas,
+                            snapshots: state.snapshots,
+                            restores: state.restores,
+                        }))
+                    }
+                },
+                None => None,
+            },
         })
     }
 }
@@ -173,6 +192,19 @@ impl From<PoolSpec> for pool::PoolDefinition {
                             Some(common::EncryptionSecret { name: details.name })
                         }
                     },
+                },
+                cordon_drain: match pool_spec.cordon_drain {
+                    Some(cordon_drain) => {
+                        let co = match cordon_drain {
+                            CordonDrainState::Cordoned(state) => pool::CordonedState {
+                                replicas: state.replicas,
+                                snapshots: state.snapshots,
+                                restores: state.restores,
+                            },
+                        };
+                        Some(pool::pool_spec::CordonDrain::Cordoned(co))
+                    }
+                    None => None,
                 },
             }),
             metadata: Some(pool::Metadata {
@@ -579,5 +611,44 @@ impl From<EncryptionSecret> for common::EncryptionSecret {
 impl From<common::EncryptionSecret> for EncryptionSecret {
     fn from(value: common::EncryptionSecret) -> Self {
         Self { name: value.name }
+    }
+}
+
+/// Pool cordon and uncordon information.
+#[derive(Debug)]
+pub struct PoolCordonRequest {
+    /// Node ID of where the pool resides on.
+    /// This is optional and may be used for stricter checks.
+    pub node_id: Option<NodeId>,
+    /// The ID of the pool to cordon/uncordon.
+    pub pool_id: PoolId,
+    /// Cordon or uncordon replicas.
+    pub replicas: bool,
+    /// Cordon or uncordon snapshots.
+    pub snapshots: bool,
+    /// Cordon or uncordon restores.
+    pub restores: bool,
+}
+
+impl From<CordonPoolRequest> for PoolCordonRequest {
+    fn from(value: CordonPoolRequest) -> Self {
+        Self {
+            node_id: value.node_id.map(Into::into),
+            pool_id: value.pool_id.into(),
+            replicas: value.replicas,
+            snapshots: value.snapshots,
+            restores: value.restores,
+        }
+    }
+}
+impl From<PoolCordonRequest> for CordonPoolRequest {
+    fn from(value: PoolCordonRequest) -> Self {
+        Self {
+            pool_id: value.pool_id.into(),
+            node_id: value.node_id.map(Into::into),
+            replicas: value.replicas,
+            snapshots: value.snapshots,
+            restores: value.restores,
+        }
     }
 }

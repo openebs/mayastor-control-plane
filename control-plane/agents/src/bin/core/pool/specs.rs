@@ -103,6 +103,30 @@ impl SpecOperationsHelper for PoolSpec {
                     Ok(())
                 }
             }
+            PoolOperation::Cordon(cordon) => {
+                if !self.cordon_would_modify(cordon) {
+                    Err(SvcError::CordonResources {
+                        kind: ResourceKind::Pool,
+                        id: self.id().to_string(),
+                        resources: cordon.resources(),
+                    })
+                } else {
+                    self.start_op(op);
+                    Ok(())
+                }
+            }
+            PoolOperation::Uncordon(uncordon) => {
+                if !self.uncordon_would_modify(uncordon) {
+                    Err(SvcError::UncordonResources {
+                        kind: ResourceKind::Pool,
+                        id: self.id().to_string(),
+                        resources: uncordon.resources(),
+                    })
+                } else {
+                    self.start_op(op);
+                    Ok(())
+                }
+            }
             _ => {
                 self.start_op(op);
                 Ok(())
@@ -379,6 +403,18 @@ impl ResourceSpecsLocked {
             .ok_or(PoolNotFound {
                 pool_id: id.to_owned(),
             })
+    }
+    /// Run the given closure with the specified pool resource.
+    pub(crate) fn pool_with<R>(
+        &self,
+        id: &PoolId,
+        run: impl Fn(&ResourceMutex<PoolSpec>) -> R,
+    ) -> Result<R, SvcError> {
+        let specs = self.read();
+        let pool = specs.pools.get(id).ok_or(PoolNotFound {
+            pool_id: id.to_owned(),
+        })?;
+        Ok(run(pool))
     }
     /// Get a pools's node from its spec for the given pool `id`, if it exists.
     pub(crate) fn spec_pool_node(&self, id: &PoolId) -> Option<NodeId> {

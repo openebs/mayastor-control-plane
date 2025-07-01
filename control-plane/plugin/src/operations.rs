@@ -192,8 +192,19 @@ pub trait GetSnapshotTopology {
 #[async_trait(?Send)]
 pub trait Cordoning {
     type ID;
-    async fn cordon(id: &Self::ID, label: &str, output: &utils::OutputFormat) -> PluginResult;
-    async fn uncordon(id: &Self::ID, label: &str, output: &utils::OutputFormat) -> PluginResult;
+    type CREQ: ?Sized;
+    type UREQ: ?Sized;
+
+    async fn cordon(
+        id: &Self::ID,
+        label: &Self::CREQ,
+        output: &utils::OutputFormat,
+    ) -> PluginResult;
+    async fn uncordon(
+        id: &Self::ID,
+        label: &Self::UREQ,
+        output: &utils::OutputFormat,
+    ) -> PluginResult;
 }
 
 /// Delete trait.

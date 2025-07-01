@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import uuid
 from datetime import datetime
 
 import pytest
@@ -216,6 +217,13 @@ class Deployer(object):
         return f"io-engine-{id + 1}"
 
     @staticmethod
+    def pool_name(id: int = None):
+        if id is None:
+            return f"pool-{uuid.uuid4()}"
+        assert id >= 0
+        return f"pool-{id + 1}"
+
+    @staticmethod
     def csi_node_name(id: int):
         assert id >= 0
         return f"csi-node-{id + 1}"
@@ -251,8 +259,20 @@ class Deployer(object):
         return pytest.deployer_options.cache_period
 
     @staticmethod
+    def update_period():
+        cache_period = common.human_time_to_float(pytest.deployer_options.cache_period)
+        reconcile_period = common.human_time_to_float(
+            pytest.deployer_options.reconcile_period
+        )
+        max(cache_period, reconcile_period) * 2
+
+    @staticmethod
     def restart_node(node_name):
         Docker.restart_container(node_name)
+
+    @staticmethod
+    def stop_node(node_name):
+        Docker.stop_container(node_name)
 
 
 def workspace_tmp():
