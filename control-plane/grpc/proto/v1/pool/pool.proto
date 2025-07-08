@@ -180,6 +180,7 @@ message CordonPoolRequest {
   bool replicas = 3;
   bool snapshots = 4;
   bool restores = 5;
+  bool import = 6;
 }
 message CordonPoolReply {
   oneof reply {
@@ -195,6 +196,8 @@ message CordonedState {
   bool snapshots = 2;
   // New restores can't be created
   bool restores = 3;
+  // Pool cannot be imported
+  bool import = 4;
 }
 
 // Service for managing storage pools

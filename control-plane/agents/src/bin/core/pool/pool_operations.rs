@@ -213,6 +213,7 @@ impl ResourceCordon for OperationGuardArc<PoolSpec> {
             replicas: request.replicas,
             snapshots: request.snapshots,
             restores: request.restores,
+            import: request.import,
         };
         let spec_clone = self.lock().clone();
         let spec_clone = self
@@ -232,6 +233,7 @@ impl ResourceCordon for OperationGuardArc<PoolSpec> {
             replicas: request.replicas,
             snapshots: request.snapshots,
             restores: request.restores,
+            import: request.import,
         };
         let spec_clone = self.lock().clone();
         let spec_clone = self

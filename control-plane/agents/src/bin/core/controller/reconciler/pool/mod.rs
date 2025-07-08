@@ -114,10 +114,14 @@ async fn missing_pool_state_reconciler(
         // nothing to do here
         return PollResult::Ok(PollerState::Idle);
     }
-    let pool_id = pool.id();
 
-    if !context.registry().has_pool_state(pool_id).await {
+    if !context.registry().has_pool_state(pool.id()).await {
         let pool_spec = pool.lock().clone();
+
+        if pool_spec.cordoned().map(|s| s.import).unwrap_or_default() {
+            tracing::trace!("Not allowed to import because the pool is cordoned for imports");
+            return PollResult::Ok(PollerState::Idle);
+        }
 
         let warn_missing = |pool_spec: &PoolSpec, node_status: NodeStatus| {
             let node_id = &pool_spec.node;
@@ -125,7 +129,7 @@ async fn missing_pool_state_reconciler(
                 tracing::trace!(
                     node.id = %node_id,
                     node.status = %node_status.to_string(),
-                    "Attempted to recreate missing pool state, but the node is not online"
+                    "Attempted to import the pool, but the node is not online"
                 )
             });
         };
@@ -143,17 +147,17 @@ async fn missing_pool_state_reconciler(
         };
 
         async {
-            pool_spec.warn_span(|| tracing::warn!("Attempting to recreate missing pool"));
+            pool_spec.warn_span(|| tracing::warn!("Attempting to import the pool"));
 
             let request = ImportPool::new(&pool_spec.node, &pool_spec.id, &pool_spec.disks, &pool_spec.encryption);
             match node.import_pool(&request).await {
                 Ok(_) => {
-                    pool_spec.info_span(|| tracing::info!("Pool successfully recreated"));
+                    pool_spec.info_span(|| tracing::info!("Pool successfully imported"));
                     PollResult::Ok(PollerState::Idle)
                 }
                 Err(error) => {
                     pool_spec.error_span(
-                        || tracing::error!(error=%error, "Failed to recreate the pool"),
+                        || tracing::error!(error=%error, "Failed to import the pool")
                     );
                     Err(error)
                 }
