@@ -66,13 +66,13 @@ class Pool(object):
             return label, ""
 
     @staticmethod
-    def cordon(pool, replicas=True, snapshots=False, restores=True):
-        rsc = PoolCordon(replicas, snapshots, restores)
+    def cordon(pool, replicas=True, snapshots=False, restores=True, imports=False):
+        rsc = PoolCordon(replicas, snapshots, restores, imports)
         return Pool.__pools_api().put_pool_cordon(pool.id, pool_cordon_req=rsc)
 
     @staticmethod
-    def uncordon(pool, replicas=True, snapshots=True, restores=True):
-        rsc = PoolCordon(replicas, snapshots, restores)
+    def uncordon(pool, replicas=True, snapshots=True, restores=True, imports=True):
+        rsc = PoolCordon(replicas, snapshots, restores, imports)
         return Pool.__pools_api().del_pool_cordon(pool.id, pool_cordon_req=rsc)
 
     @staticmethod

@@ -45,6 +45,11 @@ Feature: Pool Cordoning
     Then the pool should be imported successfully
     And all pool resources should be Online
 
+  Scenario: Restarting a cordoned pool with import constraint
+    Given a cordoned pool with import constraint
+    When the cordoned pool is restarted
+    Then the pool should be not be imported
+
   Scenario: No replica rebuild due to pool cordon
     Given a published volume with multiple replicas
     And a cordoned pool, otherwise schedulable for the volume

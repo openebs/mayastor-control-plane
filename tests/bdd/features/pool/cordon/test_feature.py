@@ -6,6 +6,7 @@ import pytest
 import uuid
 import http
 import openapi.exceptions
+from common import human_sleep
 from common.apiclient import ApiClient
 from common.operations import wait_pool_online, wait_volume_status, wait_node_status
 from common.operations import Cluster
@@ -28,12 +29,16 @@ from openapi.model.volume import Volume
 
 
 VOLUME_SIZE = 10 * 1024 * 1024
+RECONCILE_PERIOD = "80ms"
 
 
 @pytest.fixture(scope="module")
 def init():
     Deployer.start(
-        3, cache_period="50ms", reconcile_period="80ms", faulted_child_wait_period="0ms"
+        3,
+        cache_period="50ms",
+        reconcile_period=RECONCILE_PERIOD,
+        faulted_child_wait_period="0ms",
     )
     yield
     Deployer.stop()
@@ -85,6 +90,11 @@ def test_restarting_a_cordoned_pool():
     """Restarting a cordoned pool."""
 
 
+@scenario("feature.feature", "Restarting a cordoned pool with import constraint")
+def test_restarting_a_cordoned_pool_with_import_constraint():
+    """Restarting a cordoned pool with import constraint."""
+
+
 @scenario("feature.feature", "Uncordoning a pool")
 def test_uncordoning_a_pool():
     """Uncordoning a pool."""
@@ -107,6 +117,17 @@ def _(disks):
         Deployer.node_name(0), Deployer.pool_name(), CreatePoolBody([f"{disks[0]}"])
     )
     pool = PoolOps.cordon(pool)
+    yield pool
+    PoolOps.cleanup(pool)
+
+
+@given("a cordoned pool with import constraint", target_fixture="pool")
+def _(disks):
+    """a cordoned pool with import constraint."""
+    pool = ApiClient.pools_api().put_node_pool(
+        Deployer.node_name(0), Deployer.pool_name(), CreatePoolBody([f"{disks[0]}"])
+    )
+    pool = PoolOps.cordon(pool, imports=True)
     yield pool
     PoolOps.cleanup(pool)
 
@@ -269,7 +290,7 @@ def _(pool):
 @when("we issue a cordon command with additional constraints")
 def _(pool):
     """we issue a cordon command with additional constraints."""
-    PoolOps.cordon(pool, True, True, True)
+    PoolOps.cordon(pool, True, True, True, False)
 
 
 @when("we issue an uncordon command with all resources")
@@ -292,7 +313,8 @@ def _(pool):
     assert resources["replicas"] == True
     assert resources["snapshots"] == False
     assert resources["restores"] == True
-    PoolOps.uncordon(pool, True, False, False)
+    assert resources["import"] == False
+    PoolOps.uncordon(pool, True, False, False, False)
 
 
 @when("we attempt to increase the replica count", target_fixture="set_repl_request")
@@ -325,6 +347,7 @@ def _(pool, resource):
         "replicas": resource == "replicas",
         "snapshots": resource == "snapshots",
         "restores": resource == "restores",
+        "import": resource == "import",
     }
     PoolOps.cordon(pool, cordon["replicas"], cordon["snapshots"], cordon["restores"])
     yield cordon
@@ -340,6 +363,7 @@ def _(pool, resource, resources):
     assert pool_rsc["replicas"] == resources["replicas"]
     assert pool_rsc["snapshots"] == resources["snapshots"]
     assert pool_rsc["restores"] == resources["restores"]
+    assert pool_rsc["import"] == resources["import"]
     assert pool_rsc[resource] == True
 
     if resource == "replicas":
@@ -348,6 +372,8 @@ def _(pool, resource, resources):
         schedule_snap(pool, True)
     elif resource == "restores":
         schedule_restore(pool, True)
+    else:
+        assert False, "Unexpected!"
 
 
 @then("other resources can")
@@ -378,11 +404,20 @@ def _(volume, set_repl_request):
     assert ApiClient.exception_to_error(response).kind == "ResourceExhausted"
 
 
+@then("the pool should be not be imported")
+def _(pool):
+    """the pool should be not be imported."""
+    for i in range(2):
+        human_sleep(RECONCILE_PERIOD)
+    pool = PoolOps.update(pool)
+    assert not hasattr(pool, "state")
+
+
 @then("all pool resources should be Online")
 def _(pool):
     """all pool resources should be Online."""
     pool = PoolOps.update(pool, False)
-    assert pool.state is not None
+    assert hasattr(pool, "state")
     assert pool.state.status == PoolStatus("Online")
 
 
