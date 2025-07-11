@@ -462,6 +462,47 @@ pub struct CordonReq {
     /// No new restores can be created on the pool.
     #[clap(long)]
     pub restores: bool,
+    /// Pool will not be imported on node/io-engine restart.{n}
+    /// Warning: this may impact existing volume I/O{n}
+    /// This may be useful when repairing the pool metadata.
+    #[clap(long)]
+    pub import: bool,
+    /// Apply all cordon sub-resource scheduling constraints.
+    /// Note: you must selectively enable the import constraint.
+    #[clap(long)]
+    pub all_sub: bool,
+    /// Apply *ALL* cordon constraints.
+    /// Warning: This enables import constraint, which may impact existing volume I/O
+    #[clap(long)]
+    pub all: bool,
+}
+impl Default for CordonReq {
+    fn default() -> Self {
+        Self {
+            replicas: true,
+            snapshots: false,
+            restores: true,
+            import: false,
+            all_sub: false,
+            all: false,
+        }
+    }
+}
+impl From<CordonReq> for models::PoolCordonReq {
+    fn from(value: CordonReq) -> Self {
+        if value.all {
+            models::PoolCordonReq::new_all(true, true, true, false)
+        } else if value.all_sub {
+            models::PoolCordonReq::new_all(true, true, true, value.import)
+        } else {
+            models::PoolCordonReq::new_all(
+                value.replicas,
+                value.snapshots,
+                value.restores,
+                value.import,
+            )
+        }
+    }
 }
 
 #[derive(Debug, Clone, clap::Args)]
@@ -475,6 +516,37 @@ pub struct UncordonReq {
     /// New restores can be created on the pool.
     #[clap(long)]
     pub restores: bool,
+    /// Pool may be imported again.
+    #[clap(long)]
+    pub import: bool,
+    /// Remove all cordon constraints (default).
+    #[clap(long)]
+    pub all: bool,
+}
+impl Default for UncordonReq {
+    fn default() -> Self {
+        Self {
+            replicas: true,
+            snapshots: true,
+            restores: true,
+            import: true,
+            all: true,
+        }
+    }
+}
+impl From<UncordonReq> for models::PoolCordonReq {
+    fn from(value: UncordonReq) -> Self {
+        if value.all {
+            models::PoolCordonReq::new_all(true, true, true, true)
+        } else {
+            models::PoolCordonReq::new_all(
+                value.replicas,
+                value.snapshots,
+                value.restores,
+                value.import,
+            )
+        }
+    }
 }
 
 #[async_trait(?Send)]
@@ -484,36 +556,37 @@ impl Cordoning for Pool {
     type UREQ = Option<UncordonReq>;
 
     async fn cordon(id: &Self::ID, resources: &Self::CREQ, output: &OutputFormat) -> PluginResult {
-        let resources = resources.clone().unwrap_or(CordonReq {
-            replicas: true,
-            snapshots: false,
-            restores: true,
-        });
-        let body = models::PoolCordonReq::new_all(
-            resources.replicas,
-            resources.snapshots,
-            resources.restores,
-        );
+        let body = models::PoolCordonReq::from(resources.clone().unwrap_or_default());
         match RestClient::client()
             .pools_api()
             .put_pool_cordon(id, body)
             .await
         {
-            Ok(node) => match output {
+            Ok(pool) => match output {
                 OutputFormat::Yaml | OutputFormat::Json => {
                     // Print json or yaml based on output format.
-                    utils::print_table(output, node.into_body());
+                    utils::print_table(output, pool.into_body());
                 }
                 OutputFormat::None => {
                     // In case the output format is not specified, show a success message.
-                    println!("Pool {id} cordoned successfully")
+                    let constraints = pool_cordon_resources(&pool.into_body());
+                    println!("Pool {id} cordoned successfully. Current constraints: {constraints}");
                 }
             },
             Err(source) => {
                 if source.error_body().map(|b| b.kind)
                     == Some(models::rest_json_error::Kind::AlreadyExists)
                 {
-                    println!("Pool {id} already cordoned");
+                    let pool = RestClient::client()
+                        .pools_api()
+                        .get_pool(id)
+                        .await
+                        .map_err(|source| Error::GetPoolError {
+                            id: id.to_string(),
+                            source,
+                        })?;
+                    let constraints = pool_cordon_resources(&pool.into_body());
+                    println!("Pool {id} is already cordoned. Current constraints: {constraints}");
                 } else {
                     return Err(Error::PoolCordonError {
                         id: id.to_string(),
@@ -530,16 +603,7 @@ impl Cordoning for Pool {
         resources: &Self::UREQ,
         output: &OutputFormat,
     ) -> PluginResult {
-        let resources = resources.clone().unwrap_or(UncordonReq {
-            replicas: true,
-            snapshots: true,
-            restores: true,
-        });
-        let body = models::PoolCordonReq::new_all(
-            resources.replicas,
-            resources.snapshots,
-            resources.restores,
-        );
+        let body = models::PoolCordonReq::from(resources.clone().unwrap_or_default());
         let (failed, pool) = match RestClient::client()
             .pools_api()
             .del_pool_cordon(id, body)
@@ -575,14 +639,14 @@ impl Cordoning for Pool {
                 let resources = pool_cordon_resources(&pool.into_body());
                 if failed {
                     if resources.is_empty() {
-                        println!("Pool {id} already uncordoned");
+                        println!("Pool {id} is already uncordoned");
                     } else {
-                        println!("Pool {id} already partially uncordoned. Remaining cordoned resources: {resources:?}");
+                        println!("Pool {id} is already partially uncordoned. Remaining constraints: {resources}");
                     }
                 } else if resources.is_empty() {
                     println!("Pool {id} successfully uncordoned");
                 } else {
-                    println!("Pool {id} partially uncordoned. Remaining cordoned resources: {resources:?}");
+                    println!("Pool {id} partially uncordoned. Remaining constraints: {resources}");
                 }
             }
         }
@@ -598,15 +662,20 @@ fn resource(yes: bool, name: &str) -> &str {
     }
 }
 fn cordon_resources(rsc: &models::PoolCordon) -> String {
-    [
+    let cordon = [
         resource(rsc.replicas, "replicas"),
         resource(rsc.snapshots, "snapshots"),
         resource(rsc.restores, "restores"),
+        resource(rsc.import, "import"),
     ]
     .into_iter()
     .filter(|s| !s.is_empty())
     .collect::<Vec<&str>>()
-    .join(",")
+    .join(",");
+    if cordon.is_empty() {
+        return "Unknown".to_string();
+    }
+    cordon
 }
 fn pool_cordon_resources(pool: &models::Pool) -> String {
     match &pool.spec {

@@ -144,6 +144,7 @@ impl apis::actix_server::Pools for RestApi {
             replicas: body.replicas,
             snapshots: body.snapshots,
             restores: body.restores,
+            import: body.import,
         };
         let pool = client().cordon(request).await?;
         Ok(pool.into())
@@ -159,6 +160,7 @@ impl apis::actix_server::Pools for RestApi {
             replicas: body.replicas,
             snapshots: body.snapshots,
             restores: body.restores,
+            import: body.import,
         };
         let pool = client().uncordon(request).await?;
         Ok(pool.into())

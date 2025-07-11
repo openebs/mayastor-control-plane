@@ -114,6 +114,7 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
                             replicas: state.replicas,
                             snapshots: state.snapshots,
                             restores: state.restores,
+                            import: state.import,
                         }))
                     }
                 },
@@ -200,6 +201,7 @@ impl From<PoolSpec> for pool::PoolDefinition {
                                 replicas: state.replicas,
                                 snapshots: state.snapshots,
                                 restores: state.restores,
+                                import: state.import,
                             },
                         };
                         Some(pool::pool_spec::CordonDrain::Cordoned(co))
@@ -628,6 +630,8 @@ pub struct PoolCordonRequest {
     pub snapshots: bool,
     /// Cordon or uncordon restores.
     pub restores: bool,
+    /// Importing the pool after node/engine restart.
+    pub import: bool,
 }
 
 impl From<CordonPoolRequest> for PoolCordonRequest {
@@ -638,6 +642,7 @@ impl From<CordonPoolRequest> for PoolCordonRequest {
             replicas: value.replicas,
             snapshots: value.snapshots,
             restores: value.restores,
+            import: value.import,
         }
     }
 }
@@ -649,6 +654,7 @@ impl From<PoolCordonRequest> for CordonPoolRequest {
             replicas: value.replicas,
             snapshots: value.snapshots,
             restores: value.restores,
+            import: value.import,
         }
     }
 }

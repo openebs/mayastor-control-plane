@@ -222,6 +222,11 @@ impl PoolSpec {
         })
     }
 
+    /// Check if the pool is cordoned for imports.
+    pub fn cordoned_imports(&self) -> bool {
+        self.cordoned().map(|s| s.import).unwrap_or_default()
+    }
+
     /// Returns true if all labels are already present.
     pub fn cordon_would_modify(&self, op: &PoolCordonOp) -> bool {
         match &self.cordon_drain {
@@ -378,6 +383,8 @@ pub struct PoolCordonOp {
     pub snapshots: bool,
     /// No new restores can be created on this pool
     pub restores: bool,
+    /// Pool cannot be imported after node/engine restart.
+    pub import: bool,
 }
 impl PoolCordonOp {
     fn resource(yes: bool, name: &str) -> &str {
@@ -393,6 +400,7 @@ impl PoolCordonOp {
             Self::resource(self.replicas, "replicas"),
             Self::resource(self.snapshots, "snapshots"),
             Self::resource(self.restores, "restores"),
+            Self::resource(self.import, "import"),
         ]
         .into_iter()
         .filter(|s| !s.is_empty())
@@ -495,16 +503,18 @@ impl From<models::Encryption> for Encryption {
 #[derive(Clone, Default, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CordonedState {
     // todo: or should these be negated, ie: by default all blocked?
-    /// No new replicas can be created on this pool
+    /// No new replicas can be created on this pool.
     pub replicas: bool,
-    /// No new snapshots can be created on this pool
+    /// No new snapshots can be created on this pool.
     pub snapshots: bool,
-    /// No new restores can be created on this pool
+    /// No new restores can be created on this pool.
     pub restores: bool,
+    /// Pool cannot be imported after node/engine restart.
+    pub import: bool,
 }
 impl CordonedState {
     fn cordoned(&self) -> bool {
-        self.replicas || self.snapshots || self.restores
+        self.replicas || self.snapshots || self.restores || self.import
     }
 }
 
@@ -514,6 +524,7 @@ impl From<PoolCordonOp> for CordonedState {
             replicas: value.replicas,
             snapshots: value.snapshots,
             restores: value.restores,
+            import: value.import,
         }
     }
 }
@@ -526,15 +537,17 @@ impl CordonedState {
     }
     /// Add cordon resources.
     pub fn add_cordon(&mut self, op: PoolCordonOp) {
-        Self::set_if(op.replicas, &mut self.replicas, true);
-        Self::set_if(op.snapshots, &mut self.snapshots, true);
-        Self::set_if(op.restores, &mut self.restores, true);
+        self.op_cordon(op, true);
     }
     /// Remove cordon resources.
     pub fn rm_cordon(&mut self, op: PoolCordonOp) {
-        Self::set_if(op.replicas, &mut self.replicas, false);
-        Self::set_if(op.snapshots, &mut self.snapshots, false);
-        Self::set_if(op.restores, &mut self.restores, false);
+        self.op_cordon(op, false);
+    }
+    fn op_cordon(&mut self, op: PoolCordonOp, cordon: bool) {
+        Self::set_if(op.replicas, &mut self.replicas, cordon);
+        Self::set_if(op.snapshots, &mut self.snapshots, cordon);
+        Self::set_if(op.restores, &mut self.restores, cordon);
+        Self::set_if(op.import, &mut self.import, cordon);
     }
     fn if_modify(current: bool, op: bool, cordon: bool) -> bool {
         if cordon {
@@ -548,6 +561,7 @@ impl CordonedState {
         Self::if_modify(self.replicas, op.replicas, cordon)
             || Self::if_modify(self.snapshots, op.snapshots, cordon)
             || Self::if_modify(self.restores, op.restores, cordon)
+            || Self::if_modify(self.import, op.import, cordon)
     }
 }
 
@@ -591,6 +605,7 @@ impl From<CordonDrainState> for models::PoolCordonDrain {
                     replicas: state.replicas,
                     snapshots: state.snapshots,
                     restores: state.restores,
+                    import: state.import,
                 };
                 Self::cordoned(cs)
             }

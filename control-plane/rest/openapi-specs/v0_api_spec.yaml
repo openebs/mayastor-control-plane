@@ -4338,10 +4338,13 @@ components:
           type: boolean
         restores:
           type: boolean
+        import:
+          type: bool
       required:
         - replicas
         - snapshots
         - restores
+        - import
     PoolCordon:
       description: The pool is cordoned with the following resource constraints
       type: object
@@ -4355,10 +4358,14 @@ components:
         restores:
           description: No new restores can be created on this pool
           type: boolean
+        import:
+          description: Pool cannot be imported in case of node/engine restart.
+          type: boolean
       required:
         - replicas
         - snapshots
         - restores
+        - import
     CordonDrainState:
       description: The cordon and drain state
       type: object

@@ -106,7 +106,8 @@ pub enum CordonResources {
     /// Cordon the node with the given ID by applying the cordon label to that node.
     Node { id: NodeId, label: String },
     /// Cordon the pool with the given ID by applying the cordon constraints to that pool{n}
-    /// By default all resources are cordoned. Otherwise you may individually select specific constraints.
+    /// By default only replicas and restores are constrained. Otherwise, you may individually
+    /// select specific constraints.
     Pool {
         /// Id of the pool to cordon.
         id: PoolId,
@@ -122,8 +123,8 @@ pub enum UnCordonResources {
     /// When the node has no more cordon labels, it is effectively uncordoned.
     Node { id: NodeId, label: String },
     /// Removes the cordon constraints from the pool.
-    /// When the pool has no more cordon labels, it is effectively uncordoned{n}
-    /// By default all resources are cordoned. Otherwise you may individually select specific constraints removal.
+    /// When the pool has no more cordon constraints, it is effectively uncordoned{n}
+    /// By default all constraints are removed. Otherwise, you may individually select specific constraints' removal.
     Pool {
         /// Id of the pool to uncordon.
         id: PoolId,
