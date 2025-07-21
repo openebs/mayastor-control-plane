@@ -971,7 +971,7 @@ async fn test_disown_missing_replica_owners() {
     // Modify the replica spec in the store so that the replica has a volume and nexus owner;
     // neither of which exist.
     let mut etcd = Etcd::new("0.0.0.0:2379").await.unwrap();
-    let mut replica: ReplicaSpec = etcd
+    let (mut replica, _mod_rev): (ReplicaSpec, i64) = etcd
         .get_obj(&ReplicaSpecKey::from(&replica_id))
         .await
         .unwrap();

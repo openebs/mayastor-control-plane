@@ -142,7 +142,7 @@ impl OperationGuardArc<VolumeSpec> {
     ) -> Result<(), SvcError> {
         let health_info = self.lock().health_info_id().cloned();
         let nexus_info = registry
-            .nexus_info(Some(self.uuid()), health_info.as_ref(), true)
+            .nexus_info(Some(self.uuid()), health_info.as_ref(), true, None)
             .await?
             .ok_or(SvcError::Internal {
                 details: "No NexusInfo for a volume with allocated storage?".into(),

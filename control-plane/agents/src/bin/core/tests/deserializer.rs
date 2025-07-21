@@ -208,9 +208,10 @@ fn test_deserialization_v1_to_v2() {
             )),
         },
         TestEntry {
-            json_str: r#"{"children":[{"healthy":true,"uuid":"82779efa-a0c7-4652-a37b-83eefd894714"},{"healthy":true,"uuid":"2d98fa96-ac12-40be-acdc-e3559c0b1530"},{"healthy":true,"uuid":"620ff519-419a-48d6-97a8-c1ba3260d87e"}],"clean_shutdown":false}"#,
+            json_str: r#"{"children":[{"healthy":true,"uuid":"82779efa-a0c7-4652-a37b-83eefd894714"},{"healthy":true,"uuid":"2d98fa96-ac12-40be-acdc-e3559c0b1530"},{"healthy":true,"uuid":"620ff519-419a-48d6-97a8-c1ba3260d87e"}],"clean_shutdown":false, "do_self_shutdown":false}"#,
             expected: Expected::NexusInfo(NexusInfo {
                 clean_shutdown: false,
+                do_self_shutdown: false,
                 children: vec![
                     ChildInfo {
                         uuid: ReplicaId::try_from("82779efa-a0c7-4652-a37b-83eefd894714").unwrap(),

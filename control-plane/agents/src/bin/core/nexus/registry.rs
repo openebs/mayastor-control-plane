@@ -73,6 +73,7 @@ impl Registry {
         volume_uuid: Option<&VolumeId>,
         nexus_uuid: Option<&NexusId>,
         missing_key_is_error: bool,
+        get_mod_revision: Option<&mut i64>,
     ) -> Result<Option<NexusInfo>, SvcError> {
         match nexus_uuid {
             None => Ok(None),
@@ -100,8 +101,11 @@ impl Registry {
                 };
 
                 match result {
-                    Ok(mut info) => {
+                    Ok((mut info, mod_rev)) => {
                         info.uuid = nexus_uuid.clone();
+                        if let Some(mrev) = get_mod_revision {
+                            *mrev = mod_rev;
+                        }
                         Ok(Some(info))
                     }
                     Err(SvcError::StoreMissingEntry { .. }) if !missing_key_is_error => Ok(None),

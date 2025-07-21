@@ -301,7 +301,8 @@ async fn hotspare_replica_count_spread(cluster: &Cluster) {
         .await
         .expect("Failed to connect to etcd.");
 
-    let mut volume_spec: VolumeSpec = store.get_obj(&volume.spec().key()).await.unwrap();
+    let (mut volume_spec, _mod_rev): (VolumeSpec, i64) =
+        store.get_obj(&volume.spec().key()).await.unwrap();
     volume_spec.num_replicas = replica_count as u8;
     tracing::info!("VolumeSpec: {:?}", volume_spec);
     store.put_obj(&volume_spec).await.unwrap();
@@ -468,7 +469,8 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
         .await
         .expect("Failed to connect to etcd.");
 
-    let mut volume_spec: VolumeSpec = store.get_obj(&volume.spec().key()).await.unwrap();
+    let (mut volume_spec, _mod_rev): (VolumeSpec, i64) =
+        store.get_obj(&volume.spec().key()).await.unwrap();
     volume_spec.num_replicas += 1;
     tracing::info!("VolumeSpec: {:?}", volume_spec);
     store.put_obj(&volume_spec).await.unwrap();
@@ -489,7 +491,8 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
     )
     .await;
 
-    let mut volume_spec: VolumeSpec = store.get_obj(&volume.spec().key()).await.unwrap();
+    let (mut volume_spec, _mod_rev): (VolumeSpec, i64) =
+        store.get_obj(&volume.spec().key()).await.unwrap();
     volume_spec.num_replicas -= 1;
     tracing::info!("VolumeSpec: {:?}", volume_spec);
     store.put_obj(&volume_spec).await.unwrap();

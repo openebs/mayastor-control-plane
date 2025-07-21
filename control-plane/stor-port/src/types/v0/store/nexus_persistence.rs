@@ -20,6 +20,9 @@ pub struct NexusInfo {
     pub volume_uuid: Option<VolumeId>,
     /// Nexus destroyed successfully.
     pub clean_shutdown: bool,
+    /// Nexus need to be self shutdown by io-engine.
+    #[serde(default)]
+    pub do_self_shutdown: bool,
     /// Information about children.
     pub children: Vec<ChildInfo>,
 }

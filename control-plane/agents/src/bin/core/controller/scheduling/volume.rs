@@ -277,6 +277,7 @@ impl GetChildForRemovalContext {
                 Some(&request.spec.uuid),
                 request.spec.health_info_id(),
                 true,
+                None,
             )
             .await?;
 
@@ -519,7 +520,7 @@ impl VolumeReplicasForNexusCtx {
         nx_spec: &NexusSpec,
     ) -> Result<Self, SvcError> {
         let nexus_info = registry
-            .nexus_info(Some(&vol_spec.uuid), Some(&nx_spec.uuid), true)
+            .nexus_info(Some(&vol_spec.uuid), Some(&nx_spec.uuid), true, None)
             .await?;
 
         let shutdown_pending_nexuses = registry

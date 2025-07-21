@@ -565,12 +565,50 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         self.validate_update_step(registry, result, &spec_clone)
             .await?;
 
+        let mut mod_rev: i64 = i64::MIN;
+        let old_nexus_info = match registry
+            .nexus_info(
+                Some(&request.uuid),
+                Some(older_nexus.uuid()),
+                false,
+                Some(&mut mod_rev),
+            )
+            .await
+        {
+            Ok(n) => n,
+            Err(e) => {
+                return self
+                    .validate_update_step(registry, Err(e), &spec_clone)
+                    .await;
+            }
+        };
         // Create a Nexus on the requested or auto-selected node.
         let result = self.create_nexus(registry, &target_cfg).await;
         let (mut nexus, nexus_state) = self
             .validate_update_step(registry, result, &spec_clone)
             .await?;
+
         let allowed_host = target_cfg.frontend().node_nqns();
+        if older_nexus.as_ref().status_info().shutdown_failed() {
+            // New nexus is created but not yet shared.
+            // At this point, mark the older nexus for a self shutdown in case io-engine is
+            // racing with this republish and doing some modifications to persistent nexus info.
+            if let Some(mut old_nexus_info) = old_nexus_info {
+                old_nexus_info.do_self_shutdown = true;
+                old_nexus_info.volume_uuid = Some(spec_clone.uuid.clone());
+                tracing::debug!(nexus.uuid=%older_nexus.as_ref().uuid, "Updated nexusinfo(mod_rev {mod_rev:?}) - {old_nexus_info:?}");
+                if let Err(e) = registry.store_obj_cas(&old_nexus_info, mod_rev).await {
+                    nexus
+                        .destroy(registry, &DestroyNexus::from(nexus_state).with_disown_all())
+                        .await
+                        .ok();
+                    return self
+                        .validate_update_step(registry, Err(e), &spec_clone)
+                        .await;
+                }
+            }
+        }
+
         // Share the Nexus.
         let result = match nexus
             .share(

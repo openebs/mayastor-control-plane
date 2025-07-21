@@ -269,7 +269,7 @@ impl Registry {
     ) -> Result<CoreRegistryConfig, StoreError> {
         let config = CoreRegistryConfig::new(NodeRegistration::Automatic);
         let mut config = match store.get_obj(&config.key()).await {
-            Ok(config) => config,
+            Ok((config, _mod_rev)) => config,
             Err(StoreError::MissingEntry { .. }) => {
                 store.put_obj(&config).await?;
                 config
@@ -383,8 +383,36 @@ impl Registry {
         }
     }
 
+    /// Serialized write to the persistent store. Compare and Swap with expected value.
+    pub(crate) async fn store_obj_cas<O: StorableObject>(
+        &self,
+        object: &O,
+        expected_mod_rev: i64,
+    ) -> Result<(), SvcError> {
+        let store = self.store.clone();
+        match tokio::time::timeout(self.store_timeout, async move {
+            let mut store = store.lock().await;
+            Self::op_with_threshold(
+                async move { store.put_obj_cas(object, expected_mod_rev).await },
+            )
+            .await
+        })
+        .await
+        {
+            Ok(result) => result.map_err(Into::into),
+            Err(_) => Err(StoreError::Timeout {
+                operation: "Put_CAS".to_string(),
+                timeout: self.store_timeout,
+            }
+            .into()),
+        }
+    }
+
     /// Serialized read from the persistent store.
-    pub(crate) async fn load_obj<O: StorableObject>(&self, key: &O::Key) -> Result<O, SvcError> {
+    pub(crate) async fn load_obj<O: StorableObject>(
+        &self,
+        key: &O::Key,
+    ) -> Result<(O, i64), SvcError> {
         let store = self.store.clone();
         match tokio::time::timeout(self.store_timeout, async move {
             let mut store = store.lock().await;
@@ -539,9 +567,9 @@ impl Registry {
             let Ok(mut info) = pstor_cache.get_obj::<NexusInfo>(&nexus_info_key).await else {
                 continue;
             };
-            info.uuid = nexus_info_key.nexus_id().clone();
-            info.volume_uuid = Some(volume.uuid().clone());
-            health.if_empty_insert(info);
+            info.0.uuid = nexus_info_key.nexus_id().clone();
+            info.0.volume_uuid = Some(volume.uuid().clone());
+            health.if_empty_insert(info.0);
         }
         Ok(())
     }

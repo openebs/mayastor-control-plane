@@ -269,12 +269,12 @@ impl EtcdSingletonLock {
     }
     /// Get the current owner lease id, or None if it does not exist.
     async fn get_owner_lease_id(&mut self) -> Result<Option<String>, Error> {
-        let owner: Result<StoreLeaseOwner, Error> = Etcd::from(&self.client, None)
+        let owner: Result<(StoreLeaseOwner, i64), Error> = Etcd::from(&self.client, None)
             .get_obj(&StoreLeaseOwnerKey::new(&self.service_name))
             .await;
 
         match owner {
-            Ok(owner) => Ok(Some(owner.lease_id().to_string())),
+            Ok((owner, _mod_rev)) => Ok(Some(owner.lease_id().to_string())),
             Err(Error::MissingEntry { .. }) => Ok(None),
             Err(e) => Err(e),
         }
