@@ -74,8 +74,8 @@ impl ComponentAction for CoreAgent {
         if options.allow_non_persistent_devlink {
             binary = binary.with_args(vec!["--allow-non-persistent-devlink"]);
         }
-        if let Some(cluster_size) = options.pool_bs_cluster_size {
-            binary = binary.with_args(vec!["--pool-bs-cluster-size", &cluster_size.to_string()]);
+        if let Some(cluster_size) = options.pool_cluster_size {
+            binary = binary.with_args(vec!["--pool-cluster-size", &cluster_size.to_string()]);
         }
 
         Ok(cfg.add_container_spec(

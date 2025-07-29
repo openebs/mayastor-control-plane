@@ -11,6 +11,10 @@ use crate::types::v0::{
 
 pub const POOL_BS_CLUSTER_SIZE_DEFAULT: u32 = 4194304;
 
+pub fn default_pool_cluster_size() -> u32 {
+    POOL_BS_CLUSTER_SIZE_DEFAULT
+}
+
 // PoolLabel is the type for the labels
 pub type PoolLabel = HashMap<String, String>;
 

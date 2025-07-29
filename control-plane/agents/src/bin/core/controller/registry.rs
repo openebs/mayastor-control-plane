@@ -121,7 +121,7 @@ pub(crate) struct RegistryInner<S: Store> {
     encrypted_pools_soft_scheduling: bool,
     /// Blobstore cluster size(in bytes) required for pool creation and replica scheduling. This is
     /// not per-pool.
-    pool_bs_cluster_size: Option<u32>,
+    pool_cluster_size: Option<u32>,
 }
 
 impl Registry {
@@ -150,7 +150,7 @@ impl Registry {
         no_volume_health: bool,
         allow_non_persistent_devlinks: bool,
         encrypted_pools_soft_scheduling: bool,
-        pool_bs_cluster_size: Option<u32>,
+        pool_cluster_size: Option<u32>,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -212,7 +212,7 @@ impl Registry {
                 etcd_max_page_size,
                 allow_non_persistent_devlinks,
                 encrypted_pools_soft_scheduling,
-                pool_bs_cluster_size: pool_bs_cluster_size.or(Some(POOL_BS_CLUSTER_SIZE_DEFAULT)),
+                pool_cluster_size: pool_cluster_size.or(Some(POOL_BS_CLUSTER_SIZE_DEFAULT)),
             }),
         };
         registry.init().await?;
@@ -250,8 +250,8 @@ impl Registry {
     }
 
     /// Get the configured pool cluster_size.
-    pub(crate) fn pool_bs_cluster_size(&self) -> Option<u32> {
-        self.pool_bs_cluster_size
+    pub(crate) fn pool_cluster_size(&self) -> Option<u32> {
+        self.pool_cluster_size
     }
 
     /// Check if the partial rebuilds are disabled.

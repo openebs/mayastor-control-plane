@@ -361,7 +361,7 @@ pub struct StartOptions {
     /// not configurable per-pool here. However, the create pool request can be used
     /// to configure cluster size per-pool.
     #[clap(long)]
-    pool_bs_cluster_size: Option<u32>,
+    pool_cluster_size: Option<u32>,
 }
 
 /// List of KeyValues
@@ -622,8 +622,8 @@ impl StartOptions {
     }
 
     /// blobstore cluster size to be used for disk pools.
-    pub fn with_pool_bs_cluster_size(mut self, bs_cluster_size: Option<u32>) -> Self {
-        self.pool_bs_cluster_size = bs_cluster_size;
+    pub fn with_pool_cluster_size(mut self, cluster_size: Option<u32>) -> Self {
+        self.pool_cluster_size = cluster_size;
         self
     }
 

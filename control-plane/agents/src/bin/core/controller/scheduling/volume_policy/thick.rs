@@ -24,6 +24,7 @@ impl ResourcePolicy<AddVolumeReplica> for ThickPolicy {
         DefaultBasePolicy::filter(to)
             .filter(PoolBaseFilters::min_free_space_full_rebuild)
             .filter(PoolBaseFilters::encrypted)
+            .filter(PoolBaseFilters::cluster_size)
             .filter(affinity_group::SingleReplicaPolicy::replica_anti_affinity)
             .sort_ctx(ThickPolicy::sort_pools)
     }

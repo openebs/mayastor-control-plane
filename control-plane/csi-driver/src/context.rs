@@ -2,6 +2,7 @@ use crate::filesystem::FileSystem;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use kube::api::{Patch, PatchParams};
 use kube::{Api, Client};
+use parse_size::parse_size;
 use regex::Regex;
 use std::{
     collections::HashMap,
@@ -79,6 +80,8 @@ pub enum Parameters {
     FormatOptions,
     #[strum(serialize = "overrideGlobalFormatOpts")]
     OverrideGlobalFormatOpts,
+    #[strum(serialize = "pool_cluster_size")]
+    PoolAllocationUnitSize,
 }
 impl Parameters {
     fn parse_human_time(
@@ -260,6 +263,18 @@ impl Parameters {
         value: Option<&String>,
     ) -> Result<Option<bool>, ParseBoolError> {
         Self::parse_bool(value)
+    }
+    /// Parse the value for `Self::PoolAllocationUnitSize`
+    pub fn pool_cluster_size(value: Option<&String>) -> Result<Option<u64>, tonic::Status> {
+        if let Some(value) = value {
+            let alloc_unit_bytes = parse_size(value).ok();
+            if alloc_unit_bytes.is_none() {
+                return Err(tonic::Status::invalid_argument(format!(
+                    "Invalid `PoolClusterSize` value {value:?}, expected a number with capacity unit suffix"
+                )));
+            }
+        }
+        Ok(None)
     }
 }
 
@@ -492,6 +507,7 @@ pub struct CreateParams {
     encrypted: Option<bool>,
     pvc_name: Option<String>,
     pvc_namespace: Option<String>,
+    pool_cluster_size: Option<u64>,
 }
 impl CreateParams {
     /// Get the `Parameters::PublishParams` value.
@@ -517,6 +533,10 @@ impl CreateParams {
     /// Get the `Parameters::Encrypted` value.
     pub fn encrypted(&self) -> Option<bool> {
         self.encrypted
+    }
+    /// Get the `Parameters::PoolAllocationUnitSize` value.
+    pub fn pool_cluster_size(&self) -> Option<u64> {
+        self.pool_cluster_size
     }
     /// Get the sts_affinity_group name from annotations if exists else generate it.
     pub async fn sts_affinity_group(&self) -> Result<Option<StsAffinityGroupInfo>, tonic::Status> {
@@ -692,6 +712,9 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
                 tonic::Status::invalid_argument("Invalid `Encrypted` value, expected a boolean")
             })?;
 
+        let pool_cluster_size =
+            Parameters::pool_cluster_size(args.get(Parameters::PoolAllocationUnitSize.as_ref()))?;
+
         Ok(Self {
             publish_params,
             share_protocol,
@@ -702,6 +725,7 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
             encrypted,
             pvc_name,
             pvc_namespace,
+            pool_cluster_size,
         })
     }
 }

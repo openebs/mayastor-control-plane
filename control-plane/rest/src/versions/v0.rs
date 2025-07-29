@@ -213,6 +213,8 @@ pub struct CreateVolumeBody {
     pub max_snapshots: Option<u32>,
     /// Data encryption.
     pub encryption: bool,
+    /// Blobstore cluster size required for pools hosting this volume's replicas.
+    pub cluster_size: Option<u32>,
 }
 impl From<models::CreateVolumeBody> for CreateVolumeBody {
     fn from(src: models::CreateVolumeBody) -> Self {
@@ -226,6 +228,7 @@ impl From<models::CreateVolumeBody> for CreateVolumeBody {
             affinity_group: src.affinity_group.map(|ag| ag.into()),
             max_snapshots: src.max_snapshots,
             encryption: src.encrypted,
+            cluster_size: src.cluster_size.map(|c| c as u32),
         }
     }
 }
@@ -241,6 +244,7 @@ impl From<CreateVolume> for CreateVolumeBody {
             affinity_group: create.affinity_group,
             max_snapshots: create.max_snapshots,
             encryption: create.encrypted,
+            cluster_size: create.cluster_size,
         }
     }
 }
@@ -259,6 +263,7 @@ impl CreateVolumeBody {
             cluster_capacity_limit: None,
             max_snapshots: self.max_snapshots,
             encrypted: self.encryption,
+            cluster_size: self.cluster_size,
         }
     }
     /// Convert into rpc request type.

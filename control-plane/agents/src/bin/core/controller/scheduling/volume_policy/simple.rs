@@ -41,6 +41,7 @@ impl ResourcePolicy<AddVolumeReplica> for SimplePolicy {
         DefaultBasePolicy::filter(to)
             .filter(PoolBaseFilters::min_free_space)
             .filter(PoolBaseFilters::encrypted)
+            .filter(PoolBaseFilters::cluster_size)
             .filter(affinity_group::SingleReplicaPolicy::replica_anti_affinity)
             .filter_param(&self, SimplePolicy::min_free_space)
             .filter_param(&self, SimplePolicy::pool_overcommit)

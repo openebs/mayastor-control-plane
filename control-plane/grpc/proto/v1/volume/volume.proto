@@ -79,6 +79,8 @@ message VolumeSpec {
 
   // Data encryption.
   optional bool encrypted = 14;
+  // Blobstore cluster size required for pools hosting this volume's replicas.
+  optional uint32 cluster_size = 15;
 }
 
 message Metadata {
@@ -298,6 +300,8 @@ message CreateVolumeRequest {
   optional uint32 max_snapshots = 11;
   // Data encryption.
   optional bool encrypted = 12;
+  // Blobstore cluster size required for pools hosting this volume's replicas.
+  optional uint32 cluster_size = 13;
 }
 
 // Publish a volume on a node

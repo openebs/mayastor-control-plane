@@ -116,8 +116,7 @@ impl PoolWrapper {
     }
 
     /// Get the pool's blobstore cluster size.
-    #[allow(dead_code)]
-    pub(crate) fn bs_cluster_size(&self) -> u32 {
+    pub(crate) fn cluster_size(&self) -> u32 {
         self.cluster_size
     }
 
