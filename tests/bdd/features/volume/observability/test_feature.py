@@ -1,27 +1,23 @@
 """Volume observability feature tests."""
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.replica_state import ReplicaState
+from openapi.model.replica_topology import ReplicaTopology
+from openapi.model.spec_status import SpecStatus
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.volume_spec import VolumeSpec
+from openapi.model.volume_state import VolumeState
+from openapi.model.volume_status import VolumeStatus
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_spec import VolumeSpec
-from openapi.model.volume_state import VolumeState
-from openapi.model.volume_status import VolumeStatus
-from openapi.model.spec_status import SpecStatus
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.replica_state import ReplicaState
-from openapi.model.replica_topology import ReplicaTopology
-
 
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"

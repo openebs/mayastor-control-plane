@@ -1,9 +1,15 @@
 """Pool reconciliation feature tests."""
 
 import http
-import os
-import pytest
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from openapi.exceptions import ApiException, NotFoundException
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.node_status import NodeStatus
+from openapi.model.pool_status import PoolStatus
 from pytest_bdd import (
     given,
     scenario,
@@ -11,15 +17,6 @@ from pytest_bdd import (
     when,
 )
 from retrying import retry
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.node_status import NodeStatus
-from openapi.model.pool_status import PoolStatus
-from openapi.exceptions import ApiException
-from openapi.exceptions import NotFoundException
 
 
 @scenario("feature.feature", "destroying a pool that needs to be deleted")

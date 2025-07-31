@@ -1,33 +1,31 @@
 """Swap ANA enabled Nexus on ANA enabled host feature tests."""
 
+import subprocess
+from time import sleep
+
+import pytest
+from common import nvme_nqn_prefix
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from common.fio import Fio
+from common.node_agent import HaNodeHandle
+from common.nvme import (
+    nvme_connect,
+    nvme_disconnect,
+    nvme_list_subsystems,
+)
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.publish_volume_body import PublishVolumeBody
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-import pytest
-import subprocess
-from time import sleep
-
-from common import nvme_nqn_prefix
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-from common.node_agent import HaNodeHandle
-from common.fio import Fio
-from common.nvme import (
-    nvme_connect,
-    nvme_disconnect,
-    nvme_list_subsystems,
-    nvme_disconnect_controller,
-)
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.publish_volume_body import PublishVolumeBody
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1123"
 VOLUME_SIZE = 10485761
@@ -53,7 +51,6 @@ def test_replace_failed_io_path_on_demand_for_nvme_controller():
 @given("a client connected to one nexus via single I/O path")
 def a_client_connected_to_one_nexus_via_single_io_path(connect_to_first_path):
     """a client connected to one nexus via single I/O path."""
-    pass
 
 
 @given(
@@ -65,13 +62,11 @@ def a_control_plane_2_anaenabled_io_engine_instances_1_anaenabled_host_and_a_pub
     """a control plane, 2 ANA-enabled Io-Engine instances, 1 ANA-enabled host and a published volume."""
     volume = background
     assert hasattr(volume.state, "target")
-    pass
 
 
 @given("fio client is running against target nexus")
 def fio_client_is_running_against_target_nexus(run_fio_to_first_path):
     """fio client is running against target nexus."""
-    pass
 
 
 @given("a running ha node agent", target_fixture="ha_node_instance")
@@ -82,7 +77,6 @@ def a_running_ha_node_agent():
 @when("the only I/O path degrades")
 def the_only_io_path_degrades(degrade_first_path):
     """the only I/O path degrades."""
-    pass
 
 
 @then("fio client should successfully complete with the replaced I/O path")
@@ -90,7 +84,6 @@ def fio_client_should_successfully_complete_with_the_replaced_io_path(
     fio_completes_successfully,
 ):
     """fio client should successfully complete with the replaced I/O path."""
-    pass
 
 
 @then("it should be possible to create a second nexus and replace failed path with it")

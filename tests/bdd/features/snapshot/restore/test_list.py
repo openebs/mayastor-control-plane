@@ -1,19 +1,17 @@
 """Volume Snapshot Restore Listing feature tests."""
 
 import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.volume_policy import VolumePolicy
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_policy import VolumePolicy
 
 VOLUME_UUID = "8d305974-43a3-484b-8e2c-c74afe2f4400"
 SNAPSHOT_UUID = "8d305974-43a3-484b-8e2c-c74afe2f4401"

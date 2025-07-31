@@ -2,12 +2,11 @@ import os
 import subprocess
 import sys
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 
-import pytest
-from dataclasses import dataclass
-
 import common
+import pytest
 from common.docker import Docker
 from common.nvme import nvme_disconnect_allours_wait
 

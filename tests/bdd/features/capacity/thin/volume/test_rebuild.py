@@ -1,30 +1,26 @@
 """Thin Provisioning - Volume Rebuild feature tests."""
 
-import time
-
-from retrying import retry
-from urllib.parse import urlparse
-import pytest
 import subprocess
+from urllib.parse import urlparse
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.fio import Fio
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_replica_body import CreateReplicaBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.publish_volume_body import PublishVolumeBody
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.model.volume_status import VolumeStatus
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.fio import Fio
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_status import VolumeStatus
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.create_replica_body import CreateReplicaBody
+from retrying import retry
 
 VOLUME_UUID = "ec4e66fd-3b33-4439-b504-d49aba53da26"
 VOLUME_SIZE = 20 * 1024 * 1024

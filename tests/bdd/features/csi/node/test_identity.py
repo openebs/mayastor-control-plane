@@ -1,23 +1,18 @@
 """CSI node Identity RPC tests."""
 
-import os
-import threading
-import time
+import subprocess
+
+import csi_pb2 as pb
+import pytest
+from common import csi_plugin_name
+from common.csi import CsiHandle
+from common.deployer import Deployer
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-import docker
-import subprocess
-import csi_pb2 as pb
-from common import csi_plugin_name
-
-from common.csi import CsiHandle
-from common.deployer import Deployer
 
 
 @pytest.fixture(scope="module")

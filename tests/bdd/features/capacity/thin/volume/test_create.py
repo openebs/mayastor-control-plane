@@ -1,23 +1,19 @@
 """Thin Provisioning - Volume Creation feature tests."""
 
+import pytest
+import requests
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_replica_body import CreateReplicaBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.volume_policy import VolumePolicy
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-import os
-import requests
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.create_replica_body import CreateReplicaBody
-from openapi.model.volume_policy import VolumePolicy
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 104857600

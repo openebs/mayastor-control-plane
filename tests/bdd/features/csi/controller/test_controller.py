@@ -1,31 +1,28 @@
 """CSI Controller Identity RPC tests."""
 
-from pytest_bdd import (
-    given,
-    scenario,
-    then,
-    when,
-)
-
-import pytest
-import docker
-import csi_pb2 as pb
-import grpc
-from time import sleep
-import subprocess
-
-from urllib.parse import urlparse, parse_qs
 import json
+import subprocess
+from time import sleep
+from urllib.parse import parse_qs, urlparse
 
+import csi_pb2 as pb
+import docker
+import grpc
+import pytest
 from common import csi_topology_key, disk_pool_label
 from common.apiclient import ApiClient
 from common.csi import CsiHandle
 from common.deployer import Deployer
 from common.nvme import nvme_bin
 from common.operations import Cluster
-from openapi.model.create_pool_body import CreatePoolBody
 from openapi.exceptions import NotFoundException
-
+from openapi.model.create_pool_body import CreatePoolBody
+from pytest_bdd import (
+    given,
+    scenario,
+    then,
+    when,
+)
 
 VOLUME1_UUID = "d01b8bfb-0116-47b0-a03a-447fcbdc0e99"
 VOLUME2_UUID = "d8aab0f1-82f4-406c-89ee-14f08b004aea"
@@ -1034,7 +1031,6 @@ def check_unpublish_not_existing_volume(unpublish_not_existing_volume):
 @then("volume should remain as published")
 def volume_remains_published():
     """volume should remain as published."""
-    pass
 
 
 @then("volume should report itself as published")

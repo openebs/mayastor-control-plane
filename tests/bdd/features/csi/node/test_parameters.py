@@ -1,25 +1,22 @@
 """CSI Node plugin parameters feature tests."""
 
 import os
-import pytest
+import subprocess
 import threading
 import time
-from pytest_bdd import given, scenario, then, when, parsers
-import subprocess
 
 import csi_pb2 as pb
-
+import pytest
 from common.apiclient import ApiClient
+from common.csi import CsiHandle
 from common.deployer import Deployer
-from common.nvme import nvme_find_device, nvme_find_device_path
+from common.nvme import nvme_find_device_path
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.volume_policy import VolumePolicy
-
-from common.csi import CsiHandle
-
+from openapi.model.volume_share_protocol import VolumeShareProtocol
+from pytest_bdd import given, parsers, scenario, then, when
 
 VOLUME_UUID = "f04e4756-999f-446f-8610-fbf879aff2a7"
 NODE1 = "io-engine-1"

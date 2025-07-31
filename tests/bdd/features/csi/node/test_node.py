@@ -1,36 +1,33 @@
 import http
-import time
-from pathlib import Path
-
-import pytest
-from pytest_bdd import given, scenario, then, when, parsers
-
 import os
 import subprocess
+from pathlib import Path
 
-import grpc
 import csi_pb2 as pb
-import openapi
+import grpc
+import pytest
 from common import disk_pool_label
-
 from common.apiclient import ApiClient
 from common.csi import CsiHandle
 from common.deployer import Deployer
 from common.docker import Docker
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from common.operations import Volume as VolumeOps
+from common.nvme import (
+    nvme_find_controller,
+    nvme_find_device,
+    nvme_set_ctrl_loss_tmo,
+    nvme_set_reconnect_delay,
+    wait_nvme_gone_device,
+)
 from common.operations import Pool as PoolOps
+from common.operations import Volume as VolumeOps
+from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.volume_share_protocol import VolumeShareProtocol
-from common.nvme import (
-    nvme_find_device,
-    nvme_set_reconnect_delay,
-    nvme_set_ctrl_loss_tmo,
-    wait_nvme_gone_device,
-    nvme_find_controller,
-)
+from pytest_bdd import given, parsers, scenario, then, when
+
+import openapi
 
 POOL1_UUID = "ec176677-8202-4199-b461-2b68e53a055f"
 NODE1 = "io-engine-1"
@@ -816,7 +813,6 @@ def _(generic_staged_volume):
 @when("the rest client is enabled")
 def _():
     """the rest client is enabled."""
-    pass
 
 
 @then("the volume should be stageable again")

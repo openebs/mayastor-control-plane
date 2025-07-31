@@ -3,30 +3,27 @@
 import docker
 import pytest
 import requests
-
+from common import disk_pool_label
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from common.operations import Cluster
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.labelled_topology import LabelledTopology
+from openapi.model.pool_topology import PoolTopology
+from openapi.model.publish_volume_body import PublishVolumeBody
+from openapi.model.spec_status import SpecStatus
+from openapi.model.topology import Topology
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.model.volume_spec import VolumeSpec
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-from common import disk_pool_label
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-from common.operations import Cluster
-
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.spec_status import SpecStatus
-from openapi.model.volume_spec import VolumeSpec
-from openapi.model.topology import Topology
-from openapi.model.pool_topology import PoolTopology
-from openapi.model.labelled_topology import LabelledTopology
-from openapi.model.publish_volume_body import PublishVolumeBody
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761

@@ -1,30 +1,22 @@
 """Label a pool, this will be used while scheduling replica of volume considering the feature tests."""
 
+import http
+
+import docker
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from common.operations import Cluster
+from openapi.exceptions import ApiException
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.pool import Pool
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-
-import docker
-import pytest
-import sys
-import http
-
-
-from pytest_bdd import given, scenario, then, when
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-from common.etcd import Etcd
-from common.operations import Cluster, wait_node_online
-from openapi.model.node import Node
-from openapi.exceptions import ApiException
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.pool import Pool
-
 
 NUM_IO_ENGINES = 2
 LABEL1 = "KEY1=VALUE1"

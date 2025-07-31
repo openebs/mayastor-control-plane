@@ -1,40 +1,36 @@
 """Volume resize feature tests."""
 
-from pytest_bdd import (
-    given,
-    scenario,
-    then,
-    when,
-    parsers,
-)
-
 import http
-import os
-import pytest
-import time
 import subprocess
-
+import time
 from urllib.parse import urlparse
-from retrying import retry
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-from common.operations import Snapshot, Volume
 
 import openapi.exceptions
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from common.fio import Fio
+from common.operations import Snapshot, Volume
 from openapi.model.child_state import ChildState
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
-from common.fio import Fio
 from openapi.model.nexus_state import NexusState
 from openapi.model.pool_status import PoolStatus
-from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.replica_state import ReplicaState
-from openapi.model.spec_status import SpecStatus
 from openapi.model.resize_volume_body import ResizeVolumeBody
+from openapi.model.spec_status import SpecStatus
 from openapi.model.volume_policy import VolumePolicy
-
+from openapi.model.volume_share_protocol import VolumeShareProtocol
+from pytest_bdd import (
+    given,
+    parsers,
+    scenario,
+    then,
+    when,
+)
+from retrying import retry
 
 POOL1_UUID = "91a60318-bcfe-4e36-92cb-ddc7abf212ea"
 POOL2_UUID = "92a60318-bcfe-4e36-92cb-ddc7abf212ea"
@@ -84,7 +80,7 @@ def uncordon_node(node_name, label):
     try:
         ApiClient.nodes_api().delete_node_cordon(node_name, label)
         pytest.command_failed = False
-    except Exception as e:
+    except Exception:
         pytest.command_failed = True
 
 

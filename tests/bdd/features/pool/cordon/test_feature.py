@@ -1,32 +1,31 @@
 """Pool Cordoning feature tests."""
 
-from pytest_bdd import given, scenario, then, when, parsers
-
-import pytest
-import uuid
 import http
+import uuid
+
 import openapi.exceptions
+import pytest
 from common import human_sleep
 from common.apiclient import ApiClient
-from common.operations import wait_pool_online, wait_volume_status, wait_node_status
-from common.operations import Cluster
 from common.deployer import Deployer
-from openapi.model.topology import Topology
-from openapi.model.pool_topology import PoolTopology
-from openapi.model.labelled_topology import LabelledTopology
+from common.operations import Cluster
 from common.operations import Pool as PoolOps
-from common.operations import Volume as VolumeOps
 from common.operations import Snapshot as SnapshotOps
+from common.operations import Volume as VolumeOps
+from common.operations import wait_node_status, wait_pool_online, wait_volume_status
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.labelled_topology import LabelledTopology
 from openapi.model.node_status import NodeStatus
-from openapi.model.volume_status import VolumeStatus
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.pool_status import PoolStatus
+from openapi.model.pool_topology import PoolTopology
+from openapi.model.publish_volume_body import PublishVolumeBody
+from openapi.model.topology import Topology
 from openapi.model.volume import Volume
-
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.model.volume_status import VolumeStatus
+from pytest_bdd import given, parsers, scenario, then, when
 
 VOLUME_SIZE = 10 * 1024 * 1024
 RECONCILE_PERIOD = "80ms"
@@ -240,7 +239,6 @@ def _(disks):
 @given("multiple uncordoned nodes")
 def _(disks):
     """multiple uncordoned nodes."""
-    pass
 
 
 @when("the pool is uncordoned")
@@ -271,7 +269,6 @@ def _(volume):
 @when("there are insufficient uncordoned pools to accommodate new replicas")
 def _():
     """there are insufficient uncordoned pools to accommodate new replicas."""
-    pass
 
 
 @when("we attempt to delete resources on the cordoned pool")
@@ -329,7 +326,6 @@ def _(volume):
             )
         except openapi.exceptions.ApiException as e:
             response = e
-            pass
         return response
 
     yield set_repl
@@ -436,7 +432,6 @@ def _(pool):
 @then("the command will succeed")
 def _():
     """the command will succeed."""
-    pass
 
 
 @then("the pool should be imported successfully")

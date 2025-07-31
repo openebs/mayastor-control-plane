@@ -15,7 +15,7 @@ let
   channel = import ./nix/lib/rust.nix { inherit sources; };
   # python environment for tests/bdd
   pytest_inputs = python3.withPackages
-    (ps: with ps; [ virtualenv grpcio grpcio-tools black ]);
+    (ps: with ps; [ virtualenv grpcio grpcio-tools black isort autoflake ]);
   rust_chan = channel.default_src;
   rust = rust_chan.${rust-profile};
 in

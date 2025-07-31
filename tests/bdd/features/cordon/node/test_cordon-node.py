@@ -1,22 +1,19 @@
 """Cordoning feature tests."""
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from common.operations import Cluster
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.volume_policy import VolumePolicy
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-
-from common.apiclient import ApiClient
-from common.operations import Cluster
-from common.deployer import Deployer
-from common.docker import Docker
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_policy import VolumePolicy
 
 VOLUME_UUID_1 = "5cd5378e-3f05-47f1-a830-111111111111"
 VOLUME_UUID_2 = "5cd5378e-3f05-47f1-a830-222222222222"
@@ -84,7 +81,7 @@ def create_volume(vol_uuid):
     )
     ApiClient.volumes_api().put_volume(vol_uuid, request)
     # Check that the volume was created.
-    volumes = ApiClient.volumes_api().get_volume(vol_uuid)
+    ApiClient.volumes_api().get_volume(vol_uuid)
 
 
 def create_volume_and_fail(vol_uuid):
@@ -94,13 +91,13 @@ def create_volume_and_fail(vol_uuid):
     try:
         ApiClient.volumes_api().put_volume(vol_uuid, request)
         assert False
-    except Exception as e:
+    except Exception:
         print(f"creation of volume {vol_uuid} failed, and is expected")
     # Check that the volume wasn't created.
     try:
-        volumes = ApiClient.volumes_api().get_volume(vol_uuid)
+        ApiClient.volumes_api().get_volume(vol_uuid)
         assert False
-    except Exception as e:
+    except Exception:
         print(f"volume {vol_uuid} not found, as expected")
 
 
@@ -147,7 +144,7 @@ def uncordon_node(node_name, label):
     try:
         ApiClient.nodes_api().delete_node_cordon(node_name, label)
         pytest.command_failed = False
-    except Exception as e:
+    except Exception:
         pytest.command_failed = True
 
 

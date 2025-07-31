@@ -1,28 +1,22 @@
 """Volume Node Topology feature tests."""
 
-from pytest_bdd import given, scenario, then, when, parsers
-
-import pytest
 import docker
+import pytest
 import requests
-import time
-
 from common import disk_pool_label
-from common.deployer import Deployer
 from common.apiclient import ApiClient
+from common.deployer import Deployer
 from common.docker import Docker
-from common.nvme import nvme_connect, nvme_disconnect
-from common.fio import Fio
 from common.operations import Cluster
-
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.topology import Topology
-from openapi.model.node_topology import NodeTopology
 from openapi.model.labelled_topology import LabelledTopology
+from openapi.model.node_topology import NodeTopology
 from openapi.model.spec_status import SpecStatus
+from openapi.model.topology import Topology
+from openapi.model.volume_policy import VolumePolicy
 from openapi.model.volume_spec import VolumeSpec
+from pytest_bdd import given, parsers, scenario, then, when
 
 NUM_IO_ENGINES = 5
 NODE_1_NAME = "io-engine-1"

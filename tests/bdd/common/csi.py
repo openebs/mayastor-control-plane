@@ -2,8 +2,8 @@
 Wrapper around gRPC handle to communicate with CSI controller.
 """
 
-import grpc
 import csi_pb2_grpc as rpc
+import grpc
 
 
 class CsiHandle(object):

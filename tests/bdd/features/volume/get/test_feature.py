@@ -1,29 +1,17 @@
 """Issuing GET requests for volumes feature tests."""
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.volume_policy import VolumePolicy
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-import docker
-import requests
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_spec import VolumeSpec
-from openapi.model.spec_status import SpecStatus
-from openapi.model.volume_state import VolumeState
-from openapi.model.volume_status import VolumeStatus
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.replica_state import ReplicaState
-from openapi.model.replica_topology import ReplicaTopology
 
 VOLUMES = [
     "00000000-0000-0000-0000-000000000001",

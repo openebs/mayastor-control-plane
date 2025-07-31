@@ -1,22 +1,12 @@
 """Switchover Robustness feature tests."""
 
-import os
+import subprocess
 import time
 
-from pytest_bdd import (
-    given,
-    scenario,
-    then,
-    when,
-)
-import pytest
-import subprocess
-
-from retrying import retry
-
 import common.nvme
-from common.deployer import Deployer
+import pytest
 from common.apiclient import ApiClient
+from common.deployer import Deployer
 from common.docker import Docker
 from common.etcd import Etcd
 from common.nvme import (
@@ -24,15 +14,20 @@ from common.nvme import (
     nvme_disconnect,
     nvme_list_subsystems,
     nvme_set_reconnect_delay,
-    nvme_find_subsystem_devices_all,
 )
 from common.operations import Cluster
-
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.volume_share_protocol import VolumeShareProtocol
+from pytest_bdd import (
+    given,
+    scenario,
+    then,
+    when,
+)
+from retrying import retry
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = int(20 * 1024 * 1024)

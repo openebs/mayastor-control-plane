@@ -1,24 +1,21 @@
 """Persistent Nexus Info feature tests."""
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.etcd import Etcd
+from openapi.exceptions import NotFoundException
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.publish_volume_body import PublishVolumeBody
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.etcd import Etcd
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_policy import VolumePolicy
-from openapi.exceptions import NotFoundException
-from openapi.model.publish_volume_body import PublishVolumeBody
 
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"

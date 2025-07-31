@@ -1,29 +1,26 @@
 """Target Switchover test feature tests."""
 
-import os
 import subprocess
 from urllib.parse import urlparse
 
 import grpc
 import pytest
-from pytest_bdd import (
-    given,
-    scenario,
-    then,
-    when,
-    parsers,
-)
-
 from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.fio import Fio
 from common.operations import Cluster
-
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_policy import VolumePolicy
 from openapi.model.publish_volume_body import PublishVolumeBody
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.volume_share_protocol import VolumeShareProtocol
+from pytest_bdd import (
+    given,
+    parsers,
+    scenario,
+    then,
+    when,
+)
 
 POOL_UUID_1 = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL_UUID_2 = "22e1d15f-4dfd-4bf5-a98f-74e4aebf9e62"

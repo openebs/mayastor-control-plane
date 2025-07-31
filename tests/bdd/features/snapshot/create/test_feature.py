@@ -1,28 +1,25 @@
 """Volume Snapshot Creation feature tests."""
 
-from pytest_bdd import given, scenario, then, when, parsers
-
-import pytest
-import os
 import datetime
-from retrying import retry
 
-from common.deployer import Deployer
+import openapi.exceptions
+import pytest
 from common.apiclient import ApiClient
+from common.deployer import Deployer
 from common.docker import Docker
 from common.operations import Cluster
-
+from openapi.exceptions import NotFoundException
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.node_status import NodeStatus
+from openapi.model.pool_status import PoolStatus
+from openapi.model.publish_volume_body import PublishVolumeBody
+from openapi.model.replica_state import ReplicaState
 from openapi.model.spec_status import SpecStatus
 from openapi.model.volume_policy import VolumePolicy
 from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.replica_state import ReplicaState
-from openapi.model.pool_status import PoolStatus
-from openapi.model.node_status import NodeStatus
-from openapi.exceptions import NotFoundException
-import openapi.exceptions
+from pytest_bdd import given, parsers, scenario, then, when
+from retrying import retry
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 SNAP_UUID = "107ec5c6-879d-4ca5-bc8c-c1948b454ac0"

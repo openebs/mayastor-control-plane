@@ -1,10 +1,21 @@
 """Thin Provisioning - Cluster Wide feature tests."""
 
-from urllib.parse import urlparse
-import pytest
 import subprocess
 import uuid
+from urllib.parse import urlparse
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.fio import Fio
+from common.operations import Volume
+from openapi.exceptions import NotFoundException
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.publish_volume_body import PublishVolumeBody
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.model.volume_status import VolumeStatus
 from pytest_bdd import (
     given,
     scenario,
@@ -12,19 +23,6 @@ from pytest_bdd import (
     when,
 )
 from retrying import retry
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.operations import Volume
-from common.fio import Fio
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_status import VolumeStatus
-from openapi.model.volume_policy import VolumePolicy
-from openapi.exceptions import NotFoundException
 
 THIN_VOLUME_UUID = "ec4e66fd-3b33-4439-b504-d49aba53da26"
 THICK_VOLUME_UUID = "ec4e66fd-3b33-4439-b504-d49aba53da27"

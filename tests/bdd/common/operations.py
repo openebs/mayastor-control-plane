@@ -1,23 +1,22 @@
 import http
+import sys
 import time
 from urllib.parse import urlparse
-from retrying import retry
-import sys
 
 import common
 import openapi.exceptions
-from openapi.exceptions import ApiException
 from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.docker import Docker
 from common.fio import Fio
-from openapi.exceptions import NotFoundException
+from openapi.exceptions import ApiException, NotFoundException
 from openapi.model.node_status import NodeStatus
+from openapi.model.pool_cordon import PoolCordon
 from openapi.model.pool_status import PoolStatus
-from openapi.model.volume_status import VolumeStatus
 from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.pool_cordon import PoolCordon
+from openapi.model.volume_status import VolumeStatus
+from retrying import retry
 
 
 class Pool(object):
@@ -36,7 +35,6 @@ class Pool(object):
                 pass
             except openapi.exceptions.ApiException:
                 all_deleted = False
-                pass
         return all_deleted
 
     @staticmethod

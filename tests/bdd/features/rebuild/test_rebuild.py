@@ -1,31 +1,27 @@
 """Rebuilding a volume feature tests."""
 
-import os
+import http
+import time
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from common.operations import Cluster
+from openapi.exceptions import ApiException
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.publish_volume_body import PublishVolumeBody
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.model.volume_status import VolumeStatus
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-import http
-import time
 from retrying import retry
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-from common.operations import Cluster
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.exceptions import ApiException
-from openapi.model.volume_status import VolumeStatus
-from openapi.model.volume_policy import VolumePolicy
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
@@ -133,7 +129,6 @@ def a_replica_is_faulted():
 )
 def adding_a_replica_should_fail_if_doing_so_would_exceed_the_maximum_number_of_rebuilds():
     """adding a replica should fail if doing so would exceed the maximum number of rebuilds."""
-    pass
     try:
         ApiClient.volumes_api().put_volume_replica_count(
             VOLUME_UUID, NUM_VOLUME_REPLICAS + 1

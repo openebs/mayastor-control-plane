@@ -1,24 +1,20 @@
 """Snapshot capability gRPC API for CSI Controller feature tests."""
 
+import csi_pb2 as pb
+import grpc
+import pytest
+from common import disk_pool_label
+from common.apiclient import ApiClient
+from common.csi import CsiHandle
+from common.deployer import Deployer
+from common.operations import Cluster, Snapshot, Volume
+from openapi.model.create_pool_body import CreatePoolBody
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-import csi_pb2 as pb
-import grpc
-
-import openapi.exceptions
-from common import disk_pool_label
-from common.apiclient import ApiClient
-from common.operations import Snapshot, Volume, Cluster
-from openapi.model.create_pool_body import CreatePoolBody
-
-from common.csi import CsiHandle
-from common.deployer import Deployer
 
 VOLUME1_UUID = "d01b8bfb-0116-47b0-a03a-447fcbdc0e99"
 PVC_VOLUME1_NAME = "pvc-%s" % VOLUME1_UUID

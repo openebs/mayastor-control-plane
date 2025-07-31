@@ -1,44 +1,35 @@
 """Volume resize feature tests."""
 
+import http
+import subprocess
+from urllib.parse import urlparse
+
+import openapi.exceptions
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from common.fio import Fio
+from common.operations import Snapshot, Volume
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.nexus_state import NexusState
+from openapi.model.pool_status import PoolStatus
+from openapi.model.publish_volume_body import PublishVolumeBody
+from openapi.model.replica_state import ReplicaState
+from openapi.model.resize_volume_body import ResizeVolumeBody
+from openapi.model.spec_status import SpecStatus
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.model.volume_status import VolumeStatus
 from pytest_bdd import (
     given,
+    parsers,
     scenario,
     then,
     when,
-    parsers,
 )
-
-import http
-import os
-import pytest
-import datetime
-import time
-import subprocess
-
-from urllib.parse import urlparse
 from retrying import retry
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-from common.operations import Cluster, Snapshot, Volume
-from time import sleep
-
-import openapi.exceptions
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.exceptions import NotFoundException
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.nexus_state import NexusState
-from common.fio import Fio
-from openapi.model.child_state import ChildState
-from openapi.model.replica_state import ReplicaState
-from openapi.model.spec_status import SpecStatus
-from openapi.model.pool_status import PoolStatus
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.resize_volume_body import ResizeVolumeBody
-from openapi.model.volume_status import VolumeStatus
-
 
 POOL1_UUID = "91a60318-bcfe-4e36-92cb-ddc7abf212ea"
 POOL2_UUID = "92a60318-bcfe-4e36-92cb-ddc7abf212ea"
@@ -131,11 +122,10 @@ def cordon_node(node_name, label):
 
 def is_cordoned(node_name):
     node = ApiClient.nodes_api().get_node(node_name)
-    present = False
     try:
         assert node.spec.cordondrainstate["cordonedstate"]["cordonlabels"] != []
         return True
-    except AttributeError as e:
+    except AttributeError:
         return False
 
 
@@ -143,7 +133,7 @@ def uncordon_node(node_name, label):
     try:
         ApiClient.nodes_api().delete_node_cordon(node_name, label)
         pytest.command_failed = False
-    except Exception as e:
+    except Exception:
         pytest.command_failed = True
 
 
@@ -272,7 +262,6 @@ def a_published_volume_with_more_than_one_replica_and_all_are_healthy():
 @given("a deployer cluster")
 def a_deployer_cluster():
     """a deployer cluster."""
-    pass
 
 
 @given("a published volume with more than one replicas")
@@ -472,7 +461,6 @@ def the_failure_reason_should_be_invalid_arguments():
 @then("the new capacity should be available for the application to use")
 def the_new_capacity_should_be_available_for_the_application_to_use():
     """the new capacity should be available for the application to use."""
-    pass
 
 
 @then("the new volume is published")

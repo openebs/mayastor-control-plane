@@ -1,25 +1,24 @@
 """Anti-Affinity for Affinity Group feature tests."""
 
-from typing import Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict
 
+import openapi.exceptions
 import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.operations import Cluster
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.publish_volume_body import PublishVolumeBody
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.volume_share_protocol import VolumeShareProtocol
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import openapi.exceptions
-from common.apiclient import ApiClient
-from common.deployer import Deployer
-from common.operations import Cluster
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_policy import VolumePolicy
 
 NODE_NAME_1 = "io-engine-1"
 NODE_NAME_2 = "io-engine-2"

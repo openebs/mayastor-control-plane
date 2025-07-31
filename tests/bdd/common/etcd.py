@@ -1,5 +1,4 @@
 import etcd3
-
 from common import prod_domain_name, prod_name
 
 

@@ -2,21 +2,18 @@
 
 import http
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from openapi.exceptions import ApiException, NotFoundException
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.pool import Pool
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.pool import Pool
-from openapi.exceptions import ApiException
-from openapi.exceptions import NotFoundException
 
 
 @scenario(

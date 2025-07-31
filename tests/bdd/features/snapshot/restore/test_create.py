@@ -2,24 +2,23 @@
 
 import http
 import json
+import uuid
 
 import pytest
-from pytest_bdd import given, scenario, then, when, parsers
-from retrying import retry
-
-import uuid
-import openapi
+from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.docker import Docker
-from common.apiclient import ApiClient
-from common.operations import Volume, Snapshot
-
+from common.operations import Snapshot, Volume
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.node_status import NodeStatus
+from openapi.model.pool_status import PoolStatus
 from openapi.model.spec_status import SpecStatus
 from openapi.model.volume_policy import VolumePolicy
-from openapi.model.pool_status import PoolStatus
-from openapi.model.node_status import NodeStatus
+from pytest_bdd import given, parsers, scenario, then, when
+from retrying import retry
+
+import openapi
 
 REMOTE_NODE_NAME_A = "io-engine-2"
 

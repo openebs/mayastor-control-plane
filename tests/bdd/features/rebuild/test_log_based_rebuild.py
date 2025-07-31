@@ -1,34 +1,31 @@
 """Partial Rebuild feature tests."""
 
+import subprocess
+import time
+from time import sleep
+
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from common.fio import Fio
+from common.nvme import nvme_connect, nvme_disconnect
+from common.operations import Cluster
+from openapi.model.child_state import ChildState
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.publish_volume_body import PublishVolumeBody
+from openapi.model.replica_state import ReplicaState
+from openapi.model.volume_policy import VolumePolicy
+from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.model.volume_status import VolumeStatus
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-import os
-import subprocess
-import time
 from retrying import retry
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-from common.nvme import nvme_connect, nvme_disconnect
-from time import sleep
-from common.fio import Fio
-from common.operations import Cluster
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_status import VolumeStatus
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.replica_state import ReplicaState
-from openapi.model.child_state import ChildState
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 NODE_1_NAME = "io-engine-1"

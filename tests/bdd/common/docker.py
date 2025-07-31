@@ -1,6 +1,7 @@
-from datetime import datetime
-import docker
 import os
+from datetime import datetime
+
+import docker
 
 
 class Docker(object):

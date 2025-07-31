@@ -1,18 +1,15 @@
 """Deleting Restored Snapshot Volume feature tests."""
 
-import pytest
-from pytest_bdd import given, scenario, then, when
-
 import uuid
 
-from common.deployer import Deployer
+import pytest
 from common.apiclient import ApiClient
-from common.docker import Docker
-from common.operations import Volume, Snapshot, wait_node_online, Cluster
-
+from common.deployer import Deployer
+from common.operations import Cluster, Snapshot, Volume
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.volume_policy import VolumePolicy
+from pytest_bdd import given, scenario, then, when
 
 POOL = "pool"
 NODE = Deployer.node_name(0)

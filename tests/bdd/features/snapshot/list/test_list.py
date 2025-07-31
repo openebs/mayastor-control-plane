@@ -1,29 +1,23 @@
 """Volume Snapshot listing feature tests."""
 
-from pytest_bdd import given, scenario, then, when, parsers
-
-import pytest
-import pytest
-import os
 import datetime
-from retrying import retry
 
 import openapi.exceptions
+import pytest
 from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.docker import Docker
-
+from openapi.exceptions import NotFoundException
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
 from openapi.model.node_status import NodeStatus
-from openapi.model.spec_status import SpecStatus
-from openapi.model.replica_state import ReplicaState
-from openapi.exceptions import NotFoundException
 from openapi.model.pool_status import PoolStatus
-from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.publish_volume_body import PublishVolumeBody
+from openapi.model.replica_state import ReplicaState
 from openapi.model.volume_policy import VolumePolicy
-
+from openapi.model.volume_share_protocol import VolumeShareProtocol
+from pytest_bdd import given, parsers, scenario, then, when
+from retrying import retry
 
 VOLUME1_UUID = "d01b8bfb-0116-47b0-a03a-447fcbdc0e99"
 VOLUME2_UUID = "e01b8bfb-0116-47b0-a03a-447fcbdc0e99"
@@ -135,7 +129,7 @@ def we_have_created_more_than_one_snapshot_for_the_volume():
     """we have created more than one snapshot for the volume."""
     snap_id_list = VOLUME1_SNAP_IDS
     for snapid in snap_id_list:
-        snap = ApiClient.snapshots_api().put_volume_snapshot(VOLUME1_UUID, snapid)
+        ApiClient.snapshots_api().put_volume_snapshot(VOLUME1_UUID, snapid)
     yield
     for snapid in snap_id_list:
         ApiClient.snapshots_api().del_snapshot(snapid)
@@ -303,7 +297,7 @@ def validate_snapshots(listed_snapshots, ref_snaps_list, state, volume):
             assert snapshot.state.ready_as_source is False
             timestamp_within(snapshot.state.timestamp)
             wait_snapshot_state(snapshot, state)
-        except ValueError as ve:
+        except ValueError:
             assert False, "Invalid snapshot id found: " + snapshot.state.uuid
 
 

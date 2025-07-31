@@ -1,20 +1,19 @@
 """Volume Snapshot garbage collection feature tests."""
 
-import os
-
 import pytest
-from pytest_bdd import given, scenario, then, when, parsers
-from retrying import retry
-import openapi
-from common.docker import Docker
 from common.apiclient import ApiClient
 from common.deployer import Deployer
-from common.operations import Volume, Snapshot, wait_node_online
+from common.docker import Docker
+from common.operations import Snapshot, Volume, wait_node_online
 from openapi.model.create_pool_body import CreatePoolBody
 from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
 from openapi.model.publish_volume_body import PublishVolumeBody
 from openapi.model.volume_policy import VolumePolicy
+from openapi.model.volume_share_protocol import VolumeShareProtocol
+from pytest_bdd import given, parsers, scenario, then, when
+from retrying import retry
+
+import openapi
 
 VOLUME1_UUID = "d01b8bfb-0116-47b0-a03a-447fcbdc0e99"
 POOL_DISK1 = "pdisk1.img"

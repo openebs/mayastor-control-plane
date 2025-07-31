@@ -1,28 +1,28 @@
 """Encryption-at-Rest on Mayastor DiskPool feature tests."""
 
-import pytest
-import os
 import json
+import os
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer, workspace_tmp
+from common.docker import Docker
+from common.operations import Cluster
+from openapi.model.create_pool_body import CreatePoolBody
+from openapi.model.create_volume_body import CreateVolumeBody
+from openapi.model.encryption import Encryption
+from openapi.model.encryption_secret import EncryptionSecret
+from openapi.model.node_status import NodeStatus
+from openapi.model.pool_status import PoolStatus
+from openapi.model.volume_policy import VolumePolicy
 from pytest_bdd import (
     given,
+    parsers,
     scenario,
     then,
     when,
-    parsers,
 )
 from retrying import retry
-from common.deployer import Deployer, workspace_tmp
-from common.apiclient import ApiClient
-from common.docker import Docker
-from common.operations import Cluster
-from openapi.model.node_status import NodeStatus
-from openapi.model.pool_status import PoolStatus
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.encryption import Encryption
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.encryption_secret import EncryptionSecret
-from openapi.model.volume_policy import VolumePolicy
 
 ENCR_VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 NON_ENCR_VOLUME_UUID = "05451170-ac6a-43cb-a92a-e5e3581d1111"
