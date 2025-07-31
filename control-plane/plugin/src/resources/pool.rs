@@ -49,11 +49,7 @@ impl CreateRow for openapi::models::Pool {
             committed: None,
             encrypted: spec.encryption.is_some(),
         });
-        let free = if state.capacity > state.used {
-            state.capacity - state.used
-        } else {
-            0
-        };
+        let free = state.capacity.saturating_sub(state.used);
         let disks = state.disks.join(", ");
         let statuses = match spec.cordon_drain {
             None => format!("{:?}", state.status),
@@ -410,7 +406,7 @@ impl PoolDisplay {
                     .iter()
                     // Don't return the created_by_dsp label for the gets
                     .filter(|(key, _)| *key != &internal_label)
-                    .map(|(key, value)| format!("{}={}", key, value))
+                    .map(|(key, value)| format!("{key}={value}"))
                     .collect();
             }
         }

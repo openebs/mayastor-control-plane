@@ -23,11 +23,10 @@ pub(crate) async fn lookup_device(volume_id: &str) -> Result<Box<dyn Detach>, to
     Device::lookup(&uuid)
         .await
         .map_err(|error| {
-            tonic::Status::internal(format!("volume_id: {}, error: {}", volume_id, error))
+            tonic::Status::internal(format!("volume_id: {volume_id}, error: {error}"))
         })?
         .ok_or(tonic::Status::not_found(format!(
-            "volume_id: {}, not found",
-            volume_id
+            "volume_id: {volume_id}, not found"
         )))
 }
 
@@ -57,8 +56,7 @@ pub(crate) async fn find_mount(
                 // This failure is very unlikely but include for
                 // completeness
                 return Err(tonic::Status::internal(format!(
-                    "Inconsistent mount filesystems: volume ID: {}",
-                    volume_id
+                    "Inconsistent mount filesystems: volume ID: {volume_id}"
                 )));
             }
         }

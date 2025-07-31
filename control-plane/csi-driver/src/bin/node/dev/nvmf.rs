@@ -307,8 +307,7 @@ impl Detach for NvmfDetach {
         let nqn = self.nqn.clone();
         runtime::spawn_blocking(move || match disconnect(&nqn) {
             Ok(0) => Err(DeviceError::from(format!(
-                "nvmf disconnect {} failed: no device found",
-                nqn
+                "nvmf disconnect {nqn} failed: no device found"
             ))),
             Err(error) => Err(error.into()),
             Ok(_) => Ok(()),

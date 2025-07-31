@@ -545,7 +545,7 @@ trait EventWithMeta {
 
 impl EventWithMeta for NodeAgentSvc {
     fn event(&self, event_action: EventAction, nqn: &str, meta: EventMeta) -> EventMessage {
-        let volume_id = nqn.split(':').last().unwrap_or_default().to_string();
+        let volume_id = nqn.split(':').next_back().unwrap_or_default().to_string();
         EventMessage {
             category: EventCategory::NvmePath as i32,
             action: event_action as i32,

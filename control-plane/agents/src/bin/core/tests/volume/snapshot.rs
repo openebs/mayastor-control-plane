@@ -842,7 +842,7 @@ async fn nr_snapshot() {
 
     tracing::info!("CheckSums: {cksums:#?}");
     assert_eq!(cksums.len(), 2, "Expected 2 replicas");
-    assert_eq!(cksums[0], cksums[1], "CheckSum Mismatch!! {:?}", cksums);
+    assert_eq!(cksums[0], cksums[1], "CheckSum Mismatch!! {cksums:?}");
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     let snap_cli = api.snapshots_api();

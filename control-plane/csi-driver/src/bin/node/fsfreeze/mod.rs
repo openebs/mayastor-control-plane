@@ -32,8 +32,7 @@ pub async fn fsfreeze(volume_id: &str, freeze_op: FsFreezeOpt) -> Result<(), Sta
             Ok(output) if output.status.success() => Ok(()),
             Ok(output) => Err(exitcode_to_status(output)),
             Err(error) => Err(Status::aborted(format!(
-                "Failed to execute {} for {}, {}",
-                freeze_op, volume_id, error
+                "Failed to execute {freeze_op} for {volume_id}, {error}"
             ))),
         }
     })

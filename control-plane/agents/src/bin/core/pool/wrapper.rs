@@ -83,22 +83,13 @@ impl PoolWrapper {
 
     /// Get the over commitment in bytes.
     pub(crate) fn over_commitment(&self) -> u64 {
-        if self.committed > self.state.capacity {
-            self.committed - self.state.capacity
-        } else {
-            0
-        }
+        self.committed.saturating_sub(self.state.capacity)
     }
     /// Get the pool allocation growth potential in bytes.
     /// Would be allocation if all replicas are fully allocated.
     #[allow(unused)]
     pub(crate) fn max_growth(&self) -> u64 {
-        if self.committed > self.used {
-            self.committed - self.used
-        } else {
-            // should not happen...
-            0
-        }
+        self.committed.saturating_sub(self.used)
     }
     /// Get the commitment in bytes.
     pub(crate) fn commitment(&self) -> u64 {

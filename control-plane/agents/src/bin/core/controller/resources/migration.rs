@@ -26,7 +26,7 @@ pub(crate) async fn migrate_product_v1_to_v2<S: Store>(
     for (k, v) in store_entries {
         let id = k
             .split('/')
-            .last()
+            .next_back()
             .ok_or_else(|| StoreError::InvalidKey { key: k.to_string() })?;
 
         let new_value = match spec_type {

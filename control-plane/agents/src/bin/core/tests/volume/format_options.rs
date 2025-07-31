@@ -81,7 +81,7 @@ async fn filesystem_volume_format_options() {
     let _nvme_io_subsys = DeviceDisconnect(nvmeadm::NvmeTarget::try_from(uri).unwrap());
 
     let mut volume_context = HashMap::new();
-    let flags = format!("-i {}", BYTES_PER_INODE);
+    let flags = format!("-i {BYTES_PER_INODE}");
     volume_context.insert("formatOptions".to_string(), flags);
 
     let vol = volumes_api

@@ -52,7 +52,7 @@ pub(crate) fn find_mount(source: Option<&str>, target: Option<&str>) -> Option<M
         }
     }
 
-    found.map(MountInfo::from)
+    found
 }
 
 /// Return all mounts for a matching source.

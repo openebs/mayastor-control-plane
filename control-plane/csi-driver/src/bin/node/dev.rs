@@ -177,7 +177,7 @@ pub(crate) fn sysfs_dev_size<N: AsRef<Path>>(device: N) -> Result<usize, DeviceE
         .as_ref()
         .iter()
         // Works for both /dev/<device> and just <device>.
-        .last()
+        .next_back()
         .ok_or(DeviceError::new(
             "cannot find the sysfs size for device: invalid name or path",
         ))?;

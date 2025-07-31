@@ -516,7 +516,7 @@ impl node_server::Node for Node {
                         AccessType::Block(_) => Self::NotAFilesystem,
                     },
                     Err(error) => {
-                        Self::Unknown(format!("couldn't determine CSI AccessType type: {}", error))
+                        Self::Unknown(format!("couldn't determine CSI AccessType type: {error}"))
                     }
                 }
             }

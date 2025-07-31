@@ -7,6 +7,7 @@ self: super: {
   sourcer = super.callPackage ./lib/sourcer.nix { };
   images = super.callPackage ./pkgs/images { inherit img_tag img_org img_prefix; };
   control-plane = super.callPackage ./pkgs/control-plane { inherit allInOne incremental tag rustFlags; };
+  e2fsprogs_1_46_5 = (import (super.sources).nixpkgs-22_05 { }).e2fsprogs;
   xfsprogs_5_16 = (import (super.sources).nixpkgs-22_05 { }).xfsprogs;
   openapi-generator-cli = (import (super.sources).nixpkgs-22_11 { }).openapi-generator-cli;
   paperclip = super.callPackage ./pkgs/paperclip { };

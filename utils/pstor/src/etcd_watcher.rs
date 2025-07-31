@@ -93,6 +93,7 @@ impl<Ctx: Send + Sync + 'static> WatchConfig<Ctx> {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 enum WatchState {
     // Waiting to be given something to watch!
     Idle,

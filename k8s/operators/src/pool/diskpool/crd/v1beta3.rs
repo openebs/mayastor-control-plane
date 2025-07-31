@@ -185,11 +185,7 @@ impl DiskPoolStatus {
     #[cfg(feature = "openapi")]
     pub fn terminating(p: Pool) -> Self {
         let state = p.state.unwrap_or_default();
-        let free = if state.capacity > state.used {
-            state.capacity - state.used
-        } else {
-            0
-        };
+        let free = state.capacity.saturating_sub(state.used);
         Self {
             cr_state: CrPoolState::Terminating,
             pool_status: Some(state.status.into()),
@@ -238,11 +234,7 @@ impl From<RestPoolStatus> for PoolStatus {
 impl From<Pool> for DiskPoolStatus {
     fn from(p: Pool) -> Self {
         if let Some(state) = p.state {
-            let free = if state.capacity > state.used {
-                state.capacity - state.used
-            } else {
-                0
-            };
+            let free = state.capacity.saturating_sub(state.used);
             Self {
                 cr_state: CrPoolState::Created,
                 pool_status: Some(state.status.into()),

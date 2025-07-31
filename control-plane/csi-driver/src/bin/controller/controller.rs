@@ -932,8 +932,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     {
                         Err(error) if error.code() == Code::NotFound => {
                             Err(Status::not_found(format!(
-                                "Failed to freeze volume {}, filesystem volume is not attached",
-                                volume_uuid
+                                "Failed to freeze volume {volume_uuid}, filesystem volume is not attached"
                             )))
                         }
                         _else => _else,
@@ -964,13 +963,11 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             match (snapshot_creation_result, unfreeze_result) {
                 (result, Ok(())) => result,
                 (Ok(_snapshot), Err(unfreeze_error)) => Err(Status::failed_precondition(format!(
-                    "Snapshot creation succeeded but filesystem unfreeze failed: {}",
-                    unfreeze_error
+                    "Snapshot creation succeeded but filesystem unfreeze failed: {unfreeze_error}"
                 ))),
                 (Err(snap_error), Err(unfreeze_error)) => {
                     Err(Status::failed_precondition(format!(
-                        "Snapshot creation failed: {}, filesystem unfreeze failed: {}",
-                        snap_error, unfreeze_error
+                        "Snapshot creation failed: {snap_error}, filesystem unfreeze failed: {unfreeze_error}"
                     )))
                 }
             }

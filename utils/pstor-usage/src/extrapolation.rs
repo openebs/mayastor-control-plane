@@ -172,21 +172,23 @@ impl Extrapolation {
 
             let mut days = Box::new(GenericSample::new(
                 "Days",
-                std::iter::repeat(days_entry).take(max_entries as usize),
+                std::iter::repeat_n(days_entry, max_entries as usize),
             ));
             let mut turnover = Box::new(GenericSample::new(
                 "Volume Turnover",
-                std::iter::repeat(self.opts.volume_turnover * days_entry)
-                    .take(max_entries as usize),
+                std::iter::repeat_n(self.opts.volume_turnover * days_entry, max_entries as usize),
             ));
             let mut mods = Box::new(GenericSample::new(
                 "Volume Attach/Detach",
-                std::iter::repeat(self.opts.volume_attach_cycle * days_entry)
-                    .take(max_entries as usize),
+                std::iter::repeat_n(
+                    self.opts.volume_attach_cycle * days_entry,
+                    max_entries as usize,
+                ),
             ));
-            let mut daily_usage = Box::new(DiskUsage::new(
-                std::iter::repeat(days_entry * daily).take(max_entries as usize),
-            ));
+            let mut daily_usage = Box::new(DiskUsage::new(std::iter::repeat_n(
+                days_entry * daily,
+                max_entries as usize,
+            )));
 
             if extra_days > 0 {
                 extra_days += days_entry;

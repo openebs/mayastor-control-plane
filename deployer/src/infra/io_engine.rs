@@ -47,7 +47,7 @@ impl ComponentAction for IoEngine {
                 "--api-versions".to_string(),
                 IoEngineApiVersion::vec_to_str(options.io_engine_api_versions.clone()),
             ])
-            .with_args(vec!["-r", format!("/host/tmp/{}.sock", reg_name).as_str()])
+            .with_args(vec!["-r", format!("/host/tmp/{reg_name}.sock").as_str()])
             .with_args(vec!["--ptpl-dir", &ptpl_dir])
             .with_env("MAYASTOR_NVMF_HOSTID", Uuid::new_v4().to_string().as_str())
             .with_env("NEXUS_NVMF_RESV_ENABLE", "1")
@@ -157,7 +157,7 @@ impl IoEngine {
         } else {
             (i % options.idle_io_engines) + 1
         };
-        format!("io-engine-{}", index)
+        format!("io-engine-{index}")
     }
     pub fn nqn(i: u32, options: &StartOptions) -> String {
         format!(

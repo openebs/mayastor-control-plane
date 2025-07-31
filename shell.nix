@@ -71,11 +71,9 @@ mkShell {
   RUST_TOOLCHAIN = ".rust-toolchain/${rust.version}";
   RUST_TOOLCHAIN_NIX = "${rust}";
 
-  NODE_PATH = "${nodePackages."@commitlint/config-conventional"}/lib/node_modules";
-
   shellHook = ''
     ./scripts/nix/git-submodule-init.sh
-    if [ -z "$CI" ] && [ "$IN_NIX_SHELL" == "impure" ]; then
+    if [ "$CI" != "1" ] && [ "$IN_NIX_SHELL" == "impure" ]; then
       echo
       pre-commit install
       pre-commit install --hook commit-msg
