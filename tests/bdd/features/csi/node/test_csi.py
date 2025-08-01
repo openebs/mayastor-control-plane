@@ -11,12 +11,12 @@ from common.csi import CsiHandle
 from common.deployer import Deployer
 from common.operations import Pool as PoolOps
 from common.operations import Volume as VolumeOps
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.protocol import Protocol
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.protocol import Protocol
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
 
 POOL1_UUID = "ec176677-8202-4199-b461-2b68e53a055f"
 NODE1 = "io-engine-1"
@@ -37,7 +37,7 @@ def setup():
     pool_api.put_node_pool(
         NODE1,
         POOL1_UUID,
-        CreatePoolBody(["malloc:///disk?size_mb=200"], labels=pool_labels),
+        CreatePoolBody(disks=["malloc:///disk?size_mb=200"], labels=pool_labels),
     )
     yield
     PoolOps.delete_all()
@@ -100,7 +100,14 @@ def volumes(setup):
     for n in range(5):
         uuid = get_uuid(n)
         volume = ApiClient.volumes_api().put_volume(
-            uuid, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False, False)
+            uuid,
+            CreateVolumeBody(
+                policy=VolumePolicy(self_heal=False),
+                replicas=1,
+                size=VOLUME_SIZE,
+                thin=False,
+                encrypted=False,
+            ),
         )
         volumes.append(volume)
     yield volumes
@@ -153,10 +160,13 @@ def published_nexus(volumes, share_type, volume_id):
     volume = ApiClient.volumes_api().put_volume_target(
         uuid,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=NODE1, frontend_node=""
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
+            node=NODE1,
+            frontend_node="",
         ),
     )
-    yield volume.state["target"]
+    yield volume.state.target
     ApiClient.volumes_api().del_volume_target(volume.spec.uuid)
 
 
@@ -201,12 +211,12 @@ def publish_mount_flags(read_only):
 
 @pytest.fixture
 def stage_context(published_nexus, io_timeout):
-    yield {"uri": published_nexus["device_uri"], "ioTimeout": io_timeout}
+    yield {"uri": published_nexus.device_uri, "ioTimeout": io_timeout}
 
 
 @pytest.fixture
 def publish_context(published_nexus, volume_id):
-    yield {"uri": published_nexus["device_uri"]}
+    yield {"uri": published_nexus.device_uri}
 
 
 @pytest.fixture

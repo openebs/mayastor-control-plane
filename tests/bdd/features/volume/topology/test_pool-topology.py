@@ -8,14 +8,14 @@ from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.docker import Docker
 from common.operations import Cluster
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.labelled_topology import LabelledTopology
-from openapi.model.pool_topology import PoolTopology
-from openapi.model.spec_status import SpecStatus
-from openapi.model.topology import Topology
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_spec import VolumeSpec
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.labelled_topology import LabelledTopology
+from openapi.models.pool_topology import PoolTopology
+from openapi.models.spec_status import SpecStatus
+from openapi.models.topology import Topology
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_spec import VolumeSpec
 from pytest_bdd import given, parsers, scenario, then, when
 
 NUM_IO_ENGINES = 3
@@ -62,7 +62,7 @@ POOL_CONFIGURATIONS = [
         "node_name": NODE_1_NAME,
         "pool_uuid": NODE_1_POOL_1_UUID,
         "pool_body": CreatePoolBody(
-            ["malloc:///disk1?size_mb=32"],
+            disks=["malloc:///disk1?size_mb=32"],
             labels={
                 DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-1",
@@ -75,7 +75,7 @@ POOL_CONFIGURATIONS = [
         "node_name": NODE_2_NAME,
         "pool_uuid": NODE_2_POOL_1_UUID,
         "pool_body": CreatePoolBody(
-            ["malloc:///disk1?size_mb=32"],
+            disks=["malloc:///disk1?size_mb=32"],
             labels={
                 DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-2",
@@ -88,7 +88,7 @@ POOL_CONFIGURATIONS = [
         "node_name": NODE_3_NAME,
         "pool_uuid": NODE_3_POOL_1_UUID,
         "pool_body": CreatePoolBody(
-            ["malloc:///disk1?size_mb=32"],
+            disks=["malloc:///disk1?size_mb=32"],
             labels={
                 DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-3",
@@ -101,7 +101,7 @@ POOL_CONFIGURATIONS = [
         "node_name": NODE_1_NAME,
         "pool_uuid": NODE_1_POOL_2_UUID,
         "pool_body": CreatePoolBody(
-            ["malloc:///disk2?size_mb=32"],
+            disks=["malloc:///disk2?size_mb=32"],
             labels={
                 DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-1",
@@ -114,7 +114,7 @@ POOL_CONFIGURATIONS = [
         "node_name": NODE_2_NAME,
         "pool_uuid": NODE_2_POOL_2_UUID,
         "pool_body": CreatePoolBody(
-            ["malloc:///disk2?size_mb=32"],
+            disks=["malloc:///disk2?size_mb=32"],
             labels={
                 DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-2",
@@ -127,7 +127,7 @@ POOL_CONFIGURATIONS = [
         "node_name": NODE_3_NAME,
         "pool_uuid": NODE_3_POOL_2_UUID,
         "pool_body": CreatePoolBody(
-            ["malloc:///disk2?size_mb=32"],
+            disks=["malloc:///disk2?size_mb=32"],
             labels={
                 DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-3",
@@ -140,7 +140,7 @@ POOL_CONFIGURATIONS = [
         "node_name": NODE_1_NAME,
         "pool_uuid": NODE_1_POOL_3_UUID,
         "pool_body": CreatePoolBody(
-            ["malloc:///disk3?size_mb=32"],
+            disks=["malloc:///disk3?size_mb=32"],
             labels={
                 DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-1",
@@ -153,7 +153,7 @@ POOL_CONFIGURATIONS = [
         "node_name": NODE_2_NAME,
         "pool_uuid": NODE_2_POOL_3_UUID,
         "pool_body": CreatePoolBody(
-            ["malloc:///disk3?size_mb=32"],
+            disks=["malloc:///disk3?size_mb=32"],
             labels={
                 DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-2",
@@ -166,7 +166,7 @@ POOL_CONFIGURATIONS = [
         "node_name": NODE_3_NAME,
         "pool_uuid": NODE_3_POOL_3_UUID,
         "pool_body": CreatePoolBody(
-            ["malloc:///disk3?size_mb=32"],
+            disks=["malloc:///disk3?size_mb=32"],
             labels={
                 DISKPOOL_LABEL_KEY: DISKPOOL_LABEL_VAL,
                 "node": "io-engine-3",
@@ -290,9 +290,7 @@ def the_desired_number_of_replica_of_volume_ie_replica_here_is_expression_number
 ):
     """the desired number of replica of volume i.e. <replica> here; is <expression> number of the pools containing the label <volume_pool_topology_inclusion_label>."""
     no_of_eligible_pools = no_of_suitable_pools(
-        create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
-            "inclusion"
-        ],
+        create_request[CREATE_REQUEST_KEY].topology.pool_topology.labelled.inclusion,
     )
     if expression == "<=":
         assert int(replica) <= no_of_eligible_pools
@@ -314,15 +312,15 @@ def the_replica_replica_volume_creation_should_result_and_provisioned_provisione
         request = create_request[CREATE_REQUEST_KEY]
         volume = ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
         expected_spec = expected_volume_spec(
-            replica, create_request[CREATE_REQUEST_KEY]["topology"]
+            replica, create_request[CREATE_REQUEST_KEY].topology
         )
-        assert str(volume.spec) == str(expected_spec)
+        assert volume.spec == expected_spec
         pools_names_which_has_given_labels = get_pool_names_with_given_labels(
             pool_label
         )
         pools_on_which_volume_provisioned = list()
-        for replica_id, replica_details in volume.state["replica_topology"].items():
-            pools_on_which_volume_provisioned.append(replica_details["pool"])
+        for replica_id, replica_details in volume.state.replica_topology.items():
+            pools_on_which_volume_provisioned.append(replica_details.pool)
         assert set(pools_on_which_volume_provisioned).issubset(
             set(pools_names_which_has_given_labels)
         )
@@ -336,7 +334,7 @@ def the_replica_replica_volume_creation_should_result_and_provisioned_provisione
             assert exception_info["status"] == requests.codes["insufficient_storage"]
 
         # Check that the volume wasn't created.
-        volumes = ApiClient.volumes_api().get_volumes().entries
+        volumes = ApiClient.volumes_api().get_volumes(max_entries=0).entries
         assert len(volumes) == 0
 
 
@@ -378,28 +376,28 @@ def create_volume_body(replica, volume_pool_topology_inclusion_label):
         )
     )
     return CreateVolumeBody(
-        VolumePolicy(False),
-        int(replica),
-        VOLUME_SIZE,
-        False,
-        False,
+        policy=VolumePolicy(self_heal=False),
+        replicas=int(replica),
+        size=VOLUME_SIZE,
+        thin=False,
+        encrypted=False,
         topology=topology,
     )
 
 
 # Return the expected volume spec based on the input parameters.
-def expected_volume_spec(replica, toplogy):
+def expected_volume_spec(replica, topology):
     """Return the expected volume spec."""
     return VolumeSpec(
-        int(replica),
-        VOLUME_SIZE,
-        SpecStatus("Created"),
-        VOLUME_UUID,
-        VolumePolicy(False),
-        False,
-        0,
-        False,
-        topology=toplogy,
+        num_replicas=int(replica),
+        size=VOLUME_SIZE,
+        status=SpecStatus("Created"),
+        uuid=VOLUME_UUID,
+        policy=VolumePolicy(self_heal=False),
+        thin=False,
+        num_snapshots=0,
+        encrypted=False,
+        topology=topology,
     )
 
 
@@ -422,7 +420,7 @@ def get_pool_names_with_its_corresponding_labels():
     pool_with_its_corresponding_labels = {}
     pools = ApiClient.pools_api().get_pools()
     for pool in pools:
-        pool_with_its_corresponding_labels[pool["id"]] = pool["spec"]["labels"]
+        pool_with_its_corresponding_labels[pool.id] = pool.spec.labels
     return pool_with_its_corresponding_labels
 
 

@@ -38,7 +38,6 @@ mkShell {
     openssl
     pkg-config
     pre-commit
-    python3
     utillinux
     which
     paperclip

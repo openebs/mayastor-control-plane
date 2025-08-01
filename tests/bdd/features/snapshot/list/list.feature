@@ -27,7 +27,7 @@ Feature: Volume Snapshot listing
     When we <bring_down> the node hosting the snapshot
     Then the snapshots should be listed
     And all the replica snapshots should be reported as offline and validated
-    When we bring up the node hosting the snapshot
+    When the node hosting the snapshot is brought back online
     Then all the replica snapshots should be reported as online and validated
     Examples:
       | bring_down |

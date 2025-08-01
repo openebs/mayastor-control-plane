@@ -97,7 +97,7 @@ def the_rest_service_return_changes_from_200_to_503_within_double_of_the_cache_r
     """the REST service return changes from 200 to 503 within double of the cache refresh period."""
     logger.info(f"Request after killing core: expected status: 503")
 
-    @retry(wait_fixed=50, stop_max_delay=1600)
+    @retry(wait_fixed=200, stop_max_delay=1600)
     def rest_is_not_ready():
         response = ready_http_get(context_msg_prefix="Request after killing core")
         assert response.status_code == 503
@@ -119,3 +119,4 @@ def it_keeps_returning_503_at_least_for_the_cache_refresh_period(
             raise ValueError(
                 "Expected Readiness probe to return 503 for this duration of 800ms"
             )
+        time.sleep(0.2)

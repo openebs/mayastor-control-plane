@@ -3,9 +3,9 @@
 import pytest
 from common.apiclient import ApiClient
 from common.deployer import Deployer
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_policy import VolumePolicy
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.volume_policy import VolumePolicy
 from pytest_bdd import (
     given,
     scenario,
@@ -37,7 +37,7 @@ PAGINATED_STARTING_TOKEN = "starting_token"
 def init(num_volumes):
     Deployer.start(1)
     ApiClient.pools_api().put_node_pool(
-        NODE_NAME, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=100"])
+        NODE_NAME, POOL_UUID, CreatePoolBody(disks=["malloc:///disk?size_mb=100"])
     )
 
     # Create the desired number of volumes
@@ -45,10 +45,16 @@ def init(num_volumes):
         ApiClient.volumes_api().put_volume(
             volume_uuid,
             CreateVolumeBody(
-                VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
+                policy=VolumePolicy(self_heal=False),
+                replicas=NUM_VOLUME_REPLICAS,
+                size=VOLUME_SIZE,
+                thin=False,
+                encrypted=False,
             ),
         )
-    num_volumes[NUM_VOLUMES_KEY] = len(ApiClient.volumes_api().get_volumes().entries)
+    num_volumes[NUM_VOLUMES_KEY] = len(
+        ApiClient.volumes_api().get_volumes(max_entries=0).entries
+    )
 
     yield
     Deployer.stop()
@@ -177,7 +183,9 @@ def a_user_issues_a_get_request_with_the_starting_token_set_to_a_value_less_than
 @when("a user issues a GET request without pagination")
 def a_user_issues_a_get_request_without_pagination(volume_results):
     """a user issues a GET request without pagination."""
-    volume_results[VOLUME_RESULTS_KEY] = ApiClient.volumes_api().get_volumes()
+    volume_results[VOLUME_RESULTS_KEY] = ApiClient.volumes_api().get_volumes(
+        max_entries=0
+    )
 
 
 @then("all of the volumes should be returned")
@@ -214,7 +222,7 @@ def the_first_result_back_should_be_for_the_given_starting_token_offset(
 @then("the next token should be returned")
 def the_next_token_should_be_returned(paginated_variables, volume_results):
     """the next token should be returned."""
-    assert hasattr(volume_results[VOLUME_RESULTS_KEY], "next_token")
+    assert volume_results[VOLUME_RESULTS_KEY].next_token
     expected_next_token = (
         paginated_variables[PAGINATED_STARTING_TOKEN]
         + paginated_variables[PAGINATED_MAX_ENTRIES_KEY]
@@ -225,7 +233,7 @@ def the_next_token_should_be_returned(paginated_variables, volume_results):
 @then("the next token should not be returned")
 def the_next_token_should_not_be_returned(volume_results):
     """the next token should not be returned."""
-    assert not hasattr(volume_results[VOLUME_RESULTS_KEY], "next_token")
+    assert volume_results[VOLUME_RESULTS_KEY].next_token is None
 
 
 @then("the number of returned volumes should equal the paginated request")

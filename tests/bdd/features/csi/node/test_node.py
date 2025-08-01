@@ -20,11 +20,11 @@ from common.nvme import (
 )
 from common.operations import Pool as PoolOps
 from common.operations import Volume as VolumeOps
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
 from pytest_bdd import given, parsers, scenario, then, when
 
 import openapi
@@ -111,7 +111,7 @@ def setup():
     pool_api.put_node_pool(
         NODE1,
         POOL1_UUID,
-        CreatePoolBody(["malloc:///disk?size_mb=200"], labels=pool_labels),
+        CreatePoolBody(disks=["malloc:///disk?size_mb=200"], labels=pool_labels),
     )
     yield
     PoolOps.delete_all()
@@ -157,7 +157,14 @@ def volumes(setup):
     for n in range(5):
         uuid = get_uuid(n)
         volume = ApiClient.volumes_api().put_volume(
-            uuid, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False, False)
+            uuid,
+            CreateVolumeBody(
+                policy=VolumePolicy(self_heal=False),
+                replicas=1,
+                size=VOLUME_SIZE,
+                thin=False,
+                encrypted=False,
+            ),
         )
         volumes.append(volume)
     yield volumes
@@ -319,13 +326,13 @@ def publish_nexus(setup, volumes, published_nexuses):
         volume = ApiClient.volumes_api().put_volume_target(
             uuid,
             publish_volume_body=PublishVolumeBody(
-                {},
-                VolumeShareProtocol("nvmf"),
+                publish_context={},
+                protocol=VolumeShareProtocol("nvmf"),
                 node=NODE1,
                 frontend_node=Deployer.csi_node_name(0),
             ),
         )
-        nexus = Nexus(uuid, protocol, volume.state["target"]["device_uri"])
+        nexus = Nexus(uuid, protocol, volume.state.target.device_uri)
         published_nexuses[uuid] = nexus
         return nexus
 

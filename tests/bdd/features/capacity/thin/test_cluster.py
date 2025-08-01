@@ -10,12 +10,13 @@ from common.deployer import Deployer
 from common.fio import Fio
 from common.operations import Volume
 from openapi.exceptions import NotFoundException
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_status import VolumeStatus
+from openapi.models.child_state_reason import ChildStateReason
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
+from openapi.models.volume_status import VolumeStatus
 from pytest_bdd import (
     given,
     scenario,
@@ -50,13 +51,13 @@ def init():
     ApiClient.pools_api().put_node_pool(
         NODE_NAME_1,
         POOL_UUID_1,
-        CreatePoolBody([f"malloc:///disk1?size_mb={POOL_SIZE}"]),
+        CreatePoolBody(disks=[f"malloc:///disk1?size_mb={POOL_SIZE}"]),
     )
     ApiClient.pools_api().put_node_pool(
         NODE_NAME_2,
         POOL_UUID_2,
         CreatePoolBody(
-            [f"malloc:///disk1?size_mb={POOL_SIZE + LARGE_VOLUME_SIZE + 8}"]
+            disks=[f"malloc:///disk1?size_mb={POOL_SIZE + LARGE_VOLUME_SIZE + 8}"]
         ),
     )
 
@@ -104,17 +105,21 @@ def there_are_4_overcommitted_thin_volumes():
         volume = ApiClient.volumes_api().put_volume(
             str(uuid.uuid4()),
             create_volume_body=CreateVolumeBody(
-                VolumePolicy(True), 2, size * 1024 * 1024, True, False
+                policy=VolumePolicy(self_heal=True),
+                replicas=2,
+                size=size * 1024 * 1024,
+                thin=True,
+                encrypted=False,
             ),
         )
         volume = ApiClient.volumes_api().put_volume_target(
             volume.spec.uuid,
             publish_volume_body=PublishVolumeBody(
-                {}, VolumeShareProtocol("nvmf"), node=node
+                publish_context={}, protocol=VolumeShareProtocol("nvmf"), node=node
             ),
         )
-        assert hasattr(volume.spec, "target")
-        assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
+        assert volume.spec.target
+        assert volume.spec.target.protocol == "nvmf"
         volumes.append(volume)
     pytest.volumes = volumes
 
@@ -129,9 +134,9 @@ def there_are_4_overcommitted_thin_volumes():
         if i == 0:
             fio_size = LARGE_VOLUME_SIZE / 2
         fio_size = f"{int(fio_size)}M"
-        volumes[i].fio_offset = fio_size
+        volumes[i].additional_properties["fio_offset"] = fio_size
 
-        uri = urlparse(volumes[i].state.target["device_uri"])
+        uri = urlparse(volumes[i].state.target.device_uri)
         fio = Fio(name="job", rw="write", uri=uri, size=fio_size)
         fios.append(fio.open())
 
@@ -176,8 +181,13 @@ def filling_up_the_volumes_with_data():
     fios = list()
 
     for volume in volumes:
-        uri = urlparse(volume.state.target["device_uri"])
-        fio = Fio(name="job", rw="write", uri=uri, offset=volume.fio_offset)
+        uri = urlparse(volume.state.target.device_uri)
+        fio = Fio(
+            name="job",
+            rw="write",
+            uri=uri,
+            offset=volume.additional_properties["fio_offset"],
+        )
         fios.append(fio.open())
     pytest.fios = fios
 
@@ -185,8 +195,7 @@ def filling_up_the_volumes_with_data():
 @then("all volumes become healthy")
 def all_volumes_become_healthy():
     """all volumes become healthy."""
-    for volume in ApiClient.volumes_api().get_volumes().entries:
-        assert volume.state.status == VolumeStatus("Online")
+    all_volumes_online()
 
 
 @then("if other pools with sufficient free space exist on the cluster")
@@ -196,7 +205,7 @@ def if_other_pools_with_sufficient_free_space_exist_on_the_cluster():
     ApiClient.pools_api().put_node_pool(
         NODE_NAME_1,
         POOL_UUID_3,
-        CreatePoolBody([f"malloc:///disk11?size_mb={LARGE_VOLUME_SIZE + 8}"]),
+        CreatePoolBody(disks=[f"malloc:///disk11?size_mb={LARGE_VOLUME_SIZE + 8}"]),
     )
 
 
@@ -278,16 +287,17 @@ def wait_volumes_enospc(volumes):
     for volume in volumes:
         volume = ApiClient.volumes_api().get_volume(volume.spec.uuid)
         assert volume.state.status == VolumeStatus("Degraded")
-        assert len(volume.state.target["children"]) == 2
+        assert len(volume.state.target.children) == 2
 
         replicas = list(volume.state.replica_topology.values())
         enospcs = list(
             filter(
-                lambda replica: str(replica.get("child_status_reason")) == "OutOfSpace",
+                lambda replica: replica.child_status_reason
+                == ChildStateReason("OutOfSpace"),
                 replicas,
             )
         )
-        assert len(enospcs) == 1
+        assert len(enospcs) == 1, f"{replicas}"
         assert enospcs[0].pool == POOL_UUID_1
 
 
@@ -300,12 +310,16 @@ def wait_volumes_rebuild_or_online(volumes):
         ) or volume.state.status == VolumeStatus("Degraded")
         if volume.state.status == VolumeStatus("Degraded"):
             assert volume.state.target.rebuilds == 1
-            assert len(volume.state.target["children"]) == 2
-            children = list(volume.state.target["children"])
-            degraded = list(
-                filter(lambda child: child.get("state") == "Degraded", children)
-            )
+            assert len(volume.state.target.children) == 2
+            children = list(volume.state.target.children)
+            degraded = list(filter(lambda child: child.state == "Degraded", children))
             assert len(degraded) == 1
+
+
+@retry(wait_fixed=200, stop_max_attempt_number=20)
+def all_volumes_online():
+    for volume in ApiClient.volumes_api().get_volumes(max_entries=0).entries:
+        assert volume.state.status == VolumeStatus("Online")
 
 
 @retry(wait_fixed=100, stop_max_attempt_number=5)

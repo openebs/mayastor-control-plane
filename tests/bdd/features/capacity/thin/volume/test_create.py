@@ -4,10 +4,10 @@ import pytest
 import requests
 from common.apiclient import ApiClient
 from common.deployer import Deployer
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_replica_body import CreateReplicaBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_policy import VolumePolicy
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_replica_body import CreateReplicaBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.volume_policy import VolumePolicy
 from pytest_bdd import (
     given,
     scenario,
@@ -33,7 +33,7 @@ def init(disks):
     Deployer.start(1)
     Deployer.create_disks(1, POOL_SIZE)
     ApiClient.pools_api().put_node_pool(
-        NODE_NAME, POOL_UUID, CreatePoolBody([f"{disks[0]}"])
+        NODE_NAME, POOL_UUID, CreatePoolBody(disks=[f"{disks[0]}"])
     )
     # Add some used space here
     ApiClient.replicas_api().put_pool_replica(
@@ -92,9 +92,13 @@ def a_control_plane_ioengine_instances_and_a_pool(init):
 def a_request_for_a_thin_provisioned_volume(create_request):
     """a request for a thin provisioned volume."""
     request = CreateVolumeBody(
-        VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, True, False
+        policy=VolumePolicy(self_heal=False),
+        replicas=NUM_VOLUME_REPLICAS,
+        size=VOLUME_SIZE,
+        thin=True,
+        encrypted=False,
     )
-    request.uuid = VOLUME_UUID
+    request.additional_properties["uuid"] = VOLUME_UUID
     create_request[CREATE_REQUEST_KEY] = request
 
 
@@ -102,9 +106,13 @@ def a_request_for_a_thin_provisioned_volume(create_request):
 def a_request_for_a_thick_provisioned_volume(create_request):
     """a request for a thick provisioned volume."""
     request = CreateVolumeBody(
-        VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
+        policy=VolumePolicy(self_heal=False),
+        replicas=NUM_VOLUME_REPLICAS,
+        size=VOLUME_SIZE,
+        thin=False,
+        encrypted=False,
     )
-    request.uuid = VOLUME_UUID
+    request.additional_properties["uuid"] = VOLUME_UUID
     create_request[CREATE_REQUEST_KEY] = request
 
 
@@ -128,16 +136,20 @@ def a_volume_is_successfully_created(vol_request):
     assert pool.id == POOL_UUID
     assert len(ApiClient.pools_api().get_pools()) == 1
 
-    vol_request.previous_pool_usage = pool.state.used
-    yield ApiClient.volumes_api().put_volume(vol_request.uuid, vol_request)
+    vol_request.additional_properties["previous_pool_usage"] = pool.state.used
+    yield ApiClient.volumes_api().put_volume(
+        vol_request.additional_properties["uuid"], vol_request
+    )
 
-    ApiClient.volumes_api().del_volume(vol_request.uuid)
+    ApiClient.volumes_api().del_volume(vol_request.additional_properties["uuid"])
 
 
 @then("its replicas are reported to be thick provisioned")
 def its_replicas_are_reported_to_be_thick_provisioned(vol_request):
     """its replicas are reported to be thick provisioned."""
-    volume = ApiClient.volumes_api().get_volume(vol_request.uuid)
+    volume = ApiClient.volumes_api().get_volume(
+        vol_request.additional_properties["uuid"]
+    )
     replicas = volume.state.replica_topology
     for replica_uuid in replicas:
         replica = ApiClient.replicas_api().get_replica(replica_uuid)
@@ -147,7 +159,9 @@ def its_replicas_are_reported_to_be_thick_provisioned(vol_request):
 @then("its replicas are reported to be thin provisioned")
 def its_replicas_are_reported_to_be_thin_provisioned(vol_request):
     """its replicas are reported to be thin provisioned."""
-    volume = ApiClient.volumes_api().get_volume(vol_request.uuid)
+    volume = ApiClient.volumes_api().get_volume(
+        vol_request.additional_properties["uuid"]
+    )
     replicas = volume.state.replica_topology
     for replica_uuid in replicas:
         replica = ApiClient.replicas_api().get_replica(replica_uuid)
@@ -162,7 +176,12 @@ def the_pools_usage_increases_by_4mib_and_metadata(vol_request):
 
     label_part = 4 * 1024 * 1024
     metadata = 4 * 1024 * 1024
-    assert pool.state.used == vol_request.previous_pool_usage + label_part + metadata
+    assert (
+        pool.state.used
+        == vol_request.additional_properties["previous_pool_usage"]
+        + label_part
+        + metadata
+    )
 
 
 @then("the pools usage increases by volume size")
@@ -171,18 +190,23 @@ def the_pools_usage_increases_by_volume_size(vol_request):
     pool = ApiClient.pools_api().get_pool(POOL_UUID)
     assert len(ApiClient.pools_api().get_pools()) == 1
 
-    assert pool.state.used == vol_request.previous_pool_usage + vol_request.size
+    assert (
+        pool.state.used
+        == vol_request.additional_properties["previous_pool_usage"] + vol_request.size
+    )
 
 
 @then("volume creation fails due to insufficient space")
 def volume_creation_fails_due_to_insufficient_space(vol_request):
     """volume creation fails due to insufficient space."""
     try:
-        ApiClient.volumes_api().put_volume(vol_request.uuid, vol_request)
+        ApiClient.volumes_api().put_volume(
+            vol_request.additional_properties["uuid"], vol_request
+        )
     except Exception as e:
         exception_info = e.__dict__
         assert exception_info["status"] == requests.codes["insufficient_storage"]
     finally:
         # Check that the volume wasn't created.
-        volumes = ApiClient.volumes_api().get_volumes().entries
+        volumes = ApiClient.volumes_api().get_volumes(max_entries=0).entries
         assert len(volumes) == 0

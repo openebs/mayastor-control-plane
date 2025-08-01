@@ -9,8 +9,8 @@ from common.deployer import Deployer
 from common.docker import Docker
 from common.operations import Cluster
 from openapi.exceptions import ApiException
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.pool import Pool
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.pool import Pool
 from pytest_bdd import (
     given,
     scenario,
@@ -46,13 +46,13 @@ def init():
     ApiClient.pools_api().put_node_pool(
         NODE_1_NAME,
         POOL_1_UUID,
-        CreatePoolBody(["malloc:///disk?size_mb=50"]),
+        CreatePoolBody(disks=["malloc:///disk?size_mb=50"]),
     )
     ApiClient.pools_api().put_node_pool(
         NODE_2_NAME,
         POOL_2_UUID,
         CreatePoolBody(
-            ["malloc:///disk?size_mb=50"],
+            disks=["malloc:///disk?size_mb=50"],
             labels={
                 "KEY2": "VALUE2",
             },
@@ -93,14 +93,14 @@ def test_label_a_pool_when_label_key_already_exist_and_overwrite_is_true():
     """Label a pool when label key already exist and overwrite is true."""
 
 
-@scenario("pool-label.feature", "Unlabel a pool")
-def test_unlabel_a_pool():
-    """Unlabel a pool."""
-
-
 @scenario("pool-label.feature", "Unlabel a pool when the label key is not present")
 def test_unlabel_a_pool_when_the_label_key_is_not_present():
     """Unlabel a pool when the label key is not present."""
+
+
+@scenario("pool-label.feature", "Unlabel a pool")
+def test_unlabel_a_pool():
+    """Unlabel a pool."""
 
 
 @given("a control plane, two Io-Engine instances, two pools")
@@ -134,14 +134,14 @@ def a_control_plane_two_ioengine_instances_two_pools(init):
 def an_unlabeled_pool():
     """an unlabeled pool."""
     pool = ApiClient.pools_api().get_pool(POOL_1_UUID)
-    assert not "labels" in pool.spec
+    assert pool.spec.labels is None
 
 
 @given("a labeled pool")
 def a_labeled_pool(context):
     """a labeled pool."""
     pool = ApiClient.pools_api().get_pool(POOL_2_UUID)
-    assert "labels" in pool.spec
+    assert pool.spec.labels
     context["pool"] = pool
 
 
@@ -252,10 +252,7 @@ def attempt_delete_label_of_pool(context):
 def attempt_add_label(pool_name, label, overwrite, context):
     try:
         [key, value] = label.split("=")
-        overwrite = "true" if overwrite else "false"
-        pool = ApiClient.pools_api().put_pool_label(
-            pool_name, key, value, overwrite=overwrite
-        )
+        pool = ApiClient.pools_api().put_pool_label(pool_name, key, value, overwrite)
         context["pool"] = pool
         return pool
     except ApiException as exception:

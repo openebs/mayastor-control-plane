@@ -9,12 +9,12 @@ from common.deployer import Deployer
 from common.docker import Docker
 from common.operations import Cluster
 from openapi.exceptions import ApiException
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_status import VolumeStatus
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
+from openapi.models.volume_status import VolumeStatus
 from pytest_bdd import (
     given,
     scenario,
@@ -63,10 +63,10 @@ def init():
 def init_scenarios(init, disks):
     # Only create 2 pools so we can control where the initial replicas are placed.
     ApiClient.pools_api().put_node_pool(
-        NODE_1_NAME, POOL_1_UUID, CreatePoolBody([disks[0]])
+        NODE_1_NAME, POOL_1_UUID, CreatePoolBody(disks=[disks[0]])
     )
     ApiClient.pools_api().put_node_pool(
-        NODE_2_NAME, POOL_2_UUID, CreatePoolBody([disks[1]])
+        NODE_2_NAME, POOL_2_UUID, CreatePoolBody(disks=[disks[1]])
     )
     yield
     Cluster.cleanup(waitPools=True)
@@ -97,19 +97,26 @@ def a_user_defined_maximum_number_of_rebuilds():
 def an_existing_published_volume(disks):
     """an existing published volume."""
     request = CreateVolumeBody(
-        VolumePolicy(True), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
+        policy=VolumePolicy(self_heal=True),
+        replicas=NUM_VOLUME_REPLICAS,
+        size=VOLUME_SIZE,
+        thin=False,
+        encrypted=False,
     )
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=NODE_1_NAME, frontend_node=""
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
+            node=NODE_1_NAME,
+            frontend_node="",
         ),
     )
 
     # Now the volume has been created, create the additional pool.
     ApiClient.pools_api().put_node_pool(
-        NODE_3_NAME, POOL_3_UUID, CreatePoolBody([disks[2]])
+        NODE_3_NAME, POOL_3_UUID, CreatePoolBody(disks=[disks[2]])
     )
 
 
@@ -159,9 +166,9 @@ def wait_for_degraded_volume():
 @retry(wait_fixed=WAIT_FIXED, stop_max_attempt_number=20)
 def wait_for_replica_removal():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    assert len(volume.state.target["children"]) == NUM_VOLUME_REPLICAS - 1
+    assert len(volume.state.target.children) == NUM_VOLUME_REPLICAS - 1
 
 
 def check_replica_not_added():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    assert len(volume.state.target["children"]) < NUM_VOLUME_REPLICAS
+    assert len(volume.state.target.children) < NUM_VOLUME_REPLICAS

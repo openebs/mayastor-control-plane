@@ -5,11 +5,11 @@ from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.docker import Docker
 from common.operations import Snapshot, Volume, wait_node_online
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
 from pytest_bdd import given, parsers, scenario, then, when
 from retrying import retry
 
@@ -57,7 +57,7 @@ def setup(create_pool_disk_images):
     ApiClient.pools_api().put_node_pool(
         NODE1,
         POOL1_NAME,
-        CreatePoolBody(["aio://{}".format(create_pool_disk_images[0])]),
+        CreatePoolBody(disks=["aio://{}".format(create_pool_disk_images[0])]),
     )
     pytest.exception = None
     yield
@@ -81,7 +81,7 @@ def we_have_single_replica_publish_status_volume(publish_status):
     ApiClient.volumes_api().put_volume(
         VOLUME1_UUID,
         CreateVolumeBody(
-            VolumePolicy(True),
+            policy=VolumePolicy(self_heal=True),
             replicas=1,
             size=VOLUME1_SIZE,
             thin=False,
@@ -92,7 +92,10 @@ def we_have_single_replica_publish_status_volume(publish_status):
         ApiClient.volumes_api().put_volume_target(
             VOLUME1_UUID,
             publish_volume_body=PublishVolumeBody(
-                {}, VolumeShareProtocol("nvmf"), node=NODE1, frontend_node="app-node-1"
+                publish_context={},
+                protocol=VolumeShareProtocol("nvmf"),
+                node=NODE1,
+                frontend_node="app-node-1",
             ),
         )
     yield
@@ -156,10 +159,7 @@ def the_corresponding_snapshot_stuck_in_creating_state_should_be_deleted():
         assert len(response.definition.metadata.transactions) == 1
         assert response.definition.metadata.transactions["1"] is not None
         assert len(response.definition.metadata.transactions["1"]) == 1
-        assert (
-            str(response.definition.metadata.transactions["1"][0]["status"])
-            == "Created"
-        )
+        assert response.definition.metadata.transactions["1"][0].status == "Created"
     except openapi.exceptions.NotFoundException:
         pass
 
@@ -173,7 +173,7 @@ def the_response_should_not_contain_the_failed_transactions():
     transactions = list(response.definition.metadata.transactions.values())[0]
     assert transactions is not None
     assert len(transactions) == 1
-    assert str(transactions[0]["status"]) == "Created"
+    assert transactions[0].status == "Created"
 
 
 @then("the snapshot creation should be successful")

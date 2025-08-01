@@ -4,11 +4,11 @@ import pytest
 import requests
 from common.apiclient import ApiClient
 from common.deployer import Deployer
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
 from pytest_bdd import (
     given,
     scenario,
@@ -29,10 +29,17 @@ VOLUME_SIZE = 10485761
 def init():
     Deployer.start(1)
     ApiClient.pools_api().put_node_pool(
-        NODE_NAME, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
+        NODE_NAME, POOL_UUID, CreatePoolBody(disks=["malloc:///disk?size_mb=50"])
     )
     ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False, False)
+        VOLUME_UUID,
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=False),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=False,
+        ),
     )
     yield
     Deployer.stop()
@@ -54,11 +61,14 @@ def a_published_volume():
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=NODE_NAME, frontend_node=""
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
+            node=NODE_NAME,
+            frontend_node="",
         ),
     )
-    assert hasattr(volume.spec, "target")
-    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
+    assert volume.spec.target
+    assert volume.spec.target.protocol == "nvmf"
 
 
 @given("an existing volume")
@@ -72,7 +82,7 @@ def an_existing_volume():
 def an_unpublished_volume():
     """an unpublished volume."""
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    assert not hasattr(volume.spec, "target")
+    assert volume.spec.target is None
 
 
 @then("unpublishing the volume should return an already unpublished error")
@@ -90,4 +100,4 @@ def unpublishing_the_volume_should_return_an_already_unpublished_error():
 def unpublishing_the_volume_should_succeed():
     """unpublishing the volume should succeed."""
     volume = ApiClient.volumes_api().del_volume_target(VOLUME_UUID)
-    assert not hasattr(volume.spec, "target")
+    assert volume.spec.target is None

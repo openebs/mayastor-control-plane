@@ -4,15 +4,15 @@ import pytest
 from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.docker import Docker
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.labelled_topology import LabelledTopology
-from openapi.model.nexus_state import NexusState
-from openapi.model.pool_topology import PoolTopology
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.topology import Topology
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.labelled_topology import LabelledTopology
+from openapi.models.nexus_state import NexusState
+from openapi.models.pool_topology import PoolTopology
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.topology import Topology
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
 from pytest_bdd import given, scenario, then, when
 from retrying import retry
 
@@ -31,11 +31,11 @@ def a_control_plane_two_io_engine_instances_two_pools(init):
 def a_published_selfhealing_volume():
     """a published self-healing volume."""
     request = CreateVolumeBody(
-        VolumePolicy(True),
-        NUM_VOLUME_REPLICAS,
-        VOLUME_SIZE,
-        False,
-        False,
+        policy=VolumePolicy(self_heal=True),
+        replicas=NUM_VOLUME_REPLICAS,
+        size=VOLUME_SIZE,
+        thin=False,
+        encrypted=False,
         topology=Topology(
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(
@@ -49,7 +49,10 @@ def a_published_selfhealing_volume():
     ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=IO_ENGINE_1, frontend_node=""
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
+            node=IO_ENGINE_1,
+            frontend_node="",
         ),
     )
 
@@ -112,7 +115,9 @@ def init(create_pool_disk_images):
     ApiClient.pools_api().put_node_pool(
         IO_ENGINE_2,
         POOL_UUID,
-        CreatePoolBody([create_pool_disk_images[0]], labels={"node": IO_ENGINE_2}),
+        CreatePoolBody(
+            disks=[create_pool_disk_images[0]], labels={"node": IO_ENGINE_2}
+        ),
     )
 
     yield
@@ -122,14 +127,14 @@ def init(create_pool_disk_images):
 @retry(wait_fixed=200, stop_max_delay=5000)
 def check_target_faulted():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    if hasattr(volume.state, "target"):
-        assert volume.state.target["state"] == NexusState("Faulted")
+    if volume.state.target:
+        assert volume.state.target.state == NexusState("Faulted")
 
 
 @retry(wait_fixed=200, stop_max_attempt_number=30)
 def check_nexus_online():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    nexus_uuid = volume.state.target["uuid"]
+    nexus_uuid = volume.state.target.uuid
     nexus = ApiClient.nexuses_api().get_nexus(nexus_uuid)
     assert nexus.state == NexusState("Online")
 
@@ -138,10 +143,10 @@ def check_nexus_online():
 def check_nexus_removed():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     assert (
-        not hasattr(volume.state, "target")
+        volume.state.target is None
         # or it might have been recreated if we lost the "race"...
-        or volume.state.target["state"] == NexusState("Online")
-        or volume.state.target["state"] == NexusState("Degraded")
+        or volume.state.target.state == NexusState("Online")
+        or volume.state.target.state == NexusState("Degraded")
     )
 
 
@@ -150,7 +155,7 @@ def check_replicas_online():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     online_replicas = list(
         filter(
-            lambda uuid: str(volume.state.replica_topology[uuid].state) == "Online",
+            lambda uuid: volume.state.replica_topology[uuid].state == "Online",
             list(volume.state.replica_topology),
         )
     )

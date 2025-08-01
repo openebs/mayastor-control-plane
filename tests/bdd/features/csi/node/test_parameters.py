@@ -11,11 +11,11 @@ from common.apiclient import ApiClient
 from common.csi import CsiHandle
 from common.deployer import Deployer
 from common.nvme import nvme_find_device_path
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
 from pytest_bdd import given, parsers, scenario, then, when
 
 VOLUME_UUID = "f04e4756-999f-446f-8610-fbf879aff2a7"
@@ -78,20 +78,30 @@ def block_volume_capability():
 @pytest.fixture
 def staging_a_volume(staging_target_path, csi_instance, block_volume_capability):
     volume = ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, 10241024, False, False)
+        VOLUME_UUID,
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=False),
+            replicas=1,
+            size=10241024,
+            thin=False,
+            encrypted=False,
+        ),
     )
     volume = ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=NODE1, frontend_node=""
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
+            node=NODE1,
+            frontend_node="",
         ),
     )
-    device_uri = volume.state["target"]["device_uri"]
+    device_uri = volume.state.target.device_uri
     print(device_uri)
     csi_instance.node.NodeStageVolume(
         pb.NodeStageVolumeRequest(
             volume_id=volume.spec.uuid,
-            publish_context={"uri": volume.state["target"]["device_uri"]},
+            publish_context={"uri": volume.state.target.device_uri},
             staging_target_path=staging_target_path,
             volume_capability=block_volume_capability,
             secrets={},
@@ -109,7 +119,7 @@ def staging_a_volume(staging_target_path, csi_instance, block_volume_capability)
 
 def volume_device_path():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    device_path = nvme_find_device_path(volume.state["target"]["device_uri"])
+    device_path = nvme_find_device_path(volume.state.target.device_uri)
     return device_path
 
 
@@ -167,7 +177,7 @@ def setup():
     pool = pool_api.put_node_pool(
         "io-engine-1",
         "pool-1",
-        CreatePoolBody(["malloc:///disk?size_mb=200"]),
+        CreatePoolBody(disks=["malloc:///disk?size_mb=200"]),
     )
     yield
     ApiClient.pools_api().del_pool(pool.id)

@@ -8,7 +8,7 @@ from common.apiclient import ApiClient
 from common.csi import CsiHandle
 from common.deployer import Deployer
 from common.operations import Cluster, Snapshot, Volume
-from openapi.model.create_pool_body import CreatePoolBody
+from openapi.models.create_pool_body import CreatePoolBody
 from pytest_bdd import (
     given,
     scenario,
@@ -35,7 +35,7 @@ def setup():
     pool_api.put_node_pool(
         NODE1,
         POOL1_NAME,
-        CreatePoolBody(["malloc:///disk?size_mb=128"], labels=pool_labels),
+        CreatePoolBody(disks=["malloc:///disk?size_mb=128"], labels=pool_labels),
     )
     yield
     try:

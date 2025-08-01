@@ -8,7 +8,7 @@ from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.docker import Docker
 from openapi.exceptions import ApiException
-from openapi.model.node import Node
+from openapi.models.node import Node
 from pytest_bdd import given, scenario, then, when
 
 NUM_IO_ENGINES = 2
@@ -96,7 +96,7 @@ def a_control_plane_two_ioengine_instances_two_pools(init):
     assert len(nodes) == 2
     yield
     for node in ApiClient.nodes_api().get_nodes():
-        if hasattr(node.spec, "labels"):
+        if node.spec.labels:
             for label in node.spec.labels.keys():
                 ApiClient.nodes_api().delete_node_label(node.id, label)
 
@@ -222,10 +222,7 @@ def attempt_add_label_one_with_overwrite(context):
 def attempt_add_label(node_name, label, overwrite, context):
     try:
         [key, value] = label.split("=")
-        overwrite = "true" if overwrite else "false"
-        node = ApiClient.nodes_api().put_node_label(
-            node_name, key, value, overwrite=overwrite
-        )
+        node = ApiClient.nodes_api().put_node_label(node_name, key, value, overwrite)
         context["node"] = node
         return node
     except ApiException as exception:

@@ -3,15 +3,15 @@
 import pytest
 from common.apiclient import ApiClient
 from common.deployer import Deployer
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.replica_state import ReplicaState
-from openapi.model.replica_topology import ReplicaTopology
-from openapi.model.spec_status import SpecStatus
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_spec import VolumeSpec
-from openapi.model.volume_state import VolumeState
-from openapi.model.volume_status import VolumeStatus
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.replica_state import ReplicaState
+from openapi.models.replica_topology import ReplicaTopology
+from openapi.models.spec_status import SpecStatus
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_spec import VolumeSpec
+from openapi.models.volume_state import VolumeState
+from openapi.models.volume_status import VolumeStatus
 from pytest_bdd import (
     given,
     scenario,
@@ -35,10 +35,17 @@ def init():
     ApiClient.pools_api().put_node_pool(
         NODE_NAME,
         POOL_UUID,
-        CreatePoolBody(["malloc:///disk?size_mb=50"]),
+        CreatePoolBody(disks=["malloc:///disk?size_mb=50"]),
     )
     ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False, False)
+        VOLUME_UUID,
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=False),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=False,
+        ),
     )
     yield
     Deployer.stop()
@@ -72,14 +79,14 @@ def a_user_issues_a_get_request_for_a_volume(volume_ctx):
 def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
     """a volume object representing the volume should be returned."""
     expected_spec = VolumeSpec(
-        1,
-        VOLUME_SIZE,
-        SpecStatus("Created"),
-        VOLUME_UUID,
-        VolumePolicy(False),
-        False,
-        0,
-        False,
+        num_replicas=1,
+        size=VOLUME_SIZE,
+        status=SpecStatus("Created"),
+        uuid=VOLUME_UUID,
+        policy=VolumePolicy(self_heal=False),
+        thin=False,
+        num_snapshots=0,
+        encrypted=False,
     )
 
     volume = volume_ctx[VOLUME_CTX_KEY]
@@ -91,17 +98,17 @@ def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
     expected_replica_toplogy = {}
     for key, value in volume.state.replica_topology.items():
         expected_replica_toplogy[key] = ReplicaTopology(
-            ReplicaState("Online"),
+            state=ReplicaState("Online"),
             node="io-engine-1",
             encrypted=False,
             pool=POOL_UUID,
             usage=volume.state.replica_topology[key].usage,
         )
     expected_state = VolumeState(
-        VOLUME_SIZE,
-        VolumeStatus("Online"),
-        VOLUME_UUID,
-        expected_replica_toplogy,
+        size=VOLUME_SIZE,
+        status=VolumeStatus("Online"),
+        uuid=VOLUME_UUID,
+        replica_topology=expected_replica_toplogy,
         usage=volume.state.usage,
     )
     assert str(volume.state) == str(expected_state)

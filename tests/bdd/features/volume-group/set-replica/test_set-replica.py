@@ -9,9 +9,9 @@ import pytest
 from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.operations import Cluster
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_policy import VolumePolicy
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.volume_policy import VolumePolicy
 from pytest_bdd import (
     given,
     parsers,
@@ -100,7 +100,7 @@ def a_new_pool_on_node_b_is_created():
     ApiClient.pools_api().put_node_pool(
         NODE_NAME_2,
         "new_pool",
-        CreatePoolBody(["malloc:///new_disk?size_mb=200"]),
+        CreatePoolBody(disks=["malloc:///new_disk?size_mb=200"]),
     )
 
 
@@ -137,7 +137,7 @@ def the_volume_belonging_to_a_affinity_group_with_one_replica_and_thin_is_create
             ApiClient.volumes_api().put_volume(
                 pytest.vol_id,
                 CreateVolumeBody(
-                    VolumePolicy(False),
+                    policy=VolumePolicy(self_heal=False),
                     replicas=1,
                     size=VOLUME_SIZE,
                     thin=bool(thin),
@@ -149,7 +149,7 @@ def the_volume_belonging_to_a_affinity_group_with_one_replica_and_thin_is_create
             ApiClient.volumes_api().put_volume(
                 AG_VOLUME_UUID_1,
                 CreateVolumeBody(
-                    VolumePolicy(False),
+                    policy=VolumePolicy(self_heal=False),
                     replicas=1,
                     size=VOLUME_SIZE,
                     thin=bool(thin),
@@ -242,12 +242,18 @@ def create_node_pools(node_pool_map: Dict[str, int]):
             ApiClient.pools_api().put_node_pool(
                 node_name,
                 pool_name,
-                CreatePoolBody([f"malloc:///{disk_name}?size_mb=200"]),
+                CreatePoolBody(disks=[f"malloc:///{disk_name}?size_mb=200"]),
             )
             pool_index += 1
     ApiClient.volumes_api().put_volume(
         NON_VG_VOLUME_UUID,
-        CreateVolumeBody(VolumePolicy(False), 2, VOLUME_SIZE, False, False),
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=False),
+            replicas=2,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=False,
+        ),
     )
 
 
@@ -256,7 +262,7 @@ def create_affinity_group(replicas, thin):
         ApiClient.volumes_api().put_volume(
             volume_uuid,
             CreateVolumeBody(
-                VolumePolicy(False),
+                policy=VolumePolicy(self_heal=False),
                 replicas=replicas,
                 size=VOLUME_SIZE,
                 thin=thin,
@@ -291,10 +297,10 @@ def scale_affinity_group(replicas):
 
 
 def get_affinity_group_volumes():
-    volumes = ApiClient.volumes_api().get_volumes()
+    volumes = ApiClient.volumes_api().get_volumes(max_entries=0)
     return [
         volume
         for volume in volumes.entries
-        if hasattr(volume.spec, "affinity_group")
-        and volume.spec.affinity_group["id"] == AG_PARAM["id"]
+        if volume.spec.affinity_group
+        and volume.spec.affinity_group.id == AG_PARAM["id"]
     ]

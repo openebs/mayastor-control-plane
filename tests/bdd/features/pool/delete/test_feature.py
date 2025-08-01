@@ -7,10 +7,10 @@ from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.docker import Docker
 from openapi.exceptions import ApiException, NotFoundException
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.node_status import NodeStatus
-from openapi.model.volume_policy import VolumePolicy
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.node_status import NodeStatus
+from openapi.models.volume_policy import VolumePolicy
 from pytest_bdd import (
     given,
     scenario,
@@ -177,7 +177,7 @@ def pool(node_disks, nodes):
     assert len(node_disks) > 0
     node = nodes[0]
     pool = ApiClient.pools_api().put_node_pool(
-        node.id, f"{node.id}-pool", CreatePoolBody([node_disks[0]])
+        node.id, f"{node.id}-pool", CreatePoolBody(disks=[node_disks[0]])
     )
     yield pool
 
@@ -199,7 +199,14 @@ def a_pool_with_no_replicas(pool):
 @pytest.fixture
 def a_pool_with_replicas(pool):
     volume = ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False, False)
+        VOLUME_UUID,
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=False),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=False,
+        ),
     )
     print(volume)
     yield

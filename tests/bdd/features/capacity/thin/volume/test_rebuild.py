@@ -7,13 +7,14 @@ import pytest
 from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.fio import Fio
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_replica_body import CreateReplicaBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_status import VolumeStatus
+from openapi.models.child_state_reason import ChildStateReason
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_replica_body import CreateReplicaBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
+from openapi.models.volume_status import VolumeStatus
 from pytest_bdd import (
     given,
     scenario,
@@ -52,12 +53,12 @@ def init():
     ApiClient.pools_api().put_node_pool(
         NODE_NAME_1,
         POOL_UUID_1,
-        CreatePoolBody([f"malloc:///disk1?size_mb={pool_size_mb}"]),
+        CreatePoolBody(disks=[f"malloc:///disk1?size_mb={pool_size_mb}"]),
     )
     ApiClient.pools_api().put_node_pool(
         NODE_NAME_2,
         POOL_UUID_2,
-        CreatePoolBody([f"malloc:///disk2?size_mb={pool_size_mb}"]),
+        CreatePoolBody(disks=[f"malloc:///disk2?size_mb={pool_size_mb}"]),
     )
 
     yield
@@ -93,15 +94,21 @@ def a_thin_provisioned_volume_with_1_replica():
     volume = ApiClient.volumes_api().put_volume(
         VOLUME_UUID,
         create_volume_body=CreateVolumeBody(
-            VolumePolicy(True), 1, VOLUME_SIZE, True, False
+            policy=VolumePolicy(self_heal=True),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=True,
+            encrypted=False,
         ),
     )
     volume = ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid,
-        publish_volume_body=PublishVolumeBody({}, VolumeShareProtocol("nvmf")),
+        publish_volume_body=PublishVolumeBody(
+            publish_context={}, protocol=VolumeShareProtocol("nvmf")
+        ),
     )
-    assert hasattr(volume.spec, "target")
-    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
+    assert volume.spec.target
+    assert volume.spec.target.protocol == "nvmf"
     pytest.volume = volume
 
 
@@ -111,7 +118,11 @@ def a_thin_provisioned_volume_with_2_replicas():
     volume = ApiClient.volumes_api().put_volume(
         VOLUME_UUID,
         create_volume_body=CreateVolumeBody(
-            VolumePolicy(True), 2, VOLUME_SIZE, True, False
+            policy=VolumePolicy(self_heal=True),
+            replicas=2,
+            size=VOLUME_SIZE,
+            thin=True,
+            encrypted=False,
         ),
     )
 
@@ -121,11 +132,11 @@ def a_thin_provisioned_volume_with_2_replicas():
     volume = ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=node
+            publish_context={}, protocol=VolumeShareProtocol("nvmf"), node=node
         ),
     )
-    assert hasattr(volume.spec, "target")
-    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
+    assert volume.spec.target
+    assert volume.spec.target.protocol == "nvmf"
     pytest.volume = volume
 
 
@@ -133,7 +144,7 @@ def a_thin_provisioned_volume_with_2_replicas():
 def data_is_written_to_the_volume():
     """data is written to the volume."""
     volume = pytest.volume
-    uri = urlparse(volume.state.target["device_uri"])
+    uri = urlparse(volume.state.target.device_uri)
 
     fio = Fio(name="job", rw="write", uri=uri, size="10M")
 
@@ -153,7 +164,7 @@ def data_is_written_to_the_volume_which_exceeds_the_free_space_on_one_of_the_poo
     )
 
     volume = pytest.volume
-    uri = urlparse(volume.state.target["device_uri"])
+    uri = urlparse(volume.state.target.device_uri)
 
     fio = Fio(name="job", rw="write", uri=uri)
     pytest.fio = fio.open()
@@ -204,7 +215,7 @@ def the_faulted_replica_is_relocated_to_another_pool_with_sufficient_free_space(
     ApiClient.pools_api().put_node_pool(
         NODE_NAME_1,
         POOL_UUID_3,
-        CreatePoolBody([f"malloc:///disk22?size_mb={pool_size_mb}"]),
+        CreatePoolBody(disks=[f"malloc:///disk22?size_mb={pool_size_mb}"]),
     )
 
     wait_volume_new_replica(volume, replicas)
@@ -221,7 +232,7 @@ def the_total_number_of_healthy_replicas_is_restored():
     """the total number of healthy replicas is restored."""
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     assert volume.state.status == VolumeStatus("Online")
-    assert len(volume.state.target["children"]) == 2
+    assert len(volume.state.target.children) == 2
 
 
 @then("the total number of healthy replicas of the volume decreases by one")
@@ -237,10 +248,12 @@ def if_the_volume_is_republished_again():
     ApiClient.volumes_api().del_volume_target(VOLUME_UUID)
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
-        publish_volume_body=PublishVolumeBody({}, VolumeShareProtocol("nvmf")),
+        publish_volume_body=PublishVolumeBody(
+            publish_context={}, protocol=VolumeShareProtocol("nvmf")
+        ),
     )
-    assert hasattr(volume.spec, "target")
-    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
+    assert volume.spec.target
+    assert volume.spec.target.protocol == "nvmf"
     pytest.volume = volume
 
 
@@ -260,7 +273,7 @@ def the_faulted_replica_should_not_be_rebuilt_as_theres_no_free_space_in_the_poo
 def wait_unrebuildable_removed(volume, deleted):
     volume = ApiClient.volumes_api().get_volume(volume.spec.uuid)
     assert volume.state.status == VolumeStatus("Degraded")
-    assert len(volume.state.target["children"]) == 1, "We should not add the Child"
+    assert len(volume.state.target.children) == 1, "We should not add the Child"
     assert not deleted or len(volume.state.replica_topology.keys()) == 1
 
 
@@ -268,22 +281,22 @@ def wait_unrebuildable_removed(volume, deleted):
 def wait_volume_rebuild(volume):
     volume = ApiClient.volumes_api().get_volume(volume.spec.uuid)
     assert volume.state.status == VolumeStatus("Online")
-    assert len(volume.state.target["children"]) == 2
+    assert len(volume.state.target.children) == 2
 
 
 @retry(wait_fixed=200, stop_max_attempt_number=20)
 def wait_volume_enospc(volume):
     volume = ApiClient.volumes_api().get_volume(volume.spec.uuid)
     assert volume.state.status == VolumeStatus("Degraded")
-    assert len(volume.state.target["children"]) == 2
+    assert len(volume.state.target.children) == 2
 
     enospcs = list(
         filter(
-            lambda child: str(child.get("state_reason")) == "OutOfSpace",
-            list(volume.state.target["children"]),
+            lambda child: child.state_reason == ChildStateReason("OutOfSpace"),
+            list(volume.state.target.children),
         )
     )
-    assert len(enospcs) == 1
+    assert len(enospcs) == 1, f"{volume.state.target.children}"
 
 
 @retry(wait_fixed=200, stop_max_attempt_number=20)
@@ -301,7 +314,7 @@ def wait_volume_new_replica(volume, prev_replicas):
             list(volume.state.replica_topology),
         )
     )
-    assert len(new_replicas) == 1
+    assert len(new_replicas) == 1, f"{volume.state.replica_topology}"
 
 
 @retry(wait_fixed=200, stop_max_attempt_number=20)

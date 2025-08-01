@@ -6,8 +6,8 @@ import pytest
 from common.apiclient import ApiClient
 from common.deployer import Deployer
 from openapi.exceptions import ApiException, NotFoundException
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.pool import Pool
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.pool import Pool
 from pytest_bdd import (
     given,
     scenario,
@@ -155,7 +155,7 @@ def attempt_create_valid_pool_p0(context):
 def attempt_create_valid_pool(name, node, context):
     try:
         pool = ApiClient.pools_api().put_node_pool(
-            node, name, CreatePoolBody(["malloc:///disk?size_mb=100"])
+            node, name, CreatePoolBody(disks=["malloc:///disk?size_mb=100"])
         )
         context["attempt_result"] = pool
         return pool

@@ -11,17 +11,17 @@ from common.deployer import Deployer
 from common.docker import Docker
 from common.fio import Fio
 from common.operations import Snapshot, Volume
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.nexus_state import NexusState
-from openapi.model.pool_status import PoolStatus
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.replica_state import ReplicaState
-from openapi.model.resize_volume_body import ResizeVolumeBody
-from openapi.model.spec_status import SpecStatus
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_status import VolumeStatus
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.nexus_state import NexusState
+from openapi.models.pool_status import PoolStatus
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.replica_state import ReplicaState
+from openapi.models.resize_volume_body import ResizeVolumeBody
+from openapi.models.spec_status import SpecStatus
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
+from openapi.models.volume_status import VolumeStatus
 from pytest_bdd import (
     given,
     parsers,
@@ -72,18 +72,18 @@ def init(disks):
     # An extra disk for replica placement for rebuild purpose.
     assert len(disks) == DEFAULT_REPLICA_CNT + 1
     ApiClient.pools_api().put_node_pool(
-        NODE1_NAME, POOL1_UUID, CreatePoolBody([f"aio://{disks[0]}"])
+        NODE1_NAME, POOL1_UUID, CreatePoolBody(disks=[f"aio://{disks[0]}"])
     )
     ApiClient.pools_api().put_node_pool(
-        NODE2_NAME, POOL2_UUID, CreatePoolBody([f"aio://{disks[1]}"])
+        NODE2_NAME, POOL2_UUID, CreatePoolBody(disks=[f"aio://{disks[1]}"])
     )
     ApiClient.pools_api().put_node_pool(
-        NODE3_NAME, POOL3_UUID, CreatePoolBody([f"aio://{disks[2]}"])
+        NODE3_NAME, POOL3_UUID, CreatePoolBody(disks=[f"aio://{disks[2]}"])
     )
     # Create an additional pool that is need for some tests, but keep it cordoned
     # until required.
     ApiClient.pools_api().put_node_pool(
-        NODE4_NAME, POOL4_UUID, CreatePoolBody([f"aio://{disks[3]}"])
+        NODE4_NAME, POOL4_UUID, CreatePoolBody(disks=[f"aio://{disks[3]}"])
     )
     # Cordon the additional node in the beginning so that nothing gets placed there
     # in the start.
@@ -123,7 +123,7 @@ def cordon_node(node_name, label):
 def is_cordoned(node_name):
     node = ApiClient.nodes_api().get_node(node_name)
     try:
-        assert node.spec.cordondrainstate["cordonedstate"]["cordonlabels"] != []
+        assert node.spec.cordondrainstate.cordonedstate.cordonlabels != []
         return True
     except AttributeError:
         return False
@@ -140,7 +140,13 @@ def uncordon_node(node_name, label):
 def create_volume_only(uuid, size, rcount):
     volume = ApiClient.volumes_api().put_volume(
         uuid,
-        CreateVolumeBody(VolumePolicy(True), int(rcount), size, False, False),
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=True),
+            replicas=int(rcount),
+            size=size,
+            thin=False,
+            encrypted=False,
+        ),
     )
     assert volume.spec.uuid == uuid
     replicas = volume.state.replica_topology
@@ -154,10 +160,13 @@ def publish_volume(uuid, publish_on):
     volume = ApiClient.volumes_api().put_volume_target(
         uuid,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=publish_on, frontend_node=""
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
+            node=publish_on,
+            frontend_node="",
         ),
     )
-    assert hasattr(volume.state, "target")
+    assert volume.state.target
 
 
 def create_and_publish_volume(uuid, size, rcount, publish_on):
@@ -166,10 +175,13 @@ def create_and_publish_volume(uuid, size, rcount, publish_on):
     volume = ApiClient.volumes_api().put_volume_target(
         uuid,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=publish_on, frontend_node=""
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
+            node=publish_on,
+            frontend_node="",
         ),
     )
-    assert hasattr(volume.state, "target")
+    assert volume.state.target
     pytest.volume = volume
     wait_volume_published(uuid)
     return volume
@@ -181,7 +193,7 @@ def create_volume_snapshot(volume, snapid):
 
 
 def start_fio(volume):
-    uri = urlparse(volume.state.target["device_uri"])
+    uri = urlparse(volume.state.target.device_uri)
     fio = Fio(name="fio-pre-resize", rw="write", uri=uri)
     pytest.fio = fio.open()
 
@@ -331,7 +343,11 @@ def the_volume_is_receiving_io(test_volume_factory):
 def a_new_volume_is_created_with_the_snapshot_as_its_source():
     """a new volume is created with the snapshot as its source."""
     body = CreateVolumeBody(
-        VolumePolicy(True), replicas=1, size=VOLUME_SIZE, thin=True, encrypted=False
+        policy=VolumePolicy(self_heal=True),
+        replicas=1,
+        size=VOLUME_SIZE,
+        thin=True,
+        encrypted=False,
     )
     volume = ApiClient.volumes_api().put_snapshot_volume(
         SNAP_UUID_1, RESTORE_VOLUME_UUID, body
@@ -347,7 +363,7 @@ def we_issue_a_volume_expand_request(test_volume_factory):
     test_volume = test_volume_factory()
     try:
         volume = ApiClient.volumes_api().put_volume_size(
-            test_volume.spec.uuid, ResizeVolumeBody(VOLUME_NEW_SIZE)
+            test_volume.spec.uuid, ResizeVolumeBody(size=VOLUME_NEW_SIZE)
         )
         pytest.exception = None
         pytest.volume = volume
@@ -360,7 +376,7 @@ def we_issue_a_volume_shrink_request():
     """we issue a volume shrink request."""
     try:
         volume = ApiClient.volumes_api().put_volume_size(
-            VOLUME_UUID, ResizeVolumeBody(VOLUME_SHRINK_SIZE)
+            VOLUME_UUID, ResizeVolumeBody(size=VOLUME_SHRINK_SIZE)
         )
         pytest.volume = volume
         pytest.exception = None
@@ -393,7 +409,7 @@ def io_on_the_new_volume_runs_without_error_for_the_complete_volume_size(
     """IO on the new volume runs without error for the complete volume size."""
     test_volume = test_volume_factory()
 
-    uri = urlparse(test_volume.state.target["device_uri"])
+    uri = urlparse(test_volume.state.target.device_uri)
     fio = Fio(name="fio-restored-volume", rw="write", uri=uri)
 
     fio_proc = fio.open()
@@ -432,9 +448,9 @@ def the_new_capacity_should_be_available_for_the_application(test_volume_factory
     test_volume = test_volume_factory()
     # If it's a published volume, start a fio instance again that'll do
     # IO to the complete expanded volume.
-    if hasattr(test_volume.state, "target"):
-        assert test_volume.state.target["size"] >= VOLUME_NEW_SIZE
-        uri = urlparse(test_volume.state.target["device_uri"])
+    if test_volume.state.target:
+        assert test_volume.state.target.size >= VOLUME_NEW_SIZE
+        uri = urlparse(test_volume.state.target.device_uri)
         fio = Fio(name="fio-post-resize", rw="write", uri=uri)
         # If previous fio is running, kill and start fresh.
         if pytest.fio is not None and pytest.fio.poll() is not None:
@@ -520,7 +536,7 @@ def the_volume_should_be_expanded_to_the_new_capacity(test_volume_factory):
     """the volume should be expanded to the new capacity."""
     test_volume = test_volume_factory()
     # spec.operation is cleared when volume resize completes.
-    assert hasattr(test_volume.spec, "operation") is False
+    assert test_volume.spec.operation is None
     if pytest.fio is not None:
         fio = pytest.fio
         try:
@@ -535,8 +551,8 @@ def the_volume_should_be_expanded_to_the_new_capacity(test_volume_factory):
 def the_volume_target_should_get_resized_to_new_capacity(test_volume_factory):
     """the volume target should get resized to new capacity."""
     test_volume = test_volume_factory()
-    if hasattr(test_volume.state, "target"):
-        assert test_volume.state.target["size"] >= VOLUME_NEW_SIZE
+    if test_volume.state.target:
+        assert test_volume.state.target.size >= VOLUME_NEW_SIZE
 
 
 # test scenarios and steps - END
@@ -548,7 +564,7 @@ def the_volume_target_should_get_resized_to_new_capacity(test_volume_factory):
 def wait_volume_replica_offline(volume, replica):
     volume = ApiClient.volumes_api().get_volume(volume.spec.uuid)
     replicas = volume.state.replica_topology
-    assert replicas.get(replica.uuid).get("state") == ReplicaState("Unknown")
+    assert replicas.get(replica.uuid).state == ReplicaState("Unknown")
 
 
 @retry(wait_fixed=500, stop_max_attempt_number=20)
@@ -560,7 +576,7 @@ def wait_pool_online(pool_id):
 @retry(wait_fixed=200, stop_max_attempt_number=30)
 def wait_volume_published(vol_id):
     volume = ApiClient.volumes_api().get_volume(vol_id)
-    assert volume.state.target["state"] == NexusState("Online")
+    assert volume.state.target.state == NexusState("Online")
 
 
 @retry(wait_fixed=500, stop_max_attempt_number=30)
@@ -581,9 +597,9 @@ def check_replica_online(node):
 @retry(wait_fixed=100, stop_max_attempt_number=30)
 def wait_rebuild_start():
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    childlist = vol.state.target["children"]
+    childlist = vol.state.target.children
     assert (len(childlist) == DEFAULT_REPLICA_CNT) and (
-        vol.state.target["state"] == NexusState("Degraded")
+        vol.state.target.state == NexusState("Degraded")
     )
 
 

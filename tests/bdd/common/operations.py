@@ -10,12 +10,12 @@ from common.deployer import Deployer
 from common.docker import Docker
 from common.fio import Fio
 from openapi.exceptions import ApiException, NotFoundException
-from openapi.model.node_status import NodeStatus
-from openapi.model.pool_cordon import PoolCordon
-from openapi.model.pool_status import PoolStatus
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_status import VolumeStatus
+from openapi.models.node_status import NodeStatus
+from openapi.models.pool_cordon_req import PoolCordonReq
+from openapi.models.pool_status import PoolStatus
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_share_protocol import VolumeShareProtocol
+from openapi.models.volume_status import VolumeStatus
 from retrying import retry
 
 
@@ -65,12 +65,22 @@ class Pool(object):
 
     @staticmethod
     def cordon(pool, replicas=True, snapshots=False, restores=True, imports=False):
-        rsc = PoolCordon(replicas, snapshots, restores, imports)
+        rsc = PoolCordonReq(
+            replicas=replicas,
+            snapshots=snapshots,
+            restores=restores,
+            var_import=imports,
+        )
         return Pool.__pools_api().put_pool_cordon(pool.id, pool_cordon_req=rsc)
 
     @staticmethod
     def uncordon(pool, replicas=True, snapshots=True, restores=True, imports=True):
-        rsc = PoolCordon(replicas, snapshots, restores, imports)
+        rsc = PoolCordonReq(
+            replicas=replicas,
+            snapshots=snapshots,
+            restores=restores,
+            var_import=imports,
+        )
         return Pool.__pools_api().del_pool_cordon(pool.id, pool_cordon_req=rsc)
 
     @staticmethod
@@ -88,7 +98,7 @@ class Volume(object):
     # Delete all the volumes in the cluster
     @staticmethod
     def delete_all():
-        for volume in Volume.__api().get_volumes().entries:
+        for volume in Volume.__api().get_volumes(max_entries=0).entries:
             try:
                 Volume.__api().del_volume(volume.spec.uuid)
             except NotFoundException:
@@ -117,12 +127,14 @@ class Volume(object):
         try:
             volume = ApiClient.volumes_api().put_volume_target(
                 volume.spec.uuid,
-                publish_volume_body=PublishVolumeBody({}, VolumeShareProtocol("nvmf")),
+                publish_volume_body=PublishVolumeBody(
+                    publish_context={}, protocol=VolumeShareProtocol("nvmf")
+                ),
             )
         except ApiException as e:
             assert e.status == http.HTTPStatus.PRECONDITION_FAILED
             volume = Volume.update(volume)
-        uri = urlparse(volume.state.target["device_uri"])
+        uri = urlparse(volume.state.target.device_uri)
         fio = Fio(name="job", rw=rw, uri=uri, offset=offset, size=size)
         fio.run()
         volume = Volume.update(volume)
@@ -137,7 +149,7 @@ class Snapshot(object):
     # Delete all the snapshots in the cluster
     @staticmethod
     def delete_all():
-        for snapshot in Snapshot.__api().get_volumes_snapshots().entries:
+        for snapshot in Snapshot.__api().get_volumes_snapshots(max_entries=0).entries:
             try:
                 Snapshot.__api().del_snapshot(snapshot.definition.spec.uuid)
             except NotFoundException:
@@ -176,7 +188,7 @@ class Cluster(object):
 
         # ensure nodes are all online
         for node in ApiClient.nodes_api().get_nodes():
-            if node.state.status != NodeStatus("Online"):
+            if node.state is None or node.state.status != NodeStatus("Online"):
                 Docker.restart_container(node.id)
         for node in ApiClient.nodes_api().get_nodes():
             wait_node_online(node.id)

@@ -5,9 +5,9 @@ from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.docker import Docker
 from common.operations import Cluster
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_policy import VolumePolicy
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.volume_policy import VolumePolicy
 from pytest_bdd import (
     given,
     scenario,
@@ -46,7 +46,7 @@ def init():
 def init_scenario(init, disks):
     pytest.command_failed = False
     ApiClient.pools_api().put_node_pool(
-        NODE_NAME_1, POOL_UUID_1, CreatePoolBody([f"{disks[0]}"])
+        NODE_NAME_1, POOL_UUID_1, CreatePoolBody(disks=[f"{disks[0]}"])
     )
     yield
     Docker.restart_container("core")
@@ -77,7 +77,11 @@ def cordon_node(node_name, label):
 
 def create_volume(vol_uuid):
     request = CreateVolumeBody(
-        VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
+        policy=VolumePolicy(self_heal=False),
+        replicas=NUM_VOLUME_REPLICAS,
+        size=VOLUME_SIZE,
+        thin=False,
+        encrypted=False,
     )
     ApiClient.volumes_api().put_volume(vol_uuid, request)
     # Check that the volume was created.
@@ -86,7 +90,11 @@ def create_volume(vol_uuid):
 
 def create_volume_and_fail(vol_uuid):
     request = CreateVolumeBody(
-        VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
+        policy=VolumePolicy(self_heal=False),
+        replicas=NUM_VOLUME_REPLICAS,
+        size=VOLUME_SIZE,
+        thin=False,
+        encrypted=False,
     )
     try:
         ApiClient.volumes_api().put_volume(vol_uuid, request)
@@ -106,13 +114,13 @@ def delete_volume(vol_uuid):
 
 
 def delete_all_volumes():
-    volumes = ApiClient.volumes_api().get_volumes()
+    volumes = ApiClient.volumes_api().get_volumes(max_entries=0)
     for vol in volumes.entries:
         ApiClient.volumes_api().del_volume(vol.spec.uuid)
 
 
-def get_volumes():
-    return ApiClient.volumes_api().get_volumes()
+def get_volumes(max_entries=0):
+    return ApiClient.volumes_api().get_volumes(max_entries=0)
 
 
 def is_cordoned(node_name):
@@ -121,16 +129,13 @@ def is_cordoned(node_name):
 
 
 def cordon_labels(node):
-    if node.spec.get("cordondrainstate") is None:
+    if node.spec.cordondrainstate is None:
         return []
-    if node.spec.get("cordondrainstate").get("cordonedstate") is None:
+    if node.spec.cordondrainstate.cordonedstate is None:
         return []
-    if (
-        node.spec.get("cordondrainstate").get("cordonedstate").get("cordonlabels")
-        is None
-    ):
+    if node.spec.cordondrainstate.cordonedstate.cordonlabels is None:
         return []
-    return node.spec.cordondrainstate["cordonedstate"]["cordonlabels"]
+    return node.spec.cordondrainstate.cordonedstate.cordonlabels
 
 
 def remove_all_cordons(node_name):
@@ -244,7 +249,7 @@ def multiple_uncordoned_nodes():
 @given("a cordoned node")
 def a_cordoned_node():
     """a cordoned node."""
-    vols = get_volumes().entries
+    vols = get_volumes(max_entries=0).entries
     assert len(vols) == 0
     cordon_node(NODE_NAME_1, CORDON_LABEL_1)
     assert is_cordoned(NODE_NAME_1) == True
@@ -253,7 +258,7 @@ def a_cordoned_node():
 @given("a cordoned node with multiple cordons")
 def a_cordoned_node_with_multiple_cordons():
     """a cordoned node with multiple cordons."""
-    vols = get_volumes().entries
+    vols = get_volumes(max_entries=0).entries
     assert len(vols) == 0
     cordon_node(NODE_NAME_1, CORDON_LABEL_1)
     cordon_node(NODE_NAME_1, CORDON_LABEL_2)
@@ -264,7 +269,7 @@ def a_cordoned_node_with_multiple_cordons():
 def a_cordoned_node_with_resources():
     """a cordoned node with resources."""
     create_volume(VOLUME_UUID_1)
-    vols = get_volumes().entries
+    vols = get_volumes(max_entries=0).entries
     assert len(vols) == 1
     cordon_node(NODE_NAME_1, CORDON_LABEL_1)
 
@@ -278,7 +283,7 @@ def a_published_volume_with_multiple_replicas():
 @given("an uncordoned node")
 def an_uncordoned_node():
     """an uncordoned node."""
-    vols = get_volumes().entries
+    vols = get_volumes(max_entries=0).entries
     assert len(vols) == 0
     assert is_cordoned(NODE_NAME_1) == False
 
@@ -286,18 +291,18 @@ def an_uncordoned_node():
 @given("an uncordoned node with resources")
 def an_uncordoned_node_with_resources():
     """an uncordoned node with resources."""
-    vols = get_volumes().entries
+    vols = get_volumes(max_entries=0).entries
     assert len(vols) == 0
     assert is_cordoned(NODE_NAME_1) == False
     create_volume(VOLUME_UUID_1)
-    vols = get_volumes().entries
+    vols = get_volumes(max_entries=0).entries
     assert len(vols) == 1
 
 
 @given("one or more cordoned nodes")
 def one_or_more_cordoned_nodes():
     """one or more cordoned nodes."""
-    vols = get_volumes().entries
+    vols = get_volumes(max_entries=0).entries
     assert len(vols) == 0
     cordon_node(NODE_NAME_1, CORDON_LABEL_1)
 
@@ -366,7 +371,7 @@ def there_are_insufficient_uncordoned_nodes_to_accommodate_new_replicas():
 @then("existing resources remain unaffected")
 def existing_resources_remain_unaffected():
     """existing resources remain unaffected."""
-    vols = get_volumes().entries
+    vols = get_volumes(max_entries=0).entries
     assert len(vols) == 1
     assert vols[0].spec.uuid == VOLUME_UUID_1
 
@@ -414,7 +419,7 @@ def the_node_should_be_uncordoned():
 @then("the resources should be deleted")
 def the_resources_should_be_deleted():
     """the resources should be deleted."""
-    vols = get_volumes().entries
+    vols = get_volumes(max_entries=0).entries
     assert len(vols) == 0
 
 

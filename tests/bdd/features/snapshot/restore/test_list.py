@@ -3,9 +3,9 @@
 import pytest
 from common.apiclient import ApiClient
 from common.deployer import Deployer
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_policy import VolumePolicy
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.volume_policy import VolumePolicy
 from pytest_bdd import (
     given,
     scenario,
@@ -28,7 +28,7 @@ def disks():
 def deployer_cluster(disks):
     Deployer.start(1, cache_period="100ms", reconcile_period="150ms")
     ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(0), "pool", CreatePoolBody([disks[0]])
+        Deployer.node_name(0), "pool", CreatePoolBody(disks=[disks[0]])
     )
     yield
     Deployer.stop()
@@ -50,7 +50,7 @@ def a_valid_snapshot_of_a_single_replica_volume():
     ApiClient.volumes_api().put_volume(
         VOLUME_UUID,
         CreateVolumeBody(
-            VolumePolicy(True),
+            policy=VolumePolicy(self_heal=True),
             replicas=1,
             size=20 * 1024 * 1024,
             thin=False,
@@ -70,7 +70,7 @@ def a_valid_snapshot_of_a_single_replica_volume():
 def we_create_a_new_volume_with_the_snapshot_as_its_source():
     """we create a new volume with the snapshot as its source."""
     body = CreateVolumeBody(
-        VolumePolicy(True),
+        policy=VolumePolicy(self_heal=True),
         replicas=1,
         size=20 * 1024 * 1024,
         thin=True,
@@ -86,7 +86,7 @@ def we_create_a_new_volume_with_the_snapshot_as_its_source():
 @then("the new volume's source should be the snapshot")
 def the_new_volumes_source_should_be_the_snapshot(volume_restore):
     """the new volume's source should be the snapshot."""
-    source = volume_restore.spec.content_source["snapshot"]
+    source = volume_restore.spec.content_source.snapshot
     assert source.snapshot == SNAPSHOT_UUID
     assert source.volume == VOLUME_UUID
 
@@ -94,7 +94,7 @@ def the_new_volumes_source_should_be_the_snapshot(volume_restore):
 @then("we should be able to list the new volume")
 def we_should_be_able_to_list_the_new_volume():
     """we should be able to list the new volume."""
-    volumes = ApiClient.volumes_api().get_volumes()
+    volumes = ApiClient.volumes_api().get_volumes(max_entries=0)
     assert len(volumes.entries) == 2
     volume = ApiClient.volumes_api().get_volume(RESTORE_UUID)
     assert volume.spec.uuid == RESTORE_UUID

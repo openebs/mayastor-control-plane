@@ -5,12 +5,12 @@ import requests
 from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.docker import Docker
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.node_status import NodeStatus
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.node_status import NodeStatus
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
 from pytest_bdd import (
     given,
     scenario,
@@ -34,13 +34,20 @@ VOLUME_CTX_KEY = "volume"
 def init():
     Deployer.start(2)
     ApiClient.pools_api().put_node_pool(
-        NODE1_NAME, POOL1_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
+        NODE1_NAME, POOL1_UUID, CreatePoolBody(disks=["malloc:///disk?size_mb=50"])
     )
     ApiClient.pools_api().put_node_pool(
-        NODE2_NAME, POOL2_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
+        NODE2_NAME, POOL2_UUID, CreatePoolBody(disks=["malloc:///disk?size_mb=50"])
     )
     ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 2, 10485761, False, False)
+        VOLUME_UUID,
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=False),
+            replicas=2,
+            size=10485761,
+            thin=False,
+            encrypted=False,
+        ),
     )
     yield
     Deployer.stop()
@@ -83,7 +90,7 @@ def a_volume_that_is_not_sharedpublished(volume_ctx):
     """a volume that is not shared/published."""
     volume = volume_ctx[VOLUME_CTX_KEY]
     assert volume is not None
-    assert not hasattr(volume.spec, "target")
+    assert volume.spec.target is None
 
 
 @given("a volume that is shared/published")
@@ -92,10 +99,13 @@ def a_volume_that_is_sharedpublished():
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=NODE1_NAME, frontend_node=""
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
+            node=NODE1_NAME,
+            frontend_node="",
         ),
     )
-    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
+    assert volume.spec.target.protocol == "nvmf"
 
 
 @given("an existing volume")
@@ -131,14 +141,14 @@ def a_user_attempts_to_delete_a_volume():
 @then("the replica on the inaccessible node should become orphaned")
 def the_replica_on_the_inaccessible_node_should_become_orphaned():
     """the replica on the inaccessible node should become orphaned."""
-    replicas = ApiClient.specs_api().get_specs()["replicas"]
+    replicas = ApiClient.specs_api().get_specs().replicas
     assert len(replicas) == 1
 
     # The replica is orphaned if it doesn't have any owners.
     replica = replicas[0]
-    assert replica["managed"]
-    assert len(replica["owners"]["nexuses"]) == 0
-    assert "volume" not in replica["owners"]
+    assert replica.managed
+    assert len(replica.owners.nexuses) == 0
+    assert "volume" not in replica.owners
 
 
 @then("the volume should be deleted")
@@ -154,4 +164,4 @@ def the_volume_should_be_deleted():
 @retry(wait_fixed=1000, stop_max_attempt_number=15)
 def wait_offline_node(name):
     node = ApiClient.nodes_api().get_node(name)
-    assert node["state"]["status"] == NodeStatus("Offline")
+    assert node.state.status == NodeStatus("Offline")

@@ -8,7 +8,7 @@ from openapi.api.snapshots_api import SnapshotsApi
 from openapi.api.specs_api import SpecsApi
 from openapi.api.volumes_api import VolumesApi
 from openapi.exceptions import ApiException
-from openapi.model.rest_json_error import RestJsonError
+from openapi.models.rest_json_error import RestJsonError
 
 from openapi import api_client, configuration
 
@@ -21,7 +21,7 @@ NODE_NAME = "io-engine-1"
 # This is necessary for the API calls so that parameter type conversions can be performed. If the
 # configuration is not passed, a type error is raised.
 def get_cfg():
-    return configuration.Configuration(host=REST_SERVER, discard_unknown_keys=True)
+    return configuration.Configuration(host=REST_SERVER)
 
 
 # Return an API client
