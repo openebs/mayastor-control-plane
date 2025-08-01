@@ -269,10 +269,11 @@ impl VolumeSnapshotCreateInfo {
 
 impl PartialEq for VolumeSnapshotCreateInfo {
     fn eq(&self, other: &Self) -> bool {
-        self.txn_id
-            .eq(&other.txn_id)
-            .then(|| self.replicas.eq(&other.replicas))
-            .unwrap_or_default()
+        if self.txn_id.eq(&other.txn_id) {
+            self.replicas.eq(&other.replicas)
+        } else {
+            Default::default()
+        }
     }
 }
 

@@ -1,7 +1,8 @@
 import asyncio
-from collections import namedtuple
-import asyncssh
 import subprocess
+from collections import namedtuple
+
+import asyncssh
 
 CommandReturn = namedtuple("CommandReturn", "returncode stdout stderr")
 

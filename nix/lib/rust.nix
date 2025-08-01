@@ -1,15 +1,13 @@
-{ sources ? import ../sources.nix }:
+{ pkgs }:
 let
-  pkgs =
-    import sources.nixpkgs { overlays = [ (import sources.rust-overlay) ]; };
-  makeRustTarget = platform: pkgs.rust.toRustTargetSpec platform;
+  makeRustTarget = platform: platform.rust.rustcTargetSpec;
   static_target = makeRustTarget pkgs.pkgsStatic.stdenv.hostPlatform;
 in
 rec {
   inherit makeRustTarget;
   rust_default = { override ? { } }: rec {
-    nightly_pkg = pkgs.rust-bin.nightly."2024-10-30";
-    stable_pkg = pkgs.rust-bin.stable."1.82.0";
+    nightly_pkg = pkgs.rust-bin.nightly."2025-06-26";
+    stable_pkg = pkgs.rust-bin.stable."1.88.0";
 
     nightly = nightly_pkg.default.override (override);
     stable = stable_pkg.default.override (override);
@@ -26,6 +24,6 @@ rec {
   };
   hostStatic = rust_default { override = { targets = [ "${makeRustTarget pkgs.pkgsStatic.stdenv.hostPlatform}" ]; }; };
   windows_cross = rust_default {
-    override = { targets = [ "${pkgs.rust.toRustTargetSpec pkgs.pkgsCross.mingwW64.hostPlatform}" ]; };
+    override = { targets = [ "${makeRustTarget pkgs.pkgsCross.mingwW64.hostPlatform}" ]; };
   };
 }

@@ -1,36 +1,33 @@
 import http
-import time
-from pathlib import Path
-
-import pytest
-from pytest_bdd import given, scenario, then, when, parsers
-
 import os
 import subprocess
+from pathlib import Path
 
-import grpc
 import csi_pb2 as pb
-import openapi
+import grpc
+import pytest
 from common import disk_pool_label
-
 from common.apiclient import ApiClient
 from common.csi import CsiHandle
 from common.deployer import Deployer
 from common.docker import Docker
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from common.operations import Volume as VolumeOps
-from common.operations import Pool as PoolOps
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
 from common.nvme import (
-    nvme_find_device,
-    nvme_set_reconnect_delay,
-    nvme_set_ctrl_loss_tmo,
-    wait_nvme_gone_device,
     nvme_find_controller,
+    nvme_find_device,
+    nvme_set_ctrl_loss_tmo,
+    nvme_set_reconnect_delay,
+    wait_nvme_gone_device,
 )
+from common.operations import Pool as PoolOps
+from common.operations import Volume as VolumeOps
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
+from pytest_bdd import given, parsers, scenario, then, when
+
+import openapi
 
 POOL1_UUID = "ec176677-8202-4199-b461-2b68e53a055f"
 NODE1 = "io-engine-1"
@@ -114,7 +111,7 @@ def setup():
     pool_api.put_node_pool(
         NODE1,
         POOL1_UUID,
-        CreatePoolBody(["malloc:///disk?size_mb=200"], labels=pool_labels),
+        CreatePoolBody(disks=["malloc:///disk?size_mb=200"], labels=pool_labels),
     )
     yield
     PoolOps.delete_all()
@@ -160,7 +157,14 @@ def volumes(setup):
     for n in range(5):
         uuid = get_uuid(n)
         volume = ApiClient.volumes_api().put_volume(
-            uuid, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False, False)
+            uuid,
+            CreateVolumeBody(
+                policy=VolumePolicy(self_heal=False),
+                replicas=1,
+                size=VOLUME_SIZE,
+                thin=False,
+                encrypted=False,
+            ),
         )
         volumes.append(volume)
     yield volumes
@@ -322,13 +326,13 @@ def publish_nexus(setup, volumes, published_nexuses):
         volume = ApiClient.volumes_api().put_volume_target(
             uuid,
             publish_volume_body=PublishVolumeBody(
-                {},
-                VolumeShareProtocol("nvmf"),
+                publish_context={},
+                protocol=VolumeShareProtocol("nvmf"),
                 node=NODE1,
                 frontend_node=Deployer.csi_node_name(0),
             ),
         )
-        nexus = Nexus(uuid, protocol, volume.state["target"]["device_uri"])
+        nexus = Nexus(uuid, protocol, volume.state.target.device_uri)
         published_nexuses[uuid] = nexus
         return nexus
 
@@ -816,7 +820,6 @@ def _(generic_staged_volume):
 @when("the rest client is enabled")
 def _():
     """the rest client is enabled."""
-    pass
 
 
 @then("the volume should be stageable again")

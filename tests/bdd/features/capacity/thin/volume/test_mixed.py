@@ -1,26 +1,24 @@
 """Thin Provisioning feature tests."""
 
-from urllib.parse import urlparse
-import pytest
 import subprocess
+from urllib.parse import urlparse
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.fio import Fio
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
+from openapi.models.volume_status import VolumeStatus
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.fio import Fio
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_status import VolumeStatus
-from openapi.model.volume_policy import VolumePolicy
 
 THIN_VOLUME_UUID = "ec4e66fd-3b33-4439-b504-d49aba53da26"
 THICK_VOLUME_UUID = "ec4e66fd-3b33-4439-b504-d49aba53da27"
@@ -43,7 +41,7 @@ def init():
     ApiClient.pools_api().put_node_pool(
         NODE_NAME_1,
         POOL_UUID_1,
-        CreatePoolBody([f"malloc:///disk1?size_mb={pool_size_mb}"]),
+        CreatePoolBody(disks=[f"malloc:///disk1?size_mb={pool_size_mb}"]),
     )
 
     yield
@@ -69,15 +67,21 @@ def a_single_replica_overcommitted_thin_volume():
     volume = ApiClient.volumes_api().put_volume(
         THIN_VOLUME_UUID,
         create_volume_body=CreateVolumeBody(
-            VolumePolicy(True), 1, VOLUME_SIZE, True, False
+            policy=VolumePolicy(self_heal=True),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=True,
+            encrypted=False,
         ),
     )
     volume = ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid,
-        publish_volume_body=PublishVolumeBody({}, VolumeShareProtocol("nvmf")),
+        publish_volume_body=PublishVolumeBody(
+            publish_context={}, protocol=VolumeShareProtocol("nvmf")
+        ),
     )
-    assert hasattr(volume.spec, "target")
-    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
+    assert volume.spec.target
+    assert volume.spec.target.protocol == "nvmf"
     pytest.thin_volume = volume
 
 
@@ -87,15 +91,21 @@ def a_single_replica_thick_volume():
     volume = ApiClient.volumes_api().put_volume(
         THICK_VOLUME_UUID,
         create_volume_body=CreateVolumeBody(
-            VolumePolicy(True), 1, VOLUME_SIZE, False, False
+            policy=VolumePolicy(self_heal=True),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=False,
         ),
     )
     volume = ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid,
-        publish_volume_body=PublishVolumeBody({}, VolumeShareProtocol("nvmf")),
+        publish_volume_body=PublishVolumeBody(
+            publish_context={}, protocol=VolumeShareProtocol("nvmf")
+        ),
     )
-    assert hasattr(volume.spec, "target")
-    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
+    assert volume.spec.target
+    assert volume.spec.target.protocol == "nvmf"
     pytest.thick_volume = volume
 
 
@@ -115,7 +125,7 @@ def both_volumes_share_the_same_pool():
 def data_is_being_written_to_the_thick_volume():
     """data is being written to the thick volume."""
     volume = pytest.thick_volume
-    uri = urlparse(volume.state.target["device_uri"])
+    uri = urlparse(volume.state.target.device_uri)
 
     fio = Fio(name="job", rw="write", uri=uri)
     pytest.thick_fio = fio.open()
@@ -136,7 +146,7 @@ def data_is_being_written_to_the_thin_volume_which_exceeds_the_free_space_on_the
         volume.spec.size > pool_avail_size_mb
     ), "Volume data cannot fit in the pool free space"
 
-    uri = urlparse(volume.state.target["device_uri"])
+    uri = urlparse(volume.state.target.device_uri)
 
     fio = Fio(name="job", rw="write", uri=uri, size=f"{pool_avail_size_mb+9}M")
     pytest.thin_fio = fio.open()

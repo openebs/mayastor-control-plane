@@ -1,13 +1,12 @@
+import json
+import subprocess
 from datetime import datetime
 from shutil import which
-from urllib.parse import urlparse, parse_qs, ParseResult
-from retrying import retry
+from urllib.parse import ParseResult, parse_qs, urlparse
 
 import common
 from common.command import run_cmd_async_at
-
-import subprocess
-import json
+from retrying import retry
 
 nvme_bin = which("nvme")
 
@@ -85,7 +84,6 @@ def nvme_connect(uri):
         # todo: handle this better!
         if "already connected\n" in e.stderr or "already connnected\n" in e.stderr:
             print(f"{datetime.now()} {uri} is already connected")
-            pass
         else:
             raise e
 

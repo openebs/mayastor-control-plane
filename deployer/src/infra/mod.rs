@@ -106,7 +106,7 @@ macro_rules! impl_ctrlp_agents {
 pub fn build_error(name: &str, status: Option<i32>) -> Result<(), Error> {
     let make_error = |extra: &str| {
         let error = format!("Failed to build {name}: {extra}");
-        std::io::Error::new(std::io::ErrorKind::Other, error)
+        std::io::Error::other(error)
     };
     match status {
         Some(0) => Ok(()),

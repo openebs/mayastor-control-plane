@@ -2,7 +2,7 @@
 let
   sources = import ./nix/sources.nix;
   pkgs = import sources.nixpkgs {
-    overlays = [ (_: _: { inherit sources; }) (import ./nix/overlay.nix { }) ];
+    overlays = [ (_: _: { inherit sources; }) (import ./nix/overlay.nix { }) (import sources.rust-overlay) ];
   };
 in
 with pkgs;
@@ -12,10 +12,10 @@ let
   devrustup_moth =
     "You have requested an environment for rustup, you should provide it!";
   io-engine-moth = "Using the following io-engine binary: ${io-engine}";
-  channel = import ./nix/lib/rust.nix { inherit sources; };
+  channel = import ./nix/lib/rust.nix { inherit pkgs; };
   # python environment for tests/bdd
   pytest_inputs = python3.withPackages
-    (ps: with ps; [ virtualenv grpcio grpcio-tools black ]);
+    (ps: with ps; [ virtualenv grpcio grpcio-tools black isort autoflake ]);
   rust_chan = channel.default_src;
   rust = rust_chan.${rust-profile};
 in
@@ -38,7 +38,6 @@ mkShell {
     openssl
     pkg-config
     pre-commit
-    python3
     utillinux
     which
     paperclip
@@ -71,11 +70,9 @@ mkShell {
   RUST_TOOLCHAIN = ".rust-toolchain/${rust.version}";
   RUST_TOOLCHAIN_NIX = "${rust}";
 
-  NODE_PATH = "${nodePackages."@commitlint/config-conventional"}/lib/node_modules";
-
   shellHook = ''
     ./scripts/nix/git-submodule-init.sh
-    if [ -z "$CI" ] && [ "$IN_NIX_SHELL" == "impure" ]; then
+    if [ "$CI" != "1" ] && [ "$IN_NIX_SHELL" == "impure" ]; then
       echo
       pre-commit install
       pre-commit install --hook commit-msg

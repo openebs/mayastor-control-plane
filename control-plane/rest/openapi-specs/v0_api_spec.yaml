@@ -4339,7 +4339,7 @@ components:
         restores:
           type: boolean
         import:
-          type: bool
+          type: boolean
       required:
         - replicas
         - snapshots

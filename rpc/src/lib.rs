@@ -12,6 +12,7 @@ extern crate tonic;
 #[allow(clippy::upper_case_acronyms)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[allow(clippy::doc_lazy_continuation)]
+#[allow(clippy::doc_overindented_list_items)]
 pub mod io_engine {
     use std::{
         future::Future,
@@ -112,6 +113,7 @@ pub mod io_engine {
 
     /// A versioned IoEngine client.
     #[derive(Clone)]
+    #[allow(clippy::large_enum_variant)]
     enum IoEngineClient {
         V0(IoEngineClientV0<Channel>),
         V1(IoEngineClientV1<Channel>),
@@ -595,6 +597,7 @@ pub mod io_engine {
 pub mod csi {
     #![allow(clippy::derive_partial_eq_without_eq)]
     #![allow(clippy::doc_lazy_continuation)]
+    #![allow(clippy::doc_overindented_list_items)]
     include!(concat!(env!("OUT_DIR"), "/csi.v1.rs"));
 }
 
@@ -603,6 +606,7 @@ pub mod v1 {
     pub mod pb {
         #![allow(clippy::derive_partial_eq_without_eq)]
         #![allow(clippy::doc_lazy_continuation)]
+        #![allow(clippy::doc_overindented_list_items)]
         include!(concat!(env!("OUT_DIR"), "/mayastor.v1.rs"));
     }
 

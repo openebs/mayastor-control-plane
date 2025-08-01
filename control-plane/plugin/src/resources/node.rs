@@ -180,7 +180,7 @@ impl NodeDisplayLabels {
             if let Some(ds) = &ns.labels {
                 node_labels = ds
                     .iter()
-                    .map(|(key, value)| format!("{}={}", key, value))
+                    .map(|(key, value)| format!("{key}={value}"))
                     .collect();
             }
         }

@@ -4,7 +4,7 @@ set -euo pipefail
 
 
 SCRIPT_DIR="$(dirname "$0")"
-ROOT_DIR="$SCRIPT_DIR/.."
+ROOT_DIR="$SCRIPT_DIR/../.."
 
 submodule_check() {
   failed=

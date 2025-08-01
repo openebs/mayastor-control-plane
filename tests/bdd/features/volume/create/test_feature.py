@@ -1,33 +1,27 @@
 """Volume creation feature tests."""
 
-import time
-
-import os
+import docker
+import pytest
+import requests
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from common.operations import Cluster
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.replica_state import ReplicaState
+from openapi.models.replica_topology import ReplicaTopology
+from openapi.models.spec_status import SpecStatus
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_spec import VolumeSpec
+from openapi.models.volume_state import VolumeState
+from openapi.models.volume_status import VolumeStatus
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-import docker
-import requests
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-from common.operations import Cluster
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_spec import VolumeSpec
-from openapi.model.spec_status import SpecStatus
-from openapi.model.volume_state import VolumeState
-from openapi.model.volume_status import VolumeStatus
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.replica_state import ReplicaState
-from openapi.model.replica_topology import ReplicaTopology
 from retrying import retry
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
@@ -51,7 +45,7 @@ def init():
 @pytest.fixture(autouse=True)
 def init_scenario(init, disks):
     ApiClient.pools_api().put_node_pool(
-        NODE_NAME, POOL_UUID, CreatePoolBody([f"{disks[0]}"])
+        NODE_NAME, POOL_UUID, CreatePoolBody(disks=[f"{disks[0]}"])
     )
     yield
     Docker.restart_container("core")
@@ -120,7 +114,11 @@ def a_control_plane_io_engine_instances_and_a_pool():
 def a_request_for_a_volume(create_request):
     """a request for a volume."""
     request = CreateVolumeBody(
-        VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
+        policy=VolumePolicy(self_heal=False),
+        replicas=NUM_VOLUME_REPLICAS,
+        size=VOLUME_SIZE,
+        thin=False,
+        encrypted=False,
     )
     create_request[CREATE_REQUEST_KEY] = request
 
@@ -154,7 +152,7 @@ def the_number_of_suitable_pools_is_less_than_the_number_of_desired_volume_repli
     pools_api = ApiClient.pools_api()
     pools_api.del_pool(POOL_UUID)
     num_pools = len(pools_api.get_pools())
-    num_volume_replicas = create_request[CREATE_REQUEST_KEY]["replicas"]
+    num_volume_replicas = create_request[CREATE_REQUEST_KEY].replicas
     assert num_pools < num_volume_replicas
 
 
@@ -166,7 +164,7 @@ def the_number_of_volume_replicas_is_less_than_or_equal_to_the_number_of_suitabl
 ):
     """the number of volume replicas is less than or equal to the number of suitable pools."""
     num_pools = len(ApiClient.pools_api().get_pools())
-    num_volume_replicas = create_request[CREATE_REQUEST_KEY]["replicas"]
+    num_volume_replicas = create_request[CREATE_REQUEST_KEY].replicas
     assert num_volume_replicas <= num_pools
 
 
@@ -198,9 +196,9 @@ def there_should_not_be_any_specs_relating_to_the_volume():
 def check_zero_specs():
     specs = ApiClient.specs_api().get_specs()
 
-    assert len(specs["volumes"]) == 0
-    assert len(specs["nexuses"]) == 0
-    assert len(specs["replicas"]) == 0
+    assert len(specs.volumes) == 0
+    assert len(specs.nexuses) == 0
+    assert len(specs.replicas) == 0
 
 
 @then("volume creation should fail with a precondition failed error")
@@ -214,7 +212,7 @@ def volume_creation_should_fail_with_a_precondition_failed_error(create_request)
         assert exception_info["status"] == requests.codes["precondition_failed"]
 
     # Check that the volume wasn't created.
-    volumes = ApiClient.volumes_api().get_volumes().entries
+    volumes = ApiClient.volumes_api().get_volumes(max_entries=0).entries
     assert len(volumes) == 0
 
 
@@ -229,7 +227,7 @@ def volume_creation_should_fail_with_an_insufficient_storage_error(create_reques
         assert exception_info["status"] == requests.codes["insufficient_storage"]
     finally:
         # Check that the volume wasn't created.
-        volumes = ApiClient.volumes_api().get_volumes().entries
+        volumes = ApiClient.volumes_api().get_volumes(max_entries=0).entries
         assert len(volumes) == 0
 
 
@@ -237,14 +235,14 @@ def volume_creation_should_fail_with_an_insufficient_storage_error(create_reques
 def volume_creation_should_succeed_with_a_returned_volume_object(create_request):
     """volume creation should succeed with a returned volume object."""
     expected_spec = VolumeSpec(
-        1,
-        VOLUME_SIZE,
-        SpecStatus("Created"),
-        VOLUME_UUID,
-        VolumePolicy(False),
-        False,
-        0,
-        False,
+        num_replicas=1,
+        size=VOLUME_SIZE,
+        status=SpecStatus("Created"),
+        uuid=VOLUME_UUID,
+        policy=VolumePolicy(self_heal=False),
+        thin=False,
+        num_snapshots=0,
+        encrypted=False,
     )
 
     # Check the volume object returned is as expected
@@ -258,17 +256,17 @@ def volume_creation_should_succeed_with_a_returned_volume_object(create_request)
     expected_replica_toplogy = {}
     for key, value in volume.state.replica_topology.items():
         expected_replica_toplogy[key] = ReplicaTopology(
-            ReplicaState("Online"),
+            state=ReplicaState("Online"),
             node="io-engine-1",
             encrypted=False,
             pool=POOL_UUID,
             usage=volume.state.replica_topology[key].usage,
         )
     expected_state = VolumeState(
-        VOLUME_SIZE,
-        VolumeStatus("Online"),
-        VOLUME_UUID,
-        expected_replica_toplogy,
+        size=VOLUME_SIZE,
+        status=VolumeStatus("Online"),
+        uuid=VOLUME_UUID,
+        replica_topology=expected_replica_toplogy,
         usage=volume.state.usage,
     )
     assert str(volume.state) == str(expected_state)

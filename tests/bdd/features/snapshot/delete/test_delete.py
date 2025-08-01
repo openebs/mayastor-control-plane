@@ -2,19 +2,18 @@
 
 import time
 
-import pytest
-from pytest_bdd import given, scenario, then, when, parsers
-from retrying import retry
-
 import openapi.exceptions
+import pytest
 from common.apiclient import ApiClient
 from common.deployer import Deployer
-from common.operations import Snapshot, Volume, Cluster, wait_node_online
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_policy import VolumePolicy
+from common.operations import Cluster, Snapshot, Volume, wait_node_online
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
+from pytest_bdd import given, parsers, scenario, then, when
+from retrying import retry
 
 VOLUME1_UUID = "d01b8bfb-0116-47b0-a03a-447fcbdc0e99"
 POOL1_NAME = "pool-1"
@@ -75,7 +74,7 @@ def a_single_replica_publish_status_volume(publish_status):
     ApiClient.volumes_api().put_volume(
         VOLUME1_UUID,
         CreateVolumeBody(
-            VolumePolicy(False),
+            policy=VolumePolicy(self_heal=False),
             replicas=1,
             size=VOLUME1_SIZE,
             thin=False,
@@ -86,7 +85,10 @@ def a_single_replica_publish_status_volume(publish_status):
         ApiClient.volumes_api().put_volume_target(
             VOLUME1_UUID,
             publish_volume_body=PublishVolumeBody(
-                {}, VolumeShareProtocol("nvmf"), node=NODE1, frontend_node="app-node-1"
+                publish_context={},
+                protocol=VolumeShareProtocol("nvmf"),
+                node=NODE1,
+                frontend_node="app-node-1",
             ),
         )
     yield
@@ -209,7 +211,9 @@ def we_should_be_able_to_delete_the_pool(disks):
 
 def put_pool(disk):
     try:
-        ApiClient.pools_api().put_node_pool(NODE1, POOL1_NAME, CreatePoolBody([disk]))
+        ApiClient.pools_api().put_node_pool(
+            NODE1, POOL1_NAME, CreatePoolBody(disks=[disk])
+        )
     except openapi.exceptions.ApiException:
         pass
 
@@ -233,8 +237,8 @@ def the_ioengine_node_where_snapshot_2_resides_on_is_restarted(snapshot_2):
     """the io-engine node where snapshot 2 resides on is restarted."""
     assert len(snapshot_2.state.replica_snapshots) == 1
     replica_snapshot = snapshot_2.state.replica_snapshots[0]
-    assert hasattr(replica_snapshot, "online")
-    pool_id = replica_snapshot.get("online").pool_id
+    assert replica_snapshot.online
+    pool_id = replica_snapshot.online.pool_id
     pool_node = ApiClient.pools_api().get_pool(pool_id).spec.node
     Cluster.restart_node(pool_node)
     time.sleep(0.1)
@@ -261,7 +265,7 @@ def the_snapshot_2_should_still_be_online(snapshot_2):
     snapshot = Snapshot.update(snapshot_2, cached=False)
     assert len(snapshot.state.replica_snapshots) == 1
     replica_snapshot = snapshot.state.replica_snapshots[0]
-    assert hasattr(replica_snapshot, "online")
+    assert replica_snapshot.online
 
 
 @retry(wait_fixed=10, stop_max_attempt_number=200)

@@ -1,28 +1,25 @@
 """Volume Snapshot Creation feature tests."""
 
-from pytest_bdd import given, scenario, then, when, parsers
-
-import pytest
-import os
 import datetime
-from retrying import retry
 
-from common.deployer import Deployer
+import openapi.exceptions
+import pytest
 from common.apiclient import ApiClient
+from common.deployer import Deployer
 from common.docker import Docker
 from common.operations import Cluster
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.spec_status import SpecStatus
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.replica_state import ReplicaState
-from openapi.model.pool_status import PoolStatus
-from openapi.model.node_status import NodeStatus
 from openapi.exceptions import NotFoundException
-import openapi.exceptions
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.node_status import NodeStatus
+from openapi.models.pool_status import PoolStatus
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.replica_state import ReplicaState
+from openapi.models.spec_status import SpecStatus
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
+from pytest_bdd import given, parsers, scenario, then, when
+from retrying import retry
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 SNAP_UUID = "107ec5c6-879d-4ca5-bc8c-c1948b454ac0"
@@ -50,7 +47,9 @@ def deployer_cluster(disks):
         request_timeout="1s",
         no_min_timeouts=True,
     )
-    ApiClient.pools_api().put_node_pool(NODE_NAME, "pool-1", CreatePoolBody([disks[0]]))
+    ApiClient.pools_api().put_node_pool(
+        NODE_NAME, "pool-1", CreatePoolBody(disks=[disks[0]])
+    )
     yield
     Deployer.stop()
 
@@ -149,7 +148,7 @@ def the_volume_is_published_on_node_a(node_a, volume):
     ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=node_a
+            publish_context={}, protocol=VolumeShareProtocol("nvmf"), node=node_a
         ),
     )
 
@@ -158,7 +157,7 @@ def the_volume_is_published_on_node_a(node_a, volume):
 def we_have_a_multireplica_volume(disks):
     """we have a multi-replica volume."""
     ApiClient.pools_api().put_node_pool(
-        REMOTE_NODE_NAME, REMOTE_POOL_NAME, CreatePoolBody([disks[1]])
+        REMOTE_NODE_NAME, REMOTE_POOL_NAME, CreatePoolBody(disks=[disks[1]])
     )
     put_volume(2)
     yield
@@ -294,7 +293,7 @@ def the_replica_snapshots_timestamp_should_be_in_the_rfc_3339_format(snapshot):
 def the_replica_snapshots_timestamp_should_be_within_1_minute_of_creation_utc(snapshot):
     """the replica snapshot's timestamp should be within 1 minute of creation (UTC)."""
     replica_snapshot = snapshot.state.replica_snapshots[0]
-    timestamp_within(replica_snapshot["online"].timestamp)
+    timestamp_within(replica_snapshot.online.timestamp)
 
 
 @then("the snapshot creation should be fail with already exists")
@@ -392,7 +391,7 @@ def the_volume_snapshot_state_has_a_single_online_replica_snapshot(snapshot):
     """the volume snapshot state has a single online replica snapshot."""
     assert len(snapshot.state.replica_snapshots) == 1
     replica_snapshot = snapshot.state.replica_snapshots[0]
-    assert hasattr(replica_snapshot, "online")
+    assert replica_snapshot.online
 
 
 @then("the volume snapshot state has multiple online replica snapshots")
@@ -400,9 +399,9 @@ def the_volume_snapshot_state_has_multiple_online_replica_snapshots(snapshot):
     """the volume snapshot state has multiple online replica snapshots."""
     assert len(snapshot.state.replica_snapshots) == 2
     replica_snapshot = snapshot.state.replica_snapshots[0]
-    assert hasattr(replica_snapshot, "online")
+    assert replica_snapshot.online
     replica_snapshot = snapshot.state.replica_snapshots[1]
-    assert hasattr(replica_snapshot, "online")
+    assert replica_snapshot.online
 
 
 ###
@@ -441,7 +440,7 @@ def put_volume(replicas=1, publish_status="", replica_location=""):
     volume = ApiClient.volumes_api().put_volume(
         VOLUME_UUID,
         CreateVolumeBody(
-            VolumePolicy(True),
+            policy=VolumePolicy(self_heal=True),
             replicas=replicas,
             size=VOLUME_SIZE,
             thin=False,
@@ -457,7 +456,7 @@ def put_volume(replicas=1, publish_status="", replica_location=""):
         ApiClient.volumes_api().put_volume_target(
             VOLUME_UUID,
             publish_volume_body=PublishVolumeBody(
-                {}, VolumeShareProtocol("nvmf"), node=node
+                publish_context={}, protocol=VolumeShareProtocol("nvmf"), node=node
             ),
         )
 
@@ -523,7 +522,7 @@ def wait_snapshot_state(snapshot, state):
     snapshot = ApiClient.snapshots_api().get_volumes_snapshot(snapshot.state.uuid)
     assert len(snapshot.state.replica_snapshots) == 1
     replica_snapshot = snapshot.state.replica_snapshots[0]
-    assert hasattr(replica_snapshot, state), f"state: {state}"
+    assert replica_snapshot.to_dict().get(state), f"state: {state}"
 
 
 @retry(wait_fixed=100, stop_max_attempt_number=20)

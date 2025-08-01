@@ -1,48 +1,48 @@
 repos:
--   repo: https://github.com/nix-community/nixpkgs-fmt
+  - repo: https://github.com/nix-community/nixpkgs-fmt
     rev: v1.2.0
     hooks:
-    -   id: nixpkgs-fmt
--   repo: https://github.com/pre-commit/pre-commit-hooks
+      - id: nixpkgs-fmt
+  - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.0.1
     hooks:
-    -   id: trailing-whitespace
+      - id: trailing-whitespace
         exclude: openapi/
--   repo: local
+  - repo: local
     hooks:
-    -   id: openapi-check
+      - id: openapi-check
         name: OpenApi Code Generator
         description: Ensures OpenApi bindings are up to date
         entry: ./scripts/rust/generate-openapi-bindings.sh
-        args: ["--spec-changes"]
+        args: [ "--spec-changes" ]
         pass_filenames: false
         language: system
-    -   id: rust-lint
+      - id: rust-lint
         name: Rust lint
         description: Run cargo clippy on files included in the commit. clippy should be installed before-hand.
         entry: nix-shell --pure --run './scripts/rust/linter.sh clippy'
         pass_filenames: false
-        types: [file, rust]
+        types: [ file, rust ]
         language: system
-    -   id: rust-style
+      - id: rust-style
         name: Rust style
         description: Run cargo fmt on files included in the commit. rustfmt should be installed before-hand.
         entry: nix-shell --pure --run './scripts/rust/linter.sh fmt'
         exclude: openapi/
         pass_filenames: false
-        types: [file, rust]
+        types: [ file, rust ]
         language: system
-    -   id: commit-lint
+      - id: commit-lint
         name: Commit Lint
         description: Runs commitlint against the commit message.
         language: system
         entry: bash -c 'nix-shell --pure --run "cat $1 | grep -v '^#' | commitlint"'
-        args: [$1]
-        stages: [commit-msg]
-    -   id: python-check
-        name: python lint
-        entry: black
-        description: runs black against the python code
-        pass_filenames: true
-        types: [file, python]
+        args: [ $1 ]
+        stages: [ commit-msg ]
+      - id: python-lint
+        name: Python Linter
+        description: Run python fmt on files included in the commit.
+        entry: nix-shell --pure --run './scripts/python/linter.sh'
+        pass_filenames: false
+        types: [ file, python ]
         language: system

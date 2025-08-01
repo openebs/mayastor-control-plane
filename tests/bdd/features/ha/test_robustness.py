@@ -1,22 +1,12 @@
 """Switchover Robustness feature tests."""
 
-import os
+import subprocess
 import time
 
-from pytest_bdd import (
-    given,
-    scenario,
-    then,
-    when,
-)
-import pytest
-import subprocess
-
-from retrying import retry
-
 import common.nvme
-from common.deployer import Deployer
+import pytest
 from common.apiclient import ApiClient
+from common.deployer import Deployer
 from common.docker import Docker
 from common.etcd import Etcd
 from common.nvme import (
@@ -24,15 +14,20 @@ from common.nvme import (
     nvme_disconnect,
     nvme_list_subsystems,
     nvme_set_reconnect_delay,
-    nvme_find_subsystem_devices_all,
 )
 from common.operations import Cluster
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
+from pytest_bdd import (
+    given,
+    scenario,
+    then,
+    when,
+)
+from retrying import retry
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = int(20 * 1024 * 1024)
@@ -72,7 +67,7 @@ def init_scenario(init, disks):
         name = f"pool-{node_index}"
         node = f"io-engine-{node_index}"
         ApiClient.pools_api().put_node_pool(
-            node, name, CreatePoolBody([disks[disk_index]])
+            node, name, CreatePoolBody(disks=[disks[disk_index]])
         )
     yield
     if Cluster.fixture_cleanup():
@@ -109,7 +104,7 @@ def test_second_failure_during_switchover_with_no_other_nodes():
 def a_connected_nvme_initiator(connect_to_first_path):
     """a connected nvme initiator."""
     volume = pytest.volume
-    device_uri = volume.state["target"]["device_uri"]
+    device_uri = volume.state.target.device_uri
     nvme_set_reconnect_delay(device_uri, 1)
 
 
@@ -123,7 +118,7 @@ def a_deployer_cluster(init):
 def a_reconnect_delay_set_to_15s():
     """a reconnect_delay set to 15s."""
     volume = pytest.volume
-    device_uri = volume.state["target"]["device_uri"]
+    device_uri = volume.state.target.device_uri
     nvme_set_reconnect_delay(device_uri, 7)
 
 
@@ -131,12 +126,19 @@ def a_reconnect_delay_set_to_15s():
 def a_single_replica_volume():
     """a single replica volume."""
     ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(True), 1, VOLUME_SIZE, False, False)
+        VOLUME_UUID,
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=True),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=False,
+        ),
     )
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=TARGET_NODE_1
+            publish_context={}, protocol=VolumeShareProtocol("nvmf"), node=TARGET_NODE_1
         ),
     )
     pytest.volume = volume
@@ -146,12 +148,19 @@ def a_single_replica_volume():
 def a_2_replica_volume():
     """a 2 replica volume."""
     ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(True), 2, VOLUME_SIZE, False, False)
+        VOLUME_UUID,
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=True),
+            replicas=2,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=False,
+        ),
     )
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=TARGET_NODE_1
+            publish_context={}, protocol=VolumeShareProtocol("nvmf"), node=TARGET_NODE_1
         ),
     )
     pytest.volume = volume
@@ -249,7 +258,7 @@ def disks():
 @pytest.fixture
 def connect_to_first_path():
     volume = pytest.volume
-    device_uri = volume.state["target"]["device_uri"]
+    device_uri = volume.state.target.device_uri
     yield nvme_connect(device_uri)
     nvme_disconnect(device_uri)
 
@@ -269,7 +278,8 @@ def wait_initiator_reconnect(connect_to_first_path):
 @retry(wait_fixed=100, stop_max_attempt_number=20)
 def wait_node_cordon(node):
     node = ApiClient.nodes_api().get_node(node)
-    assert "cordonedstate" in node.spec.cordondrainstate
+    assert node.spec.cordondrainstate
+    assert node.spec.cordondrainstate.cordonedstate
 
 
 def simulate_network_failure(node_name, port):

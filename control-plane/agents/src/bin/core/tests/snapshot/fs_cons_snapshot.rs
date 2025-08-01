@@ -115,7 +115,7 @@ async fn blockdevice_mount(cluster: &Cluster, volume: &models::Volume) {
         .expect("Failed to publish volume");
 
     controller
-        .create_snapshot(&volume, &format!("snapshot-{}", SNAPSHOT_UUID), true)
+        .create_snapshot(&volume, &format!("snapshot-{SNAPSHOT_UUID}"), true)
         .await
         .expect("Snapshot creation should not fail if it's a raw");
 
@@ -203,7 +203,7 @@ async fn unpublished_volume_snapshot(cluster: &Cluster, volume: &models::Volume)
         .expect("Failed to publish volume");
 
     controller
-        .create_snapshot(&volume, &format!("snapshot-{}", SNAPSHOT_UUID), true)
+        .create_snapshot(&volume, &format!("snapshot-{SNAPSHOT_UUID}"), true)
         .await
         .expect("Snapshot creation should not fail if it's unpublished atm");
 
@@ -283,7 +283,7 @@ async fn preflight_failure(cluster: &Cluster, volume: &models::Volume) {
         .expect("Failed to kill io-engine");
 
     controller
-        .create_snapshot(&volume, &format!("snapshot-{}", SNAPSHOT_UUID), true)
+        .create_snapshot(&volume, &format!("snapshot-{SNAPSHOT_UUID}"), true)
         .await
         .expect_err("Snapshot creation should fail due to preflight check failure");
 

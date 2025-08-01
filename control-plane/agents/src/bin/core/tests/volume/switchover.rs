@@ -1004,7 +1004,7 @@ async fn run_fio_vol_verify(
         use tokio::sync::oneshot::error::TryRecvError;
         let code = loop {
             let (code, out) = composer.exec("csi-node-1", fio_cmd.clone()).await.unwrap();
-            println!("{}: {}, code: {:?}", fio_cmdline, out, code);
+            println!("{fio_cmdline}: {out}, code: {code:?}");
             if code != Some(0) {
                 return code;
             }

@@ -1,29 +1,26 @@
 """Target Switchover test feature tests."""
 
-import os
 import subprocess
 from urllib.parse import urlparse
 
 import grpc
 import pytest
-from pytest_bdd import (
-    given,
-    scenario,
-    then,
-    when,
-    parsers,
-)
-
 from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.fio import Fio
 from common.operations import Cluster
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.publish_volume_body import PublishVolumeBody
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
+from pytest_bdd import (
+    given,
+    parsers,
+    scenario,
+    then,
+    when,
+)
 
 POOL_UUID_1 = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL_UUID_2 = "22e1d15f-4dfd-4bf5-a98f-74e4aebf9e62"
@@ -109,10 +106,10 @@ def a_control_plane_two_ioengine_instances_two_pools(init, disks):
     """a control plane, two Io-Engine instances, two pools."""
     pytest.reuse_existing = False
     ApiClient.pools_api().put_node_pool(
-        NODE_NAME_1, POOL_UUID_1, CreatePoolBody([disks[0]])
+        NODE_NAME_1, POOL_UUID_1, CreatePoolBody(disks=[disks[0]])
     )
     ApiClient.pools_api().put_node_pool(
-        NODE_NAME_2, POOL_UUID_2, CreatePoolBody([disks[1]])
+        NODE_NAME_2, POOL_UUID_2, CreatePoolBody(disks=[disks[1]])
     )
     yield
     cleanup_iptable_rules(IO_ENGINE_1_IP)
@@ -123,18 +120,25 @@ def a_control_plane_two_ioengine_instances_two_pools(init, disks):
 def a_published_volume_with_two_replicas():
     """a published volume with two replicas."""
     ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 2, VOLUME_SIZE, False, False)
+        VOLUME_UUID,
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=False),
+            replicas=2,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=False,
+        ),
     )
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {},
-            VolumeShareProtocol("nvmf"),
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
             node=NODE_NAME_1,
             frontend_node="app-node-1",
         ),
     )
-    pytest.older_target_uri = volume["state"]["target"]["device_uri"]
+    pytest.older_target_uri = volume.state.target.device_uri
 
 
 @when("the destroy shutdown target call has succeeded")
@@ -197,8 +201,8 @@ def the_volume_republish_and_the_destroy_shutdown_target_call_has_succeeded_for_
             ApiClient.volumes_api().put_volume_target(
                 VOLUME_UUID,
                 publish_volume_body=PublishVolumeBody(
-                    {},
-                    VolumeShareProtocol("nvmf"),
+                    publish_context={},
+                    protocol=VolumeShareProtocol("nvmf"),
                     republish=True,
                     reuse_existing=pytest.reuse_existing,
                     frontend_node="app-node-1",
@@ -219,8 +223,8 @@ def the_volume_republish_on_another_node_has_succeeded():
         ApiClient.volumes_api().put_volume_target(
             VOLUME_UUID,
             publish_volume_body=PublishVolumeBody(
-                {},
-                VolumeShareProtocol("nvmf"),
+                publish_context={},
+                protocol=VolumeShareProtocol("nvmf"),
                 reuse_existing=pytest.reuse_existing,
                 node=NODE_NAME_2,
                 republish=True,
@@ -235,7 +239,7 @@ def the_volume_republish_on_another_node_has_succeeded():
 def the_newer_target_should_have_rw_access_to_the_replicas():
     """the newer target should have R/W access to the replicas."""
     newer_target = get_newer_target()
-    uri = urlparse(newer_target["device_uri"])
+    uri = urlparse(newer_target.device_uri)
 
     fio = Fio(name="job", rw="randrw", size="50M", uri=uri)
 
@@ -265,7 +269,7 @@ def the_older_target_should_not_have_rw_access_the_replicas():
 
 def get_newer_target():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    return volume.state["target"]
+    return volume.state.target
 
 
 def kill_docker_container(name):

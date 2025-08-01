@@ -1,9 +1,15 @@
 """Pool reconciliation feature tests."""
 
 import http
-import os
-import pytest
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from openapi.exceptions import ApiException, NotFoundException
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.node_status import NodeStatus
+from openapi.models.pool_status import PoolStatus
 from pytest_bdd import (
     given,
     scenario,
@@ -11,15 +17,6 @@ from pytest_bdd import (
     when,
 )
 from retrying import retry
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.node_status import NodeStatus
-from openapi.model.pool_status import PoolStatus
-from openapi.exceptions import ApiException
-from openapi.exceptions import NotFoundException
 
 
 @scenario("feature.feature", "destroying a pool that needs to be deleted")
@@ -53,7 +50,7 @@ def a_pool_p0_that_could_not_be_deleted_due_to_an_unreachable_node(
 ):
     """a pool "p0" that could not be deleted due to an unreachable node."""
     assert attempt_delete_the_pool.status == http.HTTPStatus.PRECONDITION_FAILED
-    assert not hasattr(ApiClient.pools_api().get_pool(pool.id), "state")
+    assert ApiClient.pools_api().get_pool(pool.id).state is None
     wait_node_offline(pool.spec.node)
 
 
@@ -112,7 +109,7 @@ def pool(node_disks, nodes):
     assert len(node_disks) > 0
     node = nodes[0]
     pool = ApiClient.pools_api().put_node_pool(
-        node.id, f"{node.id}-pool", CreatePoolBody([node_disks[0]])
+        node.id, f"{node.id}-pool", CreatePoolBody(disks=[node_disks[0]])
     )
     yield pool
 

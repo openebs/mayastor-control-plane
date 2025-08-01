@@ -1,26 +1,21 @@
 """Garbage collection of replicas feature tests."""
 
+import pytest
 import requests
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
 from pytest_bdd import (
     given,
     scenario,
     then,
 )
-
 from retrying import retry
-
-import os
-import pytest
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.publish_volume_body import PublishVolumeBody
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
@@ -52,23 +47,30 @@ def init(create_pool_disk_images):
     ApiClient.pools_api().put_node_pool(
         IO_ENGINE_1,
         POOL1_UUID,
-        CreatePoolBody(["aio://{}".format(create_pool_disk_images[0])]),
+        CreatePoolBody(disks=["aio://{}".format(create_pool_disk_images[0])]),
     )
     ApiClient.pools_api().put_node_pool(
         IO_ENGINE_2,
         POOL2_UUID,
-        CreatePoolBody(["aio://{}".format(create_pool_disk_images[1])]),
+        CreatePoolBody(disks=["aio://{}".format(create_pool_disk_images[1])]),
     )
 
     # Create and publish a volume on node 1
     request = CreateVolumeBody(
-        VolumePolicy(False), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
+        policy=VolumePolicy(self_heal=False),
+        replicas=NUM_VOLUME_REPLICAS,
+        size=VOLUME_SIZE,
+        thin=False,
+        encrypted=False,
     )
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=IO_ENGINE_1, frontend_node=""
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
+            node=IO_ENGINE_1,
+            frontend_node="",
         ),
     )
 
@@ -98,7 +100,6 @@ def a_replica_which_is_managed_but_does_not_have_any_owners():
         # expected and results in a replica being orphaned.
         exception_info = e.__dict__
         assert exception_info["status"] == requests.codes["request_timeout"]
-        pass
 
     check_orphaned_replica()
 
@@ -115,17 +116,17 @@ def the_replica_should_eventually_be_destroyed():
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
 def check_zero_replicas():
-    assert len(ApiClient.specs_api().get_specs()["replicas"]) == 0
+    assert len(ApiClient.specs_api().get_specs().replicas) == 0
 
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
 def check_orphaned_replica():
     # There should only be one replica remaining - the one on the node that is inaccessible.
-    replicas = ApiClient.specs_api().get_specs()["replicas"]
+    replicas = ApiClient.specs_api().get_specs().replicas
     assert len(replicas) == 1
 
     # Check that the replica is an orphan (i.e. it is managed but does not have any owners).
     replica = replicas[0]
-    assert replica["managed"]
-    assert len(replica["owners"]["nexuses"]) == 0
-    assert "volume" not in replica["owners"]
+    assert replica.managed
+    assert len(replica.owners.nexuses) == 0
+    assert "volume" not in replica.owners

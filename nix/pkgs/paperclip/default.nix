@@ -1,7 +1,7 @@
-{ lib, sources, pkgs }:
+{ lib, pkgs }:
 let
   src_json = lib.importJSON ./source.json;
-  hostPlatform = pkgs.rust.toRustTargetSpec pkgs.pkgsStatic.stdenv.hostPlatform;
+  hostPlatform = pkgs.pkgsStatic.stdenv.hostPlatform.rust.rustcTargetSpec;
 in
 pkgs.stdenv.mkDerivation {
   pname = src_json.repo;

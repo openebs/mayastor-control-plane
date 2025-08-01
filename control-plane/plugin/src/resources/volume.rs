@@ -298,7 +298,7 @@ impl SetProperty for Volume {
                 }
                 OutputFormat::None => {
                     // In case the output format is not specified, show a success message.
-                    println!("Volume {id} property {:?} set successfully", property_body);
+                    println!("Volume {id} property {property_body:?} set successfully");
                 }
             },
             Err(e) => {

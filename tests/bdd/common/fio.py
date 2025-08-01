@@ -1,9 +1,8 @@
-import shutil
-from typing import Optional
-from urllib.parse import parse_qs, ParseResult
-
 import os
+import shutil
 import subprocess
+from typing import Optional
+from urllib.parse import ParseResult, parse_qs
 
 fio_bin = shutil.which("fio")
 
@@ -85,7 +84,6 @@ class Fio(object):
         uri_query = parse_qs(self.uri.query)
         traddr = self.uri.hostname
         subnqn = self.uri.path[1:].replace(":", "\\:")
-        hostnqn = ""
 
         if uri_query.keys().__contains__("hostnqn"):
             args = "--hostnqn={} {}".format(uri_query["hostnqn"][0], args)

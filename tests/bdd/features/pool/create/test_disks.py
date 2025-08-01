@@ -1,22 +1,20 @@
 """Pool creation feature tests."""
 
 import http
-import os
-import pytest
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.operations import Pool as PoolOps
+from openapi.exceptions import ApiException
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.pool import Pool
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.operations import Pool as PoolOps
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.pool import Pool
-from openapi.exceptions import ApiException
 
 
 @scenario("disks.feature", "creating a pool with a URING disk")
@@ -157,7 +155,7 @@ def attempt_create_pool():
     def _method(name, node, disks):
         try:
             pool = ApiClient.pools_api().put_node_pool(
-                node, name, CreatePoolBody(disks)
+                node, name, CreatePoolBody(disks=disks)
             )
             return pool
         except ApiException as e:

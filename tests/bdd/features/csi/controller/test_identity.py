@@ -1,21 +1,20 @@
 """CSI Controller Identity RPC tests."""
 
+import subprocess
+
+import csi_pb2 as pb
+import docker
+import pytest
+from common import csi_plugin_name
+from common.apiclient import ApiClient
+from common.csi import CsiHandle
+from common.deployer import Deployer
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-import docker
-import subprocess
-import csi_pb2 as pb
-from common import csi_plugin_name
-
-from common.csi import CsiHandle
-from common.deployer import Deployer
-from common.apiclient import ApiClient
 
 
 @pytest.fixture(scope="module")

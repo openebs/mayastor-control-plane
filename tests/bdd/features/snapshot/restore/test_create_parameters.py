@@ -4,6 +4,11 @@ import http
 import json
 
 import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.volume_policy import VolumePolicy
 from pytest_bdd import (
     given,
     scenario,
@@ -11,15 +16,7 @@ from pytest_bdd import (
     when,
 )
 
-import uuid
 import openapi
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.spec_status import SpecStatus
-from openapi.model.volume_policy import VolumePolicy
 
 VOLUME_UUID = "8d305974-43a3-484b-8e2c-c74afe2f4400"
 SNAPSHOT_UUID = "8d305974-43a3-484b-8e2c-c74afe2f4401"
@@ -36,7 +33,7 @@ def disks():
 def deployer_cluster(disks):
     Deployer.start(1, cache_period="100ms", reconcile_period="150ms")
     ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(0), "pool", CreatePoolBody([disks[0]])
+        Deployer.node_name(0), "pool", CreatePoolBody(disks=[disks[0]])
     )
     yield
     Deployer.stop()
@@ -76,7 +73,7 @@ def a_deployer_cluster(deployer_cluster):
 def a_request_to_create_a_new_volume_with_the_snapshot_as_its_source():
     """a request to create a new volume with the snapshot as its source."""
     yield CreateVolumeBody(
-        VolumePolicy(True),
+        policy=VolumePolicy(self_heal=True),
         replicas=1,
         size=20 * 1024 * 1024,
         thin=True,
@@ -90,7 +87,7 @@ def a_valid_snapshot_of_a_single_replica_volume():
     ApiClient.volumes_api().put_volume(
         VOLUME_UUID,
         CreateVolumeBody(
-            VolumePolicy(True),
+            policy=VolumePolicy(self_heal=True),
             replicas=1,
             size=20 * 1024 * 1024,
             thin=False,

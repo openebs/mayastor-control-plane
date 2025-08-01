@@ -2,24 +2,23 @@
 
 import http
 import json
+import uuid
 
 import pytest
-from pytest_bdd import given, scenario, then, when, parsers
-from retrying import retry
-
-import uuid
-import openapi
+from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.docker import Docker
-from common.apiclient import ApiClient
-from common.operations import Volume, Snapshot
+from common.operations import Snapshot, Volume
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.node_status import NodeStatus
+from openapi.models.pool_status import PoolStatus
+from openapi.models.spec_status import SpecStatus
+from openapi.models.volume_policy import VolumePolicy
+from pytest_bdd import given, parsers, scenario, then, when
+from retrying import retry
 
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.spec_status import SpecStatus
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.pool_status import PoolStatus
-from openapi.model.node_status import NodeStatus
+import openapi
 
 REMOTE_NODE_NAME_A = "io-engine-2"
 
@@ -49,13 +48,13 @@ def remote_node_a():
 def deployer_cluster(disks):
     Deployer.start(3, fio_spdk=True, cache_period="100ms", reconcile_period="150ms")
     ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(0), "pool-0", CreatePoolBody([disks[0]])
+        Deployer.node_name(0), "pool-0", CreatePoolBody(disks=[disks[0]])
     )
     ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(1), "pool-1", CreatePoolBody([disks[1]])
+        Deployer.node_name(1), "pool-1", CreatePoolBody(disks=[disks[1]])
     )
     ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(2), "pool-2", CreatePoolBody([disks[2]])
+        Deployer.node_name(2), "pool-2", CreatePoolBody(disks=[disks[2]])
     )
     yield
     Deployer.stop()
@@ -104,7 +103,7 @@ def a_valid_snapshot_of_a_multi_replica_volume(volume_uuids, snapshot_uuids):
     ApiClient.volumes_api().put_volume(
         volume_uuids[0],
         CreateVolumeBody(
-            VolumePolicy(True),
+            policy=VolumePolicy(self_heal=True),
             replicas=3,
             size=20 * 1024 * 1024,
             thin=False,
@@ -128,7 +127,7 @@ def we_attempt_to_create_4_new_volumes_with_the_snapshot_as_their_source(
     context = {"ok": [], "failed": []}
     for attempt in range(1, 5):
         body = CreateVolumeBody(
-            VolumePolicy(True),
+            policy=VolumePolicy(self_heal=True),
             replicas=1,
             size=20 * 1024 * 1024,
             thin=True,
@@ -163,7 +162,7 @@ def we_create_a_new_volume_with_repl_count_replicas_using_snapshot_as_its_source
 ):
     """we create a new volume with <repl_count> replicas using snapshot as its source."""
     body = CreateVolumeBody(
-        VolumePolicy(True),
+        policy=VolumePolicy(self_heal=True),
         replicas=repl_count,
         size=20 * 1024 * 1024,
         thin=True,
@@ -240,7 +239,7 @@ def we_create_volume_restore_index_with_the_previous_snapshot_as_its_source(
 ):
     """we create volume restore <index> with the previous snapshot as its source."""
     body = CreateVolumeBody(
-        VolumePolicy(True),
+        policy=VolumePolicy(self_heal=True),
         replicas=1,
         size=20 * 1024 * 1024,
         thin=True,
@@ -250,9 +249,9 @@ def we_create_volume_restore_index_with_the_previous_snapshot_as_its_source(
         snapshot_uuids[index - 1], volume_uuids[index], body
     )
     ApiClient.volumes_api().del_volume(volume_uuids[index])
-    volumes = ApiClient.volumes_api().get_volumes()
+    volumes = ApiClient.volumes_api().get_volumes(max_entries=0)
     assert len(volumes.entries) == index
-    snapshots = ApiClient.snapshots_api().get_volumes_snapshots()
+    snapshots = ApiClient.snapshots_api().get_volumes_snapshots(max_entries=0)
     assert len(snapshots.entries) == index
 
 
@@ -368,7 +367,7 @@ def we_have_a_node_down(remote_node_a):
 def a_request_to_create_a_new_volume_with_the_snapshot_as_its_source():
     """a request to create a new volume with the snapshot as its source."""
     yield CreateVolumeBody(
-        VolumePolicy(True),
+        policy=VolumePolicy(self_heal=True),
         replicas=3,
         size=20 * 1024 * 1024,
         thin=True,

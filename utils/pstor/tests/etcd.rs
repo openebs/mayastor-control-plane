@@ -155,10 +155,7 @@ async fn test_kv_watcher(_test: ComposeTest) -> Result<(), etcd_client::Error> {
     }
 
     for volume in &volumes {
-        store
-            .put_kv(&format!("{}/info", volume), &"b")
-            .await
-            .unwrap();
+        store.put_kv(&format!("{volume}/info"), &"b").await.unwrap();
     }
     recv_tmo(Duration::from_secs(1), r)
         .await

@@ -1,32 +1,31 @@
 """Pool Cordoning feature tests."""
 
-from pytest_bdd import given, scenario, then, when, parsers
-
-import pytest
-import uuid
 import http
+import uuid
+
 import openapi.exceptions
+import pytest
 from common import human_sleep
 from common.apiclient import ApiClient
-from common.operations import wait_pool_online, wait_volume_status, wait_node_status
-from common.operations import Cluster
 from common.deployer import Deployer
-from openapi.model.topology import Topology
-from openapi.model.pool_topology import PoolTopology
-from openapi.model.labelled_topology import LabelledTopology
+from common.operations import Cluster
 from common.operations import Pool as PoolOps
-from common.operations import Volume as VolumeOps
 from common.operations import Snapshot as SnapshotOps
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.node_status import NodeStatus
-from openapi.model.volume_status import VolumeStatus
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.pool_status import PoolStatus
-from openapi.model.volume import Volume
-
+from common.operations import Volume as VolumeOps
+from common.operations import wait_node_status, wait_pool_online, wait_volume_status
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.labelled_topology import LabelledTopology
+from openapi.models.node_status import NodeStatus
+from openapi.models.pool_status import PoolStatus
+from openapi.models.pool_topology import PoolTopology
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.topology import Topology
+from openapi.models.volume import Volume
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
+from openapi.models.volume_status import VolumeStatus
+from pytest_bdd import given, parsers, scenario, then, when
 
 VOLUME_SIZE = 10 * 1024 * 1024
 RECONCILE_PERIOD = "80ms"
@@ -114,7 +113,9 @@ def test_no_replica_count_increase_due_to_pool_cordon():
 def _(disks):
     """a cordoned pool."""
     pool = ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(0), Deployer.pool_name(), CreatePoolBody([f"{disks[0]}"])
+        Deployer.node_name(0),
+        Deployer.pool_name(),
+        CreatePoolBody(disks=[f"{disks[0]}"]),
     )
     pool = PoolOps.cordon(pool)
     yield pool
@@ -125,7 +126,9 @@ def _(disks):
 def _(disks):
     """a cordoned pool with import constraint."""
     pool = ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(0), Deployer.pool_name(), CreatePoolBody([f"{disks[0]}"])
+        Deployer.node_name(0),
+        Deployer.pool_name(),
+        CreatePoolBody(disks=[f"{disks[0]}"]),
     )
     pool = PoolOps.cordon(pool, imports=True)
     yield pool
@@ -136,7 +139,9 @@ def _(disks):
 def _(disks):
     """a cordoned pool with multiple cordon resources."""
     pool = ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(0), Deployer.pool_name(), CreatePoolBody([f"{disks[0]}"])
+        Deployer.node_name(0),
+        Deployer.pool_name(),
+        CreatePoolBody(disks=[f"{disks[0]}"]),
     )
     pool = PoolOps.cordon(pool)
     yield pool
@@ -147,16 +152,30 @@ def _(disks):
 def _(disks):
     """a cordoned pool with resources."""
     pool = ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(0), Deployer.pool_name(), CreatePoolBody([f"{disks[0]}"])
+        Deployer.node_name(0),
+        Deployer.pool_name(),
+        CreatePoolBody(disks=[f"{disks[0]}"]),
     )
     # create volumes
     volume_1 = ApiClient.volumes_api().put_volume(
         str(uuid.uuid4()),
-        CreateVolumeBody(VolumePolicy(True), 1, VOLUME_SIZE, True, False),
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=True),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=True,
+            encrypted=False,
+        ),
     )
     volume_2 = ApiClient.volumes_api().put_volume(
         str(uuid.uuid4()),
-        CreateVolumeBody(VolumePolicy(True), 1, VOLUME_SIZE, True, False),
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=True),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=True,
+            encrypted=False,
+        ),
     )
     # then cordon
     pool = PoolOps.cordon(pool)
@@ -178,19 +197,31 @@ def pool(pool_resources):
 def _(disks):
     """a published volume with multiple replicas."""
     pool_1 = ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(0), Deployer.pool_name(), CreatePoolBody([f"{disks[0]}"])
+        Deployer.node_name(0),
+        Deployer.pool_name(),
+        CreatePoolBody(disks=[f"{disks[0]}"]),
     )
     pool_2 = ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(1), Deployer.pool_name(), CreatePoolBody([f"{disks[1]}"])
+        Deployer.node_name(1),
+        Deployer.pool_name(),
+        CreatePoolBody(disks=[f"{disks[1]}"]),
     )
     volume = ApiClient.volumes_api().put_volume(
         str(uuid.uuid4()),
-        CreateVolumeBody(VolumePolicy(True), 2, VOLUME_SIZE, True, False),
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=True),
+            replicas=2,
+            size=VOLUME_SIZE,
+            thin=True,
+            encrypted=False,
+        ),
     )
     volume = ApiClient.volumes_api().put_volume_target(
         volume.spec.uuid,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=Deployer.node_name(0)
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
+            node=Deployer.node_name(0),
         ),
     )
     yield volume
@@ -203,7 +234,9 @@ def _(disks):
 def _(disks):
     """a cordoned pool, otherwise schedulable for the volume."""
     pool = ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(2), Deployer.pool_name(), CreatePoolBody([f"{disks[2]}"])
+        Deployer.node_name(2),
+        Deployer.pool_name(),
+        CreatePoolBody(disks=[f"{disks[2]}"]),
     )
     pool = PoolOps.cordon(pool)
     yield pool
@@ -214,7 +247,9 @@ def _(disks):
 def _(disks):
     """an uncordoned pool."""
     pool = ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(0), Deployer.pool_name(), CreatePoolBody([f"{disks[0]}"])
+        Deployer.node_name(0),
+        Deployer.pool_name(),
+        CreatePoolBody(disks=[f"{disks[0]}"]),
     )
     yield pool
     PoolOps.cleanup(pool)
@@ -224,15 +259,17 @@ def _(disks):
 def _(disks):
     """an uncordoned pool with test resources."""
     pool = ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(0), Deployer.pool_name(), CreatePoolBody([f"{disks[0]}"])
+        Deployer.node_name(0),
+        Deployer.pool_name(),
+        CreatePoolBody(disks=[f"{disks[0]}"]),
     )
     # Create test requirements, ie snapshots need volume present
     volume = schedule_repl(pool, False, False)
     snapshot = ApiClient.snapshots_api().put_volume_snapshot(
         volume.spec.uuid, str(uuid.uuid4())
     )
-    pool.volume = volume.spec.uuid
-    pool.snapshot = snapshot.definition.spec.uuid
+    pool.additional_properties["volume"] = volume.spec.uuid
+    pool.additional_properties["snapshot"] = snapshot.definition.spec.uuid
     yield pool
     PoolOps.cleanup(pool)
 
@@ -240,7 +277,6 @@ def _(disks):
 @given("multiple uncordoned nodes")
 def _(disks):
     """multiple uncordoned nodes."""
-    pass
 
 
 @when("the pool is uncordoned")
@@ -271,7 +307,6 @@ def _(volume):
 @when("there are insufficient uncordoned pools to accommodate new replicas")
 def _():
     """there are insufficient uncordoned pools to accommodate new replicas."""
-    pass
 
 
 @when("we attempt to delete resources on the cordoned pool")
@@ -310,10 +345,10 @@ def _(pool):
     """we issue an uncordon command without all resources."""
     resources = cordon_resources(pool)
     assert resources is not None
-    assert resources["replicas"] == True
-    assert resources["snapshots"] == False
-    assert resources["restores"] == True
-    assert resources["import"] == False
+    assert resources.replicas == True
+    assert resources.snapshots == False
+    assert resources.restores == True
+    assert resources.var_import == False
     PoolOps.uncordon(pool, True, False, False, False)
 
 
@@ -329,7 +364,6 @@ def _(volume):
             )
         except openapi.exceptions.ApiException as e:
             response = e
-            pass
         return response
 
     yield set_repl
@@ -360,11 +394,11 @@ def _(pool, resource, resources):
     """new <resource> resources cannot be scheduled on the cordoned pool."""
     pool_rsc = cordon_resources(PoolOps.update(pool))
     assert pool_rsc, f"{pool.id} is not cordoned!"
-    assert pool_rsc["replicas"] == resources["replicas"]
-    assert pool_rsc["snapshots"] == resources["snapshots"]
-    assert pool_rsc["restores"] == resources["restores"]
-    assert pool_rsc["import"] == resources["import"]
-    assert pool_rsc[resource] == True
+    assert pool_rsc.replicas == resources["replicas"]
+    assert pool_rsc.snapshots == resources["snapshots"]
+    assert pool_rsc.restores == resources["restores"]
+    assert pool_rsc.var_import == resources["import"]
+    assert pool_rsc.to_dict()[resource] == True
 
     if resource == "replicas":
         schedule_repl(pool, True)
@@ -410,14 +444,14 @@ def _(pool):
     for i in range(2):
         human_sleep(RECONCILE_PERIOD)
     pool = PoolOps.update(pool)
-    assert not hasattr(pool, "state")
+    assert pool.state is None
 
 
 @then("all pool resources should be Online")
 def _(pool):
     """all pool resources should be Online."""
     pool = PoolOps.update(pool, False)
-    assert hasattr(pool, "state")
+    assert pool.state
     assert pool.state.status == PoolStatus("Online")
 
 
@@ -436,7 +470,6 @@ def _(pool):
 @then("the command will succeed")
 def _():
     """the command will succeed."""
-    pass
 
 
 @then("the pool should be imported successfully")
@@ -486,11 +519,11 @@ def is_cordoned(pool):
 
 
 def cordon_resources(pool):
-    cordon = pool.spec.get("cordon_drain")
+    cordon = pool.spec.cordon_drain
     if cordon is None:
         return None
     # cast to a dic to get around openapi bug with AllOf
-    cordoned = cordon.__dict__["_data_store"]["cordoned"]
+    cordoned = cordon.cordoned
     if cordoned is None:
         return None
     return cordoned
@@ -508,11 +541,11 @@ def schedule_repl(pool, cordoned, cleanup=True):
         volume = ApiClient.volumes_api().put_volume(
             str(uuid.uuid4()),
             CreateVolumeBody(
-                VolumePolicy(True),
-                1,
-                VOLUME_SIZE,
-                True,
-                False,
+                policy=VolumePolicy(self_heal=True),
+                replicas=1,
+                size=VOLUME_SIZE,
+                thin=True,
+                encrypted=False,
                 topology=Topology(
                     pool_topology=PoolTopology(
                         labelled=LabelledTopology(
@@ -538,7 +571,7 @@ def schedule_repl(pool, cordoned, cleanup=True):
 def schedule_snap(pool, cordoned):
     try:
         snapshot = ApiClient.snapshots_api().put_volume_snapshot(
-            pool.volume, str(uuid.uuid4())
+            pool.additional_properties["volume"], str(uuid.uuid4())
         )
         SnapshotOps.cleanup(snapshot)
         assert not cordoned
@@ -552,14 +585,14 @@ def schedule_snap(pool, cordoned):
 def schedule_restore(pool, cordoned):
     try:
         body = CreateVolumeBody(
-            VolumePolicy(True),
+            policy=VolumePolicy(self_heal=True),
             replicas=1,
             size=VOLUME_SIZE,
             thin=True,
             encrypted=False,
         )
         volume = ApiClient.volumes_api().put_snapshot_volume(
-            pool.snapshot, str(uuid.uuid4()), body
+            pool.additional_properties["snapshot"], str(uuid.uuid4()), body
         )
         VolumeOps.cleanup(volume)
         assert not cordoned

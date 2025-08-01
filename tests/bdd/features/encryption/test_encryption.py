@@ -1,28 +1,28 @@
 """Encryption-at-Rest on Mayastor DiskPool feature tests."""
 
-import pytest
-import os
 import json
+import os
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer, workspace_tmp
+from common.docker import Docker
+from common.operations import Cluster
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.encryption import Encryption
+from openapi.models.encryption_secret import EncryptionSecret
+from openapi.models.node_status import NodeStatus
+from openapi.models.pool_status import PoolStatus
+from openapi.models.volume_policy import VolumePolicy
 from pytest_bdd import (
     given,
+    parsers,
     scenario,
     then,
     when,
-    parsers,
 )
 from retrying import retry
-from common.deployer import Deployer, workspace_tmp
-from common.apiclient import ApiClient
-from common.docker import Docker
-from common.operations import Cluster
-from openapi.model.node_status import NodeStatus
-from openapi.model.pool_status import PoolStatus
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.encryption import Encryption
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.encryption_secret import EncryptionSecret
-from openapi.model.volume_policy import VolumePolicy
 
 ENCR_VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 NON_ENCR_VOLUME_UUID = "05451170-ac6a-43cb-a92a-e5e3581d1111"
@@ -114,7 +114,7 @@ def _():
         NODE_NAME,
         ENCR_POOL,
         CreatePoolBody(
-            [f"{pytest.disks[0]}"],
+            disks=[f"{pytest.disks[0]}"],
             encryption=Encryption(secret=EncryptionSecret(name=SECRET_FILE_NAME)),
         ),
     )
@@ -127,7 +127,13 @@ def _():
     """a single replica volume is created with encryption."""
     ApiClient.volumes_api().put_volume(
         ENCR_VOLUME_UUID,
-        CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False, True),
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=False),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=True,
+        ),
     )
     yield
     ApiClient.volumes_api().del_volume(ENCR_VOLUME_UUID)
@@ -139,7 +145,7 @@ def _():
     ApiClient.pools_api().put_node_pool(
         NODE_NAME,
         NON_ENCR_POOL,
-        CreatePoolBody([f"{pytest.disks[1]}"]),
+        CreatePoolBody(disks=[f"{pytest.disks[1]}"]),
     )
     yield
     ApiClient.pools_api().del_node_pool(NODE_NAME, NON_ENCR_POOL)
@@ -150,7 +156,13 @@ def _():
     """a single replica volume is created without encryption."""
     ApiClient.volumes_api().put_volume(
         NON_ENCR_VOLUME_UUID,
-        CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False, False),
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=False),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=False,
+        ),
     )
     yield
     ApiClient.volumes_api().del_volume(NON_ENCR_VOLUME_UUID)
@@ -184,7 +196,7 @@ def _():
     """the replica for encrypted volume should be on encrypted pool."""
     volume = ApiClient.volumes_api().get_volume(ENCR_VOLUME_UUID)
     assert volume.spec.num_replicas == 1
-    assert next(iter(volume.state.replica_topology.values()))["pool"] == ENCR_POOL
+    assert next(iter(volume.state.replica_topology.values())).pool == ENCR_POOL
 
 
 @then("the non encrypted disk pool gets created successfully")
@@ -200,7 +212,7 @@ def _():
     """the replica for non encrypted volume should be on non encrypted pool."""
     volume = ApiClient.volumes_api().get_volume(NON_ENCR_VOLUME_UUID)
     assert volume.spec.num_replicas == 1
-    assert next(iter(volume.state.replica_topology.values()))["pool"] == NON_ENCR_POOL
+    assert next(iter(volume.state.replica_topology.values())).pool == NON_ENCR_POOL
 
 
 ##########

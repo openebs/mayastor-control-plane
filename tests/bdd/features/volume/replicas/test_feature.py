@@ -1,28 +1,24 @@
 """Adjusting the volume replicas feature tests."""
 
-import os
 import time
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from common.operations import Cluster
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
 from retrying import retry
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-from common.operations import Cluster
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.publish_volume_body import PublishVolumeBody
 
 POOL_1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL_2_UUID = "91a60318-bcfe-4e36-92cb-ddc7abf212ea"
@@ -67,29 +63,33 @@ def init(background, disks):
 # Create pools and a volume for use in the test cases.
 def init_resources(disks):
     ApiClient.pools_api().put_node_pool(
-        NODE_1_NAME, POOL_1_UUID, CreatePoolBody([disks[0]])
+        NODE_1_NAME, POOL_1_UUID, CreatePoolBody(disks=[disks[0]])
     )
     ApiClient.pools_api().put_node_pool(
-        NODE_2_NAME, POOL_2_UUID, CreatePoolBody([disks[1]])
+        NODE_2_NAME, POOL_2_UUID, CreatePoolBody(disks=[disks[1]])
     )
     ApiClient.volumes_api().put_volume(
         VOLUME_UUID,
         CreateVolumeBody(
-            VolumePolicy(True), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
+            policy=VolumePolicy(self_heal=True),
+            replicas=NUM_VOLUME_REPLICAS,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=False,
         ),
     )
     ApiClient.pools_api().put_node_pool(
-        NODE_3_NAME, POOL_3_UUID, CreatePoolBody([disks[2]])
+        NODE_3_NAME, POOL_3_UUID, CreatePoolBody(disks=[disks[2]])
     )
     # Publish volume so that there is a nexus to add a replica to.
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=NODE_1_NAME
+            publish_context={}, protocol=VolumeShareProtocol("nvmf"), node=NODE_1_NAME
         ),
     )
-    assert hasattr(volume.spec, "target")
-    assert str(volume.spec.target.protocol) == str(VolumeShareProtocol("nvmf"))
+    assert volume.spec.target
+    assert volume.spec.target.protocol == "nvmf"
 
 
 # Fixture used to pass the replica context between test steps.
@@ -216,12 +216,12 @@ def setting_the_number_of_replicas_to_zero_should_fail_with_a_suitable_error():
     """the replica removal should fail with a suitable error."""
     volumes_api = ApiClient.volumes_api()
     volume = volumes_api.get_volume(VOLUME_UUID)
-    assert hasattr(volume.state, "target")
+    assert volume.state.target
     try:
         volumes_api.put_volume_replica_count(VOLUME_UUID, 0)
     except Exception as e:
         # TODO: Return a proper error rather than asserting for a substring
-        assert "ApiValueError" in str(type(e))
+        assert "Input should be greater than or equal to 1" in str(e)
 
 
 @then("the volume spec should show 1 replica")
@@ -239,9 +239,9 @@ def wait_for_volume_replica_count(expected_num_replicas):
 # Get the number of replicas from the volume state.
 def num_runtime_volume_replicas():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    assert hasattr(volume.state, "target")
+    assert volume.state.target
     nexus = volume.state.target
-    return len(nexus["children"])
+    return len(nexus.children)
 
 
 # Get the number of replicase from the volume spec.

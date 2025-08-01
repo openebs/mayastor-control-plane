@@ -1,33 +1,31 @@
 """Swap ANA enabled Nexus on ANA enabled host feature tests."""
 
+import subprocess
 from urllib.parse import urlparse
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from common.fio import Fio
+from common.nvme import (
+    nvme_connect,
+    nvme_disconnect,
+    nvme_disconnect_controller,
+    nvme_list_subsystems,
+)
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-import pytest
-import subprocess
 from retrying import retry
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-from common.fio import Fio
-from common.nvme import (
-    nvme_connect,
-    nvme_disconnect,
-    nvme_list_subsystems,
-    nvme_disconnect_controller,
-)
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.volume_share_protocol import VolumeShareProtocol
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
@@ -49,7 +47,6 @@ def test_replace_failed_io_path_on_demand_for_nvme_controller():
 @given("a client connected to one nexus via single I/O path")
 def a_client_connected_to_one_nexus_via_single_io_path(connect_to_first_path):
     """a client connected to one nexus via single I/O path."""
-    pass
 
 
 @given(
@@ -60,20 +57,17 @@ def a_control_plane_2_anaenabled_io_engine_instances_1_anaenabled_host_and_a_pub
 ):
     """a control plane, 2 ANA-enabled Io-Engine instances, 1 ANA-enabled host and a published volume."""
     volume = background
-    assert hasattr(volume.state, "target")
-    pass
+    assert volume.state.target
 
 
 @given("fio client is running against target nexus")
 def fio_client_is_running_against_target_nexus(run_fio_to_first_path):
     """fio client is running against target nexus."""
-    pass
 
 
 @when("the only I/O path degrades")
 def the_only_io_path_degrades(degrade_first_path):
     """the only I/O path degrades."""
-    pass
 
 
 @then("fio client should successfully complete with the replaced I/O path")
@@ -81,7 +75,6 @@ def fio_client_should_successfully_complete_with_the_replaced_io_path(
     fio_completes_successfully,
 ):
     """fio client should successfully complete with the replaced I/O path."""
-    pass
 
 
 @then(
@@ -91,13 +84,11 @@ def it_should_be_possible_to_create_a_second_nexus_and_connect_it_as_the_second_
     publish_to_node_2, connect_to_node_2
 ):
     """it should be possible to create a second nexus and connect it as the second path."""
-    pass
 
 
 @then("it should be possible to remove the first failed I/O path")
 def it_should_be_possible_to_remove_the_first_failed_io_path(remove_first_path):
     """it should be possible to remove the first failed I/O path."""
-    pass
 
 
 """" FixTure Implementations """
@@ -113,15 +104,22 @@ def background():
     )
 
     ApiClient.pools_api().put_node_pool(
-        POOL_NODE, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=100"])
+        POOL_NODE, POOL_UUID, CreatePoolBody(disks=["malloc:///disk?size_mb=100"])
     )
     ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False, False)
+        VOLUME_UUID,
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=False),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=False,
+        ),
     )
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=TARGET_NODE_1
+            publish_context={}, protocol=VolumeShareProtocol("nvmf"), node=TARGET_NODE_1
         ),
     )
     yield volume
@@ -132,8 +130,8 @@ def background():
 def connect_to_first_path(background):
     volume = background
     print(volume)
-    print(volume.state["target"])
-    device_uri = volume.state["target"]["device_uri"]
+    print(volume.state.target)
+    device_uri = volume.state.target.device_uri
     yield nvme_connect(device_uri)
     nvme_disconnect(device_uri)
 
@@ -161,20 +159,20 @@ def degrade_first_path():
 @pytest.fixture
 def publish_to_node_2(background):
     volume = background
-    device_uri = volume.state["target"]["device_uri"]
+    device_uri = volume.state.target.device_uri
 
     volume_updated = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {},
-            VolumeShareProtocol("nvmf"),
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
             node=TARGET_NODE_2,
             reuse_existing=False,
             republish=True,
             force=True,
         ),
     )
-    device_uri_2 = volume_updated.state["target"]["device_uri"]
+    device_uri_2 = volume_updated.state.target.device_uri
     assert device_uri != device_uri_2
     return device_uri_2
 

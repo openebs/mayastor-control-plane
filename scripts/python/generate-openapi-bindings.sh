@@ -14,19 +14,20 @@ mkdir -p "$TARGET"
 
 tmpd=$(mktemp -d /tmp/openapi-gen-bdd-XXXXXXX)
 
-# Work around bug: https://github.com/OpenAPITools/openapi-generator/issues/11763
-# export _JAVA_OPTIONS="--add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED"
-# But only required for the new python generator, not for python-prior
 # Generate a new openapi python client for use by the BDD tests
-openapi-generator-cli generate -i "$SPEC" -g python-prior -o "$tmpd" --additional-properties packageName="openapi"
+# disallowAdditionalPropertiesIfNotPresent allows adding custom properties to openapi models while testing
+openapi-generator-cli generate -i "$SPEC" -g python -o "$tmpd" --additional-properties packageName="openapi",disallowAdditionalPropertiesIfNotPresent="false"
 
 # Path AllOf bug on openapi-generator
-cat <<EOF | patch "$tmpd/openapi/model_utils.py"
-651c651
-<                     if v not in values:
+for file in "$tmpd/openapi/models"/*.py; do
+  cat <<EOF | patch "$file" >/dev/null || :
+91,92c91
+<         if not isinstance(obj, dict):
+<             return cls.model_validate(obj)
 ---
->                     if v not in values and str(v) not in list(map(lambda e: str(e), values)):
+>         return cls.model_validate(obj)
 EOF
+done
 
 mv "$tmpd"/openapi/* "$TARGET"
 rm -rf "$tmpd"

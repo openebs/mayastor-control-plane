@@ -1,17 +1,16 @@
 """gRPC API for cluster-agent feature tests."""
 
+import grpc
+import pytest
+import v1.ha.cluster_agent_pb2 as pb
+from common.cluster_agent import ClusterAgentHandle
+from common.deployer import Deployer
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-import v1.ha.cluster_agent_pb2 as pb
-import grpc
-from common.deployer import Deployer
-from common.cluster_agent import ClusterAgentHandle
 
 
 @scenario("cluster_agent.feature", "register node-agent")

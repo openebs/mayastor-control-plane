@@ -1,24 +1,21 @@
 """Persistent Nexus Info feature tests."""
 
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.etcd import Etcd
+from openapi.exceptions import NotFoundException
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.etcd import Etcd
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_policy import VolumePolicy
-from openapi.exceptions import NotFoundException
-from openapi.model.publish_volume_body import PublishVolumeBody
 
 POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
@@ -39,7 +36,7 @@ def volume_ctx():
 def init():
     Deployer.start(1)
     ApiClient.pools_api().put_node_pool(
-        NODE_NAME, POOL_UUID, CreatePoolBody(["malloc:///disk?size_mb=50"])
+        NODE_NAME, POOL_UUID, CreatePoolBody(disks=["malloc:///disk?size_mb=50"])
     )
     yield
     Deployer.stop()
@@ -77,7 +74,7 @@ def a_volume_that_has_been_published_and_unpublished(volume_ctx):
 def a_volume_that_is_not_published():
     """a volume that is not published."""
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    assert not hasattr(volume.spec, "target")
+    assert volume.spec.target is None
 
 
 @given("a volume that is published")
@@ -119,7 +116,7 @@ def the_volume_is_unpublished():
 def the_nexus_info_structure_should_be_present_in_the_persistent_store(volume_ctx):
     """the nexus info structure should be present in the persistent store."""
     volume = volume_ctx[VOLUME_CTX_KEY]
-    nexus_uuid = volume.state.target["uuid"]
+    nexus_uuid = volume.state.target.uuid
     assert ETCD_CLIENT.get_nexus_info(VOLUME_UUID, nexus_uuid) is not None
 
 
@@ -127,7 +124,7 @@ def the_nexus_info_structure_should_be_present_in_the_persistent_store(volume_ct
 def the_nexus_info_structure_should_not_be_present_in_the_persistent_store(volume_ctx):
     """the nexus info structure should not be present in the persistent store."""
     volume = volume_ctx[VOLUME_CTX_KEY]
-    nexus_uuid = volume.state.target["uuid"]
+    nexus_uuid = volume.state.target.uuid
     assert ETCD_CLIENT.get_nexus_info(VOLUME_UUID, nexus_uuid) is None
 
 
@@ -137,14 +134,21 @@ def the_old_nexus_info_structure_should_not_be_present_in_the_persistent_store(
 ):
     """the old nexus info structure should not be present in the persistent store."""
     old_volume = volume_ctx[VOLUME_CTX_KEY_OLD]
-    nexus_uuid = old_volume.state.target["uuid"]
+    nexus_uuid = old_volume.state.target.uuid
     assert ETCD_CLIENT.get_nexus_info(VOLUME_UUID, nexus_uuid) is None
 
 
 @pytest.fixture
 def an_existing_volume():
     volume = ApiClient.volumes_api().put_volume(
-        VOLUME_UUID, CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False, False)
+        VOLUME_UUID,
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=False),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=False,
+        ),
     )
     yield
     try:
@@ -159,14 +163,17 @@ def publish_volume():
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=NODE_NAME, frontend_node=""
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
+            node=NODE_NAME,
+            frontend_node="",
         ),
     )
-    assert hasattr(volume.state, "target")
+    assert volume.state.target
     return volume
 
 
 # Unpublish the volume
 def unpublish_volume():
     volume = ApiClient.volumes_api().del_volume_target(VOLUME_UUID)
-    assert not hasattr(volume.spec, "target")
+    assert volume.spec.target is None

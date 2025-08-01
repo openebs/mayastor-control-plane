@@ -3,30 +3,27 @@
 import docker
 import pytest
 import requests
-
+from common import disk_pool_label
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from common.operations import Cluster
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.labelled_topology import LabelledTopology
+from openapi.models.pool_topology import PoolTopology
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.spec_status import SpecStatus
+from openapi.models.topology import Topology
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
+from openapi.models.volume_spec import VolumeSpec
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-from common import disk_pool_label
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-from common.operations import Cluster
-
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.spec_status import SpecStatus
-from openapi.model.volume_spec import VolumeSpec
-from openapi.model.topology import Topology
-from openapi.model.pool_topology import PoolTopology
-from openapi.model.labelled_topology import LabelledTopology
-from openapi.model.publish_volume_body import PublishVolumeBody
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 VOLUME_SIZE = 10485761
@@ -48,7 +45,7 @@ def init():
         NODE_1_NAME,
         POOL_1_UUID,
         CreatePoolBody(
-            ["malloc:///disk?size_mb=50"],
+            disks=["malloc:///disk?size_mb=50"],
             labels={
                 "pool1-specific-key": "pool1-specific-value",
             }
@@ -59,7 +56,7 @@ def init():
         NODE_2_NAME,
         POOL_2_UUID,
         CreatePoolBody(
-            ["malloc:///disk?size_mb=50"],
+            disks=["malloc:///disk?size_mb=50"],
             labels={
                 "pool2-specific-key": "pool2-specific-value",
             }
@@ -158,11 +155,11 @@ def a_control_plane_two_io_engine_instances_two_pools(init):
 def a_request_for_a_volume_with_topology_different_from_pools(create_request):
     """a request for a volume with topology different from pools."""
     request = CreateVolumeBody(
-        VolumePolicy(False),
-        NUM_VOLUME_REPLICAS,
-        VOLUME_SIZE,
-        False,
-        False,
+        policy=VolumePolicy(self_heal=False),
+        replicas=NUM_VOLUME_REPLICAS,
+        size=VOLUME_SIZE,
+        thin=False,
+        encrypted=False,
         topology=Topology(
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(
@@ -179,11 +176,11 @@ def a_request_for_a_volume_with_topology_different_from_pools(create_request):
 def a_request_for_a_volume_with_topology_same_as_pool_labels(create_request):
     """a request for a volume with topology same as pool labels."""
     request = CreateVolumeBody(
-        VolumePolicy(False),
-        NUM_VOLUME_REPLICAS,
-        VOLUME_SIZE,
-        False,
-        False,
+        policy=VolumePolicy(self_heal=False),
+        replicas=NUM_VOLUME_REPLICAS,
+        size=VOLUME_SIZE,
+        thin=False,
+        encrypted=False,
         topology=Topology(
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(
@@ -200,11 +197,11 @@ def a_request_for_a_volume_with_topology_same_as_pool_labels(create_request):
 def a_request_for_a_volume_without_pool_topology(create_request):
     """a request for a volume without pool topology."""
     request = CreateVolumeBody(
-        VolumePolicy(False),
-        NUM_VOLUME_REPLICAS,
-        VOLUME_SIZE,
-        False,
-        False,
+        policy=VolumePolicy(self_heal=False),
+        replicas=NUM_VOLUME_REPLICAS,
+        size=VOLUME_SIZE,
+        thin=False,
+        encrypted=False,
     )
     create_request[CREATE_REQUEST_KEY] = request
 
@@ -214,13 +211,19 @@ def an_existing_published_volume_without_pool_topology():
     """an existing published volume without pool topology"""
     ApiClient.volumes_api().put_volume(
         VOLUME_UUID,
-        CreateVolumeBody(VolumePolicy(False), 1, VOLUME_SIZE, False, False),
+        CreateVolumeBody(
+            policy=VolumePolicy(self_heal=False),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=False,
+        ),
     )
     # Publish volume so that there is a nexus to add a replica to.
     ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=NODE_1_NAME
+            publish_context={}, protocol=VolumeShareProtocol("nvmf"), node=NODE_1_NAME
         ),
     )
 
@@ -239,11 +242,11 @@ def an_existing_published_volume_with_a_topology_matching_pool_labels():
     ApiClient.volumes_api().put_volume(
         VOLUME_UUID,
         CreateVolumeBody(
-            VolumePolicy(False),
-            1,
-            VOLUME_SIZE,
-            False,
-            False,
+            policy=VolumePolicy(self_heal=False),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=False,
             topology=Topology(
                 pool_topology=PoolTopology(
                     labelled=LabelledTopology(
@@ -258,7 +261,7 @@ def an_existing_published_volume_with_a_topology_matching_pool_labels():
     ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=NODE_1_NAME
+            publish_context={}, protocol=VolumeShareProtocol("nvmf"), node=NODE_1_NAME
         ),
     )
 
@@ -269,11 +272,11 @@ def an_existing_published_volume_with_a_topology_not_matching_pool_labels():
     ApiClient.volumes_api().put_volume(
         VOLUME_UUID,
         CreateVolumeBody(
-            VolumePolicy(False),
-            1,
-            VOLUME_SIZE,
-            False,
-            False,
+            policy=VolumePolicy(self_heal=False),
+            replicas=1,
+            size=VOLUME_SIZE,
+            thin=False,
+            encrypted=False,
             topology=Topology(
                 pool_topology=PoolTopology(
                     labelled=LabelledTopology(
@@ -288,7 +291,7 @@ def an_existing_published_volume_with_a_topology_not_matching_pool_labels():
     ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {}, VolumeShareProtocol("nvmf"), node=NODE_1_NAME
+            publish_context={}, protocol=VolumeShareProtocol("nvmf"), node=NODE_1_NAME
         ),
     )
 
@@ -297,14 +300,12 @@ def an_existing_published_volume_with_a_topology_not_matching_pool_labels():
 def a_pool_which_does_not_contain_the_volume_topology_label():
     """a pool which does not contain the volume topology label."""
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
+    print(volume)
     assert (
         # From the no of suitable pools we get one would be already occupied, thus reduce the count by 1.
         # Since in this scenario, the only pool having topology labels is being used up, we are left with
         # 0 pools having topology labels.
-        no_of_suitable_pools(
-            volume["spec"]["topology"]["pool_topology"]["labelled"]["inclusion"]
-        )
-        - 1
+        no_of_suitable_pools(volume.spec.topology.pool_topology.labelled.inclusion) - 1
         == 0
     )
 
@@ -327,11 +328,9 @@ def the_number_of_suitable_pools_is_less_than_the_number_of_desired_volume_repli
     create_request,
 ):
     """the number of suitable pools is less than the number of desired volume replicas."""
-    num_volume_replicas = create_request[CREATE_REQUEST_KEY]["replicas"]
+    num_volume_replicas = create_request[CREATE_REQUEST_KEY].replicas
     no_of_pools = no_of_suitable_pools(
-        create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
-            "inclusion"
-        ]
+        create_request[CREATE_REQUEST_KEY].topology.pool_topology.labelled.inclusion
     )
     assert num_volume_replicas > no_of_pools
 
@@ -343,15 +342,13 @@ def the_number_of_volume_replicas_is_less_than_or_equal_to_the_number_of_suitabl
     create_request,
 ):
     """the number of volume replicas is less than or equal to the number of suitable pools."""
-    num_volume_replicas = create_request[CREATE_REQUEST_KEY]["replicas"]
+    num_volume_replicas = create_request[CREATE_REQUEST_KEY].replicas
     if (
-        hasattr(create_request[CREATE_REQUEST_KEY], "topology")
-        and "pool_topology" in create_request[CREATE_REQUEST_KEY]["topology"]
+        create_request[CREATE_REQUEST_KEY].topology
+        and "pool_topology" in create_request[CREATE_REQUEST_KEY].topology
     ):
         no_of_pools = no_of_suitable_pools(
-            create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
-                "inclusion"
-            ]
+            create_request[CREATE_REQUEST_KEY].topology.pool_topology.labelled.inclusion
         )
     else:
         # Here we are fetching all pools and comparing its length, because if we reach this part of code
@@ -364,11 +361,10 @@ def the_number_of_volume_replicas_is_less_than_or_equal_to_the_number_of_suitabl
 def additional_unused_pools_with_labels_containing_volume_topology():
     """additional unused pools with labels containing volume topology."""
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
+
     assert (
-        no_of_suitable_pools(
-            volume["spec"]["topology"]["pool_topology"]["labelled"]["inclusion"]
-        )
-        > volume["spec"]["num_replicas"]
+        no_of_suitable_pools(volume.spec.topology.pool_topology.labelled.inclusion)
+        > volume.spec.num_replicas
     )
 
 
@@ -376,9 +372,9 @@ def additional_unused_pools_with_labels_containing_volume_topology():
 def an_additional_replica_should_be_added_to_the_volume(replica_ctx):
     """an additional replica should be added to the volume."""
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    assert hasattr(volume.state, "target")
+    assert volume.state.target
     nexus = volume.state.target
-    assert replica_ctx[REPLICA_CONTEXT_KEY] == len(nexus["children"])
+    assert replica_ctx[REPLICA_CONTEXT_KEY] == len(nexus.children)
     assert REPLICA_ERROR not in replica_ctx
 
 
@@ -387,21 +383,19 @@ def pool_labels_must_contain_all_the_volume_request_topology_labels(create_reque
     """pool labels must contain all the volume request topology labels."""
     assert (
         common_labels(
-            create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
-                "inclusion"
-            ],
+            create_request[
+                CREATE_REQUEST_KEY
+            ].topology.pool_topology.labelled.inclusion,
             ApiClient.pools_api().get_pool(POOL_1_UUID),
         )
         or common_labels(
-            create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
-                "inclusion"
-            ],
+            create_request[
+                CREATE_REQUEST_KEY
+            ].topology.pool_topology.labelled.inclusion,
             ApiClient.pools_api().get_pool(POOL_2_UUID),
         )
     ) == len(
-        create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
-            "inclusion"
-        ]
+        create_request[CREATE_REQUEST_KEY].topology.pool_topology.labelled.inclusion
     )
 
 
@@ -411,14 +405,14 @@ def pool_labels_must_contain_all_the_volume_topology_labels():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     assert (
         common_labels(
-            volume["spec"]["topology"]["pool_topology"]["labelled"]["inclusion"],
+            volume.spec.topology.pool_topology.labelled.inclusion,
             ApiClient.pools_api().get_pool(POOL_1_UUID),
         )
         or common_labels(
-            volume["spec"]["topology"]["pool_topology"]["labelled"]["inclusion"],
+            volume.spec.topology.pool_topology.labelled.inclusion,
             ApiClient.pools_api().get_pool(POOL_2_UUID),
         )
-    ) == len(volume["spec"]["topology"]["pool_topology"]["labelled"]["inclusion"])
+    ) == len(volume.spec.topology.pool_topology.labelled.inclusion)
 
 
 @then("pool labels must not contain the volume topology labels")
@@ -427,7 +421,7 @@ def pool_labels_must_not_contain_the_volume_topology_labels():
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     assert (
         common_labels(
-            volume["spec"]["topology"]["pool_topology"]["labelled"]["inclusion"],
+            volume.spec.topology.pool_topology.labelled.inclusion,
             ApiClient.pools_api().get_pool(POOL_2_UUID),
         )
         == 0
@@ -439,9 +433,7 @@ def pool_labels_must_not_contain_the_volume_request_topology_labels(create_reque
     """pool labels must not contain the volume request topology labels."""
     assert (
         no_of_suitable_pools(
-            create_request[CREATE_REQUEST_KEY]["topology"]["pool_topology"]["labelled"][
-                "inclusion"
-            ]
+            create_request[CREATE_REQUEST_KEY].topology.pool_topology.labelled.inclusion
         )
     ) == 0
 
@@ -465,7 +457,7 @@ def volume_creation_should_fail_with_an_insufficient_storage_error(create_reques
         assert exception_info["status"] == requests.codes["insufficient_storage"]
 
     # Check that the volume wasn't created.
-    volumes = ApiClient.volumes_api().get_volumes().entries
+    volumes = ApiClient.volumes_api().get_volumes(max_entries=0).entries
     assert len(volumes) == 0
 
 
@@ -475,14 +467,14 @@ def volume_creation_should_succeed_with_a_returned_volume_object_with_topology(
 ):
     """volume creation should succeed with a returned volume object with topology."""
     expected_spec = VolumeSpec(
-        1,
-        VOLUME_SIZE,
-        SpecStatus("Created"),
-        VOLUME_UUID,
-        VolumePolicy(False),
-        False,
-        0,
-        False,
+        num_replicas=1,
+        size=VOLUME_SIZE,
+        status=SpecStatus("Created"),
+        uuid=VOLUME_UUID,
+        policy=VolumePolicy(self_heal=False),
+        thin=False,
+        num_snapshots=0,
+        encrypted=False,
         topology=Topology(
             pool_topology=PoolTopology(
                 labelled=LabelledTopology(
@@ -496,8 +488,8 @@ def volume_creation_should_succeed_with_a_returned_volume_object_with_topology(
     # Check the volume object returned is as expected
     request = create_request[CREATE_REQUEST_KEY]
     volume = ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
-    assert str(volume.spec) == str(expected_spec)
-    assert str(volume.state["status"]) == "Online"
+    assert volume.spec == expected_spec
+    assert volume.state.status == "Online"
 
 
 @then(
@@ -508,29 +500,29 @@ def volume_creation_should_succeed_with_a_returned_volume_object_without_pool_to
 ):
     """volume creation should succeed with a returned volume object without pool topology."""
     expected_spec = VolumeSpec(
-        1,
-        VOLUME_SIZE,
-        SpecStatus("Created"),
-        VOLUME_UUID,
-        VolumePolicy(False),
-        False,
-        0,
-        False,
+        num_replicas=1,
+        size=VOLUME_SIZE,
+        status=SpecStatus("Created"),
+        uuid=VOLUME_UUID,
+        policy=VolumePolicy(self_heal=False),
+        thin=False,
+        num_snapshots=0,
+        encrypted=False,
     )
 
     # Check the volume object returned is as expected
     request = create_request[CREATE_REQUEST_KEY]
     volume = ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
-    assert str(volume.spec) == str(expected_spec)
-    assert str(volume.state["status"]) == "Online"
+    assert volume.spec == expected_spec
+    assert volume.state.status == "Online"
 
 
 @then("volume request should not contain any pool topology labels")
 def volume_request_should_not_contain_any_pool_topology_labels(create_request):
     """volume request should not contain any pool topology labels."""
     assert (
-        not hasattr(create_request[CREATE_REQUEST_KEY], "topology")
-        or "pool_topology" not in create_request[CREATE_REQUEST_KEY]["topology"]
+        create_request[CREATE_REQUEST_KEY].topology is None
+        or create_request[CREATE_REQUEST_KEY].topology.pool_topology is None
     )
 
 
@@ -538,16 +530,13 @@ def volume_request_should_not_contain_any_pool_topology_labels(create_request):
 def volume_should_not_contain_any_pool_topology_labels():
     """volume should not contain any pool topology labels."""
     volume = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    assert (
-        not hasattr(volume["spec"], "topology")
-        or "pool_topology" not in volume["spec"]["topology"]
-    )
+    assert volume.spec.topology is None or volume.spec.topology.pool_topology is None
 
 
 def no_of_suitable_pools(volume_pool_topology_labels):
     pool_labels = [
-        ApiClient.pools_api().get_pool(POOL_1_UUID)["spec"]["labels"],
-        ApiClient.pools_api().get_pool(POOL_2_UUID)["spec"]["labels"],
+        ApiClient.pools_api().get_pool(POOL_1_UUID).spec.labels,
+        ApiClient.pools_api().get_pool(POOL_2_UUID).spec.labels,
     ]
     count = 0
     for labels in pool_labels:
@@ -561,7 +550,7 @@ def no_of_suitable_pools(volume_pool_topology_labels):
 
 
 def common_labels(volume_pool_topology_labels, pool):
-    pool_labels = pool["spec"]["labels"]
+    pool_labels = pool.spec.labels
     count = 0
     for key in volume_pool_topology_labels:
         if key in pool_labels and volume_pool_topology_labels[key] == pool_labels[key]:

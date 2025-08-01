@@ -1,25 +1,24 @@
 """Anti-Affinity for Affinity Group feature tests."""
 
-from typing import Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict
 
+import openapi.exceptions
 import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.operations import Cluster
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import openapi.exceptions
-from common.apiclient import ApiClient
-from common.deployer import Deployer
-from common.operations import Cluster
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_policy import VolumePolicy
 
 NODE_NAME_1 = "io-engine-1"
 NODE_NAME_2 = "io-engine-2"
@@ -65,7 +64,7 @@ def one_non_affinity_group_volume_with_2_replica_published_on_node_b():
     ApiClient.volumes_api().put_volume(
         NON_AG_VOLUME_UUID,
         CreateVolumeBody(
-            VolumePolicy(False),
+            policy=VolumePolicy(self_heal=False),
             replicas=2,
             size=VOLUME_SIZE,
             thin=True,
@@ -75,8 +74,8 @@ def one_non_affinity_group_volume_with_2_replica_published_on_node_b():
     ApiClient.volumes_api().put_volume_target(
         NON_AG_VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {},
-            VolumeShareProtocol("nvmf"),
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
             node=NODE_NAME_2,
             frontend_node="app-node-1",
         ),
@@ -89,7 +88,7 @@ def one_unpublished_affinity_group_volume_with_2_replica():
     ApiClient.volumes_api().put_volume(
         AG_VOLUME_UUID_2,
         CreateVolumeBody(
-            VolumePolicy(False),
+            policy=VolumePolicy(self_heal=False),
             replicas=2,
             size=VOLUME_SIZE,
             thin=True,
@@ -105,7 +104,7 @@ def one_affinity_group_volume_with_2_replica_published_on_node_a():
     ApiClient.volumes_api().put_volume(
         AG_VOLUME_UUID_1,
         CreateVolumeBody(
-            VolumePolicy(False),
+            policy=VolumePolicy(self_heal=False),
             replicas=2,
             size=VOLUME_SIZE,
             thin=True,
@@ -116,8 +115,8 @@ def one_affinity_group_volume_with_2_replica_published_on_node_a():
     ApiClient.volumes_api().put_volume_target(
         AG_VOLUME_UUID_1,
         publish_volume_body=PublishVolumeBody(
-            {},
-            VolumeShareProtocol("nvmf"),
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
             node=NODE_NAME_1,
             frontend_node="app-node-1",
         ),
@@ -128,7 +127,7 @@ def one_affinity_group_volume_with_2_replica_published_on_node_a():
 def the_volume_targets_are_on_different_nodes():
     """the volume targets are on different nodes."""
     volumes = get_affinity_group_volumes()
-    assert volumes[0].state.target["node"] != volumes[1].state.target["node"]
+    assert volumes[0].state.target.node != volumes[1].state.target.node
 
 
 @given("two pools, one on node A and another on node B")
@@ -152,8 +151,8 @@ def one_volume_is_republished():
         ApiClient.volumes_api().put_volume_target(
             AG_VOLUME_UUID_2,
             publish_volume_body=PublishVolumeBody(
-                {},
-                VolumeShareProtocol("nvmf"),
+                publish_context={},
+                protocol=VolumeShareProtocol("nvmf"),
                 republish=True,
                 reuse_existing=False,
                 frontend_node="app-node-1",
@@ -170,7 +169,9 @@ def the_non_published_volume_is_published():
         ApiClient.volumes_api().put_volume_target(
             AG_VOLUME_UUID_2,
             publish_volume_body=PublishVolumeBody(
-                {}, VolumeShareProtocol("nvmf"), frontend_node="app-node-1"
+                publish_context={},
+                protocol=VolumeShareProtocol("nvmf"),
+                frontend_node="app-node-1",
             ),
         )
     except openapi.exceptions.ServiceException as e:
@@ -181,7 +182,7 @@ def the_non_published_volume_is_published():
 def both_the_targets_should_be_on_the_same_node():
     """both the targets should be on the same node."""
     volumes = get_affinity_group_volumes()
-    assert volumes[0].state.target["node"] == volumes[1].state.target["node"]
+    assert volumes[0].state.target.node == volumes[1].state.target.node
 
 
 @then("the publish should not fail")
@@ -200,7 +201,7 @@ def the_republish_should_not_fail():
 def the_target_should_land_on_node_b():
     """the target should land on node B."""
     volume = ApiClient.volumes_api().get_volume(AG_VOLUME_UUID_2)
-    assert volume.state.target["node"] == NODE_NAME_2
+    assert volume.state.target.node == NODE_NAME_2
 
 
 # HELPER METHODS
@@ -216,7 +217,7 @@ def create_node_pools(node_pool_map: Dict[str, int]):
             ApiClient.pools_api().put_node_pool(
                 node_name,
                 pool_name,
-                CreatePoolBody([f"malloc:///{disk_name}?size_mb=200"]),
+                CreatePoolBody(disks=[f"malloc:///{disk_name}?size_mb=200"]),
             )
             pool_index += 1
 
@@ -227,7 +228,7 @@ def create_affinity_group():
         ApiClient.volumes_api().put_volume(
             volume_uuid,
             CreateVolumeBody(
-                VolumePolicy(False),
+                policy=VolumePolicy(self_heal=False),
                 replicas=2,
                 size=VOLUME_SIZE,
                 thin=True,
@@ -252,7 +253,9 @@ def publish_affinity_group():
         ApiClient.volumes_api().put_volume_target(
             volume_uuid,
             publish_volume_body=PublishVolumeBody(
-                {}, VolumeShareProtocol("nvmf"), frontend_node="app-node-1"
+                publish_context={},
+                protocol=VolumeShareProtocol("nvmf"),
+                frontend_node="app-node-1",
             ),
         )
 
@@ -269,10 +272,10 @@ def publish_affinity_group():
 
 # Get the affinity group volumes based on uuids
 def get_affinity_group_volumes():
-    volumes = ApiClient.volumes_api().get_volumes()
+    volumes = ApiClient.volumes_api().get_volumes(max_entries=0)
     return [
         volume
         for volume in volumes.entries
-        if hasattr(volume.spec, "affinity_group")
-        and volume.spec.affinity_group["id"] == AG_PARAM["id"]
+        if volume.spec.affinity_group
+        and volume.spec.affinity_group.id == AG_PARAM["id"]
     ]

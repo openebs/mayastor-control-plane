@@ -9,7 +9,7 @@ edition = "2021"
 strum = "0.26.3"
 strum_macros = "0.26.4"
 serde_json = "1.0.132"
-tokio = { version = "1.41.0", features = ["full"] }
+tokio = { version = "1.43.1", features = ["full"] }
 snafu = "0.8.5"
 etcd-client = "0.14.0"
 serde = { version = "1.0.214", features = ["derive"] }
@@ -23,4 +23,4 @@ platform = { path = "../dependencies/platform" }
 
 [dev-dependencies]
 composer = { path = "../dependencies/composer" }
-tokio = { version = "1.41.0", features = ["full"] }
+tokio = { version = "1.43.1", features = ["full"] }

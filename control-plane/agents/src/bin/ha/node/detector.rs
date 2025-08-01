@@ -426,7 +426,7 @@ impl Event for PathRecord {
     fn event(&self, action: EventAction) -> EventMessage {
         let event_source = EventSource::new(self.reporter.node_name().to_string())
             .with_nvme_path_data(&self.nqn, &self.path);
-        let volume_id = self.nqn.split(':').last().unwrap_or("").to_string();
+        let volume_id = self.nqn.split(':').next_back().unwrap_or("").to_string();
         EventMessage {
             category: EventCategory::NvmePath as i32,
             action: action as i32,

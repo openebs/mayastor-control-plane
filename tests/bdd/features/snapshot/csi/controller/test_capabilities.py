@@ -1,17 +1,15 @@
 """Snapshot capability gRPC API for CSI Controller feature tests."""
 
+import csi_pb2 as pb
+import pytest
+from common.csi import CsiHandle
+from common.deployer import Deployer
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-import csi_pb2 as pb
-
-from common.csi import CsiHandle
-from common.deployer import Deployer
 
 
 @pytest.fixture(scope="module")

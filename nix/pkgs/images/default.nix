@@ -2,7 +2,7 @@
 # avoid dependency on docker tool chain. Though the maturity of OCI
 # builder in nixpkgs is questionable which is why we postpone this step.
 
-{ pkgs, xfsprogs_5_16, rdma-core, busybox, dockerTools, lib, e2fsprogs, btrfs-progs, utillinux, fetchurl, fetchpatch, control-plane, tini, sourcer, img_tag ? "", img_org ? "", img_prefix }:
+{ pkgs, xfsprogs_5_16, rdma-core, busybox, dockerTools, lib, e2fsprogs_1_46_5, btrfs-progs, utillinux, fetchurl, fetchpatch, control-plane, tini, sourcer, img_tag ? "", img_org ? "", img_prefix }:
 let
   repo-org = if img_org != "" then img_org else "${builtins.readFile (pkgs.runCommand "repo_org" {
     buildInputs = with pkgs; [ git ];
@@ -13,7 +13,7 @@ let
     ./git-org-name.sh ${sourcer.git-src} --case lower --remote origin > $out
   '')}";
   xfsprogs = xfsprogs_5_16;
-  e2fsprogs_1_46_2 = (e2fsprogs.overrideAttrs (oldAttrs: rec {
+  e2fsprogs_1_46_2 = (e2fsprogs_1_46_5.overrideAttrs (oldAttrs: rec {
     version = "1.46.2";
     src = fetchurl {
       url = "mirror://sourceforge/${oldAttrs.pname}/${oldAttrs.pname}-${version}.tar.gz";

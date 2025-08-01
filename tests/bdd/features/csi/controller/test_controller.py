@@ -1,31 +1,28 @@
 """CSI Controller Identity RPC tests."""
 
-from pytest_bdd import (
-    given,
-    scenario,
-    then,
-    when,
-)
-
-import pytest
-import docker
-import csi_pb2 as pb
-import grpc
-from time import sleep
-import subprocess
-
-from urllib.parse import urlparse, parse_qs
 import json
+import subprocess
+from time import sleep
+from urllib.parse import parse_qs, urlparse
 
+import csi_pb2 as pb
+import docker
+import grpc
+import pytest
 from common import csi_topology_key, disk_pool_label
 from common.apiclient import ApiClient
 from common.csi import CsiHandle
 from common.deployer import Deployer
 from common.nvme import nvme_bin
 from common.operations import Cluster
-from openapi.model.create_pool_body import CreatePoolBody
 from openapi.exceptions import NotFoundException
-
+from openapi.models.create_pool_body import CreatePoolBody
+from pytest_bdd import (
+    given,
+    scenario,
+    then,
+    when,
+)
 
 VOLUME1_UUID = "d01b8bfb-0116-47b0-a03a-447fcbdc0e99"
 VOLUME2_UUID = "d8aab0f1-82f4-406c-89ee-14f08b004aea"
@@ -57,12 +54,12 @@ def setup():
     pool_api.put_node_pool(
         NODE1,
         POOL1_UUID,
-        CreatePoolBody(["malloc:///disk?size_mb=128"], labels=pool_labels),
+        CreatePoolBody(disks=["malloc:///disk?size_mb=128"], labels=pool_labels),
     )
     pool_api.put_node_pool(
         NODE2,
         POOL2_UUID,
-        CreatePoolBody(["malloc:///disk?size_mb=128"], labels=pool_labels),
+        CreatePoolBody(disks=["malloc:///disk?size_mb=128"], labels=pool_labels),
     )
     yield
     if Cluster.env_cleanup():
@@ -213,7 +210,7 @@ def populate_published_2_replica_volume(_create_2_replica_nvmf_volume):
     # Make sure volume is published.
     volume = ApiClient.volumes_api().get_volume(VOLUME4_UUID)
     assert (
-        str(volume.spec.target.protocol) == "nvmf"
+        volume.spec.target.protocol.value == "nvmf"
     ), "Protocol mismatches for published volume"
     return volume
 
@@ -232,7 +229,7 @@ def populate_published_volume(_create_1_replica_nvmf_volume):
     volume = ApiClient.volumes_api().get_volume(VOLUME1_UUID)
 
     assert (
-        str(volume.spec.target.protocol) == "nvmf"
+        volume.spec.target.protocol.value == "nvmf"
     ), "Protocol mismatches for published volume"
     return volume
 
@@ -251,7 +248,7 @@ def populate_published_2_replica_volume(_create_2_replica_nvmf_volume):
     # Make sure volume is published.
     volume = ApiClient.volumes_api().get_volume(VOLUME4_UUID)
     assert (
-        str(volume.spec.target.protocol) == "nvmf"
+        volume.spec.target.protocol.value == "nvmf"
     ), "Protocol mismatches for published volume"
     return volume
 
@@ -269,7 +266,7 @@ def start_stop_ms1():
     state_synced = False
     for i in range(12):
         vol = ApiClient.volumes_api().get_volume(VOLUME4_UUID)
-        if getattr(vol.state, "target", None) is None:
+        if vol.state.target is None:
             state_synced = True
             break
         sleep(5)
@@ -369,7 +366,7 @@ def check_unpublish_volume_on_a_different_node(unpublish_volume_on_a_different_n
     target_fixture="unpublish_volume_from_its_node",
 )
 def unpublish_volume_from_its_node(populate_published_volume):
-    uri = populate_published_volume.state.target["device_uri"]
+    uri = populate_published_volume.state.target.device_uri
     # Make sure the volume is still published and is discoverable.
     assert check_nvmf_target(uri), "Volume is not discoverable over NVMF"
     do_unpublish_volume(VOLUME1_UUID, NODE1)
@@ -960,8 +957,8 @@ def check_identical_volume_creation(create_the_same_volume):
 def volume_target_should_not_be_destroyed():
     """nvmf target which exposes the volume should not be destroyed."""
     vol = ApiClient.volumes_api().get_volume(VOLUME4_UUID)
-    assert str(vol.spec.target.protocol) == "nvmf", "Volume protocol mismatches"
-    assert vol.state.target["device_uri"].startswith(
+    assert vol.spec.target.protocol == "nvmf", "Volume protocol mismatches"
+    assert vol.state.target.device_uri.startswith(
         ("nvmf://", "nvmf+tcp://", "nvmf+rdma+tcp://")
     ), "Volume share URI mismatches"
 
@@ -1034,14 +1031,13 @@ def check_unpublish_not_existing_volume(unpublish_not_existing_volume):
 @then("volume should remain as published")
 def volume_remains_published():
     """volume should remain as published."""
-    pass
 
 
 @then("volume should report itself as published")
 def check_volume_status_published():
     vol = ApiClient.volumes_api().get_volume(VOLUME1_UUID)
-    assert str(vol.spec.target.protocol) == "nvmf", "Volume protocol mismatches"
-    assert vol.state.target["device_uri"].startswith(
+    assert vol.spec.target.protocol == "nvmf", "Volume protocol mismatches"
+    assert vol.state.target.device_uri.startswith(
         ("nvmf://", "nvmf+tcp://", "nvmf+rdma+tcp://")
     ), "Volume share URI mismatches"
 

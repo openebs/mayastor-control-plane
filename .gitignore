@@ -29,3 +29,4 @@ __pycache__
 /docker-logs.txt
 /.tmp
 /ci-report/
+pytest.log

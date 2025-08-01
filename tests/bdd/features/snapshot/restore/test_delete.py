@@ -1,18 +1,15 @@
 """Deleting Restored Snapshot Volume feature tests."""
 
-import pytest
-from pytest_bdd import given, scenario, then, when
-
 import uuid
 
-from common.deployer import Deployer
+import pytest
 from common.apiclient import ApiClient
-from common.docker import Docker
-from common.operations import Volume, Snapshot, wait_node_online, Cluster
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.volume_policy import VolumePolicy
+from common.deployer import Deployer
+from common.operations import Cluster, Snapshot, Volume
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.volume_policy import VolumePolicy
+from pytest_bdd import given, scenario, then, when
 
 POOL = "pool"
 NODE = Deployer.node_name(0)
@@ -38,7 +35,7 @@ def disks():
 def deployer_cluster(disks):
     Deployer.start(1, cache_period="100ms", reconcile_period="150ms", fio_spdk=True)
     ApiClient.pools_api().put_node_pool(
-        Deployer.node_name(0), POOL, CreatePoolBody([disks[0]])
+        Deployer.node_name(0), POOL, CreatePoolBody(disks=[disks[0]])
     )
     yield
     Deployer.stop()
@@ -71,7 +68,7 @@ def a_single_replica_volume_from_the_snapshot(original_snapshot, volume_uuids):
         original_snapshot.definition.spec.uuid,
         volume_uuids[1],
         CreateVolumeBody(
-            VolumePolicy(True),
+            policy=VolumePolicy(self_heal=True),
             replicas=1,
             size=original_snapshot.definition.metadata.size,
             thin=True,
@@ -98,7 +95,7 @@ def a_single_replica_volume_with_8mib_allocated(volume_uuids):
     volume = ApiClient.volumes_api().put_volume(
         volume_uuids[0],
         CreateVolumeBody(
-            VolumePolicy(True),
+            policy=VolumePolicy(self_heal=True),
             replicas=1,
             size=88 * 1024 * 1024,
             thin=True,
@@ -323,7 +320,7 @@ def we_restore_volume_1_snapshot_2_into_restored_volume_2(
         restored_1_snapshot_2.definition.spec.uuid,
         volume_uuids[2],
         CreateVolumeBody(
-            VolumePolicy(True),
+            policy=VolumePolicy(self_heal=True),
             replicas=1,
             size=restored_1_snapshot_2.definition.metadata.size,
             thin=True,

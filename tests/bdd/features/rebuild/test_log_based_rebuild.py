@@ -1,34 +1,31 @@
 """Partial Rebuild feature tests."""
 
+import subprocess
+import time
+from time import sleep
+
+import pytest
+from common.apiclient import ApiClient
+from common.deployer import Deployer
+from common.docker import Docker
+from common.fio import Fio
+from common.nvme import nvme_connect, nvme_disconnect
+from common.operations import Cluster
+from openapi.models.child_state import ChildState
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.replica_state import ReplicaState
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
+from openapi.models.volume_status import VolumeStatus
 from pytest_bdd import (
     given,
     scenario,
     then,
     when,
 )
-
-import pytest
-import os
-import subprocess
-import time
 from retrying import retry
-
-from common.deployer import Deployer
-from common.apiclient import ApiClient
-from common.docker import Docker
-from common.nvme import nvme_connect, nvme_disconnect
-from time import sleep
-from common.fio import Fio
-from common.operations import Cluster
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.volume_status import VolumeStatus
-from openapi.model.volume_policy import VolumePolicy
-from openapi.model.replica_state import ReplicaState
-from openapi.model.child_state import ChildState
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 NODE_1_NAME = "io-engine-1"
@@ -70,15 +67,15 @@ def init_scenario(init, disks):
     assert len(disks) == (NUM_VOLUME_REPLICAS + 1)
     # Only create 3 pools, so we can control where the initial replicas are placed.
     ApiClient.pools_api().put_node_pool(
-        NODE_1_NAME, POOL_1_UUID, CreatePoolBody([f"aio://{disks[0]}"])
+        NODE_1_NAME, POOL_1_UUID, CreatePoolBody(disks=[f"aio://{disks[0]}"])
     )
 
     ApiClient.pools_api().put_node_pool(
-        NODE_2_NAME, POOL_2_UUID, CreatePoolBody([f"aio://{disks[1]}"])
+        NODE_2_NAME, POOL_2_UUID, CreatePoolBody(disks=[f"aio://{disks[1]}"])
     )
 
     ApiClient.pools_api().put_node_pool(
-        NODE_3_NAME, POOL_3_UUID, CreatePoolBody([f"aio://{disks[2]}"])
+        NODE_3_NAME, POOL_3_UUID, CreatePoolBody(disks=[f"aio://{disks[2]}"])
     )
     yield
     Cluster.cleanup(waitPools=True)
@@ -132,14 +129,18 @@ def io_engine_is_installed_and_running():
 def a_volume_with_three_replicas_filled_with_user_data(disks):
     """a volume with three replicas, filled with user data."""
     request = CreateVolumeBody(
-        VolumePolicy(True), NUM_VOLUME_REPLICAS, VOLUME_SIZE, False, False
+        policy=VolumePolicy(self_heal=True),
+        replicas=NUM_VOLUME_REPLICAS,
+        size=VOLUME_SIZE,
+        thin=False,
+        encrypted=False,
     )
     ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     volume = ApiClient.volumes_api().put_volume_target(
         VOLUME_UUID,
         publish_volume_body=PublishVolumeBody(
-            {},
-            VolumeShareProtocol("nvmf"),
+            publish_context={},
+            protocol=VolumeShareProtocol("nvmf"),
             node=NODE_1_NAME,
             frontend_node="app-node-1",
         ),
@@ -147,10 +148,10 @@ def a_volume_with_three_replicas_filled_with_user_data(disks):
 
     # Now the volume has been created, create an additional pool.
     ApiClient.pools_api().put_node_pool(
-        NODE_4_NAME, POOL_4_UUID, CreatePoolBody([f"aio://{disks[3]}"])
+        NODE_4_NAME, POOL_4_UUID, CreatePoolBody(disks=[f"aio://{disks[3]}"])
     )
     # Launch fio in background and let it run along with the test.
-    uri = volume["state"]["target"]["device_uri"]
+    uri = volume.state.target.device_uri
     disk = nvme_connect(uri)
     fio = Fio(name="job", rw="randwrite", device=disk, runtime=FIO_RUN)
     fio = fio.open()
@@ -177,11 +178,11 @@ def a_child_becomes_faulted():
 def wait_child_faulted():
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     target = vol.state.target
-    childlist = target["children"]
+    childlist = target.children
     pytest.faulted_child_uri = None
     for child in childlist:
-        if child["state"] == ChildState("Faulted"):
-            pytest.faulted_child_uri = child["uri"]
+        if child.state == ChildState("Faulted"):
+            pytest.faulted_child_uri = child.uri
     assert pytest.faulted_child_uri is not None, "Failed to find Faulted child!"
 
 
@@ -225,12 +226,12 @@ def a_full_rebuild_starts_for_unhealthy_child():
     """a full rebuild starts for unhealthy child"""
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     target = vol.state.target
-    childlist = target["children"]
+    childlist = target.children
     assert len(childlist) == NUM_VOLUME_REPLICAS
     for child in childlist:
-        if child["state"] == ChildState("Degraded"):
-            assert child["uri"] != pytest.faulted_child_uri
-            assert child["rebuild_progress"] != 0, f"{child}"
+        if child.state == ChildState("Degraded"):
+            assert child.uri != pytest.faulted_child_uri
+            assert child.rebuild_progress != 0, f"{child}"
 
 
 @then("a log-based rebuild starts for the unhealthy child")
@@ -241,12 +242,12 @@ def a_log_based_rebuild_starts_for_the_unhealthy_child():
     # No direct way to check partial rebuild via openapi yet
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     target = vol.state.target
-    childlist = target["children"]
+    childlist = target.children
     assert len(childlist) == NUM_VOLUME_REPLICAS
     assert pytest.faulted_child_uri is not None
     for child in childlist:
-        if child["uri"] == pytest.faulted_child_uri:
-            assert child["state"] == ChildState("Degraded")
+        if child.uri == pytest.faulted_child_uri:
+            assert child.state == ChildState("Degraded")
 
 
 @then("a full rebuild starts before the timed-wait period")
@@ -259,15 +260,14 @@ def a_full_rebuild_starts_before_the_timedwait_period():
 def rebuild_ongoing_before_timed_wait():
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
     target = vol.state.target
-    childlist = target["children"]
+    childlist = target.children
     assert len(childlist) == NUM_VOLUME_REPLICAS
     degraded = list(
         filter(
-            lambda child: str(child["state"]) == "Degraded",
+            lambda child: child.state == "Degraded",
             childlist,
         )
     )
-    print(degraded)
     assert len(degraded) is 1, "Should find one degraded child"
 
 
@@ -286,9 +286,9 @@ def a_full_rebuild_starts_for_both_of_the_unhealthy_children():
 @then("the volume target becomes unreachable along with its local child")
 def the_volume_target_becomes_unreachable_along_with_its_local_child():
     """the volume target becomes unreachable along with its local child"""
-    pytest.nexus_local_child = ApiClient.replicas_api().get_node_replicas(NODE_1_NAME)[
-        0
-    ]["uri"]
+    pytest.nexus_local_child = (
+        ApiClient.replicas_api().get_node_replicas(NODE_1_NAME)[0].uri
+    )
     Docker.stop_container(NODE_1_NAME)
     # wait for nexus republish
     verify_nexus_switchover()
@@ -299,8 +299,8 @@ def verify_full_rebuilds():
     """a full rebuild starts for both of the unhealthy children"""
     children = []
     new_nexus = ApiClient.volumes_api().get_volume(VOLUME_UUID).state.target
-    for child in new_nexus["children"]:
-        children.append(child["uri"])
+    for child in new_nexus.children:
+        children.append(child.uri)
     assert pytest.nexus_local_child not in children
 
     rebuild_hist = ApiClient.volumes_api().get_rebuild_history(VOLUME_UUID)
@@ -312,16 +312,16 @@ def verify_full_rebuilds():
     )
 
     assert pytest.faulted_child_uri not in children or record[0].is_partial == False
-    childs = new_nexus["children"]
+    childs = new_nexus.children
     print(f"child list during full rebuild: {childs}")
 
 
 @retry(wait_fixed=200, stop_max_attempt_number=60)
 def verify_nexus_switchover():
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    new_target = vol["state"].get("target", None)
-    if new_target is not None:
-        assert NODE_1_NAME != new_target["node"]
+    new_target = vol.state.target
+    if new_target:
+        assert NODE_1_NAME != new_target.node
     else:
         assert False, "target not yet failed over"
 
@@ -329,10 +329,10 @@ def verify_nexus_switchover():
 @retry(wait_fixed=200, stop_max_attempt_number=40)
 def check_child_removal():
     vol = ApiClient.volumes_api().get_volume(VOLUME_UUID)
-    child_list = vol.state.target["children"]
+    child_list = vol.state.target.children
     child_removed = True
     for child in child_list:
-        if pytest.faulted_child_uri == child["uri"]:
+        if pytest.faulted_child_uri == child.uri:
             child_removed = False
             break
     assert (

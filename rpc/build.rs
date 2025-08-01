@@ -35,7 +35,7 @@ fn main() {
             &["protobuf/mayastor.proto"].prefixed(io_api),
             &["protobuf"].prefixed(io_api),
         )
-        .unwrap_or_else(|e| panic!("io-engine v0 protobuf compilation failed: {}", e));
+        .unwrap_or_else(|e| panic!("io-engine v0 protobuf compilation failed: {e}"));
 
     tonic_build::configure()
         .build_server(true)
@@ -43,7 +43,7 @@ fn main() {
             &["protobuf/csi.proto"].prefixed(csi_api),
             &["protobuf"].prefixed(csi_api),
         )
-        .unwrap_or_else(|e| panic!("CSI protobuf compilation failed: {}", e));
+        .unwrap_or_else(|e| panic!("CSI protobuf compilation failed: {e}"));
 
     tonic_build::configure()
         .build_server(true)
@@ -63,7 +63,7 @@ fn main() {
             .prefixed(io_api),
             &["protobuf/v1"].prefixed(io_api),
         )
-        .unwrap_or_else(|e| panic!("io-engine v1 protobuf compilation failed: {}", e));
+        .unwrap_or_else(|e| panic!("io-engine v1 protobuf compilation failed: {e}"));
 
     tonic_build::configure()
         .build_server(true)
@@ -71,5 +71,5 @@ fn main() {
             &["protobuf/v1-alpha/registration.proto"].prefixed(io_api),
             &["protobuf/v1-alpha"].prefixed(io_api),
         )
-        .unwrap_or_else(|e| panic!("v1-alpha registration protobuf compilation failed: {}", e));
+        .unwrap_or_else(|e| panic!("v1-alpha registration protobuf compilation failed: {e}"));
 }

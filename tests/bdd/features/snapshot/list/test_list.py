@@ -1,29 +1,23 @@
 """Volume Snapshot listing feature tests."""
 
-from pytest_bdd import given, scenario, then, when, parsers
-
-import pytest
-import pytest
-import os
 import datetime
-from retrying import retry
 
 import openapi.exceptions
+import pytest
 from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.docker import Docker
-
-from openapi.model.create_pool_body import CreatePoolBody
-from openapi.model.create_volume_body import CreateVolumeBody
-from openapi.model.node_status import NodeStatus
-from openapi.model.spec_status import SpecStatus
-from openapi.model.replica_state import ReplicaState
 from openapi.exceptions import NotFoundException
-from openapi.model.pool_status import PoolStatus
-from openapi.model.volume_share_protocol import VolumeShareProtocol
-from openapi.model.publish_volume_body import PublishVolumeBody
-from openapi.model.volume_policy import VolumePolicy
-
+from openapi.models.create_pool_body import CreatePoolBody
+from openapi.models.create_volume_body import CreateVolumeBody
+from openapi.models.node_status import NodeStatus
+from openapi.models.pool_status import PoolStatus
+from openapi.models.publish_volume_body import PublishVolumeBody
+from openapi.models.replica_state import ReplicaState
+from openapi.models.volume_policy import VolumePolicy
+from openapi.models.volume_share_protocol import VolumeShareProtocol
+from pytest_bdd import given, parsers, scenario, then, when
+from retrying import retry
 
 VOLUME1_UUID = "d01b8bfb-0116-47b0-a03a-447fcbdc0e99"
 VOLUME2_UUID = "e01b8bfb-0116-47b0-a03a-447fcbdc0e99"
@@ -92,7 +86,7 @@ def setup(create_pool_disk_images):
     ApiClient.pools_api().put_node_pool(
         NODE1,
         POOL1_NAME,
-        CreatePoolBody(["aio://{}".format(create_pool_disk_images[0])]),
+        CreatePoolBody(disks=["aio://{}".format(create_pool_disk_images[0])]),
     )
     pytest.exception = None
     yield
@@ -135,7 +129,7 @@ def we_have_created_more_than_one_snapshot_for_the_volume():
     """we have created more than one snapshot for the volume."""
     snap_id_list = VOLUME1_SNAP_IDS
     for snapid in snap_id_list:
-        snap = ApiClient.snapshots_api().put_volume_snapshot(VOLUME1_UUID, snapid)
+        ApiClient.snapshots_api().put_volume_snapshot(VOLUME1_UUID, snapid)
     yield
     for snapid in snap_id_list:
         ApiClient.snapshots_api().del_snapshot(snapid)
@@ -156,16 +150,20 @@ def we_bring_down_the_node_hosting_the_snapshot(volume, bring_down):
     """we <bring_down> the node hosting the snapshot."""
     if bring_down == "stop":
         Docker.stop_container(NODE1)
-    if bring_down == "kill":
+    elif bring_down == "kill":
         Docker.kill_container(NODE1)
+    else:
+        print(f"bring_down: {bring_down}")
+        raise ValueError
+
     wait_volume_replica_offline(volume)
     yield
     restart_node(NODE1)
 
 
-@when("we bring up the node hosting the snapshot")
-def we_bring_up_the_node_hosting_the_snapshot(volume):
-    """we bring up the node hosting the snapshot."""
+@when("the node hosting the snapshot is brought back online")
+def _(volume):
+    """the node hosting the snapshot is brought back online."""
     restart_node(NODE1)
 
 
@@ -266,7 +264,7 @@ def the_snapshots_should_be_listed_in_a_paginated_manner_by_filter(filter):
                 )
                 assert len(snapshots.entries) == 1
                 total_fetched += len(snapshots.entries)
-                if hasattr(snapshots, "next_token"):
+                if snapshots.next_token:
                     token = snapshots.next_token
                 else:
                     break
@@ -279,7 +277,7 @@ def the_snapshots_should_be_listed_in_a_paginated_manner_by_filter(filter):
                     volume_id=VOLUME2_UUID, max_entries=1, starting_token=token
                 )
                 total_fetched += len(snapshots.entries)
-                if hasattr(snapshots, "next_token"):
+                if snapshots.next_token:
                     token = snapshots.next_token
                 else:
                     break
@@ -298,12 +296,15 @@ def validate_snapshots(listed_snapshots, ref_snaps_list, state, volume):
             # Since there are multiple snapshots created for volume, and
             # we are not writing anything to the volume, only first snapshot
             # will have size equal to volume size.
-            if idx == 0 and hasattr(snapshot, "size"):
-                assert snapshot.state.size == volume.spec.size
+            if idx == 0:
+                assert (
+                    snapshot.definition.metadata.total_allocated_size
+                    == volume.spec.size
+                )
             assert snapshot.state.ready_as_source is False
             timestamp_within(snapshot.state.timestamp)
             wait_snapshot_state(snapshot, state)
-        except ValueError as ve:
+        except ValueError:
             assert False, "Invalid snapshot id found: " + snapshot.state.uuid
 
 
@@ -314,7 +315,7 @@ def create_volume(replicas=1, volume_id="", publish_status="", replica_location=
     volume = ApiClient.volumes_api().put_volume(
         volume_id,
         CreateVolumeBody(
-            VolumePolicy(True),
+            policy=VolumePolicy(self_heal=True),
             replicas=replicas,
             size=VOLUME_SIZE,
             thin=False,
@@ -327,7 +328,7 @@ def create_volume(replicas=1, volume_id="", publish_status="", replica_location=
         ApiClient.volumes_api().put_volume_target(
             volume_id,
             publish_volume_body=PublishVolumeBody(
-                {}, VolumeShareProtocol("nvmf"), node=node
+                publish_context={}, protocol=VolumeShareProtocol("nvmf"), node=node
             ),
         )
 
@@ -366,7 +367,8 @@ def wait_snapshot_state(snapshot, state):
     snapshot = ApiClient.snapshots_api().get_volumes_snapshot(snapshot.state.uuid)
     assert len(snapshot.state.replica_snapshots) == 1
     replica_snapshot = snapshot.state.replica_snapshots[0]
-    assert hasattr(replica_snapshot, state)
+    print(replica_snapshot)
+    assert replica_snapshot.to_dict().get(state), f"state: {state}"
 
 
 def timestamp_within(timestamp, minutes=1):
