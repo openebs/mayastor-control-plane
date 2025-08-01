@@ -1,7 +1,5 @@
-{ sources ? import ../sources.nix }:
+{ pkgs }:
 let
-  pkgs =
-    import sources.nixpkgs { overlays = [ (import sources.rust-overlay) ]; };
   makeRustTarget = platform: platform.rust.rustcTargetSpec;
   static_target = makeRustTarget pkgs.pkgsStatic.stdenv.hostPlatform;
 in

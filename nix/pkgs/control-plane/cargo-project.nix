@@ -29,7 +29,7 @@
 , rustFlags
 }:
 let
-  channel = import ../../lib/rust.nix { inherit sources; };
+  channel = import ../../lib/rust.nix { inherit pkgs; };
   stable_channel = {
     rustc = channel.default.stable;
     cargo = channel.default.stable;

@@ -1,4 +1,4 @@
-{ lib, sources, pkgs }:
+{ lib, pkgs }:
 let
   src_json = lib.importJSON ./source.json;
   hostPlatform = pkgs.pkgsStatic.stdenv.hostPlatform.rust.rustcTargetSpec;
