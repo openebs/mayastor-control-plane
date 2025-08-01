@@ -7,7 +7,7 @@ description = "Create and Manage local deployer clusters"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.41.0", features = ["full"] }
+tokio = { version = "1.43.1", features = ["full"] }
 openapi = { path = "../../openapi", features = ["tower-client", "tower-trace"] }
 composer = { path = "../../utils/dependencies/composer", default-features = false }
 deployer = { path = "../../deployer" }

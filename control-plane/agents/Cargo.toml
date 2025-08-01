@@ -33,7 +33,7 @@ anyhow = "1.0.92"
 uuid = { version = "1.11.0", features = ["serde", "v4"] }
 chrono = "0.4.38"
 clap = { version = "4.5.20", features = ["color", "derive", "env", "string"] }
-tokio = { version = "1.41.0", features = ["full"] }
+tokio = { version = "1.43.1", features = ["full"] }
 tonic = "0.12.3"
 futures = "0.3.31"
 serde_json = "1.0.132"

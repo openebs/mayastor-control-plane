@@ -21,7 +21,7 @@ rpc = { path = "../rpc" }
 utils = { path = "../utils/utils-lib" }
 grpc = { path = "../control-plane/grpc" }
 clap = { version = "4.5.20", features = ["color", "derive", "env", "string"] }
-tokio = { version = "1.41.0", features = ["full"] }
+tokio = { version = "1.43.1", features = ["full"] }
 tonic = "0.12.3"
 async-trait = "0.1.83"
 hyper-util = "0.1.10"
