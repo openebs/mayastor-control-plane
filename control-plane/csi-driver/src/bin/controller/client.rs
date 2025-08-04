@@ -264,6 +264,7 @@ impl RestApiClient {
         affinity_group: Option<AffinityGroup>,
         max_snapshots: Option<u32>,
         encrypted: bool,
+        cluster_size: Option<u64>,
     ) -> Result<Volume, ApiClientError> {
         let topology =
             Topology::new_all(volume_topology.node_topology, volume_topology.pool_topology);
@@ -278,6 +279,7 @@ impl RestApiClient {
             affinity_group,
             max_snapshots,
             encrypted,
+            cluster_size,
         };
 
         let result = self
@@ -318,6 +320,7 @@ impl RestApiClient {
             affinity_group,
             max_snapshots,
             encrypted,
+            cluster_size: None,
         };
         let result = self
             .rest_client

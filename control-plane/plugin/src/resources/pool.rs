@@ -48,6 +48,7 @@ impl CreateRow for openapi::models::Pool {
             used: 0,
             committed: None,
             encrypted: spec.encryption.is_some(),
+            cluster_size: Some(0),
         });
         let free = state.capacity.saturating_sub(state.used);
         let disks = state.disks.join(", ");

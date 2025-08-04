@@ -411,6 +411,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 let affinity_group_name = sts_affinity_group_info.as_ref().map(|info| info.name());
                 let max_snapshots = context.max_snapshots();
                 let encrypted = context.encrypted().unwrap_or_default();
+                let pool_cluster_size = context.pool_cluster_size();
 
                 let volume = match volume_content_source {
                     Some(snapshot_uuid) => {
@@ -444,6 +445,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                                 affinity_group_name.map(AffinityGroup::new),
                                 max_snapshots,
                                 encrypted,
+                                pool_cluster_size,
                             )
                             .await?
                     }

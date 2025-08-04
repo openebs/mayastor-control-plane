@@ -6,6 +6,7 @@ use crate::{
         store::{
             definitions::{ObjectKey, StorableObject, StorableObjectType},
             nexus_persistence::VolumeHealthKey,
+            pool::{default_pool_cluster_size, POOL_BS_CLUSTER_SIZE_DEFAULT},
             AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{
@@ -212,6 +213,9 @@ pub struct VolumeSpec {
     /// Data encryption.
     #[serde(default)]
     pub encrypted: bool,
+    /// Pool's blobstore cluster size required for replicas of this volume.
+    #[serde(default = "default_pool_cluster_size")]
+    pub cluster_size: u32,
 }
 
 /// Volume Content Source i.e the snapshot or a volume.
@@ -759,6 +763,7 @@ impl From<&CreateVolume> for VolumeSpec {
             affinity_group: request.affinity_group.clone(),
             max_snapshots: request.max_snapshots,
             encrypted: request.encrypted,
+            cluster_size: request.cluster_size.unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
             ..Default::default()
         }
     }

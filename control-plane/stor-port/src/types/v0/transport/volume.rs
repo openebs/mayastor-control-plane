@@ -508,6 +508,8 @@ pub struct CreateVolume {
     pub max_snapshots: Option<u32>,
     /// Data encryption.
     pub encrypted: bool,
+    /// Pool's blobstore cluster size required for replicas of this volume.
+    pub cluster_size: Option<u32>,
 }
 
 /// Resize volume request.

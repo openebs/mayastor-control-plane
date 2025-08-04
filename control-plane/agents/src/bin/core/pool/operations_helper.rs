@@ -46,7 +46,6 @@ impl OperationGuardArc<PoolSpec> {
             }
             CreatePool::from(spec.deref())
         };
-
         let node = registry.node_wrapper(&request.node).await?;
         if node.pool(&request.id).await.is_none() {
             return Ok(());

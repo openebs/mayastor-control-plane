@@ -100,6 +100,8 @@ pub struct PoolState {
     pub committed: Option<u64>,
     /// Is the pool encrypted.
     pub encrypted: bool,
+    /// Blobstore cluster size used for this pool.
+    pub cluster_size: u32,
 }
 
 impl From<CtrlPoolState> for models::PoolState {
@@ -114,6 +116,7 @@ impl From<CtrlPoolState> for models::PoolState {
             src.used,
             src.committed,
             src.encrypted,
+            Some(src.cluster_size as u64),
         )
     }
 }
@@ -291,6 +294,8 @@ pub struct CreatePool {
     pub labels: Option<PoolLabel>,
     /// Encryption parameters for this pool.
     pub encryption: Option<Encryption>,
+    /// Blobstore cluster size in bytes.
+    pub cluster_size: Option<u32>,
 }
 
 impl CreatePool {
@@ -301,6 +306,7 @@ impl CreatePool {
         disks: &[PoolDeviceUri],
         labels: &Option<PoolLabel>,
         encryption: &Option<Encryption>,
+        cluster_size: &Option<u32>,
     ) -> Self {
         Self {
             node: node.clone(),
@@ -308,6 +314,7 @@ impl CreatePool {
             disks: disks.to_vec(),
             labels: labels.clone(),
             encryption: encryption.clone(),
+            cluster_size: *cluster_size,
         }
     }
 }

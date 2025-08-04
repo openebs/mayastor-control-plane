@@ -18,9 +18,12 @@ use std::{borrow::Borrow, collections::HashMap, convert::TryFrom};
 use stor_port::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind},
     types::v0::{
-        store::volume::{
-            AffinityGroupSpec, FrontendConfig, InitiatorAC, TargetConfig, VolumeContentSource,
-            VolumeMetadata, VolumeSpec, VolumeTarget,
+        store::{
+            pool::POOL_BS_CLUSTER_SIZE_DEFAULT,
+            volume::{
+                AffinityGroupSpec, FrontendConfig, InitiatorAC, TargetConfig, VolumeContentSource,
+                VolumeMetadata, VolumeSpec, VolumeTarget,
+            },
         },
         transport::{
             AffinityGroup, CreateSnapshotVolume, CreateVolume, DestroyShutdownTargets,
@@ -168,6 +171,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
                 num_snapshots: volume_spec.metadata.num_snapshots() as u32,
                 max_snapshots: volume_spec.max_snapshots,
                 encrypted: Some(volume_spec.encrypted),
+                cluster_size: Some(volume_spec.cluster_size),
             }),
             metadata: Some(volume::Metadata {
                 spec_status: spec_status as i32,
@@ -380,6 +384,9 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
             num_snapshots: volume_spec.num_snapshots,
             max_snapshots: volume_spec.max_snapshots,
             encrypted: volume_spec.encrypted.unwrap_or_default(),
+            cluster_size: volume_spec
+                .cluster_size
+                .unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
         };
         Ok(volume_spec)
     }
@@ -938,6 +945,8 @@ pub trait CreateVolumeInfo: Send + Sync + std::fmt::Debug {
     fn max_snapshots(&self) -> Option<u32>;
     /// Data encryption.
     fn encrypted(&self) -> bool;
+    /// Pool's blobstore cluster size required for replicas of this volume.
+    fn cluster_size(&self) -> Option<u32>;
 }
 
 impl CreateVolumeInfo for CreateVolume {
@@ -983,6 +992,10 @@ impl CreateVolumeInfo for CreateVolume {
 
     fn encrypted(&self) -> bool {
         self.encrypted
+    }
+
+    fn cluster_size(&self) -> Option<u32> {
+        self.cluster_size
     }
 }
 
@@ -1044,6 +1057,10 @@ impl CreateVolumeInfo for ValidatedCreateVolumeRequest {
     fn encrypted(&self) -> bool {
         self.inner.encrypted.unwrap_or_default()
     }
+
+    fn cluster_size(&self) -> Option<u32> {
+        self.inner.cluster_size
+    }
 }
 
 impl ValidateRequestTypes for CreateVolumeRequest {
@@ -1083,6 +1100,7 @@ impl From<&dyn CreateVolumeInfo> for CreateVolume {
             cluster_capacity_limit: data.cluster_capacity_limit(),
             max_snapshots: data.max_snapshots(),
             encrypted: data.encrypted(),
+            cluster_size: data.cluster_size(),
         }
     }
 }
@@ -1103,6 +1121,7 @@ impl From<&dyn CreateVolumeInfo> for CreateVolumeRequest {
             cluster_capacity_limit: data.cluster_capacity_limit(),
             max_snapshots: data.max_snapshots(),
             encrypted: Some(data.encrypted()),
+            cluster_size: data.cluster_size(),
         }
     }
 }

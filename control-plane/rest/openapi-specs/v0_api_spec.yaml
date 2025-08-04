@@ -2558,6 +2558,15 @@ components:
             type: string
         encryption:
           $ref: '#/components/schemas/Encryption'
+        cluster_size:
+          type: integer
+          format: int64
+          minimum: 4194304
+          multipleOf: 4194304
+          description: |-
+           Blobstore cluster size for the pool, in bytes. Must be >= 4 MiB and in multiples of 4MiB.
+           This is an advanced option. Please refer documentation to understand the implications
+           of changing this.
       required:
         - disks
     HostNqn:
@@ -2737,6 +2746,7 @@ components:
         topology: null
         affinity_group: null
         max_snapshots: 10
+        cluster_size: 33554432
       description: Create Volume Body
       type: object
       properties:
@@ -2775,6 +2785,14 @@ components:
         encrypted:
           description: flag to enable data encryption
           type: boolean
+        cluster_size:
+          description: |-
+           Choose only the pools matching this cluster_size for the replicas of this volume.
+           This is an advanced option. Please refer documentation to understand the usage.
+          type: integer
+          format: int64
+          minimum: 4194304
+          multipleOf: 4194304
       required:
         - policy
         - replicas
@@ -3182,6 +3200,12 @@ components:
         encrypted:
           description: Is the pool encrypted
           type: boolean
+        cluster_size:
+          description: Blobstore cluster size for this pool, in bytes
+          type: integer
+          format: int64
+          example: 4194304
+          minimum: 4194304
       required:
         - capacity
         - disks
@@ -3296,7 +3320,7 @@ components:
           minimum: 0
           default: 0
         cluster_size:
-          description: Cluster size in bytes.
+          description: Underlying pool's blobstore cluster size in bytes.
           example: 80241024
           type: integer
           format: int64

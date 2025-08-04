@@ -106,6 +106,11 @@ impl PoolWrapper {
         self.encrypted
     }
 
+    /// Get the pool's blobstore cluster size.
+    pub(crate) fn cluster_size(&self) -> u32 {
+        self.cluster_size
+    }
+
     /// Set pool state as unknown.
     #[allow(dead_code)]
     pub(crate) fn set_unknown(&mut self) {

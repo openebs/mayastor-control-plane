@@ -62,6 +62,11 @@ impl PoolBaseFilters {
         }
         use_this
     }
+    /// Should only use the pools that match blobstore cluster size as specified via storage class,
+    /// or if nothing specified match against a default blobstore cluster size.
+    pub(crate) fn cluster_size(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+        item.pool.cluster_size() == request.cluster_size
+    }
     /// Return true if the pool has enough capacity to resize the replica by the requested
     /// value.
     pub(crate) fn min_free_space_repl_resize(

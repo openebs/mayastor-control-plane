@@ -9,6 +9,12 @@ use crate::types::v0::{
     transport::{self, CreatePool, ImportPool, NodeId, PoolDeviceUri, PoolId},
 };
 
+pub const POOL_BS_CLUSTER_SIZE_DEFAULT: u32 = 4194304;
+
+pub fn default_pool_cluster_size() -> u32 {
+    POOL_BS_CLUSTER_SIZE_DEFAULT
+}
+
 // PoolLabel is the type for the labels
 pub type PoolLabel = HashMap<String, String>;
 
@@ -56,6 +62,8 @@ impl From<&CreatePool> for PoolSpec {
             creat_tsc: None,
             encryption: request.encryption.clone(),
             cordon_drain: None,
+            // Default is 4MiB today.
+            cluster_size: request.cluster_size.unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
         }
     }
 }
@@ -67,6 +75,7 @@ impl From<&PoolSpec> for CreatePool {
             disks: pool.disks.clone(),
             labels: pool.labels.clone(),
             encryption: pool.encryption.clone(),
+            cluster_size: Some(pool.cluster_size),
         }
     }
 }
@@ -124,6 +133,8 @@ pub struct PoolSpec {
     /// Cordon/drain state.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cordon_drain: Option<CordonDrainState>,
+    /// Blobstore cluster size used for this pool.
+    pub cluster_size: u32,
 }
 
 impl PoolSpec {
@@ -481,6 +492,7 @@ impl From<&PoolSpec> for transport::PoolState {
             used: 0,
             committed: None,
             encrypted: pool.encryption.is_some(),
+            cluster_size: pool.cluster_size,
         }
     }
 }

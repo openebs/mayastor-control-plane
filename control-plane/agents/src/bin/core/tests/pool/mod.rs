@@ -1,15 +1,20 @@
+use anyhow::{anyhow, Result};
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::{
     context::Context,
     operations::{
         node::traits::NodeOperations, pool::traits::PoolOperations,
         registry::traits::RegistryOperations, replica::traits::ReplicaOperations,
+        volume::traits::VolumeOperations,
     },
 };
 use itertools::Itertools;
 use std::{collections::HashMap, convert::TryFrom, thread::sleep, time::Duration};
-use stor_port::types::v0::store::pool::{Encryption, EncryptionSecret};
 use stor_port::types::v0::transport::{GetBlockDevices, NodeStatus};
+use stor_port::types::v0::{
+    store::pool::{Encryption, EncryptionSecret},
+    transport::Volume,
+};
 use stor_port::{
     pstor::{etcd::Etcd, StoreObj},
     transport_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
@@ -59,6 +64,7 @@ async fn pool() {
                 disks: vec!["malloc:///disk0?size_mb=100".into()],
                 labels: None,
                 encryption: None,
+                cluster_size: None,
             },
             None,
         )
@@ -72,11 +78,13 @@ async fn pool() {
                 disks: vec!["malloc:///disk1?size_mb=100".into()],
                 labels: None,
                 encryption: None,
+                cluster_size: None,
             },
             None,
         )
         .await
         .unwrap();
+
     tracing::info!("Pools: {:?}", pool);
 
     let pools = pool_client.get(Filter::None, None).await.unwrap();
@@ -270,6 +278,181 @@ async fn pool() {
         .is_empty());
 }
 
+// Tests creation and import of pool with larger blobstore cluster size.
+// Create a few replicas, restart the node. Pool should import again without issue.
+#[tokio::test]
+async fn pool_larger_cluster_size() {
+    let cluster = ClusterBuilder::builder()
+        .with_rest(false)
+        .with_tmpfs_pool(POOL_SIZE_BYTES)
+        .with_options(|o| o.with_pool_cluster_size(Some(POOL_BS_CLUSTER_SIZE as u32)))
+        .build()
+        .await
+        .unwrap();
+
+    let node_client = cluster.grpc_client().node();
+    let pool_client = cluster.grpc_client().pool();
+    let rep_client = cluster.grpc_client().replica();
+
+    let io_engine = cluster.node(0);
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
+    tracing::info!("Nodes: {:?}", nodes);
+    let pools = pool_client.get(Filter::None, None).await.unwrap();
+    let poolid = pools.0[0].id();
+
+    for repl_idx in 1..=2 {
+        let _ = rep_client
+            .create(
+                &CreateReplica {
+                    node: io_engine.clone(),
+                    uuid: ReplicaId::new(),
+                    entity_id: None,
+                    pool_id: poolid.clone(),
+                    pool_uuid: None,
+                    size: 52428800, // 50MiB. Actual will be 64MiB(2 clusters)
+                    thin: repl_idx % 2 == 0,
+                    share: Protocol::None,
+                    name: None,
+                    ..Default::default()
+                },
+                None,
+            )
+            .await
+            .unwrap();
+    }
+
+    cluster.composer().stop("io-engine-1").await.unwrap();
+    cluster
+        .wait_node_status(NodeId::from("io-engine-1"), NodeStatus::Unknown)
+        .await
+        .unwrap();
+    cluster.composer().start("io-engine-1").await.unwrap();
+    cluster.wait_pool_online(poolid.clone()).await.unwrap();
+    let replicas = rep_client.get(Filter::None, None).await.unwrap();
+    replicas.into_inner().iter().all(|r| {
+        assert!(r.online());
+        assert_eq!(r.space.as_ref().unwrap().cluster_size, POOL_BS_CLUSTER_SIZE);
+        true
+    });
+}
+
+// Create multiple pools, having different cluster sizes. Create volumes with varying cluster size
+// requirements. Assert that the replicas are placed as expected on matching pools.
+#[tokio::test]
+async fn volume_repl_placement_with_cluster_size() {
+    let cluster = ClusterBuilder::builder()
+        .with_io_engines(3)
+        .with_reconcile_period(Duration::from_secs(10), Duration::from_secs(10))
+        .build()
+        .await
+        .unwrap();
+
+    let client = cluster.grpc_client();
+    let rest_client = cluster.rest_v00();
+    let volume_client = cluster.grpc_client().volume();
+    let volumes_api = rest_client.volumes_api();
+
+    let pool_4m_1 = CreatePool {
+        node: cluster.node(0),
+        id: "pool_cs_4m_1".into(),
+        disks: vec!["malloc:///disk0?size_mb=200".into()],
+        labels: None,
+        encryption: None,
+        cluster_size: None,
+    };
+
+    let pool_32m_1 = CreatePool {
+        node: cluster.node(1),
+        id: "pool_cs_32m_1".into(),
+        disks: vec!["malloc:///disk1?size_mb=200".into()],
+        labels: None,
+        encryption: None,
+        cluster_size: Some(33554432),
+    };
+
+    let pool_32m_2 = CreatePool {
+        node: cluster.node(2),
+        id: "pool_cs_32m_2".into(),
+        disks: vec!["malloc:///disk2?size_mb=200".into()],
+        labels: None,
+        encryption: None,
+        cluster_size: Some(33554432),
+    };
+
+    let _ = client.pool().create(&pool_4m_1, None).await.unwrap();
+    let _ = client.pool().create(&pool_32m_1, None).await.unwrap();
+    let _ = client.pool().create(&pool_32m_2, None).await.unwrap();
+    // Create two volumes. Expect replica placement on 32MiB cluster sized pools.
+    // For each volume, validate the cluster size of chosen pool by looking into replica.
+    for _ in 0..2 {
+        let body = CreateVolumeBody::new_all(
+            VolumePolicy::default(),
+            1,
+            62914560u64,
+            false,
+            models::Topology::new(),
+            HashMap::new(),
+            None,
+            Some(10),
+            false,
+            Some(33554432),
+        );
+        let volume = VolumeId::new();
+        volumes_api.put_volume(&volume, body).await.unwrap();
+        let vol = volume_client
+            .get(Filter::Volume(volume), false, None, None)
+            .await
+            .unwrap();
+        assert_eq!(vol.entries.len(), 1);
+        validate_vol_repl_cluster_size(&cluster, &vol.entries[0], 33554432)
+            .await
+            .unwrap();
+    }
+
+    // Create one more volume. Expect replica placement on 4MiB cluster sized pool.
+    // For this volume also, validate the cluster size of chosen pool by looking into replica.
+    let body = CreateVolumeBody::new(VolumePolicy::default(), 1, 62914560u64, false, false);
+    let volume = VolumeId::new();
+    volumes_api.put_volume(&volume, body).await.unwrap();
+    let vol = volume_client
+        .get(Filter::Volume(volume), false, None, None)
+        .await
+        .unwrap();
+    assert_eq!(vol.entries.len(), 1);
+    validate_vol_repl_cluster_size(&cluster, &vol.entries[0], 4194304)
+        .await
+        .unwrap();
+}
+
+async fn validate_vol_repl_cluster_size(
+    cluster: &Cluster,
+    volume: &Volume,
+    expected_cluster_size: u64,
+) -> Result<()> {
+    let vstate: Vec<_> = volume.state().replica_topology.keys().cloned().collect();
+    for r in vstate {
+        let repl_client = cluster.grpc_client().replica();
+        let hdl = tokio::spawn(async move {
+            println!("Validate replica {r} cluster size to be {expected_cluster_size}");
+            let repl = repl_client
+                .get(Filter::Replica(r.clone()), None)
+                .await
+                .unwrap();
+            assert_eq!(repl.0.len(), 1);
+            let repl_cluster_size = repl.0[0].space.as_ref().unwrap().cluster_size;
+            if repl_cluster_size != expected_cluster_size {
+                return Err(anyhow!(
+                    "Replica {r} has cluster_size {}, expected {}",
+                    repl_cluster_size,
+                    expected_cluster_size
+                ));
+            }
+            Ok(())
+        });
+        hdl.await.unwrap()?
+    }
+    Ok(())
+}
 /// The tests below revolve around transactions and are dependent on the core agent's command line
 /// arguments for timeouts.
 /// This is required because as of now, we don't have a good mocking strategy
@@ -542,7 +725,8 @@ async fn replica_transaction_store() {
 const RECONCILE_TIMEOUT_SECS: u64 = 7;
 const POOL_FILE_NAME: &str = "disk1.img";
 const POOL_FILE_NAME_2: &str = "disk2.img";
-const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
+const POOL_SIZE_BYTES: u64 = 200 * 1024 * 1024;
+const POOL_BS_CLUSTER_SIZE: u64 = 33554432;
 
 /// Creates a pool on a io_engine instance, which will have both spec and state.
 /// Stops/Kills the io_engine container. At some point we will have no pool state, because the node
@@ -1040,6 +1224,7 @@ async fn destroy_after_restart() {
         disks: pool.state().cloned().unwrap().disks,
         labels: None,
         encryption: None,
+        cluster_size: None,
     };
 
     client.pool().destroy(&destroy, None).await.unwrap();
@@ -1075,6 +1260,7 @@ async fn slow_create() {
             disks: vec![lvol.path().into()],
             labels: Some(PoolLabel::from([("a".into(), "b".into())])),
             encryption: None,
+            cluster_size: None,
         };
 
         let result = client.pool().create(&create, None).await;
@@ -1233,6 +1419,7 @@ async fn reject_devlink_reuse() {
             encryption: Some(Encryption::Secret(EncryptionSecret {
                 name: SECRETFILE.to_string(),
             })),
+            cluster_size: None,
         };
 
         client
@@ -1253,6 +1440,7 @@ async fn reject_devlink_reuse() {
             encryption: Some(Encryption::Secret(EncryptionSecret {
                 name: SECRETFILE.to_string(),
             })),
+            cluster_size: None,
         };
 
         client
@@ -1303,6 +1491,7 @@ async fn reject_devlink_reuse() {
             .into()],
             labels: None,
             encryption: None,
+            cluster_size: None,
         };
 
         client

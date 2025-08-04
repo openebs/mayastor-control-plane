@@ -357,6 +357,11 @@ pub struct StartOptions {
     /// Allow non persistent devlink for pool creation.
     #[clap(long)]
     allow_non_persistent_devlink: bool,
+    /// Blobstore cluster size(in bytes) required for pool creation. This is
+    /// not configurable per-pool here. However, the create pool request can be used
+    /// to configure cluster size per-pool.
+    #[clap(long)]
+    pool_cluster_size: Option<u32>,
 }
 
 /// List of KeyValues
@@ -613,6 +618,12 @@ impl StartOptions {
     /// Specify whether allow non peristent devlink is needed or not.
     pub fn with_allow_non_persistent_devlink(mut self, enabled: bool) -> Self {
         self.allow_non_persistent_devlink = enabled;
+        self
+    }
+
+    /// blobstore cluster size to be used for disk pools.
+    pub fn with_pool_cluster_size(mut self, cluster_size: Option<u32>) -> Self {
+        self.pool_cluster_size = cluster_size;
         self
     }
 

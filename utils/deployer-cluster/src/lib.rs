@@ -1131,6 +1131,7 @@ impl ClusterBuilder {
                         disks: vec![pool.disk()],
                         labels: None,
                         encryption: None,
+                        cluster_size: None,
                     },
                     None,
                 )

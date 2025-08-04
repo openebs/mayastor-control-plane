@@ -7,6 +7,7 @@ use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
         openapi::apis::IntoVec,
+        store::pool::POOL_BS_CLUSTER_SIZE_DEFAULT,
         transport::{
             self, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
             NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState, Protocol, Replica,
@@ -91,6 +92,7 @@ impl IoEngineToAgent for v0::Pool {
             used: self.used,
             committed: None,
             encrypted: false,
+            cluster_size: POOL_BS_CLUSTER_SIZE_DEFAULT,
         }
     }
 }
