@@ -41,6 +41,9 @@ pub struct DiskPoolSpec {
     /// Use to create encrypted pool.
     #[serde(rename = "encryptionConfig")]
     pub encryption_config: Option<EncryptionConfig>,
+    /// Blobstore cluster size required for this pool. This is an advanced option,
+    /// please refer documentation to understand this configuration and its implications.
+    pub cluster_size: Option<String>,
 }
 
 /// Placement pool topology used by volume operations.
@@ -77,12 +80,14 @@ impl DiskPoolSpec {
         disks: Vec<String>,
         topology: Option<Topology>,
         encryption_config: Option<EncryptionConfig>,
+        cluster_size: Option<String>,
     ) -> Self {
         Self {
             node,
             disks,
             topology,
             encryption_config,
+            cluster_size,
         }
     }
     /// The node the pool is placed on.
@@ -101,6 +106,10 @@ impl DiskPoolSpec {
     /// The encryption configuration.
     pub fn encryption_config(&self) -> Option<EncryptionConfig> {
         self.encryption_config.clone()
+    }
+    /// Blobstore cluster size for this pool.
+    pub fn cluster_size(&self) -> Option<String> {
+        self.cluster_size.clone()
     }
 }
 
@@ -153,6 +162,8 @@ pub struct DiskPoolStatus {
     pub available_q: Option<Quantity>,
     /// Encryption enabled.
     pub encrypted: Option<bool>,
+    /// Blobstore cluster size of this pool.
+    pub cluster_size: Option<Quantity>,
 }
 
 impl Default for DiskPoolStatus {
@@ -167,6 +178,7 @@ impl Default for DiskPoolStatus {
             used_q: None,
             available_q: None,
             encrypted: None,
+            cluster_size: None,
         }
     }
 }
@@ -196,6 +208,7 @@ impl DiskPoolStatus {
             capacity_q: Some(Quantity::from_bytes(state.capacity)),
             used_q: Some(Quantity::from_bytes(state.used)),
             available_q: Some(Quantity::from_bytes(free)),
+            cluster_size: state.cluster_size.map(Quantity::from_bytes),
         }
     }
 
@@ -245,6 +258,7 @@ impl From<Pool> for DiskPoolStatus {
                 capacity_q: Some(Quantity::from_bytes(state.capacity)),
                 used_q: Some(Quantity::from_bytes(state.used)),
                 available_q: Some(Quantity::from_bytes(free)),
+                cluster_size: Some(Quantity::from_bytes(state.cluster_size.unwrap_or(0))),
             }
         } else {
             Self {

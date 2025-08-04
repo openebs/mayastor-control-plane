@@ -3549,6 +3549,10 @@ components:
           description: the cordon and drain state
           allOf:
             - $ref: '#/components/schemas/PoolCordonDrain'
+        clusterSize:
+          description: Blobstore cluster size for the pool.
+          type: integer
+          format: int64
       required:
         - disks
         - id

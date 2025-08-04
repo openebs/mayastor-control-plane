@@ -277,7 +277,17 @@ impl ResourceContext {
             },
         };
 
-        let body = CreatePoolBody::new_all(self.spec.disks(), labels, encryption, None); // TODO: fill cluster_size from DSP CR
+        let cluster_size = match self.spec.cluster_size() {
+            Some(ref c) => {
+                let parsed = parse_size::parse_size(c).map_err(|_| Error::Generic {
+                    message: format!("Couldn't parse pool cluster size: {c:?}"),
+                })?;
+                Some(parsed)
+            }
+            None => None,
+        };
+
+        let body = CreatePoolBody::new_all(self.spec.disks(), labels, encryption, cluster_size);
         match self
             .pools_api()
             .put_node_pool(&self.spec.node(), &self.name_any(), body)
