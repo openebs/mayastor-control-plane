@@ -1025,4 +1025,8 @@ impl CreateSnapshotVolume {
     pub fn params(&self) -> &CreateVolume {
         &self.volume_params
     }
+    /// Get a mutable reference to the generic volume parameters.
+    pub fn params_mut(&mut self) -> &mut CreateVolume {
+        &mut self.volume_params
+    }
 }

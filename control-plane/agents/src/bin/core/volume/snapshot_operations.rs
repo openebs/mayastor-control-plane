@@ -553,4 +553,41 @@ impl OperationGuardArc<VolumeSnapshot> {
         }
         failed
     }
+
+    /// Get the pool cluster size from one of the replica snapshot. This gets set as the cluster size
+    /// constraint in the new restore/clone volume. Once the correct cluster size constraint is set on the
+    /// volume, the further replica scheduling work as expected in terms of cluster size constraint, for
+    /// the clone volume.
+    pub(crate) async fn pool_cluster_size_for_clone(
+        &self,
+        registry: &Registry,
+    ) -> Result<u32, SvcError> {
+        let repl_snap = self
+            .as_ref()
+            .metadata()
+            .replica_snapshots()
+            .ok_or(SvcError::NoHealthyReplicas {
+                id: self.as_ref().uid_str().clone(),
+            })?
+            .first()
+            .ok_or(SvcError::NoHealthyReplicas {
+                id: self.as_ref().uid_str().clone(),
+            })?;
+
+        let snapshot_replica = registry
+            .snapshot_replica(repl_snap.spec())
+            .await
+            .map_err(|_| SvcError::ReplicaSnapMiss {
+                replica: repl_snap.spec().source_id().replica_id().to_string(),
+            })?;
+
+        Ok(registry
+            .ctrl_pool(snapshot_replica.pool_id())
+            .await?
+            .spec()
+            .ok_or(SvcError::PoolNotFound {
+                pool_id: snapshot_replica.pool_id().clone(),
+            })?
+            .cluster_size)
+    }
 }
