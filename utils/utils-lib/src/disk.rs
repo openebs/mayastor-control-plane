@@ -63,6 +63,11 @@ mod tests {
             ("/dev/disk/by-partuuid/somepath", true),
             ("/dev/disk/by-partlabel/somepath", true),
             ("/dev/mapper/dm0", true),
+            ("/dev/mapper/zvol", true),
+            ("/dev/disk/zvol", false),
+            ("/dev/disk/by-zvol/zpool/somevolume", false),
+            ("/dev/zvol/zpool/somevolume", true),
+            ("/dev/zvol/zpool/somevolume/somevolume", true),
         ];
 
         for test in test_suite {
