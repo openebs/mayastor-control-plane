@@ -80,8 +80,8 @@ pub enum Parameters {
     FormatOptions,
     #[strum(serialize = "overrideGlobalFormatOpts")]
     OverrideGlobalFormatOpts,
-    #[strum(serialize = "pool_cluster_size")]
-    PoolAllocationUnitSize,
+    #[strum(serialize = "poolClusterSize")]
+    PoolClusterSize,
 }
 impl Parameters {
     fn parse_human_time(
@@ -264,7 +264,7 @@ impl Parameters {
     ) -> Result<Option<bool>, ParseBoolError> {
         Self::parse_bool(value)
     }
-    /// Parse the value for `Self::PoolAllocationUnitSize`
+    /// Parse the value for `Self::PoolClusterSize`
     pub fn pool_cluster_size(value: Option<&String>) -> Result<Option<u64>, tonic::Status> {
         if let Some(value) = value {
             let alloc_unit_bytes = parse_size(value).ok();
@@ -534,7 +534,7 @@ impl CreateParams {
     pub fn encrypted(&self) -> Option<bool> {
         self.encrypted
     }
-    /// Get the `Parameters::PoolAllocationUnitSize` value.
+    /// Get the `Parameters::PoolClusterSize` value.
     pub fn pool_cluster_size(&self) -> Option<u64> {
         self.pool_cluster_size
     }
@@ -713,7 +713,7 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
             })?;
 
         let pool_cluster_size =
-            Parameters::pool_cluster_size(args.get(Parameters::PoolAllocationUnitSize.as_ref()))?;
+            Parameters::pool_cluster_size(args.get(Parameters::PoolClusterSize.as_ref()))?;
 
         Ok(Self {
             publish_params,
