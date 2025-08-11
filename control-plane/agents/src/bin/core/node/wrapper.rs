@@ -71,6 +71,7 @@ enum ResourceType {
     Pool(Either<PoolState, PoolId>),
     Replicas(Vec<Replica>),
     Replica(Either<Replica, ReplicaId>),
+    #[allow(unused)]
     Snapshots(Vec<ReplicaSnapshot>),
     Snapshot(Either<ReplicaSnapshot, SnapshotId>),
 }
@@ -474,12 +475,12 @@ impl NodeWrapper {
     }
 
     /// Get the inner states.
-    fn resources(&self) -> parking_lot::RwLockReadGuard<ResourceStates> {
+    fn resources(&self) -> parking_lot::RwLockReadGuard<'_, ResourceStates> {
         self.states.read()
     }
 
     /// Get the inner resource states.
-    fn resources_mut(&self) -> parking_lot::RwLockWriteGuard<ResourceStates> {
+    fn resources_mut(&self) -> parking_lot::RwLockWriteGuard<'_, ResourceStates> {
         self.states.write()
     }
 
@@ -799,6 +800,7 @@ impl NodeWrapper {
     }
 
     /// Update all the snapshot states.
+    #[allow(unused)]
     async fn update_snapshot_states(
         node: &Arc<tokio::sync::RwLock<NodeWrapper>>,
         client: &mut GrpcClient,

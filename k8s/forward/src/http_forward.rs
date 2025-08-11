@@ -56,7 +56,7 @@ impl HttpForward {
         Ok(uri)
     }
 
-    fn finder(&self) -> TargetFinder {
+    fn finder(&self) -> TargetFinder<'_> {
         TargetFinder {
             pod_api: &self.pod_api,
             svc_api: &self.svc_api,

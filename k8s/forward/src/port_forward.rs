@@ -126,7 +126,7 @@ impl PortForward {
         tracing::debug!(local_port, pod_port, pod_name, "connection closed");
         Ok(())
     }
-    fn finder(&self) -> TargetPodFinder {
+    fn finder(&self) -> TargetPodFinder<'_> {
         TargetPodFinder {
             pod_api: &self.pod_api,
             svc_api: &self.svc_api,

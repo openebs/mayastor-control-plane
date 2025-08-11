@@ -341,6 +341,7 @@ impl OperationGuardArc<VolumeSnapshot> {
     ) -> Result<VolumeSnapshotCreateResult, SvcError> {
         let target = volume.as_ref().target();
         if target.is_some() && target_node.is_some() {
+            #[allow(clippy::unnecessary_unwrap)]
             self.snapshot_nexus::<N>(prep_params, target.unwrap(), registry, target_node.unwrap())
                 .await
         } else {

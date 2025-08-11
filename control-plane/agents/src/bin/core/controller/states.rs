@@ -92,7 +92,7 @@ impl ResourceStates {
     }
 
     /// Returns an iterator of nexus states.
-    pub(crate) fn nexus_states(&self) -> Values<NexusId, Resource<NexusState>> {
+    pub(crate) fn nexus_states(&self) -> Values<'_, NexusId, Resource<NexusState>> {
         self.nexuses.values()
     }
 
@@ -125,8 +125,7 @@ impl ResourceStates {
     }
 
     /// Returns an iterator of pool states.
-    #[allow(unused)]
-    pub(crate) fn pool_states(&self) -> Values<PoolId, Resource<PoolState>> {
+    pub(crate) fn pool_states(&self) -> Values<'_, PoolId, Resource<PoolState>> {
         self.pools.values()
     }
 
@@ -178,7 +177,7 @@ impl ResourceStates {
     }
 
     /// Returns an iterator of replica states.
-    pub(crate) fn replica_states(&self) -> Values<ReplicaId, Resource<ReplicaState>> {
+    pub(crate) fn replica_states(&self) -> Values<'_, ReplicaId, Resource<ReplicaState>> {
         self.replicas.values()
     }
 
@@ -188,7 +187,7 @@ impl ResourceStates {
     }
 
     /// Returns an iterator of replica states.
-    pub(crate) fn snapshot_states(&self) -> Values<SnapshotId, Resource<ReplicaSnapshotState>> {
+    pub(crate) fn snapshot_states(&self) -> Values<'_, SnapshotId, Resource<ReplicaSnapshotState>> {
         self.snapshots.values()
     }
 

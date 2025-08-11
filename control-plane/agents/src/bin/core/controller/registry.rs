@@ -316,7 +316,7 @@ impl Registry {
     }
 
     /// Get the `CoreRegistryConfig`.
-    pub(crate) fn config(&self) -> parking_lot::RwLockReadGuard<CoreRegistryConfig> {
+    pub(crate) fn config(&self) -> parking_lot::RwLockReadGuard<'_, CoreRegistryConfig> {
         self.config.read()
     }
 
