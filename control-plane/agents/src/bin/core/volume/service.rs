@@ -261,7 +261,7 @@ impl Service {
             registry,
         }
     }
-    async fn create_volume_permit(&self) -> Result<tokio::sync::SemaphorePermit, SvcError> {
+    async fn create_volume_permit(&self) -> Result<tokio::sync::SemaphorePermit<'_>, SvcError> {
         tokio::time::timeout(
             // if we take too long waiting for our turn just abort..
             std::time::Duration::from_secs(10),

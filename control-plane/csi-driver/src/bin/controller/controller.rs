@@ -45,7 +45,9 @@ impl CsiControllerSvc {
             force_unstage_volume: cfg.force_unstage_volume(),
         }
     }
-    async fn create_volume_permit(&self) -> Result<tokio::sync::SemaphorePermit, tonic::Status> {
+    async fn create_volume_permit(
+        &self,
+    ) -> Result<tokio::sync::SemaphorePermit<'_>, tonic::Status> {
         tokio::time::timeout(
             // if we take too long waiting for our turn just abort..
             std::time::Duration::from_secs(3),
