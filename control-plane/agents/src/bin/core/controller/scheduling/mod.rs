@@ -82,7 +82,7 @@ pub(crate) trait ResourceFilter: Sized {
     }
     fn sort<F: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(mut self, sort: F) -> Self {
         let data = self.data();
-        data.list.sort_by(sort);
+        data.list.sort_unstable_by(sort);
         self
     }
     fn sort_ctx<F: FnMut(&Self::Request, &Self::Item, &Self::Item) -> std::cmp::Ordering>(
@@ -90,7 +90,7 @@ pub(crate) trait ResourceFilter: Sized {
         mut sort: F,
     ) -> Self {
         let data = self.data();
-        data.list.sort_by(|a, b| sort(&data.context, a, b));
+        data.list.sort_unstable_by(|a, b| sort(&data.context, a, b));
         self
     }
     fn collect(self) -> Vec<Self::Item>;
