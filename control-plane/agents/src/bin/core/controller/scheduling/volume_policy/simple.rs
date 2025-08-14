@@ -138,10 +138,10 @@ impl SimplePolicy {
         b: &PoolItem,
     ) -> std::cmp::Ordering {
         match request.registry().encryption_preference_soft() {
-            true => match b.pool.encrypted().partial_cmp(&a.pool.encrypted()) {
-                Some(Ordering::Greater) => Ordering::Greater,
-                Some(Ordering::Less) => Ordering::Less,
-                None | Some(Ordering::Equal) => {
+            true => match b.pool.encrypted().cmp(&a.pool.encrypted()) {
+                Ordering::Greater => Ordering::Greater,
+                Ordering::Less => Ordering::Less,
+                Ordering::Equal => {
                     // sort pools in order of total weight of certain field values.
                     SimplePolicy::sort_by_weights(request, a, b)
                 }
@@ -152,7 +152,7 @@ impl SimplePolicy {
     }
 
     /// Sort pools using weights between:
-    /// 1. number of replicas or number of replicas of a ag (N_REPL_WEIGHT %)
+    /// 1. number of replicas or number of replicas of an ag (N_REPL_WEIGHT %)
     /// 2. free space         (FREE_SPACE_WEIGHT %)
     /// 3. overcommitment     (OVER_COMMIT_WEIGHT %)
     pub(crate) fn sort_by_weights(

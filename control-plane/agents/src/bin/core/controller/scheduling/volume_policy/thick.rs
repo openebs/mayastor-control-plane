@@ -92,10 +92,10 @@ impl ThickPolicy {
         b: &PoolItem,
     ) -> std::cmp::Ordering {
         match request.registry().encryption_preference_soft() {
-            true => match b.pool.encrypted().partial_cmp(&a.pool.encrypted()) {
-                Some(Ordering::Greater) => Ordering::Greater,
-                Some(Ordering::Less) => Ordering::Less,
-                None | Some(Ordering::Equal) => {
+            true => match b.pool.encrypted().cmp(&a.pool.encrypted()) {
+                Ordering::Greater => Ordering::Greater,
+                Ordering::Less => Ordering::Less,
+                Ordering::Equal => {
                     // sort pools in order of preference (from least to most number of replicas)
                     ThickPolicy::sort_by_weights(request, a, b)
                 }
