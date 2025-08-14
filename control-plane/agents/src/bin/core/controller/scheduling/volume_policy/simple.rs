@@ -127,7 +127,7 @@ impl SimplePolicy {
         )
     }
     /// Sort pools using weights between:
-    /// 1. number of replicas or number of replicas of a ag (N_REPL_WEIGHT %)
+    /// 1. number of replicas or number of replicas of an ag (N_REPL_WEIGHT %)
     /// 2. free space         (FREE_SPACE_WEIGHT %)
     /// 3. overcommitment     (OVER_COMMIT_WEIGHT %)
     pub(crate) fn sort_by_weights(

@@ -185,16 +185,12 @@ impl ChildSorters {
 
                     let childa_is_local = !a.spec().share.shared();
                     let childb_is_local = !b.spec().share.shared();
-                    if childa_is_local == childb_is_local {
-                        match a.ag_replicas_on_pool().cmp(&b.ag_replicas_on_pool()) {
-                            Ordering::Less => Ordering::Greater,
-                            Ordering::Equal => Ordering::Equal,
-                            Ordering::Greater => Ordering::Less,
+                    match (childa_is_local, childb_is_local) {
+                        (true, true) | (false, false) => {
+                            b.ag_replicas_on_pool().cmp(&a.ag_replicas_on_pool())
                         }
-                    } else if childa_is_local {
-                        std::cmp::Ordering::Greater
-                    } else {
-                        std::cmp::Ordering::Less
+                        (true, false) => Ordering::Greater,
+                        (false, true) => Ordering::Less,
                     }
                 }
                 ord => ord,
@@ -204,53 +200,30 @@ impl ChildSorters {
     }
     // sort replicas by their health: prefer healthy replicas over unhealthy
     fn sort_by_health(a: &ReplicaItem, b: &ReplicaItem) -> std::cmp::Ordering {
-        match a.child_info() {
-            None => {
-                match b.child_info() {
-                    Some(b_info) if b_info.healthy => {
-                        // sort replicas by their health: prefer healthy replicas over unhealthy
-                        std::cmp::Ordering::Less
-                    }
-                    _ => std::cmp::Ordering::Equal,
-                }
-            }
-            Some(a_info) => match b.child_info() {
-                Some(b_info) if a_info.healthy && !b_info.healthy => std::cmp::Ordering::Greater,
-                Some(b_info) if !a_info.healthy && b_info.healthy => std::cmp::Ordering::Less,
-                _ => std::cmp::Ordering::Equal,
-            },
+        match (a.child_info(), b.child_info()) {
+            (None, None) => Ordering::Equal,
+            (None, Some(b)) if b.healthy => Ordering::Less,
+            (None, Some(_)) => Ordering::Equal,
+            (Some(a), None) if a.healthy => Ordering::Greater,
+            (Some(_), None) => Ordering::Equal,
+            (Some(a), Some(b)) => a.healthy.cmp(&b.healthy),
         }
     }
     // remove unused replicas first
     fn sort_by_child(a: &ReplicaItem, b: &ReplicaItem) -> std::cmp::Ordering {
-        match a.child_spec() {
-            None => {
-                match b.child_spec() {
-                    None => std::cmp::Ordering::Equal,
-                    Some(_) => {
-                        // prefer the replica that is not part of a nexus
-                        std::cmp::Ordering::Greater
-                    }
-                }
-            }
-            Some(_) => {
-                match b.child_spec() {
-                    // prefer the replica that is not part of a nexus
-                    None => std::cmp::Ordering::Less,
-                    // compare the child states, and then the rebuild progress
-                    Some(_) => match (a.child_state(), b.child_state()) {
-                        (Some(a_state), Some(b_state)) => {
-                            match a_state.state.partial_cmp(&b_state.state) {
-                                None => a_state.rebuild_progress.cmp(&b_state.rebuild_progress),
-                                Some(ord) => ord,
-                            }
-                        }
-                        (Some(_), None) => std::cmp::Ordering::Less,
-                        (None, Some(_)) => std::cmp::Ordering::Greater,
-                        (None, None) => std::cmp::Ordering::Equal,
-                    },
-                }
-            }
+        match (a.child_spec(), b.child_spec()) {
+            (None, None) => Ordering::Equal,
+            (None, Some(_)) => Ordering::Less,
+            (Some(_), None) => Ordering::Greater,
+            (Some(_), Some(_)) => match (a.child_state(), b.child_state()) {
+                (Some(a_state), Some(b_state)) => match a_state.state.cmp(&b_state.state) {
+                    Ordering::Equal => a_state.rebuild_progress.cmp(&b_state.rebuild_progress),
+                    ord => ord,
+                },
+                (Some(_), None) => std::cmp::Ordering::Greater,
+                (None, Some(_)) => std::cmp::Ordering::Less,
+                (None, None) => std::cmp::Ordering::Equal,
+            },
         }
     }
 }
@@ -353,6 +326,8 @@ impl AddReplicaSorters {
         a: &ChildItem,
         b: &ChildItem,
     ) -> std::cmp::Ordering {
+        // todo: preferring local to healthy children seems strange, though also why would we
+        //  have healthy replicas not part of the nexus?
         let a_is_local = a.state().node == request.nexus_spec().node;
         let b_is_local = b.state().node == request.nexus_spec().node;
         match (a_is_local, b_is_local) {
@@ -364,7 +339,7 @@ impl AddReplicaSorters {
                 match (a_healthy, b_healthy) {
                     (true, false) => std::cmp::Ordering::Less,
                     (false, true) => std::cmp::Ordering::Greater,
-                    (_, _) => a.pool().free_space().cmp(&b.pool().free_space()),
+                    (_, _) => b.pool().free_space().cmp(&a.pool().free_space()),
                 }
             }
         }
