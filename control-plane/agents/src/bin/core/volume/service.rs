@@ -232,10 +232,11 @@ impl VolumeOperations for Service {
         req: &dyn CreateSnapshotVolumeInfo,
         _ctx: Option<Context>,
     ) -> Result<Volume, ReplyError> {
-        let request = req.into();
+        let mut request = req.into();
         let service = self.clone();
         let volume =
-            Context::spawn(async move { service.create_snapshot_volume(&request).await }).await??;
+            Context::spawn(async move { service.create_snapshot_volume(&mut request).await })
+                .await??;
         Ok(volume)
     }
 
@@ -590,11 +591,14 @@ impl Service {
     #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.params().uuid))]
     pub(super) async fn create_snapshot_volume(
         &self,
-        request: &CreateSnapshotVolume,
+        request: &mut CreateSnapshotVolume,
     ) -> Result<Volume, SvcError> {
         let _permit = self.create_volume_permit().await?;
         let snap_uuid = request.snapshot_uuid();
         let mut snapshot = self.specs().volume_snapshot(snap_uuid).await?;
+        let cluster_size_for_clone_vol =
+            snapshot.pool_cluster_size_for_clone(&self.registry).await?;
+        request.params_mut().cluster_size = Some(cluster_size_for_clone_vol);
         snapshot.create_clone(&self.registry, request).await?;
         self.registry.volume(&request.params().uuid).await
     }

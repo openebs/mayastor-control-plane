@@ -424,7 +424,7 @@ async fn volume_repl_placement_with_cluster_size() {
         .unwrap();
 }
 
-async fn validate_vol_repl_cluster_size(
+pub(crate) async fn validate_vol_repl_cluster_size(
     cluster: &Cluster,
     volume: &Volume,
     expected_cluster_size: u64,
