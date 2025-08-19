@@ -302,6 +302,9 @@ impl ExecuteOperation for DeleteArgs {
             DeleteResources::Volume { id } => {
                 volume::Volume::del(id, self.ignore_not_found, &cli_args.output).await
             }
+            DeleteResources::VolumeSnapshot(args) => {
+                snapshot::VolumeSnapshots::del(args, self.ignore_not_found, &cli_args.output).await
+            }
         }
     }
 }
