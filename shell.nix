@@ -18,6 +18,11 @@ let
     (ps: with ps; [ virtualenv grpcio grpcio-tools black isort autoflake ]);
   rust_chan = channel.default_src;
   rust = rust_chan.${rust-profile};
+  usePreCommit = builtins.getEnv "IN_NIX_SHELL" == "impure" && builtins.getEnv "CI" != "1";
+  pre-commit = pkgs.runCommand "pre-commit" { } ''
+    mkdir -p $out/bin
+    cp ${pkgs.pre-commit}/bin/pre-commit $out/bin/pre-commit
+  '';
 in
 mkShell {
   name = "control-plane-shell";
@@ -37,12 +42,13 @@ mkShell {
     openapi-generator-cli
     openssl
     pkg-config
-    pre-commit
     utillinux
     which
     paperclip
     pytest_inputs
+    python3
   ] ++ pkgs.lib.optional (!norust) rust
+  ++ pkgs.lib.optional (usePreCommit) pre-commit
   ++ pkgs.lib.optionals (system != "aarch64-darwin") [
     e2fsprogs
     xfsprogs_5_16
@@ -72,7 +78,7 @@ mkShell {
 
   shellHook = ''
     ./scripts/nix/git-submodule-init.sh
-    if [ "$CI" != "1" ] && [ "$IN_NIX_SHELL" == "impure" ]; then
+    if [ "${toString usePreCommit}" = "1" ]; then
       echo
       pre-commit install
       pre-commit install --hook commit-msg
