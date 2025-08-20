@@ -10,11 +10,6 @@ use grpc::{
 };
 use itertools::Itertools;
 use std::{collections::HashMap, convert::TryFrom, thread::sleep, time::Duration};
-use stor_port::types::v0::transport::{GetBlockDevices, NodeStatus};
-use stor_port::types::v0::{
-    store::pool::{Encryption, EncryptionSecret},
-    transport::Volume,
-};
 use stor_port::{
     pstor::{etcd::Etcd, StoreObj},
     transport_api::{ReplyError, ReplyErrorKind, ResourceKind, TimeoutOptions},
@@ -29,13 +24,14 @@ use stor_port::{
             },
         },
         store::{
-            pool::PoolLabel,
+            pool::{Encryption, EncryptionSecret, PoolLabel},
             replica::{ReplicaSpec, ReplicaSpecKey},
         },
         transport::{
-            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetSpecs, NexusId,
-            NodeId, Protocol, Replica, ReplicaId, ReplicaName, ReplicaOwners, ReplicaShareProtocol,
-            ReplicaStatus, ShareReplica, UnshareReplica, VolumeId,
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetBlockDevices,
+            GetSpecs, NexusId, NodeId, NodeStatus, Protocol, Replica, ReplicaId, ReplicaName,
+            ReplicaOwners, ReplicaShareProtocol, ReplicaStatus, ShareReplica, UnshareReplica,
+            Volume, VolumeId,
         },
     },
 };
@@ -1335,10 +1331,8 @@ async fn slow_create() {
 #[tokio::test]
 async fn reject_devlink_reuse() {
     use serde_json::json;
-    use std::env;
-    use std::path::PathBuf;
-    use tokio::fs::File;
-    use tokio::io::AsyncWriteExt;
+    use std::{env, path::PathBuf};
+    use tokio::{fs::File, io::AsyncWriteExt};
 
     const SECRETFILE: &str = "secretfile";
 
@@ -1391,14 +1385,8 @@ async fn reject_devlink_reuse() {
         let device_devlinks: Vec<&str> = matched_device
             .devlinks
             .iter()
-            .filter_map(|link| link.strip_prefix("/dev/disk/by-"))
-            .map(|s| {
-                &matched_device
-                    .devlinks
-                    .iter()
-                    .find(|l| l.ends_with(s))
-                    .unwrap()[..]
-            })
+            .filter(|link| link.starts_with("/dev/disk/by-id"))
+            .map(|s| s.as_str())
             .collect();
 
         assert!(

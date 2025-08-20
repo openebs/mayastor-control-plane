@@ -1050,7 +1050,10 @@ async fn offline_node(cluster: &Cluster) {
         .stop(kill_node.as_str())
         .await
         .unwrap_or_else(|_| panic!("The {kill_node} container should stop"));
-    sleep(Duration::from_secs(2)).await;
+    cluster
+        .wait_node_status(&NodeId::from(&kill_node), transport::NodeStatus::Unknown)
+        .await
+        .unwrap();
 
     // Publish volume2
     let pub_vol2 = volume_client
@@ -1077,7 +1080,10 @@ async fn offline_node(cluster: &Cluster) {
         .start(kill_node.as_str())
         .await
         .unwrap_or_else(|_| panic!("The {kill_node} container should be starting"));
-    sleep(Duration::from_secs(2)).await;
+    cluster
+        .wait_node_status(&NodeId::from(kill_node), transport::NodeStatus::Online)
+        .await
+        .unwrap();
 
     // Unpublish volume2
     let _ = volume_client
