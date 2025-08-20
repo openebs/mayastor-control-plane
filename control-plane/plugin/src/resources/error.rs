@@ -112,6 +112,11 @@ pub enum Error {
     ListSnapshotsError {
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
+    /// Error when delete snapshots request fails.
+    #[snafu(display("Failed to delete volume snapshot. Error {source}"))]
+    DelSnapshotsError {
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
     /// Error when get pool request fails.
     #[snafu(display(
         "Error while parsing labels `{labels}`. \

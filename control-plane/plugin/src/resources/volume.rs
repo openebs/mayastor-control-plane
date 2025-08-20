@@ -12,10 +12,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::prelude::*;
-use openapi::models::ReplicaState;
 use openapi::{
     apis::StatusCode,
-    models::{SetVolumePropertyBody, VolumeContentSource},
+    models::{ReplicaState, SetVolumePropertyBody, VolumeContentSource},
     tower::client::Url,
 };
 use prettytable::Row;
@@ -177,7 +176,7 @@ impl Delete for Volume {
             Err(source) if ignore_not_found && source.status() == Some(StatusCode::NOT_FOUND) => {
                 Ok(())
             }
-            Err(source) => Err(Error::GetVolumeError {
+            Err(source) => Err(Error::DelVolumeError {
                 id: id.to_string(),
                 source,
             }),

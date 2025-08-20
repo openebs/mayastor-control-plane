@@ -2,6 +2,7 @@
 use crate::volume::helpers::wait_node_online;
 use deployer_cluster::{Cluster, ClusterBuilder, FindVolumeRequest};
 use grpc::{
+    common::MapWrapper,
     csi_node_nvme::{nvme_operations_client, NvmeConnectRequest},
     operations::{
         nexus::traits::NexusOperations, pool::traits::PoolOperations,
@@ -826,8 +827,8 @@ async fn republished_nexus_io_engine_txn_fail() {
         .with_agents(vec!["core"])
         .with_io_engines(3)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
-        .with_cache_period("1s")
-        .with_reconcile_period(Duration::from_secs(5), Duration::from_secs(5))
+        .with_cache_period("100ms")
+        .with_reconcile_period(Duration::from_millis(150), Duration::from_millis(150))
         .with_node_deadline("2s")
         .with_options(|o| {
             o.with_io_engine_env("MAYASTOR_HB_INTERVAL_SEC", "1")
@@ -840,6 +841,7 @@ async fn republished_nexus_io_engine_txn_fail() {
 
     let node_idx0 = cluster.node(0);
     let node_idx1 = cluster.node(1);
+    let app_id = cluster.csi_node(0);
     let vol_cli = cluster.grpc_client().volume();
 
     let volume = vol_cli
@@ -886,7 +888,7 @@ async fn republished_nexus_io_engine_txn_fail() {
         .await
         .unwrap();
     println!("STEP: node now unknown...");
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
 
     let vol_republished = vol_cli
         .republish(
@@ -904,8 +906,8 @@ async fn republished_nexus_io_engine_txn_fail() {
         .unwrap();
     println!("STEP: Republished volume to new node...");
 
-    let csi_node_ip = cluster.composer().container_ip("csi-node-1");
-    let socket_path_cp = std::path::PathBuf::from("/var/tmp/csi-app-node-1.sock");
+    let csi_node_ip = cluster.composer().container_ip(&cluster.csi_container(0));
+    let socket_path_cp = std::path::PathBuf::from(format!("/var/tmp/csi-{app_id}.sock"));
     let channel =
         tonic::transport::channel::Endpoint::try_from(format!("http://{csi_node_ip}:50051"))
             .expect("local endpoint should be valid")
@@ -965,7 +967,7 @@ async fn run_fio_vol_verify(
             "--ioengine=libaio",
             "--bs=4k",
             "--iodepth=16",
-            "--loops=10",
+            "--loops=1",
             "--numjobs=1",
             "--name=fio",
             "--readwrite=randwrite",
@@ -979,7 +981,7 @@ async fn run_fio_vol_verify(
 
     println!("STEP: staging volume");
     let mut node = cluster.csi_node_client(0).await.unwrap();
-    node.node_stage_volume(&volume, HashMap::new())
+    node.node_stage_volume(&volume, HashMap::from([("ioTimeout".into(), "11".into())]))
         .await
         .unwrap();
 
@@ -998,12 +1000,13 @@ async fn run_fio_vol_verify(
         .iter()
         .fold(String::new(), |acc, next| format!("{acc} {next}"));
     let composer = cluster.composer().clone();
+    let name = cluster.csi_container(0);
 
     println!("STEP: spawn fio in container");
     tokio::spawn(async move {
         use tokio::sync::oneshot::error::TryRecvError;
         let code = loop {
-            let (code, out) = composer.exec("csi-node-1", fio_cmd.clone()).await.unwrap();
+            let (code, out) = composer.exec(&name, fio_cmd.clone()).await.unwrap();
             println!("{fio_cmdline}: {out}, code: {code:?}");
             if code != Some(0) {
                 return code;
@@ -1034,8 +1037,8 @@ async fn republished_nexus_core_agent_txn_fail() {
         .with_agents(vec!["core"])
         .with_io_engines(3)
         .with_tmpfs_pool(POOL_SIZE_BYTES)
-        .with_cache_period("1s")
-        .with_reconcile_period(Duration::from_secs(5), Duration::from_secs(5))
+        .with_cache_period("100ms")
+        .with_reconcile_period(Duration::from_millis(150), Duration::from_millis(150))
         .with_node_deadline("2s")
         .with_options(|o| {
             o.with_io_engine_env("MAYASTOR_HB_INTERVAL_SEC", "1")
@@ -1048,6 +1051,8 @@ async fn republished_nexus_core_agent_txn_fail() {
 
     let node_idx0 = cluster.node(0);
     let node_idx1 = cluster.node(1);
+    let csi_id = cluster.csi_container(0);
+    let app_id = cluster.csi_node(0);
     let vol_cli = cluster.grpc_client().volume();
 
     let volume = vol_cli
@@ -1094,9 +1099,9 @@ async fn republished_nexus_core_agent_txn_fail() {
         .await
         .unwrap();
     println!("STEP: node now unknown...");
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
 
-    let csi_node_ip = cluster.composer().container_ip("csi-node-1");
+    let csi_node_ip = cluster.composer().container_ip(&csi_id);
     let vol_clone = volume.clone();
     let node_idx0_spawn = node_idx0.clone();
     let node_idx1_spawn = node_idx1.clone();
@@ -1120,7 +1125,7 @@ async fn republished_nexus_core_agent_txn_fail() {
                 ReplyErrorKind::FailedPersist if e.source.contains("Etcd Txn Compare failed") => {
                     // try few times so that path is recovered.
                     for _ in 1..5 {
-                        tokio::time::sleep(Duration::from_secs(2)).await;
+                        tokio::time::sleep(Duration::from_secs(1)).await;
                         vol_republished = vol_cli
                             .republish(
                                 &RepublishVolume {
@@ -1147,7 +1152,7 @@ async fn republished_nexus_core_agent_txn_fail() {
 
         println!("STEP: Republished volume to new node...");
 
-        let socket_path_cp = std::path::PathBuf::from("/var/tmp/csi-app-node-1.sock");
+        let socket_path_cp = std::path::PathBuf::from(format!("/var/tmp/csi-{app_id}.sock"));
         let channel =
             tonic::transport::channel::Endpoint::try_from(format!("http://{csi_node_ip}:50051"))
                 .expect("local endpoint should be valid")
@@ -1164,7 +1169,9 @@ async fn republished_nexus_core_agent_txn_fail() {
         let _ = nvme_clnt
             .nvme_connect(NvmeConnectRequest {
                 uri: new_path_uri,
-                publish_context: None,
+                publish_context: Some(MapWrapper {
+                    map: HashMap::from([("ioTimeout".into(), "11".into())]),
+                }),
             })
             .await;
     });

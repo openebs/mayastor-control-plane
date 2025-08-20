@@ -1,5 +1,5 @@
 use crate::{
-    operations::{GetSnapshotTopology, GetSnapshots, PluginResult},
+    operations::{Delete, GetSnapshotTopology, GetSnapshots, PluginResult},
     resources::{
         error::Error,
         utils::{self, optional_cell, CreateRow, CreateRows, GetHeaderRow},
@@ -9,6 +9,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use openapi::apis::StatusCode;
 use prettytable::Row;
 use std::str::FromStr;
 
@@ -25,6 +26,16 @@ pub struct VolumeSnapshotArgs {
     /// Uuid of the snapshot (Optional).
     #[clap(long)]
     snapshot: Option<SnapshotId>,
+}
+
+/// Delete Volume Snapshot args.
+#[derive(Debug, Clone, clap::Args)]
+pub struct DelVolumeSnapshotArgs {
+    /// Uuid of the parent volume (Optional).
+    #[clap(long)]
+    pub volume: Option<VolumeId>,
+    /// Uuid of the snapshot.
+    pub snapshot: SnapshotId,
 }
 
 /// Volume snapshot topology.
@@ -86,6 +97,29 @@ impl GetSnapshots for VolumeSnapshots {
             Err(e) => return Err(e),
         }
         Ok(())
+    }
+}
+
+#[async_trait(?Send)]
+impl Delete for VolumeSnapshots {
+    type ID = DelVolumeSnapshotArgs;
+    async fn del(
+        id: &Self::ID,
+        ignore_not_found: bool,
+        _output: &utils::OutputFormat,
+    ) -> PluginResult {
+        let client = RestClient::client().snapshots_api();
+        let DelVolumeSnapshotArgs { snapshot, volume } = id;
+        match match volume {
+            Some(volume) => client.del_volume_snapshot(volume, snapshot).await,
+            None => client.del_snapshot(snapshot).await,
+        } {
+            Ok(_) => Ok(()),
+            Err(source) if ignore_not_found && source.status() == Some(StatusCode::NOT_FOUND) => {
+                Ok(())
+            }
+            Err(source) => Err(Error::DelSnapshotsError { source }),
+        }
     }
 }
 

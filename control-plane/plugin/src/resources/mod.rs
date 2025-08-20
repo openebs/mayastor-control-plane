@@ -227,6 +227,8 @@ pub enum DeleteResources {
         /// The id of the volume to delete.
         id: VolumeId,
     },
+    /// Deletes the specified volume snapshot resource.
+    VolumeSnapshot(snapshot::DelVolumeSnapshotArgs),
 }
 
 /// Prompt the user with the given question, and collect a y/n answer.
