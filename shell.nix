@@ -24,7 +24,7 @@ let
     cp ${pkgs.pre-commit}/bin/pre-commit $out/bin/pre-commit
   '';
 in
-mkShell {
+mkShellNoCC {
   name = "control-plane-shell";
   buildInputs = [
     llvmPackages.bintools
@@ -74,7 +74,7 @@ mkShell {
   # copy the rust toolchain to a writable directory, see: https://github.com/rust-lang/cargo/issues/10096
   # the whole toolchain is copied to allow the src to be retrievable through "rustc --print sysroot"
   RUST_TOOLCHAIN = ".rust-toolchain/${rust.version}";
-  RUST_TOOLCHAIN_NIX = "${rust}";
+  RUST_TOOLCHAIN_NIX = pkgs.lib.optional (!norust) "${rust}";
 
   shellHook = ''
     ./scripts/nix/git-submodule-init.sh
@@ -102,5 +102,6 @@ mkShell {
       export DOCKER_USER=$(echo $DOCKER_TOKEN | cut -d':' -f1)
       export DOCKER_PASS=$(echo $DOCKER_TOKEN | cut -d':' -f2)
     fi
+    unset CC
   '';
 }
