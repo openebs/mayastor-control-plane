@@ -69,7 +69,7 @@ def init_scenarios(init, disks):
         NODE_2_NAME, POOL_2_UUID, CreatePoolBody(disks=[disks[1]])
     )
     yield
-    Cluster.cleanup(waitPools=True)
+    Cluster.cleanup(wait_pools=True)
 
 
 @scenario(
