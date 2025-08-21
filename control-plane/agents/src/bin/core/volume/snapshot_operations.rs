@@ -563,32 +563,16 @@ impl OperationGuardArc<VolumeSnapshot> {
         &self,
         registry: &Registry,
     ) -> Result<u32, SvcError> {
-        let repl_snap = self
-            .as_ref()
-            .metadata()
-            .replica_snapshots()
-            .ok_or(SvcError::NoHealthyReplicas {
-                id: self.as_ref().uid_str().clone(),
-            })?
-            .first()
-            .ok_or(SvcError::NoHealthyReplicas {
-                id: self.as_ref().uid_str().clone(),
-            })?;
+        let repl_snapshots = self.as_ref().metadata().replica_snapshots();
+        for repl_snap in repl_snapshots.into_iter().flatten() {
+            let pool_id = repl_snap.spec().source_id().pool_id();
+            if let Some(pool) = registry.specs().pool_rsc(pool_id) {
+                return Ok(pool.lock().cluster_size);
+            }
+        }
 
-        let snapshot_replica = registry
-            .snapshot_replica(repl_snap.spec())
-            .await
-            .map_err(|_| SvcError::ReplicaSnapMiss {
-                replica: repl_snap.spec().source_id().replica_id().to_string(),
-            })?;
-
-        Ok(registry
-            .ctrl_pool(snapshot_replica.pool_id())
-            .await?
-            .spec()
-            .ok_or(SvcError::PoolNotFound {
-                pool_id: snapshot_replica.pool_id().clone(),
-            })?
-            .cluster_size)
+        Err(SvcError::NoHealthyReplicas {
+            id: self.as_ref().uid_str().clone(),
+        })
     }
 }

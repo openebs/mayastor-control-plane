@@ -182,7 +182,7 @@ class Snapshot(object):
 class Cluster(object):
     # Cleanup the cluster in preparation for another test scenario
     @staticmethod
-    def cleanup(snapshots=True, volumes=True, pools=True, waitPools=True):
+    def cleanup(snapshots=True, volumes=True, pools=True, wait_pools=True):
         # ensure core agent is up
         wait_core_online()
 
@@ -204,7 +204,7 @@ class Cluster(object):
             Volume.delete_all()
         # ensure pools are all deleted
         if pools:
-            if waitPools and not Pool.delete_all():
+            if wait_pools and not Pool.delete_all():
                 wait_pools_deleted()
 
     @staticmethod

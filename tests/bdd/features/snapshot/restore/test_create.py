@@ -112,8 +112,8 @@ def a_valid_snapshot_of_a_multi_replica_volume(volume_uuids, snapshot_uuids):
     )
     ApiClient.snapshots_api().put_volume_snapshot(volume_uuids[0], snapshot_uuids[0])
     yield
-    ApiClient.snapshots_api().del_snapshot(snapshot_uuids[0])
-    ApiClient.volumes_api().del_volume(volume_uuids[0])
+    Snapshot.cleanup(snapshot_uuids[0])
+    Volume.cleanup(volume_uuids[0])
 
 
 @when(
@@ -142,7 +142,7 @@ def we_attempt_to_create_4_new_volumes_with_the_snapshot_as_their_source(
             context["failed"].append(e)
     yield context
     for volume in context["ok"]:
-        ApiClient.volumes_api().del_volume(volume.spec.uuid)
+        Volume.cleanup(volume)
 
 
 @when(
@@ -183,7 +183,7 @@ def we_create_a_snapshot_from_volume_restore_index(volume_uuids, snapshot_uuids,
         volume_uuids[index], snapshot_uuids[index]
     )
     yield
-    ApiClient.snapshots_api().del_snapshot(snapshot_uuids[index])
+    Snapshot.cleanup(snapshot_uuids[index])
 
 
 @then(parsers.parse("a new {repl_count:d} replicas will be created for the new volume"))

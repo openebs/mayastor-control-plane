@@ -78,7 +78,7 @@ def init_scenario(init, disks):
         NODE_3_NAME, POOL_3_UUID, CreatePoolBody(disks=[f"aio://{disks[2]}"])
     )
     yield
-    Cluster.cleanup(waitPools=True)
+    Cluster.cleanup(wait_pools=True)
 
 
 @pytest.fixture
