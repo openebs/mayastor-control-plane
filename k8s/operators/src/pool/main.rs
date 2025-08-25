@@ -18,13 +18,14 @@ use diskpool::crd::{
     v1beta3::{CrPoolState, DiskPool, DiskPoolSpec, DiskPoolStatus},
 };
 use error::Error;
+use kube::CustomResourceExt;
 use mayastorpool::client::{check_crd, delete, list};
 use openapi::clients::{self, tower::Url};
 use tracing::{error, info, trace, warn};
 use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
 use chrono::Utc;
-use clap::{Arg, ArgMatches};
+use clap::{Arg, ArgAction, ArgMatches};
 use futures::StreamExt;
 use kube::{
     api::Api,
@@ -34,6 +35,9 @@ use kube::{
     },
     Client, ResourceExt,
 };
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 const PAGINATION_LIMIT: u32 = 100;
@@ -210,10 +214,41 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Write the DiskPool CRD to a file
+fn write_diskpool_crd(output_dir: &str) -> anyhow::Result<()> {
+    // Generate the CRD
+    let crd = DiskPool::crd();
+
+    let str = serde_json::to_string_pretty(&crd)?;
+
+    // Create output directory if it doesn't exist
+    std::fs::create_dir_all(output_dir)?;
+
+    // Write to file
+    let output_path = Path::new(output_dir).join("diskpools.crd.yaml");
+    let mut file = File::create(output_path)?;
+    file.write_all(str.as_ref())?;
+
+    println!("DiskPool CRD generated successfully at {output_dir:?}/diskpools.crd.yaml");
+    Ok(())
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let matches = clap::Command::new(utils::package_description!())
         .version(utils::version_info_str!())
+        .arg(
+            Arg::new("generate-crd")
+                .long("generate-crd")
+                .action(ArgAction::SetTrue)
+                .help("Generate the DiskPool CRD and write it to a file"),
+        )
+        .arg(
+            Arg::new("output-dir")
+                .long("output-dir")
+                .default_value("./generated-crds")
+                .help("Directory where the generated CRD will be written"),
+        )
         .arg(
             Arg::new("interval")
                 .short('i')
@@ -290,6 +325,12 @@ async fn main() -> anyhow::Result<()> {
         .get_matches();
 
     utils::print_package_info!();
+
+    // Check if we should generate the CRD
+    if matches.get_flag("generate-crd") {
+        let output_dir = matches.get_one::<String>("output-dir").unwrap();
+        return write_diskpool_crd(output_dir);
+    }
 
     let tags = utils::tracing_telemetry::default_tracing_tags(
         utils::raw_version_str(),
