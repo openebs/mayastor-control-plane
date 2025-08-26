@@ -22,6 +22,7 @@ use tower::{util::BoxService, ServiceExt};
 /// ```
 pub struct ConfigBuilder<T> {
     kube_config: Option<PathBuf>,
+    context: Option<String>,
     target: kube_forward::Target,
     timeout: Option<std::time::Duration>,
     jwt: Option<String>,
@@ -77,6 +78,7 @@ impl Default for ConfigBuilder<ApiRest> {
     fn default() -> Self {
         Self {
             kube_config: None,
+            context: None,
             target: kube_forward::Target::new(
                 kube_forward::TargetSelector::ServiceLabel(utils::API_REST_LABEL.to_string()),
                 utils::API_REST_HTTP_PORT,
@@ -94,6 +96,7 @@ impl Default for ConfigBuilder<Etcd> {
     fn default() -> Self {
         Self {
             kube_config: None,
+            context: None,
             target: kube_forward::Target::new(
                 kube_forward::TargetSelector::PodLabel(utils::ETCD_LABEL.to_string()),
                 utils::ETCD_PORT,
@@ -111,6 +114,7 @@ impl Default for ConfigBuilder<Loki> {
     fn default() -> Self {
         Self {
             kube_config: None,
+            context: None,
             target: kube_forward::Target::new(
                 kube_forward::TargetSelector::ServiceLabel(utils::LOKI_LABEL.to_string()),
                 utils::LOKI_PORT,
@@ -155,6 +159,11 @@ impl<T> ConfigBuilder<T> {
         self.target = target;
         self
     }
+    /// Move self with the following context.
+    pub fn with_context(mut self, context: Option<String>) -> Self {
+        self.context = context;
+        self
+    }
     /// Move self with the following target closure.
     pub fn with_target_mod(
         mut self,
@@ -191,7 +200,7 @@ impl ConfigBuilder<ApiRest> {
     }
     /// Tries to build an HTTP `Configuration` from the current self.
     async fn build_http(self) -> Result<Configuration, Error> {
-        let client = super::client_from_kubeconfig(self.kube_config).await?;
+        let client = super::client_from_kubeconfig(self.kube_config, self.context).await?;
         let uri =
             kube_forward::HttpForward::new(self.target, Some(self.scheme.into()), client.clone())
                 .uri()
@@ -209,7 +218,7 @@ impl ConfigBuilder<ApiRest> {
     }
     /// Tries to build a TCP `Configuration` from the current self.
     async fn build_tcp(self) -> Result<Configuration, Error> {
-        let client = super::client_from_kubeconfig(self.kube_config).await?;
+        let client = super::client_from_kubeconfig(self.kube_config, self.context).await?;
 
         let pf = kube_forward::PortForward::new(self.target, None, client);
 
@@ -238,7 +247,7 @@ impl ConfigBuilder<ApiRest> {
 impl ConfigBuilder<Etcd> {
     /// Tries to build a TCP `Configuration` from the current self.
     pub async fn build(self) -> Result<Uri, Error> {
-        let client = super::client_from_kubeconfig(self.kube_config).await?;
+        let client = super::client_from_kubeconfig(self.kube_config, self.context).await?;
 
         let pf = kube_forward::PortForward::new(self.target, None, client);
 
@@ -284,7 +293,7 @@ impl ConfigBuilder<Loki> {
     }
     /// Tries to build an HTTP `Configuration` from the current self.
     async fn build_http(self) -> Result<(Uri, LokiClient), Error> {
-        let client = super::client_from_kubeconfig(self.kube_config).await?;
+        let client = super::client_from_kubeconfig(self.kube_config, self.context).await?;
 
         let uri =
             kube_forward::HttpForward::new(self.target, Some(self.scheme.into()), client.clone())
@@ -300,7 +309,7 @@ impl ConfigBuilder<Loki> {
     }
     /// Tries to build a TCP `Configuration` from the current self.
     async fn build_tcp(self) -> Result<(Uri, LokiClient), Error> {
-        let client = super::client_from_kubeconfig(self.kube_config).await?;
+        let client = super::client_from_kubeconfig(self.kube_config, self.context).await?;
 
         let pf = kube_forward::PortForward::new(self.target, None, client);
 
