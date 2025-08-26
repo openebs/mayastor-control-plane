@@ -1,0 +1,23 @@
+apiVersion: openebs.io/v1beta3
+kind: DiskPool
+spec:
+  cluster_size: string
+  disks: [] # minItems 0 of type string
+  encryptionConfig:
+    source:
+      secret:
+        name: string
+  node: string
+  topology:
+    labelled: {}
+status:
+  available: 0
+  available_q: "100 GiB"
+  capacity: 0
+  capacity_q: "100 GiB"
+  cluster_size: "100 GiB"
+  cr_state: "Creating"
+  encrypted: true
+  pool_status: "Unknown" # "Unknown", "Online", "Degraded", "Faulted"
+  used: 0
+  used_q: "100 GiB"
