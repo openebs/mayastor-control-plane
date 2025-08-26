@@ -38,7 +38,7 @@ pub(crate) async fn ensure_and_migrate_crd(
             return Err(error);
         }
     }
-    run_crd_migration(k8s.clone(), namespace, api_version, target_schema).await?;
+    run_cr_migration(k8s.clone(), namespace, api_version, target_schema).await?;
     Ok(())
 }
 
@@ -97,20 +97,21 @@ pub(crate) async fn ensure_crd(
 }
 
 /// Migrate existing v1alpha1/v1beta1/v1beta2 CR in cluster to v1beta3 CR.
-async fn run_crd_migration(
+async fn run_cr_migration(
     k8s: Client,
     namespace: &str,
     api_version: &ApiVersion,
     target_schema: &str,
 ) -> Result<(), Error> {
     match api_version {
-        ApiVersion::V1Alpha1 | ApiVersion::V1Beta1 | ApiVersion::V1Beta2 => {
+        // Handle migration irrespective of version, for cases where some new changes to
+        // CRD come in within same CRD version.
+        ApiVersion::V1Alpha1 | ApiVersion::V1Beta1 | ApiVersion::V1Beta2 | ApiVersion::V1Beta3 => {
             migrate_to_v1beta3(k8s.clone(), namespace, PAGINATION_LIMIT).await?;
             _ = discard_older_schema(&k8s, target_schema).await;
-        }
-        ApiVersion::V1Beta3 => {
-            info!("CRD has the latest schema. Skipping CRD Operations");
-        }
+        } //ApiVersion::V1Beta3 => {
+          //    info!("CRD has the latest schema. Skipping CRD Operations");
+          //}
     }
     Ok(())
 }
@@ -134,7 +135,7 @@ pub(crate) async fn migrate_to_v1beta3(
                     &name,
                     ns,
                     Some(res_ver.clone()),
-                    DiskPoolSpec::new(node, disk, topology, None),
+                    DiskPoolSpec::new(node, disk, topology, None, None),
                 )
                 .await?;
                 info!(crd = ?dsp.name_any(), "CR creation successful");

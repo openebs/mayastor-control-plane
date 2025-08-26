@@ -105,6 +105,8 @@ pub(crate) async fn create_missing_cr(
                             spec.disks.clone(),
                             None,
                             encryption,
+                            spec.cluster_size
+                                .map(|c| utils::bytes::into_human(c as u64)),
                         );
                         let new_disk_pool: DiskPool = DiskPool::new(&pool.id, cr_spec);
                         if let Err(error) = pools_api.create(&param, &new_disk_pool).await {

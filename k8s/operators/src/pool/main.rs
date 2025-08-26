@@ -109,13 +109,17 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
 
     match api_version {
         Some(version) => match version {
-            ApiVersion::V1Alpha1 | ApiVersion::V1Beta1 | ApiVersion::V1Beta2 => {
+            // Run the ensure and merge flow also for cases where some new changes to
+            // CRD come in within same/existing CRD version.
+            ApiVersion::V1Alpha1
+            | ApiVersion::V1Beta1
+            | ApiVersion::V1Beta2
+            | ApiVersion::V1Beta3 => {
                 ensure_and_migrate_crd(k8s.clone(), namespace, &version, LATEST_API_VERSION)
                     .await?;
-            }
-            ApiVersion::V1Beta3 => {
-                info!("CRD has the latest schema. Skipping CRD Operations");
-            }
+            } //ApiVersion::V1Beta3 => {
+              //    info!("CRD has the latest schema. Skipping CRD Operations");
+              //}
         },
         None => {
             create_crd(k8s.clone()).await?;
@@ -366,12 +370,12 @@ pub(crate) async fn migrate_and_clean_msps(k8s: &Client, namespace: &str) -> Res
                     let node = msp.spec.node();
                     let disks = msp.spec.disks();
                     // Create the corresponding v1beta3 DiskPool CRs.
-                    // Hardcoding encryption to be none as it did not exist at that point.
+                    // Hardcoding encryption and cluster_size to be none as it did not exist at that point.
                     if let Err(error) = create_v1beta3_cr(
                         k8s,
                         namespace,
                         &name,
-                        DiskPoolSpec::new(node, disks, None, None),
+                        DiskPoolSpec::new(node, disks, None, None, None),
                     )
                     .await
                     {

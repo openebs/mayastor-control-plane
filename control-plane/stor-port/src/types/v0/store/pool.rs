@@ -134,6 +134,7 @@ pub struct PoolSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cordon_drain: Option<CordonDrainState>,
     /// Blobstore cluster size used for this pool.
+    #[serde(default = "default_pool_cluster_size")]
     pub cluster_size: u32,
 }
 
@@ -295,6 +296,7 @@ impl From<PoolSpec> for models::PoolSpec {
             src.status,
             encryption,
             src.cordon_drain.into_opt(),
+            Some(src.cluster_size as i64),
         )
     }
 }
