@@ -99,8 +99,10 @@ pub struct PoolState {
     /// Total pool commitment (in bytes) which is basically the accrued size of pool replicas.
     pub committed: Option<u64>,
     /// Is the pool encrypted.
+    #[serde(default)]
     pub encrypted: bool,
     /// Blobstore cluster size used for this pool.
+    #[serde(default = "crate::types::v0::store::pool::default_pool_cluster_size")]
     pub cluster_size: u32,
 }
 

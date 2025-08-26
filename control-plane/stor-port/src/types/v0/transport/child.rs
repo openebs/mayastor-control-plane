@@ -15,6 +15,7 @@ pub struct Child {
     /// Current rebuild progress (%).
     pub rebuild_progress: Option<u8>,
     /// Reason for the child state.
+    #[serde(default)]
     pub state_reason: ChildStateReason,
     /// Last faulted timestamp of this child.
     pub faulted_at: Option<SystemTime>,

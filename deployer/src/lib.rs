@@ -10,21 +10,6 @@ pub(crate) use utils::tracing_telemetry::KeyValue;
 
 const TEST_LABEL_PREFIX: &str = "io.composer.test";
 
-#[derive(Debug, Parser)]
-#[clap(name = utils::package_description!(), version = utils::version_info_str!())]
-pub struct CliArgs {
-    #[clap(subcommand)]
-    action: Action,
-}
-
-#[derive(Debug, Parser)]
-#[clap(about = "Deployment actions")]
-pub(crate) enum Action {
-    Start(Box<StartOptions>),
-    Stop(StopOptions),
-    List(ListOptions),
-}
-
 /// docker network label:
 /// $prefix.name = $name
 const DEFAULT_CLUSTER_LABEL: &str = ".cluster";
@@ -256,6 +241,11 @@ pub struct StartOptions {
     /// By default the agents will determine this value themselves.
     #[clap(long)]
     pub cluster_uid: Option<ClusterUid>,
+
+    /// Namespace of the cluster.
+    /// By default the agents will determine this value themselves.
+    #[clap(long)]
+    pub cluster_ns: Option<String>,
 
     /// Disable the etcd service.
     #[clap(long)]
@@ -647,25 +637,8 @@ impl StartOptions {
     }
 }
 
-impl CliArgs {
-    /// Act upon the requested action
-    pub async fn execute(&self) -> Result<(), Error> {
-        self.action.execute().await
-    }
-}
-
-impl Action {
-    async fn execute(&self) -> Result<(), Error> {
-        match self {
-            Action::Start(options) => options.start(self).await,
-            Action::Stop(options) => options.stop(self).await,
-            Action::List(options) => options.list(self).await,
-        }
-    }
-}
-
 impl StartOptions {
-    async fn start(&self, _action: &Action) -> Result<(), Error> {
+    pub async fn start(&self) -> Result<composer::ComposeTest, Error> {
         let components = Components::new(self.clone());
         let composer = Builder::new()
             .name(&self.cluster_label.name())
@@ -698,11 +671,11 @@ impl StartOptions {
             };
             lister.list_simple().await?;
         }
-        Ok(())
+        Ok(composer)
     }
 }
 impl StopOptions {
-    async fn stop(&self, _action: &Action) -> Result<(), Error> {
+    pub async fn stop(&self) -> Result<(), Error> {
         let composer = Builder::new()
             .name(&self.cluster_label.name())
             .label_prefix(&self.cluster_label.prefix())
@@ -769,7 +742,7 @@ impl ListOptions {
         }
         Ok(())
     }
-    async fn list(&self, _action: &Action) -> Result<(), Error> {
+    pub async fn list(&self) -> Result<(), Error> {
         match self.no_docker {
             true => self.list_simple().await,
             false => self.list_docker(),

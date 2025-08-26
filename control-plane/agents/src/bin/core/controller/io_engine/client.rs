@@ -28,6 +28,8 @@ pub(crate) struct GrpcContext {
     comms_timeouts: NodeCommsTimeout,
     /// The api version to be used for calls.
     api_version: ApiVersion,
+    /// Simulated io-engine node.
+    sim: bool,
 }
 
 impl GrpcContext {
@@ -39,6 +41,7 @@ impl GrpcContext {
         comms_timeouts: &NodeCommsTimeout,
         request: Option<MessageId>,
         api_version: ApiVersion,
+        sim: bool,
     ) -> Result<Self, SvcError> {
         let uri = http::uri::Uri::builder()
             .scheme("http")
@@ -66,6 +69,7 @@ impl GrpcContext {
             endpoint,
             comms_timeouts: comms_timeouts.clone(),
             api_version,
+            sim,
         })
     }
     /// Override the timeout config in the context for the given request.
@@ -98,7 +102,11 @@ impl GrpcContext {
     }
     /// Get the tonic endpoint.
     pub(crate) fn tonic_endpoint(&self) -> tonic::transport::Endpoint {
-        self.endpoint.clone()
+        let mut endpoint = self.endpoint.clone();
+        if self.sim {
+            endpoint = endpoint.user_agent(self.node().as_str()).unwrap();
+        }
+        endpoint
     }
     /// Get the node identifier.
     pub(crate) fn node(&self) -> &NodeId {

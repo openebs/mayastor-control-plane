@@ -134,6 +134,7 @@ mod test {
             &NodeCommsTimeout::new(one_s, one_s, false),
             None,
             ApiVersion::V1,
+            false,
         )
         .unwrap();
         let io_engine = GrpcClient::new(&ctx).await.unwrap();

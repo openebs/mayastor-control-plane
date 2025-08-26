@@ -1,0 +1,21 @@
+[package]
+name = "bundle-sim"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+composer = { path = "../dependencies/composer", default-features = false }
+deployer = { path = "../../deployer" }
+stor-port = { path = "../../control-plane/stor-port" }
+rpc = { path = "../../rpc" }
+utils = { path = "../utils-lib" }
+clap = { version = "4.5.20", features = ["color", "derive", "env", "string"] }
+tokio = { version = "1.43.1", features = ["full"] }
+tonic = "0.12.3"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+anyhow = "1.0.92"
+flate2 = "1.0"
+tar = "0.4"
+etcd-client = "0.14.0"
+serde_json = { version = "1.0.132" }

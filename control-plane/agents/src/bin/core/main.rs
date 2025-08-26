@@ -162,6 +162,18 @@ pub(crate) struct CliArgs {
     /// to configure cluster size per-pool.
     #[clap(long)]
     pool_cluster_size: Option<u32>,
+
+    /// Running in simulation mode.
+    #[clap(long, env = "SIMULATION", requires = "bundle")]
+    simulation: bool,
+
+    /// Simulation bundle location.
+    #[clap(long = "sim-bundle", env = "SIM_BUNDLE")]
+    bundle: Option<std::path::PathBuf>,
+
+    /// Disable most start-time reconcilers (other than the pstor cleanup).
+    #[clap(long = "sim-no-start", env = "SIM_NO_START_EVENT")]
+    no_start: bool,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -195,6 +207,32 @@ pub(crate) struct ThinArgs {
     volume_commitment_initial: u64,
 }
 
+/// Simulation related arguments.
+#[derive(Debug)]
+pub struct SimArgs {
+    /// Simulation bundle location.
+    bundle: std::path::PathBuf,
+    /// Disable most start-time reconcilers (other than the pstor cleanup).
+    no_start_event: bool,
+}
+impl TryFrom<&CliArgs> for Option<SimArgs> {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &CliArgs) -> Result<Self, Self::Error> {
+        if !value.simulation {
+            return Ok(None);
+        }
+        let Some(bundle) = value.bundle.clone() else {
+            return Err(anyhow::anyhow!("Specify --sim-bundle"));
+        };
+        anyhow::ensure!(bundle.is_dir(), "Simulation Bundle must be extracted");
+        Ok(Some(SimArgs {
+            bundle,
+            no_start_event: value.no_start,
+        }))
+    }
+}
+
 fn value_parse_percent(value: &str) -> Result<u64, ParseIntError> {
     value.replace('%', "").parse()
 }
@@ -217,6 +255,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
     stor_port::platform::init_cluster_info_or_panic().await;
+    let sim_args: Option<SimArgs> = (&cli_args).try_into()?;
     let registry = controller::registry::Registry::new(
         cli_args.cache_period.into(),
         cli_args.store.clone(),
@@ -242,6 +281,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         cli_args.allow_non_persistent_devlink,
         cli_args.encrypted_pools_soft_scheduling,
         cli_args.pool_cluster_size,
+        sim_args,
     )
     .await?;
 

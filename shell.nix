@@ -103,5 +103,6 @@ mkShellNoCC {
       export DOCKER_PASS=$(echo $DOCKER_TOKEN | cut -d':' -f2)
     fi
     unset CC
+    unset AR
   '';
 }

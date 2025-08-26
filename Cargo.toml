@@ -3,6 +3,12 @@ h2 = { path = "./utils/dependencies/h2" }
 
 [profile.dev]
 panic = "abort"
+debug = false
+
+[profile.dev.package.crc32fast]
+opt-level = 2
+[profile.dev.package.miniz_oxide]
+opt-level = 2
 
 [workspace]
 members = [
@@ -26,6 +32,7 @@ members = [
     "utils/deployer-cluster",
     "utils/hyper-body",
     "tests/io-engine",
+    "utils/bundle-sim",
 ]
 exclude = [
     "utils/dependencies/*",
