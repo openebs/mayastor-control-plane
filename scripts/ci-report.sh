@@ -2,7 +2,7 @@
 
 SCRIPT_DIR="$(dirname "$0")"
 export ROOT_DIR="$SCRIPT_DIR/.."
-SUDO=$(which sudo)
+SUDO=$(which nix-sudo 2>/dev/null || which sudo)
 CI_REPORT_START_DATE=${CI_REPORT_START_DATE:--3h}
 
 set -eu
@@ -13,9 +13,8 @@ cd "$ROOT_DIR/ci-report"
 journalctl --since="$CI_REPORT_START_DATE" -o short-precise | sed -E 's/ghs_[^[:space:]]+/ghs_***/g' > journalctl.txt
 journalctl -k -b0 -o short-precise > dmesg.txt
 lsblk -tfa > lsblk.txt
-$SUDO nvme list -v > nvme.txt
-$SUDO nvme list-subsys -v >> nvme.txt
+$SUDO $(which nvme) list -v > nvme.txt
+$SUDO $(which nvme) list-subsys -v >> nvme.txt
 cat /proc/meminfo > meminfo.txt
 
 find . -type f \( -name "*.txt" -o -name "*.xml" \) -print0 | xargs -0 tar -czvf ci-report.tar.gz
-
