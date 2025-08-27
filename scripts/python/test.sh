@@ -32,6 +32,11 @@ cleanup_handler() {
   fi
 }
 
+if ! "$ROOT_DIR"/utils/dependencies/scripts/nvme-conf.sh --check; then
+  echo "Warning: nvme configuration may not be valid, this can cause some test issues"
+  exit 1
+fi
+
 # FAST mode to avoid rebuilding certain dependencies
 FAST=${FAST:-"0"}
 # Set to 0 to avoid cleanup/teardown of the deployer cluster and its resources
