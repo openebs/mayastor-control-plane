@@ -273,6 +273,7 @@ impl Parameters {
                     "Invalid `PoolClusterSize` value {value:?}, expected a number with capacity unit suffix"
                 )));
             }
+            return Ok(alloc_unit_bytes);
         }
         Ok(None)
     }
