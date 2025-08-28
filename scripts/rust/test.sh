@@ -31,6 +31,13 @@ trap cleanup_handler INT QUIT TERM HUP EXIT
 
 set -euxo pipefail
 
+if [ "$OPTS" != " --no-run" ]; then
+  if ! "$SCRIPT_DIR"/../../utils/dependencies/scripts/nvme-conf.sh --check; then
+    echo "Warning: nvme configuration may not be valid, this can cause some test issues"
+    exit 1
+  fi
+fi
+
 # build test dependencies
 cargo build --bins
 

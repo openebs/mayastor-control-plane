@@ -9,7 +9,7 @@ env:
 
 jobs:
   bdd-tests:
-    runs-on: ubuntu-latest-16-cores
+    runs-on: oracle-vm-16cpu-64gb-x86-64
     permissions:
       contents: read
       id-token: write
@@ -42,6 +42,11 @@ jobs:
           echo "NIX_PATH=$NIX_PATH" >> $GITHUB_ENV
           nix-shell --run "echo" shell.nix
 
+      - name: Rustc for Rust dependencies caching
+        run: |
+          nix-shell --pure --run 'dirname "$(command -v rustc)" > rustc' shell.nix
+          echo "PATH=$(cat rustc):$PATH" >> $GITHUB_ENV
+
       - name: Handle Rust dependencies caching
         uses: Swatinem/rust-cache@v2
 
@@ -56,6 +61,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install linux-modules-extra-$(uname -r)
           sudo modprobe nvme_tcp
+          # Check if nvme config is valid, otherwise apply it
+          sudo ./utils/dependencies/scripts/nvme-conf.sh --check --apply --overwrite
 
       - name: Run BDD Tests
         run: |
