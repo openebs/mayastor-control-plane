@@ -26,7 +26,7 @@ cleanup_ws_tmp() {
   return 0
 }
 
-$SUDO nvme disconnect-all
+$SUDO $(which nvme) disconnect-all
 "$ROOT_DIR"/target/debug/deployer stop
 
 for c in $(docker ps -a --filter "label=io.composer.test.name" --format '{{.ID}}') ; do
