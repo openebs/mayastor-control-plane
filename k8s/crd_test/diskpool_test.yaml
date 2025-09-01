@@ -1,0 +1,7 @@
+suite: test DiskPool
+template: k8s/crd_test/crds/diskpools.crd.yaml
+tests:
+  - it: matches DiskPool correctly
+    asserts:
+      - matchSnapshot:
+          path: k8s/crd_test/__snapshot__
