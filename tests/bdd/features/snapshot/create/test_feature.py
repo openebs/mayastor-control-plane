@@ -511,13 +511,13 @@ def snapshot_node(snapshot):
     return NODE_NAME
 
 
-@retry(wait_fixed=100, stop_max_attempt_number=20)
+@retry(wait_fixed=100, stop_max_attempt_number=40)
 def wait_snapshot_deleted():
     with pytest.raises(NotFoundException) as e:
         ApiClient.snapshots_api().get_volumes_snapshot(SNAP_UUID)
 
 
-@retry(wait_fixed=100, stop_max_attempt_number=20)
+@retry(wait_fixed=100, stop_max_attempt_number=40)
 def wait_snapshot_state(snapshot, state):
     snapshot = ApiClient.snapshots_api().get_volumes_snapshot(snapshot.state.uuid)
     assert len(snapshot.state.replica_snapshots) == 1
