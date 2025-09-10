@@ -93,6 +93,7 @@ async fn create_pool_idempotent() {
                 labels: None,
                 encryption: None,
                 cluster_size: None,
+                max_expansion: None,
             },
             None,
         )
@@ -108,6 +109,7 @@ async fn create_pool_idempotent() {
                 labels: None,
                 encryption: None,
                 cluster_size: None,
+                max_expansion: None,
             },
             None,
         )
@@ -129,6 +131,7 @@ async fn create_pool_idempotent_same_disk_different_query() {
                 labels: None,
                 encryption: None,
                 cluster_size: None,
+                max_expansion: None,
             },
             None,
         )
@@ -144,6 +147,7 @@ async fn create_pool_idempotent_same_disk_different_query() {
                 labels: None,
                 encryption: None,
                 cluster_size: None,
+                max_expansion: None,
             },
             None,
         )
@@ -168,6 +172,7 @@ async fn create_pool_idempotent_different_nvmf_host() {
                 labels: None,
                 encryption: None,
                 cluster_size: None,
+                max_expansion: None,
             },
             None,
         )
@@ -183,6 +188,7 @@ async fn create_pool_idempotent_different_nvmf_host() {
                 labels: None,
                 encryption: None,
                 cluster_size: None,
+                max_expansion: None,
             },
             None,
         )
@@ -198,6 +204,7 @@ async fn create_pool_idempotent_different_nvmf_host() {
                 labels: None,
                 encryption: None,
                 cluster_size: None,
+                max_expansion: None,
             },
             None,
         )
@@ -213,6 +220,7 @@ async fn create_pool_idempotent_different_nvmf_host() {
                 labels: None,
                 encryption: None,
                 cluster_size: None,
+                max_expansion: None,
             },
             None,
         )

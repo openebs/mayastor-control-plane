@@ -80,6 +80,8 @@ pub struct CreatePoolBody {
     pub encryption: Option<Encryption>,
     /// Blobstore cluster size for the pool
     pub cluster_size: Option<u32>,
+    /// Maximum expansion size for this pool.
+    pub max_expansion: Option<String>,
 }
 impl From<models::CreatePoolBody> for CreatePoolBody {
     fn from(src: models::CreatePoolBody) -> Self {
@@ -88,6 +90,7 @@ impl From<models::CreatePoolBody> for CreatePoolBody {
             labels: src.labels,
             encryption: src.encryption.into_opt(),
             cluster_size: src.cluster_size.map(|v| v as u32),
+            max_expansion: src.max_expansion,
         }
     }
 }
@@ -100,6 +103,7 @@ impl TryFrom<CreatePool> for CreatePoolBody {
             labels: create.labels,
             encryption: create.encryption.try_into_opt()?,
             cluster_size: create.cluster_size,
+            max_expansion: create.max_expansion,
         })
     }
 }
@@ -113,6 +117,7 @@ impl CreatePoolBody {
             labels: self.labels.clone(),
             encryption: self.encryption.clone().into_opt(),
             cluster_size: self.cluster_size,
+            max_expansion: self.max_expansion.clone(),
         }
     }
 }

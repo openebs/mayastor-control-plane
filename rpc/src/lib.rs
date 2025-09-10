@@ -675,7 +675,7 @@ pub mod v1 {
     pub mod pool {
         pub use super::pb::{
             pool_rpc_client, CreatePoolRequest, DestroyPoolRequest, ImportPoolRequest,
-            ListPoolOptions, ListPoolsResponse, Pool, PoolType,
+            ListPoolOptions, ListPoolsResponse, Pool, PoolMetadataArgs, PoolType,
         };
     }
 

@@ -660,6 +660,8 @@ impl IoEngineToAgent for v1::pool::Pool {
             },
             encrypted: self.encrypted.unwrap_or_default(),
             cluster_size: self.cluster_size,
+            disk_capacity: Some(self.disk_capacity),
+            max_expandable_size: self.max_expandable_size,
         }
     }
 }
@@ -674,7 +676,10 @@ impl AgentToIoEngine for transport::CreatePool {
             uuid: None,
             pooltype: v1::pool::PoolType::Lvs as i32,
             cluster_size: self.cluster_size,
-            md_args: None,
+            md_args: Some(v1::pool::PoolMetadataArgs {
+                md_resv_ratio: None,
+                max_expansion: self.max_expansion.clone(),
+            }),
             encryption: self
                 .encryption
                 .clone()

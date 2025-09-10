@@ -2567,6 +2567,11 @@ components:
            Blobstore cluster size for the pool, in bytes. Must be >= 4 MiB and in multiples of 4MiB.
            This is an advanced option. Please refer documentation to understand the implications
            of changing this.
+        max_expansion:
+          type: string
+          description: |-
+            Sets the maximum allowed growth for the pool disk. Can be passed as absolute size or a
+            factor of the original size.
       required:
         - disks
     HostNqn:
@@ -3206,6 +3211,14 @@ components:
           format: int64
           example: 4194304
           minimum: 4194304
+        disk_capacity:
+          description: Size of the underlying disk, in bytes
+          type: integer
+          format: uint64
+        max_expandable_size:
+          description: Maximum size upto which this pool can be grown, in bytes
+          type: integer
+          format: uint64
       required:
         - capacity
         - disks

@@ -76,6 +76,10 @@ message PoolState {
   optional bool encrypted = 8;
   // Blobstore cluster size required for this pool
   optional uint32 cluster_size = 9;
+  // Size of the underlying disk, in bytes
+  optional uint64 disk_capacity = 10;
+  // Maximum disk_capacity this pool can be expanded to, in bytes
+  optional uint64 max_expandable_size = 11;
 }
 
 // status of the pool
@@ -117,6 +121,8 @@ message CreatePoolRequest {
   }
   // Blobstore cluster size required for this pool
   optional uint32 cluster_size = 7;
+  // Maximum expansion size for this pool
+  optional string max_expansion = 8;
 }
 
 // Destroy Pool Request

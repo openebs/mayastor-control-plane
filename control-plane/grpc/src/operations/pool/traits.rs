@@ -123,6 +123,7 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
             cluster_size: pool_spec
                 .cluster_size
                 .unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
+            max_expansion: None,
         })
     }
 }
@@ -152,6 +153,8 @@ impl TryFrom<pool::PoolState> for PoolState {
             cluster_size: pool_state
                 .cluster_size
                 .unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
+            disk_capacity: pool_state.disk_capacity,
+            max_expandable_size: pool_state.max_expandable_size,
         })
     }
 }
@@ -236,6 +239,8 @@ impl From<PoolState> for pool::PoolState {
             committed: pool_state.committed,
             encrypted: Some(pool_state.encrypted),
             cluster_size: Some(pool_state.cluster_size),
+            disk_capacity: pool_state.disk_capacity,
+            max_expandable_size: pool_state.max_expandable_size,
         }
     }
 }
@@ -310,6 +315,8 @@ pub trait CreatePoolInfo: Send + Sync + std::fmt::Debug {
     fn encryption(&self) -> Option<Encryption>;
     /// Requested cluster size for blobstore.
     fn cluster_size(&self) -> Option<u32>;
+    /// Maximum expansion size for this pool.
+    fn max_expansion(&self) -> Option<String>;
 }
 
 /// DestroyPoolInfo trait for the pool deletion to be implemented by entities which want to avail
@@ -344,6 +351,10 @@ impl CreatePoolInfo for CreatePool {
 
     fn cluster_size(&self) -> Option<u32> {
         self.cluster_size
+    }
+
+    fn max_expansion(&self) -> Option<String> {
+        self.max_expansion.clone()
     }
 }
 
@@ -381,6 +392,10 @@ impl CreatePoolInfo for ValidatedCreatePoolRequest {
     fn cluster_size(&self) -> Option<u32> {
         self.inner.cluster_size
     }
+
+    fn max_expansion(&self) -> Option<String> {
+        self.inner.max_expansion.clone()
+    }
 }
 
 impl ValidateRequestTypes for CreatePoolRequest {
@@ -411,6 +426,7 @@ impl From<&dyn CreatePoolInfo> for CreatePoolRequest {
                 .map(|labels| crate::common::StringMapValue { value: labels }),
             encryption: data.encryption().into_opt(),
             cluster_size: data.cluster_size(),
+            max_expansion: data.max_expansion(),
         }
     }
 }
@@ -424,6 +440,7 @@ impl From<&dyn CreatePoolInfo> for CreatePool {
             labels: data.labels(),
             encryption: data.encryption(),
             cluster_size: data.cluster_size(),
+            max_expansion: data.max_expansion(),
         }
     }
 }

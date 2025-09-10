@@ -157,6 +157,7 @@ fn test_deserialization_v1_to_v2() {
                 encryption: None,
                 cordon_drain: None,
                 cluster_size: 4194304,
+                max_expansion: None,
             }),
         },
         TestEntry {

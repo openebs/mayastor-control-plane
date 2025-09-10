@@ -61,6 +61,7 @@ async fn pool() {
                 labels: None,
                 encryption: None,
                 cluster_size: None,
+                max_expansion: None,
             },
             None,
         )
@@ -75,6 +76,7 @@ async fn pool() {
                 labels: None,
                 encryption: None,
                 cluster_size: None,
+                max_expansion: None,
             },
             None,
         )
@@ -274,6 +276,64 @@ async fn pool() {
         .is_empty());
 }
 
+/// Creates two pool on a temps fs files using max_expansion arg.
+/// Validates that disk_capacity is equal to the underlying disk capacity.
+/// TODO: Add logic to assert max_expandable_size and grow functionality once changes are in.
+#[tokio::test]
+async fn pool_expansion() {
+    let pool_disk_one = deployer_cluster::TmpDiskFile::new(POOL_FILE_NAME, TEN_GIB_BYTES);
+    let pool_disk_two = deployer_cluster::TmpDiskFile::new(POOL_FILE_NAME_2, TEN_GIB_BYTES);
+    let cluster = ClusterBuilder::builder()
+        .with_rest(false)
+        .with_options(|p| {
+            p.with_io_engine_devices(vec![pool_disk_one.path(), pool_disk_two.path()])
+        })
+        .build()
+        .await
+        .unwrap();
+    let pool_client = cluster.grpc_client().pool();
+    let pool_one = pool_client
+        .create(
+            &CreatePool {
+                node: cluster.node(0),
+                id: "pool-1".into(),
+                disks: vec![pool_disk_one.path().into()],
+                labels: None,
+                encryption: None,
+                cluster_size: None,
+                max_expansion: Some("30x".to_string()),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    let disk_capacity_one = pool_one.state().unwrap().disk_capacity.unwrap();
+    let pool_two = pool_client
+        .create(
+            &CreatePool {
+                node: cluster.node(0),
+                id: "pool-2".into(),
+                disks: vec![pool_disk_two.path().into()],
+                labels: None,
+                encryption: None,
+                cluster_size: None,
+                max_expansion: Some("300GiB".to_string()),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    let disk_capacity_two = pool_two.state().unwrap().disk_capacity.unwrap();
+    assert_eq!(
+        TEN_GIB_BYTES, disk_capacity_one,
+        "disk capacity doesnt match with underlying disk capacity"
+    );
+    assert_eq!(
+        TEN_GIB_BYTES, disk_capacity_two,
+        "disk capacity doesnt match with underlying disk capacity"
+    );
+}
+
 // Tests creation and import of pool with larger blobstore cluster size.
 // Create a few replicas, restart the node. Pool should import again without issue.
 #[tokio::test]
@@ -355,6 +415,7 @@ async fn volume_repl_placement_with_cluster_size() {
         labels: None,
         encryption: None,
         cluster_size: None,
+        max_expansion: None,
     };
 
     let pool_32m_1 = CreatePool {
@@ -364,6 +425,7 @@ async fn volume_repl_placement_with_cluster_size() {
         labels: None,
         encryption: None,
         cluster_size: Some(33554432),
+        max_expansion: None,
     };
 
     let pool_32m_2 = CreatePool {
@@ -373,6 +435,7 @@ async fn volume_repl_placement_with_cluster_size() {
         labels: None,
         encryption: None,
         cluster_size: Some(33554432),
+        max_expansion: None,
     };
 
     let _ = client.pool().create(&pool_4m_1, None).await.unwrap();
@@ -723,6 +786,7 @@ const POOL_FILE_NAME: &str = "disk1.img";
 const POOL_FILE_NAME_2: &str = "disk2.img";
 const POOL_SIZE_BYTES: u64 = 200 * 1024 * 1024;
 const POOL_BS_CLUSTER_SIZE: u64 = 33554432;
+const TEN_GIB_BYTES: u64 = 10737418240;
 
 /// Creates a pool on a io_engine instance, which will have both spec and state.
 /// Stops/Kills the io_engine container. At some point we will have no pool state, because the node
@@ -1221,6 +1285,7 @@ async fn destroy_after_restart() {
         labels: None,
         encryption: None,
         cluster_size: None,
+        max_expansion: None,
     };
 
     client.pool().destroy(&destroy, None).await.unwrap();
@@ -1257,6 +1322,7 @@ async fn slow_create() {
             labels: Some(PoolLabel::from([("a".into(), "b".into())])),
             encryption: None,
             cluster_size: None,
+            max_expansion: None,
         };
 
         let result = client.pool().create(&create, None).await;
@@ -1408,6 +1474,7 @@ async fn reject_devlink_reuse() {
                 name: SECRETFILE.to_string(),
             })),
             cluster_size: None,
+            max_expansion: None,
         };
 
         client
@@ -1429,6 +1496,7 @@ async fn reject_devlink_reuse() {
                 name: SECRETFILE.to_string(),
             })),
             cluster_size: None,
+            max_expansion: None,
         };
 
         client
@@ -1480,6 +1548,7 @@ async fn reject_devlink_reuse() {
             labels: None,
             encryption: None,
             cluster_size: None,
+            max_expansion: None,
         };
 
         client
