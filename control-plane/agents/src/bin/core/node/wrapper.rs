@@ -1,9 +1,8 @@
-use crate::controller::io_engine::HostApi;
 use crate::{
     controller::{
         io_engine::{
             types::{CreateNexusSnapshot, CreateNexusSnapshotResp},
-            GrpcClient, GrpcClientLocked, GrpcContext, NexusApi, NexusChildActionApi,
+            GrpcClient, GrpcClientLocked, GrpcContext, HostApi, NexusApi, NexusChildActionApi,
             NexusChildApi, NexusShareApi, NexusSnapshotApi, PoolApi, ReplicaApi,
             ReplicaSnapshotApi,
         },
@@ -19,23 +18,21 @@ use agents::{errors::SvcError, eventing::EventWithMeta};
 use async_trait::async_trait;
 use events_api::event::{EventAction, EventCategory, EventMessage, EventMeta, EventSource};
 use grpc::operations::snapshot::SnapshotInfo;
-use stor_port::transport_api::v0::BlockDevices;
-use stor_port::types::v0::transport::GetBlockDevices;
 use stor_port::{
-    transport_api::{Message, MessageId, ResourceKind},
+    transport_api::{v0::BlockDevices, Message, MessageId, ResourceKind},
     types::v0::{
         store,
         store::{nexus::NexusState, replica::ReplicaState},
         transport::{
             AddNexusChild, ApiVersion, Child, CreateNexus, CreatePool, CreateReplica,
             CreateReplicaSnapshot, DestroyNexus, DestroyPool, DestroyReplica,
-            DestroyReplicaSnapshot, FaultNexusChild, ImportPool, IoEngCreateSnapshotClone,
-            ListRebuildRecord, ListReplicaSnapshots, ListSnapshotClones, MessageIdVs, Nexus,
-            NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, NodeId,
-            NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register, RemoveNexusChild,
-            Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ResizeNexus, ResizeReplica,
-            SetReplicaEntityId, ShareNexus, ShareReplica, ShutdownNexus, SnapshotId, UnshareNexus,
-            UnshareReplica, VolumeId,
+            DestroyReplicaSnapshot, FaultNexusChild, GetBlockDevices, ImportPool,
+            IoEngCreateSnapshotClone, ListRebuildRecord, ListReplicaSnapshots, ListSnapshotClones,
+            MessageIdVs, Nexus, NexusChildAction, NexusChildActionContext, NexusChildActionKind,
+            NexusId, NodeId, NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register,
+            RemoveNexusChild, Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ResizeNexus,
+            ResizeReplica, SetReplicaEntityId, ShareNexus, ShareReplica, ShutdownNexus, SnapshotId,
+            UnshareNexus, UnshareReplica, VolumeId,
         },
     },
 };
@@ -104,6 +101,8 @@ pub(crate) struct NodeWrapper {
     num_rebuilds: Arc<RwLock<NumRebuilds>>,
     /// If HA is disabled, don't use reservations when creating nexuses.
     disable_ha: bool,
+    /// Simulated address for the node.
+    sim_socket: Option<std::net::SocketAddr>,
 }
 
 impl NodeWrapper {
@@ -113,6 +112,7 @@ impl NodeWrapper {
         deadline: std::time::Duration,
         comms_timeouts: NodeCommsTimeout,
         disable_ha: bool,
+        sim_socket: Option<std::net::SocketAddr>,
     ) -> Self {
         tracing::debug!("Creating new node {:?}", node);
         Self {
@@ -124,6 +124,7 @@ impl NodeWrapper {
             states: ResourceStatesLocked::new(),
             num_rebuilds: Arc::new(RwLock::new(0)),
             disable_ha,
+            sim_socket,
         }
     }
 
@@ -143,6 +144,7 @@ impl NodeWrapper {
             states: ResourceStatesLocked::new(),
             num_rebuilds: Arc::new(RwLock::new(0)),
             disable_ha: false,
+            sim_socket: None,
         }
     }
 
@@ -257,6 +259,13 @@ impl NodeWrapper {
         GrpcClient::new(&self.grpc_context_timeout(timeout)?).await
     }
 
+    fn node_endpoint(&self) -> std::net::SocketAddr {
+        match self.sim_socket {
+            Some(sim) => sim,
+            None => self.node_state().grpc_endpoint,
+        }
+    }
+
     /// Get `GrpcContext` for this node.
     /// It will be used to execute the `request` operation.
     pub(crate) fn grpc_context_ext(&self, request: MessageId) -> Result<GrpcContext, SvcError> {
@@ -264,10 +273,11 @@ impl NodeWrapper {
             Ok(GrpcContext::new(
                 self.lock.clone(),
                 self.id(),
-                self.node_state().grpc_endpoint,
+                self.node_endpoint(),
                 &self.comms_timeouts,
                 Some(request),
                 api_version,
+                self.sim_socket.is_some(),
             )?)
         } else {
             Err(SvcError::InvalidApiVersion { api_version: None })
@@ -283,10 +293,11 @@ impl NodeWrapper {
             Ok(GrpcContext::new(
                 self.lock.clone(),
                 self.id(),
-                self.node_state().grpc_endpoint,
+                self.node_endpoint(),
                 &timeout,
                 None,
                 api_version,
+                self.sim_socket.is_some(),
             )?)
         } else {
             Err(SvcError::InvalidApiVersion { api_version: None })
@@ -299,10 +310,11 @@ impl NodeWrapper {
             Ok(GrpcContext::new(
                 self.lock.clone(),
                 self.id(),
-                self.node_state().grpc_endpoint,
+                self.node_endpoint(),
                 &self.comms_timeouts,
                 None,
                 api_version,
+                self.sim_socket.is_some(),
             )?)
         } else {
             Err(SvcError::InvalidApiVersion { api_version: None })

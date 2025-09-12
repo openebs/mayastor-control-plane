@@ -13,8 +13,7 @@ use stor_port::types::v0::transport::{
     Deregister, Filter, Node, NodeId, NodeState, NodeStatus, Register,
 };
 
-use crate::controller::io_engine::HostApi;
-use crate::controller::wrapper::InternalOps;
+use crate::controller::{io_engine::HostApi, wrapper::InternalOps};
 use grpc::{
     context::Context,
     operations::{
@@ -32,6 +31,8 @@ pub(crate) struct Service {
     deadline: std::time::Duration,
     /// Node communication timeouts.
     comms_timeouts: NodeCommsTimeout,
+    /// Simulated node endpoint.
+    sim_socket: Option<std::net::SocketAddr>,
 }
 
 /// Node communication Timeouts for establishing the connection to a node and
@@ -165,19 +166,27 @@ impl RegistrationOperations for Service {
 }
 
 impl Service {
+    fn sim_socket(registry: &Registry) -> Option<std::net::SocketAddr> {
+        let sim_args = registry.sim_args()?;
+        let sim_socket = sim_args.bundle.join("sim_socket");
+        let sim_socket = std::fs::read_to_string(sim_socket).ok()?;
+        sim_socket.parse::<std::net::SocketAddr>().ok()
+    }
     /// New Node Service which uses the `registry` as its node cache and sets
     /// the `deadline` to each node's watchdog.
-    pub(super) async fn new(
+    pub(crate) async fn new(
         registry: Registry,
         deadline: std::time::Duration,
         request: std::time::Duration,
         connect: std::time::Duration,
         no_min: bool,
     ) -> Self {
+        let sim_socket = Self::sim_socket(&registry);
         let service = Self {
             registry,
             deadline,
             comms_timeouts: NodeCommsTimeout::new(connect, request, no_min),
+            sim_socket,
         };
         // attempt to reload the node state based on the specification
         for node in service.registry.specs().nodes() {
@@ -241,6 +250,7 @@ impl Service {
                     self.deadline,
                     self.comms_timeouts.clone(),
                     ha_disabled,
+                    self.sim_socket,
                 );
 
                 // On startup api version is not known, thus probe all apiversions

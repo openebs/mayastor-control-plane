@@ -24,6 +24,8 @@ pub(crate) enum PollTriggerEvent {
     VolumeDegraded,
     /// Resource Set to Deleting from Creating, garbage collection required.
     ResourceCreatingToDeleting,
+    /// The Agent is starting up in simulation mode.
+    SimulStart,
     /// The Agent is starting up.
     Start,
     /// A node needs to be drained.
@@ -150,6 +152,7 @@ pub(crate) trait TaskPoller: Send + Sync + std::fmt::Debug {
     async fn poll_event(&mut self, context: &PollContext) -> bool {
         match context.event() {
             PollEvent::TimedRun => true,
+            PollEvent::Triggered(PollTriggerEvent::SimulStart) => false,
             PollEvent::Triggered(_event) => true,
             PollEvent::Shutdown => true,
         }

@@ -35,3 +35,4 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tower = { version = "0.5.1", features = ["timeout", "util"] }
 events-api = { path = "../utils/dependencies/apis/events" }
+anyhow = "1.0.92"

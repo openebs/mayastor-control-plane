@@ -1,4 +1,7 @@
-use crate::controller::task_poller::{PollContext, PollResult, PollerState, TaskPoller};
+use crate::controller::{
+    reconciler::PollTriggerEvent,
+    task_poller::{PollContext, PollEvent, PollResult, PollerState, TaskPoller},
+};
 
 /// Reconcile dirty specs in the persistent store.
 /// This happens when we fail to update the persistent store and we have a "live" spec that
@@ -32,5 +35,13 @@ impl TaskPoller for PersistentStoreReconciler {
         }
 
         PollResult::Ok(PollerState::Idle)
+    }
+    async fn poll_event(&mut self, context: &PollContext) -> bool {
+        match context.event() {
+            PollEvent::TimedRun => true,
+            PollEvent::Triggered(PollTriggerEvent::SimulStart) => true,
+            PollEvent::Triggered(_event) => true,
+            PollEvent::Shutdown => true,
+        }
     }
 }

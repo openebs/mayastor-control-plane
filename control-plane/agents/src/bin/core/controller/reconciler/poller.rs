@@ -69,7 +69,7 @@ impl ReconcilerWorker {
     /// The polling will continue until we receive the shutdown signal
     pub(super) async fn poller(mut self, registry: Registry) {
         // kick-off the first run
-        let mut event = PollEvent::Triggered(PollTriggerEvent::Start);
+        let mut event = PollEvent::Triggered(self.start_trigger(&registry));
         loop {
             let result = match &event {
                 PollEvent::Shutdown => {
@@ -96,6 +96,16 @@ impl ReconcilerWorker {
                     PollEvent::TimedRun
                 }
             };
+        }
+    }
+    fn start_trigger(&self, registry: &Registry) -> PollTriggerEvent {
+        let Some(sim_args) = registry.sim_args() else {
+            return PollTriggerEvent::Start;
+        };
+        if sim_args.no_start_event {
+            PollTriggerEvent::SimulStart
+        } else {
+            PollTriggerEvent::Start
         }
     }
 

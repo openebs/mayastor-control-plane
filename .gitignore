@@ -30,3 +30,4 @@ __pycache__
 /.tmp
 /ci-report/
 pytest.log
+/bundle
