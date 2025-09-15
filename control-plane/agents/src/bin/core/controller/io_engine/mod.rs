@@ -16,12 +16,13 @@ use stor_port::{
     transport_api::v0::BlockDevices,
     types::v0::transport::{
         AddNexusChild, ApiVersion, CreateNexus, CreatePool, CreateReplica, CreateReplicaSnapshot,
-        DestroyNexus, DestroyPool, DestroyReplica, DestroyReplicaSnapshot, FaultNexusChild,
-        GetBlockDevices, GetRebuildRecord, ImportPool, IoEngCreateSnapshotClone, ListRebuildRecord,
-        ListReplicaSnapshots, ListSnapshotClones, Nexus, NexusChildAction, NexusChildActionContext,
-        NexusChildActionKind, NexusId, PoolState, RebuildHistory, Register, RemoveNexusChild,
-        Replica, ReplicaId, ReplicaSnapshot, ResizeNexus, ResizeReplica, SetReplicaEntityId,
-        ShareNexus, ShareReplica, ShutdownNexus, UnshareNexus, UnshareReplica,
+        DestroyNexus, DestroyPool, DestroyReplica, DestroyReplicaSnapshot, ExpandPool,
+        FaultNexusChild, GetBlockDevices, GetRebuildRecord, ImportPool, IoEngCreateSnapshotClone,
+        ListRebuildRecord, ListReplicaSnapshots, ListSnapshotClones, Nexus, NexusChildAction,
+        NexusChildActionContext, NexusChildActionKind, NexusId, PoolState, RebuildHistory,
+        Register, RemoveNexusChild, Replica, ReplicaId, ReplicaSnapshot, ResizeNexus,
+        ResizeReplica, SetReplicaEntityId, ShareNexus, ShareReplica, ShutdownNexus, UnshareNexus,
+        UnshareReplica,
     },
 };
 
@@ -65,6 +66,8 @@ pub(crate) trait PoolApi {
     async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError>;
     /// Import a pool on the node via gRPC.
     async fn import_pool(&self, request: &ImportPool) -> Result<PoolState, SvcError>;
+    /// Expands a pool on the node via gRPC.
+    async fn expand_pool(&self, request: &ExpandPool) -> Result<PoolState, SvcError>;
 }
 
 #[async_trait]

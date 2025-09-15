@@ -1462,6 +1462,32 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  '/pools/{pool_id}/expand':
+    put:
+      tags:
+        - Pools
+      operationId: put_pool_expand
+      parameters:
+        - in: path
+          name: pool_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/PoolId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pool'
+        '204':
+          description: OK
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   /replicas:
     get:
       tags:
@@ -2570,7 +2596,7 @@ components:
         max_expansion:
           type: string
           description: |-
-            Sets the maximum allowed growth for the pool disk. Can be passed as absolute size or a
+            The maximum size the pool disk may be expanded to. Can be passed as absolute size or a
             factor of the original size.
       required:
         - disks
@@ -3566,6 +3592,9 @@ components:
           description: Blobstore cluster size for the pool.
           type: integer
           format: int64
+        maxExpansion:
+          description: The maximum size the pool disk may be expanded to.
+          type: string
       required:
         - disks
         - id

@@ -77,6 +77,8 @@ pub enum MessageIdVs {
     CreatePool,
     /// Destroy Pool.
     DestroyPool,
+    /// Expand Pool.
+    ExpandPool,
     /// Label Pool.
     LabelPool,
     /// Unlabel Pool.

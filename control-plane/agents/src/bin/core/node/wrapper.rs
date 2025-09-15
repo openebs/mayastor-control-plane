@@ -26,7 +26,7 @@ use stor_port::{
         transport::{
             AddNexusChild, ApiVersion, Child, CreateNexus, CreatePool, CreateReplica,
             CreateReplicaSnapshot, DestroyNexus, DestroyPool, DestroyReplica,
-            DestroyReplicaSnapshot, FaultNexusChild, GetBlockDevices, ImportPool,
+            DestroyReplicaSnapshot, ExpandPool, FaultNexusChild, GetBlockDevices, ImportPool,
             IoEngCreateSnapshotClone, ListRebuildRecord, ListReplicaSnapshots, ListSnapshotClones,
             MessageIdVs, Nexus, NexusChildAction, NexusChildActionContext, NexusChildActionKind,
             NexusId, NodeId, NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register,
@@ -1309,6 +1309,10 @@ impl PoolApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
                 Ok(pool)
             }
         }
+    }
+    async fn expand_pool(&self, request: &ExpandPool) -> Result<PoolState, SvcError> {
+        let dataplane = self.grpc_client_locked(request.id()).await?;
+        Ok(dataplane.expand_pool(request).await?)
     }
 }
 

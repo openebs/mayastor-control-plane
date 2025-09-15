@@ -2,10 +2,13 @@ use super::traits::UnlabelPoolInfo;
 use crate::{
     common::{CommonFilter, NodeFilter, NodePoolFilter, PoolFilter},
     context::{Client, Context, TracedChannel},
-    operations::pool::traits::{CreatePoolInfo, DestroyPoolInfo, LabelPoolInfo, PoolOperations},
+    operations::pool::traits::{
+        CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo, PoolOperations,
+    },
     pool::{
-        cordon_pool_reply, create_pool_reply, get_pools_reply, get_pools_request, label_pool_reply,
-        pool_grpc_client::PoolGrpcClient, unlabel_pool_reply, CordonPoolRequest, GetPoolsRequest,
+        cordon_pool_reply, create_pool_reply, expand_pool_reply, get_pools_reply,
+        get_pools_request, label_pool_reply, pool_grpc_client::PoolGrpcClient, unlabel_pool_reply,
+        CordonPoolRequest, ExpandPoolRequest, GetPoolsRequest,
     },
 };
 use std::{convert::TryFrom, ops::Deref};
@@ -166,6 +169,19 @@ impl PoolOperations for PoolClient {
             Some(reply) => match reply {
                 cordon_pool_reply::Reply::Pool(pool) => Ok(Pool::try_from(pool)?),
                 cordon_pool_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
+        }
+    }
+
+    #[tracing::instrument(name = "PoolClient::expand", level = "info", skip(self), err)]
+    async fn expand(&self, request: &dyn ExpandPoolInfo) -> Result<Pool, ReplyError> {
+        let req = ExpandPoolRequest::from(request);
+        let response = self.client().expand_pool(req).await?.into_inner();
+        match response.reply {
+            Some(expand_pool_reply) => match expand_pool_reply {
+                expand_pool_reply::Reply::Pool(pool) => Ok(Pool::try_from(pool)?),
+                expand_pool_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
         }

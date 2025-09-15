@@ -17,9 +17,8 @@ use stor_port::{
         openapi::{
             apis::StatusCode,
             clients::tower::Error,
-            models,
             models::{
-                CreateReplicaBody, CreateVolumeBody, Pool, PoolState, PublishVolumeBody,
+                self, CreateReplicaBody, CreateVolumeBody, Pool, PoolState, PublishVolumeBody,
                 VolumePolicy,
             },
         },
@@ -28,10 +27,10 @@ use stor_port::{
             replica::{ReplicaSpec, ReplicaSpecKey},
         },
         transport::{
-            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetBlockDevices,
-            GetSpecs, NexusId, NodeId, NodeStatus, Protocol, Replica, ReplicaId, ReplicaName,
-            ReplicaOwners, ReplicaShareProtocol, ReplicaStatus, ShareReplica, UnshareReplica,
-            Volume, VolumeId,
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, ExpandPool, Filter,
+            GetBlockDevices, GetSpecs, NexusId, NodeId, NodeStatus, Protocol, Replica, ReplicaId,
+            ReplicaName, ReplicaOwners, ReplicaShareProtocol, ReplicaStatus, ShareReplica,
+            UnshareReplica, Volume, VolumeId,
         },
     },
 };
@@ -332,6 +331,52 @@ async fn pool_expansion() {
         TEN_GIB_BYTES, disk_capacity_two,
         "disk capacity doesnt match with underlying disk capacity"
     );
+    let capacity_before_pool_one = pool_one.state().unwrap().capacity;
+    let capacity_before_pool_two = pool_two.state().unwrap().capacity;
+    // TODO: expand till maximum expandable size when mayastor cherry-pick merges.
+    // Here we extend device by cluster size.
+    let max_expandable_pool_two = pool_two.state().unwrap().max_expandable_size.unwrap();
+    let expand_by_two = max_expandable_pool_two.saturating_sub(disk_capacity_two);
+    let max_expandable_pool_one = pool_one.state().unwrap().max_expandable_size.unwrap();
+    let expand_by_one = max_expandable_pool_one.saturating_sub(disk_capacity_one);
+    let _ = pool_disk_one.clone().expand(expand_by_one);
+    let _ = pool_disk_two.clone().expand(expand_by_two);
+    let expand_request_one = ExpandPool {
+        id: "pool-1".into(),
+    };
+    let expand_request_two = ExpandPool {
+        id: "pool-2".into(),
+    };
+    let pool_one = pool_client.expand(&expand_request_one).await.unwrap();
+    let pool_two = pool_client.expand(&expand_request_two).await.unwrap();
+    let capacity_after_pool_one = pool_one.state().unwrap().capacity;
+    let capacity_after_pool_two = pool_two.state().unwrap().capacity;
+    assert!(
+        capacity_after_pool_one > capacity_before_pool_one,
+        "pool-1 capacity did not increase as expected"
+    );
+    assert!(
+        capacity_after_pool_two > capacity_before_pool_two,
+        "pool-2 capacity did not increase as expected"
+    );
+    // Attempt expand without extending the underlying device.
+    // Should result in FailedPrecondition.
+    if let Err(e) = pool_client.expand(&expand_request_one).await {
+        assert_eq!(e.kind, ReplyErrorKind::FailedPrecondition);
+    }
+    if let Err(e) = pool_client.expand(&expand_request_two).await {
+        assert_eq!(e.kind, ReplyErrorKind::FailedPrecondition);
+    }
+    // Attempt expand after extending the device 1 cluster more then max_expandable_size.
+    // Should result in OutOfRange. max_expandable_size is absolute limit.
+    let _ = pool_disk_one.expand(4194304);
+    let _ = pool_disk_two.expand(4194304);
+    if let Err(e) = pool_client.expand(&expand_request_one).await {
+        assert_eq!(e.kind, ReplyErrorKind::OutOfRange);
+    }
+    if let Err(e) = pool_client.expand(&expand_request_two).await {
+        assert_eq!(e.kind, ReplyErrorKind::OutOfRange);
+    }
 }
 
 // Tests creation and import of pool with larger blobstore cluster size.

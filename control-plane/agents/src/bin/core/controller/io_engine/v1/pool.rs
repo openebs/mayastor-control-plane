@@ -3,7 +3,7 @@ use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::pool::ListPoolOptions;
 use stor_port::{
     transport_api::ResourceKind,
-    types::v0::transport::{CreatePool, DestroyPool, ImportPool, PoolState},
+    types::v0::transport::{CreatePool, DestroyPool, ExpandPool, ImportPool, PoolState},
 };
 
 use snafu::ResultExt;
@@ -83,5 +83,32 @@ impl crate::controller::io_engine::PoolApi for super::RpcClient {
                 })?;
         let pool = rpc_pool_to_agent(&rpc_pool.into_inner(), &request.node);
         Ok(pool)
+    }
+
+    #[tracing::instrument(name = "rpc::v1::pool::grow", level = "debug", skip(self), err)]
+    async fn expand_pool(&self, request: &ExpandPool) -> Result<PoolState, SvcError> {
+        match self.pool().grow_pool_v2(request.to_rpc()).await {
+            Ok(rpc_pool) => Ok(rpc_pool_to_agent(
+                &rpc_pool.into_inner(),
+                self.context.node(),
+            )),
+            Err(error) if error.code() == tonic::Code::OutOfRange => {
+                Err(SvcError::PoolDeviceBeyondMaxSize {
+                    name: request.id.clone().into(),
+                })
+            }
+            Err(error)
+                if (error.code() == tonic::Code::FailedPrecondition
+                    && error.metadata().contains_key("bdev_not_extended")) =>
+            {
+                Err(SvcError::PoolDeviceNotExtended {
+                    name: request.id.clone().into(),
+                })
+            }
+            Err(error) => Err(error).context(GrpcRequestError {
+                resource: ResourceKind::Pool,
+                request: "expand_pool",
+            }),
+        }
     }
 }

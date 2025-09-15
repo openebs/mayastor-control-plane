@@ -386,6 +386,21 @@ impl From<CreatePool> for DestroyPool {
     }
 }
 
+/// Expand Pool Request.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ExpandPool {
+    /// Id of the pool.
+    pub id: PoolId,
+}
+
+impl ExpandPool {
+    /// Create a new `Self` from the given parameters.
+    pub fn new(id: PoolId) -> Self {
+        Self { id }
+    }
+}
+
 /// Label Pool Request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]

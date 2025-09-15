@@ -144,8 +144,8 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         pool,
         models::Pool::new_all(
             "pooloop",
-            models::PoolSpec::new_all(vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"], "pooloop", None, &io_engine1, models::SpecStatus::Created, None, None, 4194304),
-            models::PoolState::new_all(100663296u64, vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"], "pooloop", &io_engine1, models::PoolStatus::Online, 0u64, 0, false, 4194304u64, 104857600u64 , Some(0))
+            models::PoolSpec::new_all(vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"], "pooloop", None, &io_engine1, models::SpecStatus::Created, None, None, 4194304, None),
+            models::PoolState::new_all(100663296u64, vec!["malloc:///malloc0?blk_size=512&size_mb=100&uuid=b940f4f2-d45d-4404-8167-3b0366f9e2b0"], "pooloop", &io_engine1, models::PoolStatus::Online, 0u64, 0, false, 4194304u64, 104857600u64 , Some(137271181312))
         )
     );
 

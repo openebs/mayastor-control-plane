@@ -101,8 +101,8 @@ mod test {
             operations::pool::{
                 test::TimeoutTester,
                 traits::{
-                    CreatePoolInfo, DestroyPoolInfo, LabelPoolInfo, PoolCordonRequest,
-                    PoolOperations, UnlabelPoolInfo,
+                    CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo,
+                    PoolCordonRequest, PoolOperations, UnlabelPoolInfo,
                 },
             },
         };
@@ -159,6 +159,10 @@ mod test {
             }
 
             async fn uncordon(&self, _info: PoolCordonRequest) -> Result<Pool, ReplyError> {
+                todo!()
+            }
+
+            async fn expand(&self, _info: &dyn ExpandPoolInfo) -> Result<Pool, ReplyError> {
                 todo!()
             }
         }

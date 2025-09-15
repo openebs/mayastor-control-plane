@@ -434,6 +434,10 @@ pub enum SvcError {
     },
     #[snafu(display("Invalid devlink, use a persistent devlink for pool creation"))]
     InvalidDevlink {},
+    #[snafu(display("Pool {name} underlying device exceeds max expandable size"))]
+    PoolDeviceBeyondMaxSize { name: String },
+    #[snafu(display("Pool {name} underlying device has not been extended"))]
+    PoolDeviceNotExtended { name: String },
 }
 
 impl SvcError {
@@ -1076,6 +1080,18 @@ impl From<SvcError> for ReplyError {
             SvcError::ClonedSnapshotVolumeSize {} => ReplyError {
                 kind: ReplyErrorKind::OutOfRange,
                 resource: ResourceKind::VolumeSnapshotClone,
+                source,
+                extra,
+            },
+            SvcError::PoolDeviceBeyondMaxSize { .. } => ReplyError {
+                kind: ReplyErrorKind::OutOfRange,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::PoolDeviceNotExtended { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Pool,
                 source,
                 extra,
             },
