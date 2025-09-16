@@ -104,6 +104,10 @@ pub struct PoolState {
     /// Blobstore cluster size used for this pool.
     #[serde(default = "crate::types::v0::store::pool::default_pool_cluster_size")]
     pub cluster_size: u32,
+    /// Size of the underlying disk, in bytes.
+    pub disk_capacity: Option<u64>,
+    /// Maximum disk_capacity this pool can be expanded to, in bytes.
+    pub max_expandable_size: Option<u64>,
 }
 
 impl From<CtrlPoolState> for models::PoolState {
@@ -119,6 +123,8 @@ impl From<CtrlPoolState> for models::PoolState {
             src.committed,
             src.encrypted,
             Some(src.cluster_size as u64),
+            src.disk_capacity,
+            src.max_expandable_size,
         )
     }
 }
@@ -298,6 +304,8 @@ pub struct CreatePool {
     pub encryption: Option<Encryption>,
     /// Blobstore cluster size in bytes.
     pub cluster_size: Option<u32>,
+    /// Maximum expansion size for this pool.
+    pub max_expansion: Option<String>,
 }
 
 impl CreatePool {
@@ -309,6 +317,7 @@ impl CreatePool {
         labels: &Option<PoolLabel>,
         encryption: &Option<Encryption>,
         cluster_size: &Option<u32>,
+        max_expansion: &Option<String>,
     ) -> Self {
         Self {
             node: node.clone(),
@@ -317,6 +326,7 @@ impl CreatePool {
             labels: labels.clone(),
             encryption: encryption.clone(),
             cluster_size: *cluster_size,
+            max_expansion: max_expansion.clone(),
         }
     }
 }

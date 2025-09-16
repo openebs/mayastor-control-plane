@@ -645,6 +645,14 @@ impl TmpDiskFile {
         &self.inner.path
     }
 
+    /// Resizes the disk by `expand_by`.
+    pub fn expand(self, expand_by: u64) -> std::io::Result<()> {
+        let file: std::fs::File = std::fs::OpenOptions::new().write(true).open(self.path())?;
+        let new_size = file.metadata()?.len().saturating_add(expand_by);
+        file.set_len(new_size)?;
+        Ok(())
+    }
+
     /// Get the inner disk if there are no other references to it.
     pub fn into_inner(self) -> Result<TmpDiskFileInner, Arc<TmpDiskFileInner>> {
         Arc::try_unwrap(self.inner)
@@ -1132,6 +1140,7 @@ impl ClusterBuilder {
                         labels: None,
                         encryption: None,
                         cluster_size: None,
+                        max_expansion: None,
                     },
                     None,
                 )

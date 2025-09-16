@@ -64,6 +64,7 @@ impl From<&CreatePool> for PoolSpec {
             cordon_drain: None,
             // Default is 4MiB today.
             cluster_size: request.cluster_size.unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
+            max_expansion: request.max_expansion.clone(),
         }
     }
 }
@@ -76,6 +77,7 @@ impl From<&PoolSpec> for CreatePool {
             labels: pool.labels.clone(),
             encryption: pool.encryption.clone(),
             cluster_size: Some(pool.cluster_size),
+            max_expansion: pool.max_expansion.clone(),
         }
     }
 }
@@ -136,6 +138,9 @@ pub struct PoolSpec {
     /// Blobstore cluster size used for this pool.
     #[serde(default = "default_pool_cluster_size")]
     pub cluster_size: u32,
+    /// Maximum expansion size for this pool.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_expansion: Option<String>,
 }
 
 impl PoolSpec {
@@ -495,6 +500,8 @@ impl From<&PoolSpec> for transport::PoolState {
             committed: None,
             encrypted: pool.encryption.is_some(),
             cluster_size: pool.cluster_size,
+            disk_capacity: None,
+            max_expandable_size: None,
         }
     }
 }

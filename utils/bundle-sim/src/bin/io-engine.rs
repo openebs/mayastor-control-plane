@@ -82,9 +82,10 @@ impl IoEngine {
                 committed: state.committed.unwrap_or_default(),
                 cluster_size: state.cluster_size,
                 page_size: None,
-                disk_capacity: state.capacity,
+                disk_capacity: state.disk_capacity.unwrap_or_default(),
                 md_info: None,
                 encrypted: Some(state.encrypted),
+                max_expandable_size: state.max_expandable_size,
             };
             if let Some(node) = io_engine.sims.get_mut(state.node.as_str()) {
                 node.pools.push(pool);
@@ -319,6 +320,13 @@ impl rpc::v1::pb::pool_rpc_server::PoolRpc for IoEngine {
         &self,
         _request: tonic::Request<GrowPoolRequest>,
     ) -> Result<tonic::Response<GrowPoolResponse>, tonic::Status> {
+        Err(tonic::Status::unimplemented(""))
+    }
+    #[tracing::instrument(skip(self), err, level = "info")]
+    async fn grow_pool_v2(
+        &self,
+        _request: tonic::Request<GrowPoolRequest>,
+    ) -> Result<tonic::Response<Pool>, tonic::Status> {
         Err(tonic::Status::unimplemented(""))
     }
 }
