@@ -2,10 +2,9 @@ use crate::{
     common,
     context::Context,
     misc::traits::{StringValue, ValidateRequestTypes},
-    pool,
     pool::{
-        get_pools_request, CordonPoolRequest, CreatePoolRequest, DestroyPoolRequest,
-        LabelPoolRequest, UnlabelPoolRequest,
+        self, get_pools_request, CordonPoolRequest, CreatePoolRequest, DestroyPoolRequest,
+        ExpandPoolRequest, LabelPoolRequest, UnlabelPoolRequest,
     },
 };
 use std::{collections::HashMap, convert::TryFrom};
@@ -17,8 +16,8 @@ use stor_port::{
             PoolSpecStatus, POOL_BS_CLUSTER_SIZE_DEFAULT,
         },
         transport::{
-            CreatePool, CtrlPoolState, DestroyPool, Filter, LabelPool, NodeId, Pool, PoolDeviceUri,
-            PoolId, PoolState, PoolStatus, UnlabelPool, VolumeId,
+            CreatePool, CtrlPoolState, DestroyPool, ExpandPool, Filter, LabelPool, NodeId, Pool,
+            PoolDeviceUri, PoolId, PoolState, PoolStatus, UnlabelPool, VolumeId,
         },
     },
     IntoOption,
@@ -58,6 +57,8 @@ pub trait PoolOperations: Send + Sync {
     /// Uncordon the pool with the given info by removing the associated label.
     /// All cordon labels must be removed in order to uncordon the node.
     async fn uncordon(&self, info: PoolCordonRequest) -> Result<Pool, ReplyError>;
+    /// Expands the pool to span the entire capacity of backing disk.
+    async fn expand(&self, info: &dyn ExpandPoolInfo) -> Result<Pool, ReplyError>;
 }
 
 impl TryFrom<pool::PoolDefinition> for PoolSpec {
@@ -480,6 +481,39 @@ impl From<&dyn DestroyPoolInfo> for DestroyPool {
             node: data.node_id(),
             id: data.pool_id(),
         }
+    }
+}
+
+/// ExpandPoolInfo trait for the pool expansion to be implemented by entities which want to avail
+/// this operation.
+pub trait ExpandPoolInfo: Sync + Send + std::fmt::Debug {
+    /// Id of the pool
+    fn pool_id(&self) -> PoolId;
+}
+
+impl ExpandPoolInfo for ExpandPool {
+    fn pool_id(&self) -> PoolId {
+        self.id.clone()
+    }
+}
+
+impl ExpandPoolInfo for ExpandPoolRequest {
+    fn pool_id(&self) -> PoolId {
+        self.pool_id.clone().into()
+    }
+}
+
+impl From<&dyn ExpandPoolInfo> for ExpandPoolRequest {
+    fn from(data: &dyn ExpandPoolInfo) -> Self {
+        Self {
+            pool_id: data.pool_id().clone().into(),
+        }
+    }
+}
+
+impl From<&dyn ExpandPoolInfo> for ExpandPool {
+    fn from(data: &dyn ExpandPoolInfo) -> Self {
+        Self { id: data.pool_id() }
     }
 }
 

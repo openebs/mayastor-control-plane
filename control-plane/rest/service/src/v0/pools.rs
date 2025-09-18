@@ -4,7 +4,7 @@ use rest_client::versions::v0::apis::Uuid;
 use std::collections::HashMap;
 use stor_port::{
     transport_api::{ReplyError, ReplyErrorKind, ResourceKind},
-    types::v0::transport::{DestroyPool, Filter, UnlabelPool},
+    types::v0::transport::{DestroyPool, ExpandPool, Filter, UnlabelPool},
 };
 
 fn client() -> impl PoolOperations {
@@ -163,6 +163,14 @@ impl apis::actix_server::Pools for RestApi {
             import: body.import,
         };
         let pool = client().uncordon(request).await?;
+        Ok(pool.into())
+    }
+
+    async fn put_pool_expand(
+        Path(pool_id): Path<String>,
+    ) -> Result<models::Pool, RestError<models::RestJsonError>> {
+        let expand_request = ExpandPool { id: pool_id.into() };
+        let pool = client().expand(&expand_request).await?;
         Ok(pool.into())
     }
 }

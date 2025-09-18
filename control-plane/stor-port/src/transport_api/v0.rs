@@ -31,6 +31,7 @@ impl_message!(GetAppNode);
 impl_message!(CreatePool);
 impl_message!(DestroyPool);
 impl_message!(ImportPool);
+impl_message!(ExpandPool);
 impl_vector_request!(Pools, Pool);
 impl_message!(GetPools);
 

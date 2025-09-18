@@ -302,6 +302,7 @@ impl From<PoolSpec> for models::PoolSpec {
             encryption,
             src.cordon_drain.into_opt(),
             Some(src.cluster_size as i64),
+            src.max_expansion,
         )
     }
 }

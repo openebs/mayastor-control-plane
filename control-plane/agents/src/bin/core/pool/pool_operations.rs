@@ -3,7 +3,7 @@ use crate::{
         io_engine::PoolApi,
         registry::Registry,
         resources::{
-            operations::{ResourceCordon, ResourceLabel, ResourceLifecycle},
+            operations::{ResourceCordon, ResourceLabel, ResourceLifecycle, ResourceResize},
             operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
             OperationGuardArc,
         },
@@ -17,7 +17,7 @@ use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
         store::pool::{PoolCordonOp, PoolOperation, PoolSpec},
-        transport::{CreatePool, CtrlPoolState, DestroyPool, Pool},
+        transport::{CreatePool, CtrlPoolState, DestroyPool, ExpandPool, Pool},
     },
 };
 use utils::dsp_created_by_key;
@@ -142,6 +142,48 @@ impl ResourceLifecycle for Option<OperationGuardArc<PoolSpec>> {
                 pool_id: request.id.clone(),
             })
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceResize for Option<OperationGuardArc<PoolSpec>> {
+    type Resize = ExpandPool;
+    type ResizeOutput = Pool;
+
+    async fn resize(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Resize,
+    ) -> Result<Self::ResizeOutput, SvcError> {
+        if let Some(pool) = self {
+            pool.resize(registry, request).await
+        } else {
+            Err(SvcError::PoolNotFound {
+                pool_id: request.id.clone(),
+            })
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceResize for OperationGuardArc<PoolSpec> {
+    type Resize = ExpandPool;
+    type ResizeOutput = Pool;
+
+    async fn resize(
+        &mut self,
+        registry: &Registry,
+        request: &Self::Resize,
+    ) -> Result<Self::ResizeOutput, SvcError> {
+        let pool = registry.ctrl_pool(&request.id).await?;
+        let node = registry.node_wrapper(&pool.node()).await?;
+        if !node.read().await.is_online() {
+            return Err(SvcError::NodeNotOnline { node: pool.node() });
+        }
+        let pool_state = node.expand_pool(request).await?;
+        let pool_spec = registry.specs().pool(&request.id)?;
+
+        Ok(Pool::new(pool_spec, Some(CtrlPoolState::new(pool_state))))
     }
 }
 

@@ -699,6 +699,17 @@ impl AgentToIoEngine for transport::DestroyPool {
     }
 }
 
+impl AgentToIoEngine for transport::ExpandPool {
+    type IoEngineMessage = v1::pool::GrowPoolRequest;
+    /// This converts Control plane ExpandPool struct to IO Engine gRPC message.
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        Self::IoEngineMessage {
+            name: self.id.clone().into(),
+            uuid: None,
+        }
+    }
+}
+
 impl AgentToIoEngine for transport::ImportPool {
     type IoEngineMessage = v1::pool::ImportPoolRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {

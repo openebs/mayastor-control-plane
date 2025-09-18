@@ -12,7 +12,8 @@ use grpc::{
     context::Context,
     operations::{
         pool::traits::{
-            CreatePoolInfo, DestroyPoolInfo, LabelPoolInfo, PoolOperations, UnlabelPoolInfo,
+            CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo, PoolOperations,
+            UnlabelPoolInfo,
         },
         replica::traits::{
             CreateReplicaInfo, DestroyReplicaInfo, ReplicaOperations, ResizeReplicaInfo,
@@ -28,9 +29,9 @@ use stor_port::{
     types::v0::{
         store::{pool::PoolSpec, replica::ReplicaSpec},
         transport::{
-            CreatePool, CreateReplica, DestroyPool, DestroyReplica, Filter, GetPools, GetReplicas,
-            LabelPool, NodeId, Pool, PoolId, Replica, ResizeReplica, ShareReplica, UnlabelPool,
-            UnshareReplica, VolumeId,
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, ExpandPool, Filter, GetPools,
+            GetReplicas, LabelPool, NodeId, Pool, PoolId, Replica, ResizeReplica, ShareReplica,
+            UnlabelPool, UnshareReplica, VolumeId,
         },
     },
 };
@@ -117,6 +118,13 @@ impl PoolOperations for Service {
     async fn uncordon(&self, info: PoolCordonRequest) -> Result<Pool, ReplyError> {
         let service = self.clone();
         let pool = Context::spawn(async move { service.uncordon(info).await }).await??;
+        Ok(pool)
+    }
+
+    async fn expand(&self, request: &dyn ExpandPoolInfo) -> Result<Pool, ReplyError> {
+        let req: ExpandPool = request.into();
+        let service = self.clone();
+        let pool = Context::spawn(async move { service.expand(&req).await }).await??;
         Ok(pool)
     }
 }
@@ -424,5 +432,13 @@ impl Service {
         let spec = guarded_pool.uncordon(&self.registry, request).await?;
         let state = self.registry.ctrl_pool_state(guarded_pool.uid()).await.ok();
         Ok(Pool::new(spec, state))
+    }
+
+    /// Expands the specified pool.
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %request.id))]
+    async fn expand(&self, request: &ExpandPool) -> Result<Pool, SvcError> {
+        let mut pool = self.pool_opt(&request.id).await?;
+        let pool = pool.resize(&self.registry, request).await?;
+        Ok(pool)
     }
 }

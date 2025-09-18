@@ -1,13 +1,13 @@
 use crate::{
     misc::traits::ValidateRequestTypes,
     operations::pool::traits::PoolOperations,
-    pool,
     pool::{
-        cordon_pool_reply, create_pool_reply, get_pools_reply, label_pool_reply,
+        self, cordon_pool_reply, create_pool_reply, expand_pool_reply, get_pools_reply,
+        label_pool_reply,
         pool_grpc_server::{PoolGrpc, PoolGrpcServer},
         unlabel_pool_reply, CordonPoolReply, CordonPoolRequest, CreatePoolReply, CreatePoolRequest,
-        DestroyPoolReply, DestroyPoolRequest, GetPoolsReply, GetPoolsRequest, LabelPoolReply,
-        LabelPoolRequest, UnlabelPoolReply, UnlabelPoolRequest,
+        DestroyPoolReply, DestroyPoolRequest, ExpandPoolReply, ExpandPoolRequest, GetPoolsReply,
+        GetPoolsRequest, LabelPoolReply, LabelPoolRequest, UnlabelPoolReply, UnlabelPoolRequest,
     },
 };
 use std::sync::Arc;
@@ -144,6 +144,21 @@ impl PoolGrpc for PoolServer {
             })),
             Err(err) => Ok(Response::new(CordonPoolReply {
                 reply: Some(cordon_pool_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn expand_pool(
+        &self,
+        request: Request<ExpandPoolRequest>,
+    ) -> Result<tonic::Response<ExpandPoolReply>, tonic::Status> {
+        let req = request.into_inner();
+        match self.service.expand(&req).await {
+            Ok(pool) => Ok(Response::new(ExpandPoolReply {
+                reply: Some(expand_pool_reply::Reply::Pool(pool.into())),
+            })),
+            Err(err) => Ok(Response::new(ExpandPoolReply {
+                reply: Some(expand_pool_reply::Reply::Error(err.into())),
             })),
         }
     }

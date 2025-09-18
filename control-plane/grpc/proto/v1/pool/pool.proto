@@ -141,6 +141,20 @@ message CreatePoolReply {
   }
 }
 
+// Request type for expand pool
+message ExpandPoolRequest {
+  // id of the pool
+  string pool_id = 1;
+}
+
+// Reply type for a ExpandPool request
+message ExpandPoolReply {
+  oneof reply {
+    Pool pool = 1;
+    common.ReplyError error = 2;
+  }
+}
+
 // Reply type for a DestroyPool request
 message DestroyPoolReply {
   optional common.ReplyError error = 2;
@@ -221,4 +235,5 @@ service PoolGrpc {
   rpc UnlabelPool (UnlabelPoolRequest) returns (UnlabelPoolReply) {}
   rpc CordonPool (CordonPoolRequest) returns (CordonPoolReply) {}
   rpc UncordonPool (CordonPoolRequest) returns (CordonPoolReply) {}
+  rpc ExpandPool (ExpandPoolRequest) returns (ExpandPoolReply) {}
 }

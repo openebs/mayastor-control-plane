@@ -329,7 +329,7 @@ pub(crate) trait ResourceResize {
     type Resize: Sync + Send;
     type ResizeOutput: Sync + Send + Sized;
 
-    /// Resize this resource to a requested capacity.
+    /// Resize the resource.
     async fn resize(
         &mut self,
         registry: &Registry,
