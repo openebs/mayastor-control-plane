@@ -74,6 +74,17 @@ pub enum ScaleResources {
     },
 }
 
+/// The types of resources that support the 'expand' operation.
+#[derive(clap::Subcommand, Debug)]
+pub enum ExpandResources {
+    /// Expand a Pool to cover the entire span of the disk.
+    /// Please refer maxExpansion parameter in the docs which controls maxExpandableSize of the pool.
+    Pool {
+        /// ID of the pool.
+        id: PoolId,
+    },
+}
+
 /// The types of resources that support the 'SetProperty' operation.
 #[derive(clap::Subcommand, Debug)]
 pub enum SetPropertyResources {
