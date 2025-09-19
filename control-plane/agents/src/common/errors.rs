@@ -21,6 +21,8 @@ pub enum SvcError {
     GetNodes { source: ReplyError },
     #[snafu(display("Node '{}' is not online", node))]
     NodeNotOnline { node: NodeId },
+    #[snafu(display("Node: '{node}' hosting Pool: '{pool}' is not online"))]
+    PoolNodeNotOnline { node: NodeId, pool: PoolId },
     #[snafu(display("Node {} has invalid socket address {}", node, socket))]
     NodeGrpcEndpoint {
         node: NodeId,
@@ -598,6 +600,12 @@ impl From<SvcError> for ReplyError {
 
             SvcError::NodeNotOnline { .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Node,
+                source,
+                extra,
+            },
+            SvcError::PoolNodeNotOnline { .. } => ReplyError {
+                kind: ReplyErrorKind::Unavailable,
                 resource: ResourceKind::Node,
                 source,
                 extra,

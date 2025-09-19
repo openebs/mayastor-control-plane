@@ -28,7 +28,9 @@ use super::quantity::Quantity;
     printcolumn = r#"{ "name":"encrypted", "type":"boolean", "description":"encryption enabled", "jsonPath":".status.encrypted"}"#,
     printcolumn = r#"{ "name":"capacity", "type":"string", "nullable": "true", "description":"total bytes", "jsonPath":".status.capacity_q"}"#,
     printcolumn = r#"{ "name":"used", "type":"string", "nullable": "true", "description":"used bytes", "jsonPath":".status.used_q"}"#,
-    printcolumn = r#"{ "name":"available", "type":"string", "nullable": "true", "description":"available bytes", "jsonPath":".status.available_q"}"#
+    printcolumn = r#"{ "name":"available", "type":"string", "nullable": "true", "description":"available bytes", "jsonPath":".status.available_q"}"#,
+    printcolumn = r#"{ "name":"disk_capacity", "type":"string", "nullable": "true", "description":"underlying disk capacity", "jsonPath":".status.disk_capacity"}"#,
+    printcolumn = r#"{ "name":"max_expandable_size", "type":"string", "nullable": "true", "description":"max expandable size", "jsonPath":".status.max_expandable_size"}"#
 )]
 /// The pool spec which contains the parameters we use when creating the pool
 pub struct DiskPoolSpec {
@@ -43,7 +45,12 @@ pub struct DiskPoolSpec {
     pub encryption_config: Option<EncryptionConfig>,
     /// Blobstore cluster size required for this pool. This is an advanced option,
     /// please refer documentation to understand this configuration and its implications.
+    #[serde(rename = "clusterSize")]
     pub cluster_size: Option<String>,
+    /// Maximum expected expansion for the pool. It can be a factor or an absolute size,
+    /// Example: 5x, 10x, 6x, 200GiB, 2TiB or 536870912000B.
+    #[serde(rename = "maxExpansion")]
+    pub max_expansion: Option<String>,
 }
 
 /// Placement pool topology used by volume operations.
@@ -81,6 +88,7 @@ impl DiskPoolSpec {
         topology: Option<Topology>,
         encryption_config: Option<EncryptionConfig>,
         cluster_size: Option<String>,
+        max_expansion: Option<String>,
     ) -> Self {
         Self {
             node,
@@ -88,6 +96,7 @@ impl DiskPoolSpec {
             topology,
             encryption_config,
             cluster_size,
+            max_expansion,
         }
     }
     /// The node the pool is placed on.
@@ -110,6 +119,11 @@ impl DiskPoolSpec {
     /// Blobstore cluster size for this pool.
     pub fn cluster_size(&self) -> Option<String> {
         self.cluster_size.clone()
+    }
+
+    /// Maximum expected expansion for the pool.
+    pub fn max_expansion(&self) -> Option<String> {
+        self.max_expansion.clone()
     }
 }
 
@@ -163,7 +177,14 @@ pub struct DiskPoolStatus {
     /// Encryption enabled.
     pub encrypted: Option<bool>,
     /// Blobstore cluster size of this pool.
+    #[serde(rename = "clusterSize")]
     pub cluster_size: Option<Quantity>,
+    /// Size of the underlying disk, in quantity.
+    #[serde(rename = "diskCapacity")]
+    pub disk_capacity: Option<Quantity>,
+    /// Size upto which disk_capacity_q can grow upto, in quantity.
+    #[serde(rename = "maxExpansionSize")]
+    pub max_expandable_size: Option<Quantity>,
 }
 
 impl Default for DiskPoolStatus {
@@ -179,6 +200,8 @@ impl Default for DiskPoolStatus {
             available_q: None,
             encrypted: None,
             cluster_size: None,
+            disk_capacity: None,
+            max_expandable_size: None,
         }
     }
 }
@@ -209,6 +232,8 @@ impl DiskPoolStatus {
             used_q: Some(Quantity::from_bytes(state.used)),
             available_q: Some(Quantity::from_bytes(free)),
             cluster_size: state.cluster_size.map(Quantity::from_bytes),
+            disk_capacity: state.disk_capacity.map(Quantity::from_bytes),
+            max_expandable_size: state.max_expandable_size.map(Quantity::from_bytes),
         }
     }
 
@@ -259,6 +284,8 @@ impl From<Pool> for DiskPoolStatus {
                 used_q: Some(Quantity::from_bytes(state.used)),
                 available_q: Some(Quantity::from_bytes(free)),
                 cluster_size: Some(Quantity::from_bytes(state.cluster_size.unwrap_or(0))),
+                disk_capacity: state.disk_capacity.map(Quantity::from_bytes),
+                max_expandable_size: state.max_expandable_size.map(Quantity::from_bytes),
             }
         } else {
             Self {

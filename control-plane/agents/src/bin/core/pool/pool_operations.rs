@@ -178,7 +178,10 @@ impl ResourceResize for OperationGuardArc<PoolSpec> {
         let pool = registry.ctrl_pool(&request.id).await?;
         let node = registry.node_wrapper(&pool.node()).await?;
         if !node.read().await.is_online() {
-            return Err(SvcError::NodeNotOnline { node: pool.node() });
+            return Err(SvcError::PoolNodeNotOnline {
+                node: pool.node(),
+                pool: pool.id().clone(),
+            });
         }
         let pool_state = node.expand_pool(request).await?;
         let pool_spec = registry.specs().pool(&request.id)?;

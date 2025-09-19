@@ -3231,17 +3231,17 @@ components:
         encrypted:
           description: Is the pool encrypted
           type: boolean
-        cluster_size:
+        clusterSize:
           description: Blobstore cluster size for this pool, in bytes
           type: integer
           format: int64
           example: 4194304
           minimum: 4194304
-        disk_capacity:
+        diskCapacity:
           description: Size of the underlying disk, in bytes
           type: integer
           format: uint64
-        max_expandable_size:
+        maxExpandableSize:
           description: Maximum size upto which this pool can be grown, in bytes
           type: integer
           format: uint64
@@ -3593,7 +3593,9 @@ components:
           type: integer
           format: int64
         maxExpansion:
-          description: The maximum size the pool disk may be expanded to.
+          description: |-
+            Maximum expected expansion for the pool. It can be a factor or an absolute size,
+            Example: 5x, 10x, 6x, 200GiB, 2TiB, 536870912000B
           type: string
       required:
         - disks

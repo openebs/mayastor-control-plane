@@ -19,6 +19,7 @@ __pycache__
 !/openapi/build.rs
 !/openapi/src/lib.rs
 /tests/bdd/autogen/
+/k8s/crd_test/crds/diskpools.crd.yaml
 /terraform/cluster/ansible-hosts
 /terraform/cluster/current_user.txt
 /rust-toolchain.toml
