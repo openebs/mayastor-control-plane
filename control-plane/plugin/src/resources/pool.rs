@@ -1,13 +1,12 @@
 extern crate utils as external_utils;
 use super::VolumeId;
 use crate::{
-    operations::{Cordoning, GetWithArgs, Label, ListWithArgs, PluginResult},
+    operations::{Cordoning, Expand, GetWithArgs, Label, ListWithArgs, PluginResult},
     resources::{
         error::{Error, LabelAssignSnafu, OpError, TopologyError},
-        utils,
         utils::{
-            optional_cell, print_table, validate_topology_key, validate_topology_value, CreateRow,
-            CreateRows, GetHeaderRow, OutputFormat,
+            self, optional_cell, print_table, validate_topology_key, validate_topology_value,
+            CreateRow, CreateRows, GetHeaderRow, OutputFormat,
         },
         NodeId, PoolId,
     },
@@ -41,9 +40,9 @@ impl CreateRow for openapi::models::Pool {
         // spec data and mark the status as Unknown.
         let state = self.state.clone().unwrap_or(openapi::models::PoolState {
             capacity: 0,
-            disks: spec.disks,
-            id: spec.id,
-            node: spec.node,
+            disks: spec.disks.clone(),
+            id: spec.id.clone(),
+            node: spec.node.clone(),
             status: openapi::models::PoolStatus::Unknown,
             used: 0,
             committed: None,
@@ -70,7 +69,9 @@ impl CreateRow for openapi::models::Pool {
             ::utils::bytes::into_human(state.used),
             ::utils::bytes::into_human(free),
             optional_cell(state.committed.map(::utils::bytes::into_human)),
-            state.encrypted
+            state.encrypted,
+            optional_cell(state.disk_capacity.map(::utils::bytes::into_human)),
+            optional_cell(state.max_expandable_size.map(::utils::bytes::into_human))
         ]
     }
 }
@@ -545,6 +546,53 @@ impl From<UncordonReq> for models::PoolCordonReq {
                 value.import,
             )
         }
+    }
+}
+
+#[async_trait(?Send)]
+impl Expand for Pool {
+    type ID = PoolId;
+    async fn expand(id: &Self::ID, output: &OutputFormat) -> PluginResult {
+        let pool = RestClient::client()
+            .pools_api()
+            .get_pool(id)
+            .await
+            .map_err(|source| Error::GetPoolError {
+                id: id.to_string(),
+                source,
+            })?;
+        let before_size = pool
+            .into_body()
+            .state
+            .ok_or(Error::PoolStateError { id: id.to_string() })?
+            .capacity;
+        let before_size = ::utils::bytes::into_human(before_size);
+        match RestClient::client().pools_api().put_pool_expand(id).await {
+            Ok(pool) => match output {
+                OutputFormat::Yaml | OutputFormat::Json => {
+                    // Print json or yaml based on output format.
+                    utils::print_table(output, pool.into_body());
+                }
+                OutputFormat::None => {
+                    // Unlikely that pool won't have state.
+                    let pool_now = pool
+                        .clone()
+                        .into_body()
+                        .state
+                        .ok_or(Error::PoolStateError { id: id.to_string() })?
+                        .capacity;
+                    let pool_now = ::utils::bytes::into_human(pool_now);
+                    println!("Pool expanded from {before_size} to {pool_now}");
+                }
+            },
+            Err(e) => {
+                return Err(Error::ExpandPoolError {
+                    id: id.to_string(),
+                    source: e,
+                });
+            }
+        }
+        Ok(())
     }
 }
 

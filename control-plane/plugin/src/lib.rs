@@ -10,14 +10,14 @@ use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
 use crate::{
     operations::{
-        Cordoning, Delete, Drain, Get, GetBlockDevices, GetSnapshotTopology, GetSnapshots,
+        Cordoning, Delete, Drain, Expand, Get, GetBlockDevices, GetSnapshotTopology, GetSnapshots,
         GetWithArgs, List, ListExt, ListWithArgs, Operations, PluginResult, RebuildHistory,
         ReplicaTopology, Scale,
     },
     resources::{
         blockdevice, cordon, drain, node, pool, snapshot, volume, CordonResources, DeleteArgs,
-        DeleteResources, DrainResources, GetCordonArgs, GetDrainArgs, GetResources, ScaleResources,
-        SetPropertyResources, SetVolumeProperties, UnCordonResources,
+        DeleteResources, DrainResources, ExpandResources, GetCordonArgs, GetDrainArgs,
+        GetResources, ScaleResources, SetPropertyResources, SetVolumeProperties, UnCordonResources,
     },
 };
 
@@ -111,6 +111,7 @@ impl ExecuteOperation for Operations {
             Operations::Drain(resource) => resource.execute(cli_args).await,
             Operations::Get(resource) => resource.execute(cli_args).await,
             Operations::Scale(resource) => resource.execute(cli_args).await,
+            Operations::Expand(resource) => resource.execute(cli_args).await,
             Operations::Set(resource) => resource.execute(cli_args).await,
             Operations::Cordon(resource) => resource.execute(cli_args).await,
             Operations::Uncordon(resource) => resource.execute(cli_args).await,
@@ -219,6 +220,17 @@ impl ExecuteOperation for ScaleResources {
             ScaleResources::Volume { id, replica_count } => {
                 volume::Volume::scale(id, *replica_count, &cli_args.output).await
             }
+        }
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl ExecuteOperation for ExpandResources {
+    type Args = CliArgs;
+    type Error = crate::resources::Error;
+    async fn execute(&self, cli_args: &CliArgs) -> PluginResult {
+        match self {
+            ExpandResources::Pool { id } => pool::Pool::expand(id, &cli_args.output).await,
         }
     }
 }

@@ -66,6 +66,9 @@ pub enum Error {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
+    /// Error when get pool request fails.
+    #[snafu(display("No state for pool {id}. Please verify if node is online"))]
+    PoolStateError { id: String },
     /// Error when list pools request fails.
     #[snafu(display("Failed to list pools. Error {source}"))]
     ListPoolsError {
@@ -92,6 +95,12 @@ pub enum Error {
     /// Error when scale volume request fails.
     #[snafu(display("Failed to scale volume {id}. Error {source}"))]
     ScaleVolumeError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
+    /// Error when expand pool request fails.
+    #[snafu(display("Failed to expand pool {id}. Error {source}"))]
+    ExpandPoolError {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },

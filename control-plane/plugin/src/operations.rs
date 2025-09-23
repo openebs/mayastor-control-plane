@@ -1,6 +1,6 @@
 use crate::resources::{
-    error::Error, utils, CordonResources, DeleteArgs, DrainResources, GetResources, LabelResources,
-    ScaleResources, SetPropertyResources, UnCordonResources,
+    error::Error, utils, CordonResources, DeleteArgs, DrainResources, ExpandResources,
+    GetResources, LabelResources, ScaleResources, SetPropertyResources, UnCordonResources,
 };
 use async_trait::async_trait;
 
@@ -19,6 +19,9 @@ pub enum Operations {
     /// 'Scale' resources.
     #[clap(subcommand)]
     Scale(ScaleResources),
+    /// 'Expand' resources.
+    #[clap(subcommand)]
+    Expand(ExpandResources),
     /// 'Set' resources.
     #[clap(subcommand)]
     Set(SetPropertyResources),
@@ -112,6 +115,14 @@ pub trait Scale {
         requested_size: u64,
         output: &utils::OutputFormat,
     ) -> PluginResult;
+}
+
+/// Expand trait.
+/// To be implemented by resources which support the 'expand' operation.
+#[async_trait(?Send)]
+pub trait Expand {
+    type ID;
+    async fn expand(id: &Self::ID, output: &utils::OutputFormat) -> PluginResult;
 }
 
 /// SetProperty trait.
