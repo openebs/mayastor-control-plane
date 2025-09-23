@@ -362,10 +362,10 @@ async fn pool_expansion() {
     // Attempt expand without extending the underlying device.
     // Should result in FailedPrecondition.
     if let Err(e) = pool_client.expand(&expand_request_one).await {
-        assert_eq!(e.kind, ReplyErrorKind::FailedPrecondition);
+        assert_eq!(e.kind, ReplyErrorKind::DiskNotExtended);
     }
     if let Err(e) = pool_client.expand(&expand_request_two).await {
-        assert_eq!(e.kind, ReplyErrorKind::FailedPrecondition);
+        assert_eq!(e.kind, ReplyErrorKind::DiskNotExtended);
     }
     // Attempt expand after extending the device 1 cluster more then max_expandable_size.
     // Should result in OutOfRange. max_expandable_size is absolute limit.

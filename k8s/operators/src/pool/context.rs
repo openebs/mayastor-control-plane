@@ -240,7 +240,7 @@ impl ResourceContext {
     }
 
     /// Removes pool expand annotation from the CR.
-    async fn patch_metadata(&self) -> Result<(), Error> {
+    async fn remove_expand_annotation(&self) -> Result<(), Error> {
         let patch = Patch::Merge(json!({
             "metadata": {
                 "annotations": {
@@ -248,7 +248,7 @@ impl ResourceContext {
                 }
             }
         }));
-        let ps = PatchParams::apply(WHO_AM_I);
+        let ps = PatchParams::default();
         let _o: kube::api::PartialObjectMeta<DiskPool> = self
             .api()
             .patch_metadata(&self.name_any(), &ps, &patch)
@@ -490,20 +490,20 @@ impl ResourceContext {
                         Err(e) => {
                             if matches!(
                             e.error_body(),
-                            Some(body) if matches!(body.kind, Kind::OutOfRange | Kind::FailedPrecondition)
+                            Some(body) if matches!(body.kind, Kind::OutOfRange | Kind::DiskNotExtended | Kind::DiskRescanFailed )
                             ) {
                                 error!(
                                     "DiskPool expansion failed, Stopping reconciliation err: {:?}",
                                     e
                                 );
-                                let _ = self.patch_metadata().await;
+                                let _ = self.remove_expand_annotation().await;
                             } else {
                                 error!("DiskPool expansion failed, {:?}", e);
                             }
                         }
                         Ok(_) => {
                             info!("DiskPool {} expanded successfully", self.name_any());
-                            let _ = self.patch_metadata().await;
+                            let _ = self.remove_expand_annotation().await;
                         }
                     }
                 }

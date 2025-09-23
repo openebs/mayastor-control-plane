@@ -70,6 +70,8 @@ enum ReplyErrorKind {
   CapacityLimitExceeded = 30;
   NotAcceptable = 31;
   Cancelled = 32;
+  DiskNotExtended = 33;
+  DiskRescanFailed = 34;
 }
 
 // ResourceKind for the resource which has undergone this error

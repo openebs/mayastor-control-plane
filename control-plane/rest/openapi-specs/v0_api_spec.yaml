@@ -2561,9 +2561,6 @@ components:
       example:
         disks:
           - "malloc:///disk?size_mb=100"
-        encryption:
-          secret:
-            name: pool-secret-encr
       description: Create Pool Body
       type: object
       properties:
@@ -3242,7 +3239,7 @@ components:
           type: integer
           format: uint64
         maxExpandableSize:
-          description: Maximum size upto which this pool can be grown, in bytes
+          description: Maximum size underlying disk can be grown to, in bytes
           type: integer
           format: uint64
       required:
@@ -3427,6 +3424,8 @@ components:
             - CapacityLimitExceeded
             - NotAcceptable
             - Cancelled
+            - DiskNotExtended
+            - DiskRescanFailed
       required:
         - details
         - kind
@@ -3595,7 +3594,7 @@ components:
         maxExpansion:
           description: |-
             Maximum expected expansion for the pool. It can be a factor or an absolute size,
-            Example: 5x, 10x, 6x, 200GiB, 2TiB, 536870912000B
+            Example: 5x, 10x, 6x, 200GiB, 2TiB or 536870912000B.
           type: string
       required:
         - disks

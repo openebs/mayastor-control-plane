@@ -24,13 +24,13 @@ use super::quantity::Quantity;
     shortname = "dsp",
     printcolumn = r#"{ "name":"node", "type":"string", "description":"node the pool is on", "jsonPath":".spec.node"}"#,
     printcolumn = r#"{ "name":"state", "type":"string", "description":"dsp cr state", "jsonPath":".status.cr_state"}"#,
-    printcolumn = r#"{ "name":"pool_status", "type":"string", "description":"Control plane pool status", "jsonPath":".status.pool_status"}"#,
+    printcolumn = r#"{ "name":"pool-status", "type":"string", "description":"Control plane pool status", "jsonPath":".status.pool_status"}"#,
     printcolumn = r#"{ "name":"encrypted", "type":"boolean", "description":"encryption enabled", "jsonPath":".status.encrypted"}"#,
     printcolumn = r#"{ "name":"capacity", "type":"string", "nullable": "true", "description":"total bytes", "jsonPath":".status.capacity_q"}"#,
     printcolumn = r#"{ "name":"used", "type":"string", "nullable": "true", "description":"used bytes", "jsonPath":".status.used_q"}"#,
     printcolumn = r#"{ "name":"available", "type":"string", "nullable": "true", "description":"available bytes", "jsonPath":".status.available_q"}"#,
-    printcolumn = r#"{ "name":"disk_capacity", "type":"string", "nullable": "true", "description":"underlying disk capacity", "jsonPath":".status.disk_capacity"}"#,
-    printcolumn = r#"{ "name":"max_expandable_size", "type":"string", "nullable": "true", "description":"max expandable size", "jsonPath":".status.max_expandable_size"}"#
+    printcolumn = r#"{ "name":"disk-capacity", "type":"string", "nullable": "true", "description":"underlying disk capacity", "jsonPath":".status.diskCapacity"}"#,
+    printcolumn = r#"{ "name":"max-expandable-size", "type":"string", "nullable": "true", "description":"max expandable size", "jsonPath":".status.maxExpandableSize"}"#
 )]
 /// The pool spec which contains the parameters we use when creating the pool
 pub struct DiskPoolSpec {
@@ -179,11 +179,12 @@ pub struct DiskPoolStatus {
     /// Blobstore cluster size of this pool.
     #[serde(rename = "clusterSize")]
     pub cluster_size: Option<Quantity>,
-    /// Size of the underlying disk, in quantity.
+    /// Current size of the underlying disk. in quantity.
     #[serde(rename = "diskCapacity")]
     pub disk_capacity: Option<Quantity>,
-    /// Size upto which disk_capacity_q can grow upto, in quantity.
-    #[serde(rename = "maxExpansionSize")]
+    /// Maximum capacity the disk can be expanded to.
+    /// This is an absolute max. No expansion is allowed beyond this size.
+    #[serde(rename = "maxExpandableSize")]
     pub max_expandable_size: Option<Quantity>,
 }
 
