@@ -4,6 +4,7 @@ use super::{
     error::Error,
 };
 use crate::diskpool::crd::v1beta3::{EncryptionSecretConfig, EncryptionSource};
+use openapi::models::rest_json_error::Kind;
 use openapi::models::{Encryption, EncryptionSecret};
 use openapi::{
     apis::StatusCode,
@@ -238,6 +239,24 @@ impl ResourceContext {
         Ok(Action::requeue(Duration::from_secs(30)))
     }
 
+    /// Removes pool expand annotation from the CR.
+    async fn remove_expand_annotation(&self) -> Result<(), Error> {
+        let patch = Patch::Merge(json!({
+            "metadata": {
+                "annotations": {
+                    "openebs.io/expand": null
+                }
+            }
+        }));
+        let ps = PatchParams::default();
+        let _o: kube::api::PartialObjectMeta<DiskPool> = self
+            .api()
+            .patch_metadata(&self.name_any(), &ps, &patch)
+            .await
+            .map_err(|source| Error::Kube { source })?;
+        Ok(())
+    }
+
     /// Patch the resource state to creating.
     async fn is_missing(&self) -> Result<Action, Error> {
         self.patch_status(DiskPoolStatus::default()).await?;
@@ -287,8 +306,13 @@ impl ResourceContext {
             None => None,
         };
 
-        let body =
-            CreatePoolBody::new_all(self.spec.disks(), labels, encryption, cluster_size, None);
+        let body = CreatePoolBody::new_all(
+            self.spec.disks(),
+            labels,
+            encryption,
+            cluster_size,
+            self.spec.max_expansion(),
+        );
         match self
             .pools_api()
             .put_node_pool(&self.spec.node(), &self.name_any(), body)
@@ -445,12 +469,47 @@ impl ResourceContext {
 
     /// Check the state of the pool.
     ///
+    /// If "openebs.io/expand" is set, then attempt the pool expansion by invoking put_pool_expand.
+    /// Removes annotation in 3 failure cases:
+    /// 1. If pool device is extended beyond max_expandable_size, expansion fails with OutOfRange.
+    /// 2. If device is not resized before adding expand annotation.
+    /// 3. Device rescan fails if Pool device is detached from the node. It fails even if it comes back.
+    /// We need to handle that scenario. Until then, we will not retry this operation.
+    ///
     /// Get the pool information from the control plane and use this to set the state of the CRD
     /// accordingly. If the control plane returns a pool state, set the CRD to 'Online'. If the
     /// control plane does not return a pool state (occurs when a node is missing), set the CRD to
     /// 'Unknown' and let the reconciler retry later.
     #[tracing::instrument(fields(name = ?self.name_any(), status = ?self.status) skip(self))]
     pub(crate) async fn pool_check(&self) -> Result<Action, Error> {
+        if let Some(annotation) = self.metadata.annotations.clone() {
+            if let Some(value) = annotation.get("openebs.io/expand") {
+                if value == "true" {
+                    info!("Attempting to expand {}", self.name_any());
+                    match self.pools_api().put_pool_expand(&self.name_any()).await {
+                        Err(e) => {
+                            if matches!(
+                            e.error_body(),
+                            Some(body) if matches!(body.kind, Kind::OutOfRange | Kind::DiskNotExtended | Kind::DiskRescanFailed )
+                            ) {
+                                error!(
+                                    "DiskPool expansion failed, Stopping reconciliation err: {:?}",
+                                    e
+                                );
+                                let _ = self.remove_expand_annotation().await;
+                            } else {
+                                error!("DiskPool expansion failed, {:?}", e);
+                            }
+                        }
+                        Ok(_) => {
+                            info!("DiskPool {} expanded successfully", self.name_any());
+                            let _ = self.remove_expand_annotation().await;
+                        }
+                    }
+                }
+            }
+        }
+
         let pool = match self
             .pools_api()
             .get_node_pool(&self.spec.node(), &self.name_any())

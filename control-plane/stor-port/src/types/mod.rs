@@ -146,6 +146,14 @@ impl From<ReplyError> for RestError<RestJsonError> {
                 let error = RestJsonError::new(details, message, Kind::Cancelled);
                 (StatusCode::GATEWAY_TIMEOUT, error)
             }
+            ReplyErrorKind::DiskNotExtended => {
+                let error = RestJsonError::new(details, message, Kind::DiskNotExtended);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
+            ReplyErrorKind::DiskRescanFailed => {
+                let error = RestJsonError::new(details, message, Kind::DiskRescanFailed);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
         };
 
         RestError::new(status, error)

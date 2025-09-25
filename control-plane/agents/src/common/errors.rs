@@ -434,10 +434,12 @@ pub enum SvcError {
     },
     #[snafu(display("Invalid devlink, use a persistent devlink for pool creation"))]
     InvalidDevlink {},
-    #[snafu(display("Pool {name} underlying device exceeds max expandable size"))]
-    PoolDeviceBeyondMaxSize { name: String },
-    #[snafu(display("Pool {name} underlying device has not been extended"))]
-    PoolDeviceNotExtended { name: String },
+    #[snafu(display("Pool {name} underlying disk exceeded max expandable size"))]
+    DiskBeyondMaxSize { name: PoolId },
+    #[snafu(display("Pool {name} underlying disk has not been extended"))]
+    DiskNotExtended { name: PoolId },
+    #[snafu(display("Pool {name} underlying disk rescan failed"))]
+    DiskRescanFailed { name: PoolId },
 }
 
 impl SvcError {
@@ -1083,14 +1085,20 @@ impl From<SvcError> for ReplyError {
                 source,
                 extra,
             },
-            SvcError::PoolDeviceBeyondMaxSize { .. } => ReplyError {
+            SvcError::DiskBeyondMaxSize { .. } => ReplyError {
                 kind: ReplyErrorKind::OutOfRange,
                 resource: ResourceKind::Pool,
                 source,
                 extra,
             },
-            SvcError::PoolDeviceNotExtended { .. } => ReplyError {
-                kind: ReplyErrorKind::FailedPrecondition,
+            SvcError::DiskNotExtended { .. } => ReplyError {
+                kind: ReplyErrorKind::DiskNotExtended,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::DiskRescanFailed { .. } => ReplyError {
+                kind: ReplyErrorKind::DiskRescanFailed,
                 resource: ResourceKind::Pool,
                 source,
                 extra,

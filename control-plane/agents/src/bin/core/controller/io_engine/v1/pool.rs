@@ -93,16 +93,24 @@ impl crate::controller::io_engine::PoolApi for super::RpcClient {
                 self.context.node(),
             )),
             Err(error) if error.code() == tonic::Code::OutOfRange => {
-                Err(SvcError::PoolDeviceBeyondMaxSize {
-                    name: request.id.clone().into(),
+                Err(SvcError::DiskBeyondMaxSize {
+                    name: request.id.clone(),
                 })
             }
             Err(error)
                 if (error.code() == tonic::Code::FailedPrecondition
                     && error.metadata().contains_key("bdev_not_extended")) =>
             {
-                Err(SvcError::PoolDeviceNotExtended {
-                    name: request.id.clone().into(),
+                Err(SvcError::DiskNotExtended {
+                    name: request.id.clone(),
+                })
+            }
+            Err(error)
+                if (error.code() == tonic::Code::FailedPrecondition
+                    && error.metadata().contains_key("bdev_rescan_failed")) =>
+            {
+                Err(SvcError::DiskRescanFailed {
+                    name: request.id.clone(),
                 })
             }
             Err(error) => Err(error).context(GrpcRequestError {

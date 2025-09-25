@@ -135,7 +135,7 @@ pub(crate) async fn migrate_to_v1beta3(
                     &name,
                     ns,
                     Some(res_ver.clone()),
-                    DiskPoolSpec::new(node, disk, topology, None, None),
+                    DiskPoolSpec::new(node, disk, topology, None, None, None),
                 )
                 .await?;
                 info!(crd = ?dsp.name_any(), "CR creation successful");
