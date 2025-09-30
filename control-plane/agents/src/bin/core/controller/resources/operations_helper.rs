@@ -89,7 +89,7 @@ impl OnCreateFail {
             // 3. dataplane core is shared with other processes
             // TODO: use higher timeout on larger pool sizes or potentially make this
             //  an async operation.
-            tonic::Code::Cancelled => Self::LeaveAsIs,
+            tonic::Code::Cancelled | tonic::Code::Aborted => Self::LeaveAsIs,
             _ => Self::SetDeleting,
         }
     }
