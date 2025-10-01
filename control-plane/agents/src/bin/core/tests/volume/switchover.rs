@@ -930,7 +930,11 @@ async fn republished_nexus_io_engine_txn_fail() {
 
     cluster.composer().thaw(node_idx0.as_str()).await.unwrap();
     cluster
-        .wait_node_status(node_idx0.clone(), NodeStatus::Online)
+        .wait_node_status_tmo(
+            node_idx0.clone(),
+            NodeStatus::Online,
+            Duration::from_secs(4),
+        )
         .await
         .unwrap();
     println!("STEP: Reconnected older container back to network...");

@@ -260,11 +260,21 @@ impl Cluster {
         &self,
         node_id: I,
         status: NodeStatus,
-    ) -> Result<(), ()> {
+    ) -> Result<(), String> {
+        self.wait_node_status_tmo(node_id, status, Duration::from_secs(2))
+            .await
+    }
+    /// Wait till the node is in the given status.
+    pub async fn wait_node_status_tmo<I: AsRef<NodeId>>(
+        &self,
+        node_id: I,
+        status: NodeStatus,
+        timeout: Duration,
+    ) -> Result<(), String> {
         let node_id = node_id.as_ref();
-        let timeout = Duration::from_secs(2);
         let node_cli = self.grpc_client().node();
         let start = std::time::Instant::now();
+        let mut seen_status = None;
         loop {
             let node = node_cli
                 .get(Filter::Node(node_id.clone()), true, None)
@@ -274,13 +284,16 @@ impl Cluster {
                 if node.state().map(|n| &n.status) == Some(&status) {
                     return Ok(());
                 }
+                seen_status = node.state().map(|n| n.status.clone());
             }
             if std::time::Instant::now() > (start + timeout) {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
-        Err(())
+        Err(format!(
+            "Node {node_id} not {status} within {timeout:?}, currently: {seen_status:?}"
+        ))
     }
     /// Wait till the pool is online.
     pub async fn wait_pool_online(&self, pool_id: PoolId) -> Result<(), ()> {

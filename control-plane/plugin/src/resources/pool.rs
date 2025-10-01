@@ -40,9 +40,9 @@ impl CreateRow for openapi::models::Pool {
         // spec data and mark the status as Unknown.
         let state = self.state.clone().unwrap_or(openapi::models::PoolState {
             capacity: 0,
-            disks: spec.disks.clone(),
-            id: spec.id.clone(),
-            node: spec.node.clone(),
+            disks: spec.disks,
+            id: spec.id,
+            node: spec.node,
             status: openapi::models::PoolStatus::Unknown,
             used: 0,
             committed: None,
