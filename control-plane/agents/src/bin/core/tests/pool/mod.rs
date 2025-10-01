@@ -1087,6 +1087,16 @@ async fn slow_create() {
             }
         }
 
+        let result = client.pool().create(&create, None).await;
+        match result {
+            Err(error) => assert_eq!(error.kind, ReplyErrorKind::Aborted),
+            Ok(_) => {
+                let info = lvol.dm_info().unwrap();
+                tracing::error!("Log DMSetup info:\n{info}");
+                panic!("Should have failed!");
+            }
+        }
+
         lvol.resume().unwrap();
 
         let start = std::time::Instant::now();
@@ -1114,6 +1124,17 @@ async fn slow_create() {
             }
             break;
         }
+
+        let result = client.pool().create(&create, None).await;
+        match result {
+            Err(error) => assert_eq!(error.kind, ReplyErrorKind::AlreadyExists),
+            Ok(_) => {
+                let info = lvol.dm_info().unwrap();
+                tracing::error!("Log DMSetup info:\n{info}");
+                panic!("Should have failed!");
+            }
+        }
+
         let destroy = DestroyPool::from(create.clone());
         client.pool().destroy(&destroy, None).await.unwrap();
 
