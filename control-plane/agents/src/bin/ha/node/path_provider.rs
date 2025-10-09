@@ -131,17 +131,17 @@ impl CachedNvmePathProvider {
         });
     }
     #[cfg(target_os = "linux")]
-    fn udev_supported() -> bool {
+    fn udev_supported(&self) -> bool {
         match current_platform_type() {
             PlatformType::K8s => true,
             PlatformType::None => true,
-            PlatformType::Deployer => false,
+            PlatformType::Deployer => matches!(self.monitor, UdevMonitor::Kernel),
         }
     }
     /// Start UDEV monitoring loop.
     #[cfg(target_os = "linux")]
     pub fn start(&mut self) -> anyhow::Result<impl std::future::Future<Output = ()> + '_> {
-        if !Self::udev_supported() {
+        if !self.udev_supported() {
             self.spawn_nvmeadm_syncer();
         }
 
