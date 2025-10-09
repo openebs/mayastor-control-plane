@@ -1,5 +1,5 @@
 use crate::{
-    path_provider::{CachedNvmePathProvider, NvmePath, NvmePathNameCollection},
+    path_provider::{CachedNvmePathProvider, NvmePath, NvmePathNameCollection, UdevMonitor},
     reporter::PathReporter,
     Cli,
 };
@@ -247,6 +247,7 @@ pub struct PathFailureDetector {
     reporter: Rc<PathReporter>,
     cache_channel_rx: Receiver<NvmeCacheMessage>,
     cache_channel_tx: Arc<Sender<NvmeCacheMessage>>,
+    monitor: UdevMonitor,
 }
 
 impl PathFailureDetector {
@@ -268,6 +269,7 @@ impl PathFailureDetector {
             reporter: Rc::new(reporter),
             cache_channel_tx: Arc::new(tx),
             cache_channel_rx: rx,
+            monitor: args.udev_monitor,
         }
     }
 
@@ -351,7 +353,7 @@ impl PathFailureDetector {
 
     /// Start NVMe path error detection loop.
     pub async fn start(mut self) -> anyhow::Result<()> {
-        let mut path_provider = CachedNvmePathProvider::new();
+        let mut path_provider = CachedNvmePathProvider::new(self.monitor);
         let mut path_collection = path_provider.get_path_collection().unwrap();
         let start = path_provider.start()?;
         tokio::pin!(start);

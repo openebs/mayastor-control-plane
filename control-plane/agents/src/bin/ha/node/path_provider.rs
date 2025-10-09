@@ -73,6 +73,15 @@ enum CacheOp {
     InvalidateCache,
 }
 
+/// Monitor kernel or udev events.
+#[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
+#[clap(rename_all = "lowercase")]
+pub(crate) enum UdevMonitor {
+    Udev,
+    #[default]
+    Kernel,
+}
+
 /// UDEV-based NVMe path provider that uses cache to keep all known NVMe targets
 /// in memory and avoid wildcard Sysfs enumeration when there is a need to get
 /// a list of all existing NVMe path in the system.
@@ -90,6 +99,7 @@ pub struct CachedNvmePathProvider {
     #[cfg(target_os = "linux")]
     udev_queue: Arc<SegQueue<CacheOp>>,
     frontend: Option<NvmePathNameCollection>,
+    monitor: UdevMonitor,
 }
 
 impl CachedNvmePathProvider {
@@ -135,7 +145,11 @@ impl CachedNvmePathProvider {
             self.spawn_nvmeadm_syncer();
         }
 
-        let builder = MonitorBuilder::new()?.match_subsystem("nvme")?;
+        let builder = match self.monitor {
+            UdevMonitor::Udev => MonitorBuilder::new()?,
+            UdevMonitor::Kernel => MonitorBuilder::new_kernel()?,
+        }
+        .match_subsystem("nvme")?;
 
         let monitor: AsyncMonitorSocket = builder.listen()?.try_into()?;
 
@@ -197,13 +211,14 @@ impl CachedNvmePathProvider {
     }
 
     /// Create a new cached name provider.
-    pub fn new() -> Self {
+    pub fn new(monitor: UdevMonitor) -> Self {
         let q = Arc::new(SegQueue::new());
 
         Self {
             frontend: Some(NvmePathNameCollection::new(Arc::clone(&q))),
             #[cfg(target_os = "linux")]
             udev_queue: q,
+            monitor,
         }
     }
 }
