@@ -2,18 +2,17 @@ use nvmeadm::nvmf_subsystem::{NvmeSubsystems, Subsystem};
 use stor_port::platform::{current_platform_type, PlatformType};
 use utils::nvme_target_nqn_prefix;
 
-#[cfg(target_os = "linux")]
-use std::convert::TryInto;
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-
 use crossbeam_queue::SegQueue;
 use futures_util::future::ready;
 #[cfg(target_os = "linux")]
 use futures_util::stream::StreamExt;
+#[cfg(target_os = "linux")]
+use std::convert::TryInto;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 #[cfg(target_os = "linux")]
 use tokio_udev::{AsyncMonitorSocket, EventType, MonitorBuilder};
 
@@ -22,7 +21,7 @@ const SYSFS_PREFIX: &str = "/sys/devices/virtual/nvme-fabrics/ctl/";
 const CACHE_EVENTS_BATCH_SIZE: usize = 128;
 
 /// Object that represents a path to sysfs NVMe object.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NvmePath {
     path_buffer: PathBuf,
     nqn: String,
@@ -56,6 +55,11 @@ pub fn get_nvme_path_entry(path: &String) -> Option<NvmePath> {
             if s.nqn.starts_with(&nvme_target_nqn_prefix()) {
                 Some(NvmePath::new(pb, s.nqn))
             } else {
+                // todo: right after being added a path may not yet be fully init
+                // in the sysfs, example: nqn: "(efault)", state: "connecting"
+                // address: SubsystemAddr("traddr=10.1.0.8,trsvcid=8420"), serial: "(efault)"
+                // we could sleep for a bit and retry but since we get the [`EventType::Change`]
+                // event, this is probably fine as is
                 None
             }
         })
@@ -67,6 +71,7 @@ pub fn get_nvme_path_entry(path: &String) -> Option<NvmePath> {
 #[allow(dead_code)]
 enum CacheOp {
     Add(String),
+    Change(String),
     Remove(String),
     /// Sync up subsystems for platforms where udev is not supported.
     SubsystemsSync(Vec<String>),
@@ -185,6 +190,10 @@ impl CachedNvmePathProvider {
                                 tracing::debug!(path, "NVMe path removed");
                                 Some(CacheOp::Remove(path.to_owned()))
                             }
+                            EventType::Change => {
+                                tracing::debug!(path, "NVMe path changed");
+                                Some(CacheOp::Change(path.to_owned()))
+                            }
                             _ => None,
                         };
 
@@ -245,6 +254,23 @@ impl NvmePathNameCollection {
         }
     }
 
+    fn update_cache_entry(&mut self, path: String) {
+        if let Some(pb) = get_nvme_path_entry(&path) {
+            match self.entries.entry(path.clone()) {
+                Entry::Occupied(mut existing) => {
+                    if existing.get() != &pb {
+                        tracing::warn!(path, nqn = pb.nqn, "Updating NVMe path entry in cache");
+                        *existing.get_mut() = pb;
+                    }
+                }
+                Entry::Vacant(entry) => {
+                    tracing::warn!(path, nqn = pb.nqn, "Adding new NVMe path entry to cache");
+                    entry.insert(pb);
+                }
+            }
+        }
+    }
+
     /// Fully rebuild the NVMe path cache.
     fn invalidate_cache(&mut self) {
         self.entries.clear();
@@ -273,6 +299,9 @@ impl NvmePathNameCollection {
                 match e {
                     CacheOp::Add(p) => {
                         self.add_cache_entry(p);
+                    }
+                    CacheOp::Change(p) => {
+                        self.update_cache_entry(p);
                     }
                     CacheOp::Remove(path) => match self.entries.remove(&path) {
                         Some(_) => tracing::info!(path, "NVMe path removed from the cache"),
