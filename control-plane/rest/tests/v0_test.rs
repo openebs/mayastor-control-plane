@@ -575,3 +575,146 @@ async fn unpublish_from_nonfrontend_node() {
     let vol = client.volumes_api().get_volume(&volume_uuid).await.unwrap();
     assert!(!vol.state.target.unwrap().device_uri.is_empty());
 }
+
+#[tokio::test]
+async fn metrics_endpoint() {
+    // Test with authentication
+    let cluster = test_setup(&true).await;
+    let client = RestClient::new("https://localhost:8080", true, Some(bearer_token()))
+        .unwrap()
+        .v00();
+
+    // Ensure we have nodes registered
+    let nodes = client.nodes_api().get_nodes(None).await.unwrap();
+    assert!(!nodes.is_empty(), "Should have at least one node");
+
+    // Make HTTP request to metrics endpoint
+    let https_client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .unwrap();
+
+    let response = https_client
+        .get("https://localhost:8080/v0/metrics")
+        .send()
+        .await
+        .expect("Failed to fetch metrics");
+
+    assert_eq!(
+        response.status(),
+        reqwest::StatusCode::OK,
+        "Metrics endpoint should return 200 OK"
+    );
+
+    // Verify content type
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .expect("Content-Type header should be present")
+        .to_str()
+        .unwrap();
+    assert!(
+        content_type.contains("text/plain"),
+        "Content type should be text/plain for Prometheus metrics"
+    );
+
+    // Get the response body
+    let body = response.text().await.expect("Failed to read response body");
+
+    // Verify the metrics are present
+    info!("Metrics response:\n{}", body);
+
+    // Check for expected metric names
+    assert!(
+        body.contains("mayastor_node_status"),
+        "Metrics should contain mayastor_node_status"
+    );
+    assert!(
+        body.contains("mayastor_node_cordoned"),
+        "Metrics should contain mayastor_node_cordoned"
+    );
+    assert!(
+        body.contains("mayastor_node_drain_state"),
+        "Metrics should contain mayastor_node_drain_state"
+    );
+
+    // Verify HELP and TYPE lines exist
+    assert!(
+        body.contains("# HELP mayastor_node_status"),
+        "Should have HELP line for node_status"
+    );
+    assert!(
+        body.contains("# TYPE mayastor_node_status gauge"),
+        "Should have TYPE line for node_status"
+    );
+
+    // Verify we have metrics for the nodes
+    for node in nodes {
+        let node_id = node.id;
+        assert!(
+            body.contains(&format!("{{node=\"{}\"}}", node_id)),
+            "Should have metrics for node {}",
+            node_id
+        );
+    }
+
+    // Test cordoning a node and verifying metrics change
+    let test_node = cluster.node(0);
+    info!("Cordoning node: {}", test_node);
+
+    client
+        .nodes_api()
+        .put_node_cordon(test_node.as_str(), "test-label")
+        .await
+        .expect("Failed to cordon node");
+
+    // Wait a bit for the state to update
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // Fetch metrics again
+    let response = https_client
+        .get("https://localhost:8080/v0/metrics")
+        .send()
+        .await
+        .expect("Failed to fetch metrics after cordoning");
+
+    let body = response.text().await.expect("Failed to read response body");
+    info!("Metrics after cordoning:\n{}", body);
+
+    // Verify cordoned metric is now 1 for this node
+    assert!(
+        body.contains(&format!(
+            "mayastor_node_cordoned{{node=\"{}\"}} 1",
+            test_node
+        )),
+        "Cordoned metric should be 1 after cordoning node"
+    );
+
+    // Uncordon the node
+    client
+        .nodes_api()
+        .delete_node_cordon(test_node.as_str(), "test-label")
+        .await
+        .expect("Failed to uncordon node");
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // Fetch metrics one more time
+    let response = https_client
+        .get("https://localhost:8080/v0/metrics")
+        .send()
+        .await
+        .expect("Failed to fetch metrics after uncordoning");
+
+    let body = response.text().await.expect("Failed to read response body");
+    info!("Metrics after uncordoning:\n{}", body);
+
+    // Verify cordoned metric is back to 0
+    assert!(
+        body.contains(&format!(
+            "mayastor_node_cordoned{{node=\"{}\"}} 0",
+            test_node
+        )),
+        "Cordoned metric should be 0 after uncordoning node"
+    );
+}

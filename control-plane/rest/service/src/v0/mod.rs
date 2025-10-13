@@ -6,6 +6,7 @@ pub mod app_node;
 pub mod block_devices;
 pub mod children;
 pub mod jsongrpc;
+pub mod metrics;
 pub mod nexuses;
 pub mod nodes;
 pub mod pools;
@@ -76,6 +77,10 @@ fn configure(cfg: &mut actix_web::web::ServiceConfig) {
     apis::actix_server::configure::<RestApi, BearerToken>(cfg);
     // todo: remove when the /states is added to the spec
     states::configure(cfg);
+    // Override the auto-generated metrics endpoint with our custom implementation
+    // The OpenAPI-generated handler doesn't properly support text/plain responses,
+    // so we register our custom handler after the auto-generated one to override it.
+    metrics::configure(cfg);
 }
 
 fn json_error(err: impl std::fmt::Display, _req: &actix_web::HttpRequest) -> actix_web::Error {

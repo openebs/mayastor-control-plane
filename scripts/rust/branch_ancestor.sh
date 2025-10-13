@@ -43,8 +43,8 @@ pub const TARGET_REGISTRY: &str = "${REGISTRY,,}";
 EOF
 )
 
-if [ "$CONTENT" != "$(cat $TEST_CONSTANTS 2>/dev/null)" ]; then
+if [ "$CONTENT" != "$(cat "$TEST_CONSTANTS" 2>/dev/null)" ]; then
   echo "Writing To $TEST_CONSTANTS"
   echo "$CONTENT"
-  echo "$CONTENT" > $TEST_CONSTANTS
+  echo "$CONTENT" > "$TEST_CONSTANTS"
 fi

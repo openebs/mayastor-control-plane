@@ -40,6 +40,7 @@ utils = { path = "../../utils/utils-lib" }
 humantime = "2.1.0"
 grpc = { path = "../grpc" }
 num_cpus = "1.16.0"
+prometheus = "0.13.4"
 
 [dev-dependencies]
 tokio = { version = "1.43.1", features = ["full"] }

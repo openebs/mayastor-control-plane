@@ -5,6 +5,32 @@ info:
 servers:
   - url: /v0
 paths:
+  /metrics:
+    get:
+      tags:
+        - Metrics
+      operationId: get_metrics
+      summary: Get Prometheus metrics
+      description: Returns Mayastor node status metrics in Prometheus text format
+      responses:
+        '200':
+          description: Prometheus metrics in text format
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  # HELP mayastor_node_status Status of mayastor node (0=Unknown, 1=Online, 2=Offline)
+                  # TYPE mayastor_node_status gauge
+                  mayastor_node_status{node="node-1"} 1
+                  # HELP mayastor_node_cordoned Whether mayastor node is cordoned (0=No, 1=Yes)
+                  # TYPE mayastor_node_cordoned gauge
+                  mayastor_node_cordoned{node="node-1"} 0
+                  # HELP mayastor_node_drain_state Drain state of mayastor node (0=None, 1=Cordoned, 2=Draining, 3=Drained)
+                  # TYPE mayastor_node_drain_state gauge
+                  mayastor_node_drain_state{node="node-1"} 0
+        '5XX':
+          $ref: '#/components/responses/ServerError'
   /nexuses:
     get:
       tags:

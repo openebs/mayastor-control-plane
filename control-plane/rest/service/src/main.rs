@@ -239,6 +239,9 @@ async fn main() -> anyhow::Result<()> {
         .ok()
         .expect("Expect to be initialised only once");
 
+    // Initialize Prometheus metrics collector
+    v0::metrics::init_metrics();
+
     let cached_core_state =
         Data::new(CachedCoreState::new(cli_args.core_liveness_check_frequency).await);
 
