@@ -3,13 +3,22 @@ use stor_port::types::v0::transport::NodeId;
 
 /// Watchdog which must be pet within the deadline, otherwise
 /// it triggers the `on_timeout` callback from the node `Service`.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct Watchdog {
     node_id: NodeId,
     deadline: std::time::Duration,
     timestamp: std::time::Instant,
     pet_chan: Option<tokio::sync::mpsc::Sender<()>>,
     service: Option<Service>,
+}
+impl std::fmt::Debug for Watchdog {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Watchdog")
+            .field("node_id", &self.node_id)
+            .field("deadline", &self.deadline)
+            .field("timestamp", &self.timestamp)
+            .finish()
+    }
 }
 
 impl Watchdog {

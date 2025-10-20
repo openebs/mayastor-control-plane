@@ -149,7 +149,7 @@ macro_rules! rpc_impl_string_id {
 macro_rules! rpc_impl_string_uuid_inner {
     ($Name:ident, $Doc:literal) => {
         #[doc = $Doc]
-        #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+        #[derive(Clone, Eq, PartialEq, Hash)]
         pub struct $Name(uuid::Uuid, String);
 
         impl Serialize for $Name {
@@ -182,6 +182,11 @@ macro_rules! rpc_impl_string_uuid_inner {
         impl std::fmt::Display for $Name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, "{}", self.0)
+            }
+        }
+        impl std::fmt::Debug for $Name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}({})", stringify!($Name), self.1)
             }
         }
 
