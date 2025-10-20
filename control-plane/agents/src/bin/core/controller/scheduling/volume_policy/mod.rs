@@ -1,4 +1,7 @@
-use super::{volume::ResizeVolumeReplicas, ReplicaFilters, ResourceFilter};
+use super::{
+    volume::ResizeVolumeReplicas, FailedPredicate, ReplicaFilters, ResourceExhausted,
+    ResourceFilter,
+};
 use crate::controller::scheduling::volume::{
     AddVolumeReplica, CloneVolumeSnapshot, SnapshotVolumeReplica,
 };
@@ -39,15 +42,33 @@ impl DefaultBasePolicy {
     }
     fn filter_snapshot_nodes(request: SnapshotVolumeReplica) -> SnapshotVolumeReplica {
         request
-            .filter(node::NodeFilters::cordoned_for_pool)
-            .filter(node::NodeFilters::online_for_pool)
+            .filter_expl(
+                node::NodeFilters::cordoned_for_pool,
+                FailedPredicate::NodeCordoned,
+            )
+            .filter_expl(
+                node::NodeFilters::online_for_pool,
+                FailedPredicate::NodeNotOnline,
+            )
     }
     fn filter_snapshot_pools(request: SnapshotVolumeReplica) -> SnapshotVolumeReplica {
         request
-            .filter(pool::PoolBaseFilters::usable)
-            .filter(pool::PoolBaseFilters::uncordoned_snaps)
-            .filter(pool::PoolBaseFilters::capacity)
-            .filter(pool::PoolBaseFilters::min_free_space)
+            .filter_expl(
+                pool::PoolBaseFilters::usable,
+                FailedPredicate::PoolNotOnline,
+            )
+            .filter_expl(
+                pool::PoolBaseFilters::uncordoned_snaps,
+                FailedPredicate::PoolSnapshotCordon,
+            )
+            .filter_expl(
+                pool::PoolBaseFilters::capacity,
+                FailedPredicate::PoolTooSmall,
+            )
+            .filter_expl(
+                pool::PoolBaseFilters::min_free_space,
+                ResourceExhausted::PoolNoSpace,
+            )
     }
     fn filter_clone(request: CloneVolumeSnapshot) -> CloneVolumeSnapshot {
         Self::filter_clone_pools(Self::filter_clone_nodes(request))

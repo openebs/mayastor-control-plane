@@ -19,7 +19,11 @@ use stor_port::types::v0::{
     transport::{NodeId, PoolId, VolumeState},
 };
 
-use std::{collections::HashMap, ops::Deref};
+use crate::controller::scheduling::ResourceExcReason;
+use std::{
+    collections::{BTreeMap, HashMap},
+    ops::Deref,
+};
 
 /// Move replica to another pool.
 #[derive(Default, Clone)]
@@ -713,6 +717,14 @@ impl ResourceFilter for SnapshotVolumeReplica {
 
     fn collect(self) -> Vec<Self::Item> {
         self.data.list
+    }
+    fn collect_ext(
+        self,
+    ) -> (
+        Vec<Self::Item>,
+        BTreeMap<ResourceExcReason, Vec<Self::Item>>,
+    ) {
+        (self.data.list, self.data.out)
     }
 }
 
