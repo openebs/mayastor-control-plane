@@ -22,11 +22,23 @@ pub fn check_nvme_core_ana() -> Result<bool, std::io::Error> {
         Ok(multipath) => Ok(multipath),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             // check the nvme_core is enabled, otherwise all this is moot.
-            std::fs::exists("/sys/module/nvme_core")?;
+            if !std::fs::exists("/sys/module/nvme_core")? {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "kernel module nvme_core not found",
+                ));
+            }
+
             // there's a race here where the module may be unloaded and reloaded, though this may
             // happen even after we check here - also when a volume is attached the module cannot
             // be unloaded, so we're safe to check it.
-            return Ok(false);
+
+            // RHEL10 and derivatives have defaulted to multipath enabled, but have done so whilst
+            // removing the multipath parameter completely for some reason, which is a breaking
+            // change for us: https://issues.redhat.com/browse/RHEL-67045
+            //
+            // If multipath parameter doesn't exist but iopolicy does, let's assume multipath is on?
+            return std::fs::exists("/sys/module/nvme_core/parameters/iopolicy");
         }
         Err(error) => Err(error),
     };
