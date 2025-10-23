@@ -4,6 +4,7 @@ use crate::{
     },
     resources::{
         error::Error,
+        node::NodeDisplayLabels,
         utils::{self, optional_cell, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
         VolumeId,
     },
@@ -38,6 +39,9 @@ pub struct VolumesArgs {
     #[clap(long)]
     /// Shows only volumes created from specific source, viz none, snapshot
     source: Option<VolumeSource>,
+    /// Show the node labels for each replica (tabled output only).
+    #[clap(long)]
+    show_node_labels: bool,
 }
 
 impl CreateRow for openapi::models::Volume {
@@ -318,7 +322,7 @@ impl ReplicaTopology for Volume {
     type ID = VolumeId;
     type Context = VolumesArgs;
     async fn topologies(output: &OutputFormat, context: &Self::Context) -> PluginResult {
-        let volumes = VolumeTopologies(get_paginated_volumes(context).await.unwrap_or_default());
+        let volumes = VolumesTopologies::new(context).await?;
         utils::print_table(output, volumes);
         Ok(())
     }
@@ -326,7 +330,10 @@ impl ReplicaTopology for Volume {
         match RestClient::client().volumes_api().get_volume(id).await {
             Ok(volume) => {
                 // Print table, json or yaml based on output format.
-                utils::print_table(output, volume.into_body().state.replica_topology);
+                utils::print_table(
+                    output,
+                    VolumeReplicaTopologies::new(volume.into_body()).await?,
+                );
             }
             Err(e) => {
                 return Err(Error::GetVolumeError {
@@ -362,31 +369,57 @@ impl RebuildHistory for Volume {
     }
 }
 
-#[derive(Default, Debug, serde::Serialize, serde::Deserialize)]
-struct VolumeTopologies(Vec<openapi::models::Volume>);
+#[derive(Default, Debug)]
+struct VolumesTopologies {
+    volumes: Vec<openapi::models::Volume>,
+    nodes: Vec<openapi::models::Node>,
+    show_node_labels: bool,
+}
+impl VolumesTopologies {
+    async fn new(context: &VolumesArgs) -> Result<Self, Error> {
+        Ok(Self {
+            volumes: get_paginated_volumes(context).await.unwrap_or_default(),
+            nodes: list_nodes(context.show_node_labels).await?,
+            show_node_labels: context.show_node_labels,
+        })
+    }
+}
 
-impl GetHeaderRow for VolumeTopologies {
+impl serde::Serialize for VolumesTopologies {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.volumes.serialize(serializer)
+    }
+}
+
+impl GetHeaderRow for VolumesTopologies {
     fn get_header_row(&self) -> Row {
-        utils::REPLICA_TOPOLOGIES_PREFIX
+        let mut row: Row = utils::REPLICA_TOPOLOGIES_PREFIX
             .iter()
             .chain(utils::REPLICA_TOPOLOGY_HEADERS.iter())
             .cloned()
-            .collect()
+            .collect();
+        if self.show_node_labels {
+            row.extend(vec!["NODE-LABELS"]);
+        }
+        row
     }
 }
-impl CreateRows for VolumeTopologies {
+impl CreateRows for VolumesTopologies {
     fn create_rows(&self) -> Vec<Row> {
-        self.0
+        self.volumes
             .iter()
             .flat_map(|volume| {
                 let mut rows = Vec::new();
                 volume
                     .state
                     .replica_topology
-                    .create_rows()
-                    .into_iter()
+                    .iter()
+                    .sorted_by(|(a, _), (b, _)| a.cmp(b))
                     .enumerate()
-                    .for_each(|(i, mut r)| {
+                    .for_each(|(i, r)| {
                         let mut row = if i == 0 {
                             row![volume.spec.uuid]
                         } else if i < volume.state.replica_topology.len() - 1 {
@@ -394,7 +427,8 @@ impl CreateRows for VolumeTopologies {
                         } else {
                             row!["└─"]
                         };
-                        for cell in r.iter_mut() {
+
+                        for cell in VolumeReplicaTopology::new(r, &self.nodes).row().iter_mut() {
                             row.add_cell(cell.clone());
                         }
                         rows.push(row);
@@ -408,34 +442,94 @@ impl CreateRows for VolumeTopologies {
     }
 }
 
-impl GetHeaderRow for HashMap<String, openapi::models::ReplicaTopology> {
+#[derive(Default, Debug, serde::Serialize)]
+pub(crate) struct VolumeReplicaTopologies {
+    #[serde(flatten)]
+    replicas: HashMap<String, openapi::models::ReplicaTopology>,
+    #[serde(skip)]
+    nodes: Vec<openapi::models::Node>,
+}
+impl VolumeReplicaTopologies {
+    async fn new(volume: openapi::models::Volume) -> Result<Self, Error> {
+        Ok(Self {
+            replicas: volume.state.replica_topology,
+            nodes: list_nodes(false).await?,
+        })
+    }
+}
+impl From<HashMap<String, openapi::models::ReplicaTopology>> for VolumeReplicaTopologies {
+    fn from(replicas: HashMap<String, openapi::models::ReplicaTopology>) -> Self {
+        Self {
+            replicas,
+            nodes: vec![],
+        }
+    }
+}
+
+impl GetHeaderRow for VolumeReplicaTopologies {
     fn get_header_row(&self) -> Row {
         (*utils::REPLICA_TOPOLOGY_HEADERS).clone()
     }
 }
 
-impl CreateRows for HashMap<String, openapi::models::ReplicaTopology> {
+impl CreateRows for VolumeReplicaTopologies {
     fn create_rows(&self) -> Vec<Row> {
-        self.iter()
+        self.replicas
+            .iter()
             .sorted_by(|(a, _), (b, _)| a.cmp(b))
-            .map(|(id, topology)| {
-                let usage = topology.usage.as_ref();
-                row![
-                    id,
-                    optional_cell(topology.node.as_ref()),
-                    optional_cell(topology.pool.as_ref()),
-                    topology.state,
-                    optional_cell(topology.encrypted),
-                    optional_cell(usage.map(|u| ::utils::bytes::into_human(u.capacity))),
-                    optional_cell(usage.map(|u| ::utils::bytes::into_human(u.allocated))),
-                    optional_cell(usage.map(|u| ::utils::bytes::into_human(u.allocated_snapshots))),
-                    optional_cell(topology.child_status.as_ref().map(|s| s.to_string())),
-                    optional_cell(topology.child_status_reason.as_ref().map(|s| s.to_string())),
-                    optional_cell(topology.rebuild_progress.map(|p| format!("{p}%"))),
-                    optional_cell(topology.healthy)
-                ]
-            })
+            .map(|s| VolumeReplicaTopology::new(s, &self.nodes).row())
             .collect()
+    }
+    fn sort_rows(&self) -> bool {
+        false
+    }
+}
+
+struct VolumeReplicaTopology<'a> {
+    id: &'a String,
+    topology: &'a openapi::models::ReplicaTopology,
+    nodes: &'a Vec<openapi::models::Node>,
+}
+impl<'a> VolumeReplicaTopology<'a> {
+    fn new(
+        (id, topology): (&'a String, &'a openapi::models::ReplicaTopology),
+        nodes: &'a Vec<openapi::models::Node>,
+    ) -> Self {
+        Self {
+            id,
+            topology,
+            nodes,
+        }
+    }
+}
+
+impl<'a> CreateRow for VolumeReplicaTopology<'a> {
+    fn row(&self) -> Row {
+        let topology = &self.topology;
+        let usage = topology.usage.as_ref();
+        let labels = self
+            .nodes
+            .iter()
+            .find(|n| Some(&n.id) == topology.node.as_ref())
+            .map(|n| NodeDisplayLabels::get_node_label_list(n).join(", "));
+        let mut row = row![
+            self.id,
+            optional_cell(topology.node.as_ref()),
+            optional_cell(topology.pool.as_ref()),
+            topology.state,
+            optional_cell(topology.encrypted),
+            optional_cell(usage.map(|u| ::utils::bytes::into_human(u.capacity))),
+            optional_cell(usage.map(|u| ::utils::bytes::into_human(u.allocated))),
+            optional_cell(usage.map(|u| ::utils::bytes::into_human(u.allocated_snapshots))),
+            optional_cell(topology.child_status.as_ref().map(|s| s.to_string())),
+            optional_cell(topology.child_status_reason.as_ref().map(|s| s.to_string())),
+            optional_cell(topology.rebuild_progress.map(|p| format!("{p}%"))),
+            optional_cell(topology.healthy),
+        ];
+        if !self.nodes.is_empty() {
+            row.add_cell(prettytable::Cell::new(&optional_cell(labels)));
+        }
+        row
     }
     fn sort_rows(&self) -> bool {
         false
@@ -491,4 +585,16 @@ fn child_uuid(uri: &str) -> String {
 
 fn to_human_readable(val: u64) -> String {
     ::utils::bytes::into_human(val)
+}
+
+async fn list_nodes(labels: bool) -> Result<Vec<openapi::models::Node>, Error> {
+    if !labels {
+        return Ok(vec![]);
+    }
+    Ok(RestClient::client()
+        .nodes_api()
+        .get_nodes(None)
+        .await
+        .map_err(|source| Error::ListNodesError { source })?
+        .into_body())
 }
