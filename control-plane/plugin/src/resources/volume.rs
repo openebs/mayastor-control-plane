@@ -12,6 +12,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::prelude::*;
+use itertools::Itertools;
 use openapi::{
     apis::StatusCode,
     models::{ReplicaState, SetVolumePropertyBody, VolumeContentSource},
@@ -134,7 +135,7 @@ async fn get_paginated_volumes(volume_args: &VolumesArgs) -> Option<Vec<openapi:
                 starting_token = v.next_token;
             }
             Err(e) => {
-                println!("Failed to list volumes. Error {e}");
+                eprintln!("Failed to list volumes. Error {e}");
                 return None;
             }
         }
@@ -402,6 +403,9 @@ impl CreateRows for VolumeTopologies {
             })
             .collect()
     }
+    fn sort_rows(&self) -> bool {
+        false
+    }
 }
 
 impl GetHeaderRow for HashMap<String, openapi::models::ReplicaTopology> {
@@ -413,6 +417,7 @@ impl GetHeaderRow for HashMap<String, openapi::models::ReplicaTopology> {
 impl CreateRows for HashMap<String, openapi::models::ReplicaTopology> {
     fn create_rows(&self) -> Vec<Row> {
         self.iter()
+            .sorted_by(|(a, _), (b, _)| a.cmp(b))
             .map(|(id, topology)| {
                 let usage = topology.usage.as_ref();
                 row![
@@ -432,6 +437,9 @@ impl CreateRows for HashMap<String, openapi::models::ReplicaTopology> {
             })
             .collect()
     }
+    fn sort_rows(&self) -> bool {
+        false
+    }
 }
 
 impl GetHeaderRow for openapi::models::RebuildHistory {
@@ -444,6 +452,7 @@ impl CreateRows for openapi::models::RebuildHistory {
     fn create_rows(&self) -> Vec<Row> {
         self.records
             .iter()
+            .sorted_by_key(|rec| &rec.start_time)
             .map(|rec| {
                 let start: DateTime<Utc> = DateTime::from_str(rec.start_time.as_str())
                     .expect("Cant map time to required format");
@@ -464,6 +473,9 @@ impl CreateRows for openapi::models::RebuildHistory {
                 ]
             })
             .collect()
+    }
+    fn sort_rows(&self) -> bool {
+        false
     }
 }
 

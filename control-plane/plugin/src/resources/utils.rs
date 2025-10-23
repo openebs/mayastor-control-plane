@@ -135,10 +135,16 @@ pub fn table_printer(titles: Row, rows: Vec<Row>) {
 /// CreateRows trait to be implemented by Vec<`resource`> to create the rows.
 pub trait CreateRows {
     fn create_rows(&self) -> Vec<Row>;
+    fn sort_rows(&self) -> bool {
+        true
+    }
 }
 /// CreateRows trait to be implemented by `resource` to create a row.
 pub trait CreateRow {
     fn row(&self) -> Row;
+    fn sort_rows(&self) -> bool {
+        true
+    }
 }
 
 /// GetHeaderRow trait to be implemented by Vec<`resource`> to fetch the corresponding headers.
@@ -168,6 +174,9 @@ where
     fn create_rows(&self) -> Vec<Row> {
         self.iter().map(|i| i.row()).collect()
     }
+    fn sort_rows(&self) -> bool {
+        self.first().map(T::sort_rows).unwrap_or_default()
+    }
 }
 impl<T> CreateRows for T
 where
@@ -175,6 +184,9 @@ where
 {
     fn create_rows(&self) -> Vec<Row> {
         vec![self.row()]
+    }
+    fn sort_rows(&self) -> bool {
+        T::sort_rows(self)
     }
 }
 
@@ -208,7 +220,11 @@ where
         }
         OutputFormat::None => {
             // Show the tabular form if output format is not specified.
-            let rows: Vec<Row> = obj.create_rows();
+            let mut rows: Vec<Row> = obj.create_rows();
+            if obj.sort_rows() {
+                // not the most optimal way to do it at this stage but at least will work for all by default
+                rows.sort_by_key(|r| r.get_cell(0).map(|r| r.get_content()).unwrap_or_default());
+            }
             let header: Row = obj.get_header_row();
             table_printer(header, rows);
         }

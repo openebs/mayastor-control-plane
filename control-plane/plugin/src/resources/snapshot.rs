@@ -217,6 +217,9 @@ impl CreateRows for VolumeSnapshotTopology {
             })
             .collect()
     }
+    fn sort_rows(&self) -> bool {
+        false
+    }
 }
 impl CreateRows for Vec<openapi::models::ReplicaSnapshotState> {
     fn create_rows(&self) -> Vec<Row> {
