@@ -326,6 +326,7 @@ impl OperationGuardArc<VolumeSpec> {
     /// (that is, replicas which are not used by a nexus).
     /// It must not be the last replica of the volume
     /// (an error will be returned in such case).
+    /// todo: this is succeeding without acomplishing...
     pub(crate) async fn remove_unused_volume_replica(
         &mut self,
         registry: &Registry,

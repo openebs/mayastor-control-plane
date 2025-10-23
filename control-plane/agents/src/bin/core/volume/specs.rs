@@ -191,7 +191,7 @@ pub(crate) async fn volume_replica_candidates(
 
     volume_spec.trace(&format!(
         "Creation pool candidates for volume: {:?}",
-        pools.iter().map(|p| p.state()).collect::<Vec<_>>()
+        pools.iter().take(10).map(|p| p.state()).collect::<Vec<_>>()
     ));
 
     Ok(pools
