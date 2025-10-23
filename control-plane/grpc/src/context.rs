@@ -48,7 +48,9 @@ pub fn timeout_grpc(op_id: MessageId, timeout_opts: TimeoutOptions) -> Duration 
     if let Some(min_timeouts) = timeout_opts.request_min_timeout() {
         let op_timeout = match op_id {
             MessageId::v0(op_id) => match op_id {
-                MessageIdVs::CreateVolume => min_timeouts.replica() * 3 + min_timeouts.nexus(),
+                MessageIdVs::CreateSnapshotVolume | MessageIdVs::CreateVolume => {
+                    min_timeouts.replica() * 3 + min_timeouts.nexus()
+                }
                 MessageIdVs::DestroyVolume => min_timeouts.replica() * 3 + min_timeouts.nexus(),
                 MessageIdVs::PublishVolume => min_timeouts.nexus(),
                 MessageIdVs::UnpublishVolume => min_timeouts.nexus(),
