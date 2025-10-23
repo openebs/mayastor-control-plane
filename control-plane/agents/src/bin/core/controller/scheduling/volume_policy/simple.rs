@@ -8,7 +8,7 @@ use crate::{
                 ReplicaResizePoolsContext, ResizeVolumeReplicas, SnapshotVolumeReplica,
             },
             volume_policy::{affinity_group, pool::PoolBaseFilters, DefaultBasePolicy},
-            ResourceFilter, ResourcePolicy, SortBuilder, SortCriteria,
+            ResourceExhausted, ResourceFilter, ResourcePolicy, SortBuilder, SortCriteria,
         },
     },
     ThinArgs,
@@ -53,9 +53,16 @@ impl ResourcePolicy<AddVolumeReplica> for SimplePolicy {
 impl ResourcePolicy<SnapshotVolumeReplica> for SimplePolicy {
     fn apply(self, to: SnapshotVolumeReplica) -> SnapshotVolumeReplica {
         DefaultBasePolicy::filter_snapshot(to)
-            .filter(PoolBaseFilters::min_free_space)
-            .filter_param(&self, SimplePolicy::min_free_space)
-            .filter_param(&self, SimplePolicy::pool_overcommit)
+            .filter_param_expl(
+                &self,
+                SimplePolicy::min_free_space,
+                ResourceExhausted::PoolNoSpace,
+            )
+            .filter_param_expl(
+                &self,
+                SimplePolicy::pool_overcommit,
+                ResourceExhausted::PoolOverCommit,
+            )
     }
 }
 

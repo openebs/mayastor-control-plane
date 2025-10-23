@@ -325,7 +325,7 @@ impl Service {
     }
 
     /// Destroy a volume using the given parameters.
-    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
+    #[tracing::instrument(level = "info", skip(self, request), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn destroy_volume(&self, request: &DestroyVolume) -> Result<(), SvcError> {
         let mut volume = self.specs().volume(&request.uuid).await?;
         let content_source = volume.as_ref().content_source.as_ref();
@@ -370,7 +370,7 @@ impl Service {
     }
 
     /// Unshare a volume using the given parameters.
-    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
+    #[tracing::instrument(level = "info", skip(self, request), err, fields(volume.uuid = %request.uuid))]
     pub(super) async fn unshare_volume(&self, request: &UnshareVolume) -> Result<(), SvcError> {
         let mut volume = self.specs().volume(&request.uuid).await?;
         volume.unshare(&self.registry, request).await
@@ -409,7 +409,7 @@ impl Service {
     }
 
     /// Set volume replica.
-    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
+    #[tracing::instrument(level = "info", skip(self, request), err, fields(volume.uuid = %request.uuid, request.replicas = request.replicas))]
     pub(super) async fn set_volume_replica(
         &self,
         request: &SetVolumeReplica,
@@ -419,7 +419,7 @@ impl Service {
         self.registry.volume(&request.uuid).await
     }
     /// Set volume property.
-    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.uuid))]
+    #[tracing::instrument(level = "info", skip(self, request), err, fields(volume.uuid = %request.uuid, request.property = ?request.property))]
     pub(super) async fn set_volume_property(
         &self,
         request: &SetVolumeProperty,
@@ -429,7 +429,7 @@ impl Service {
         self.registry.volume(&request.uuid).await
     }
     /// Create a volume snapshot.
-    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = %request.source_id, snapshot.source_uuid = %request.source_id, snapshot.uuid = %request.snap_id))]
+    #[tracing::instrument(level = "info", skip(self, request), err, fields(volume.uuid = %request.source_id, snapshot.source_uuid = %request.source_id, snapshot.uuid = %request.snap_id))]
     async fn create_snapshot(
         &self,
         request: CreateVolumeSnapshot,
@@ -471,7 +471,7 @@ impl Service {
     }
 
     /// Delete a volume snapshot.
-    #[tracing::instrument(level = "info", skip(self), err, fields(volume.uuid = ?request.source_id, snapshot.source_uuid = ?request.source_id, snapshot.uuid = %request.snap_id))]
+    #[tracing::instrument(level = "info", skip(self, request), err, fields(volume.uuid = ?request.source_id, snapshot.source_uuid = ?request.source_id, snapshot.uuid = %request.snap_id))]
     async fn destroy_snapshot(&self, request: DestroyVolumeSnapshot) -> Result<(), SvcError> {
         // Fetch the snapshot spec.
         let snapshot = self.specs().volume_snapshot_rsc(request.snap_id()).ok_or(

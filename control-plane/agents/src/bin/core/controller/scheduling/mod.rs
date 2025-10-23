@@ -10,8 +10,16 @@ use crate::controller::scheduling::{
     resources::{ChildItem, PoolItem, ReplicaItem},
     volume::{ReplicaResizePoolsContext, VolumeReplicasForNexusCtx},
 };
-use std::{cmp::Ordering, collections::HashMap, future::Future};
+
+use stor_port::transport_api::ResourceKind;
 use weighted_scoring::{Criteria, Value, ValueGrading, WeightedScore};
+
+use snafu::Snafu;
+use std::{
+    cmp::Ordering,
+    collections::{btree_map::Entry, BTreeMap, HashMap},
+    future::Future,
+};
 
 #[async_trait::async_trait(?Send)]
 pub(crate) trait ResourcePolicy<Request: ResourceFilter>: Sized {
@@ -22,11 +30,111 @@ pub(crate) trait ResourcePolicy<Request: ResourceFilter>: Sized {
     }
 }
 
+/// Failed precondition errors.
+#[derive(Clone, Debug, Snafu, Eq, Hash, PartialEq)]
+#[allow(missing_docs)]
+pub(crate) enum FailedPredicate {
+    #[snafu(display("Pool is not online"))]
+    PoolNotOnline,
+    #[snafu(display("Pool is cordoned for snapshots"))]
+    PoolSnapshotCordon,
+    #[snafu(display("Pool's capacity is not sufficient"))]
+    PoolTooSmall,
+    #[snafu(display("Node where pool/replica resides is not online"))]
+    NodeNotOnline,
+    #[snafu(display("Node where pool/replica is cordoned"))]
+    NodeCordoned,
+}
+impl From<&FailedPredicate> for ResourceKind {
+    fn from(value: &FailedPredicate) -> Self {
+        match value {
+            FailedPredicate::PoolNotOnline => Self::Pool,
+            FailedPredicate::PoolSnapshotCordon => Self::Pool,
+            FailedPredicate::PoolTooSmall => Self::Pool,
+            FailedPredicate::NodeNotOnline => Self::Node,
+            FailedPredicate::NodeCordoned => Self::Node,
+        }
+    }
+}
+
+/// Resource Exhausted errors.
+#[derive(Clone, Debug, Snafu, Eq, Hash, PartialEq)]
+#[allow(missing_docs)]
+pub(crate) enum ResourceExhausted {
+    #[snafu(display("Pool doesn't have sufficient free space"))]
+    PoolNoSpace,
+    #[snafu(display("Pool is already overcommitted"))]
+    PoolOverCommit,
+}
+impl From<&ResourceExhausted> for ResourceKind {
+    fn from(value: &ResourceExhausted) -> Self {
+        match value {
+            ResourceExhausted::PoolNoSpace => Self::Pool,
+            ResourceExhausted::PoolOverCommit => Self::Pool,
+        }
+    }
+}
+
+/// Reason for excluding or filtering out items as part of the scheduling.
+#[derive(Clone, Debug, Snafu, Eq, Hash, PartialEq)]
+#[allow(missing_docs)]
+pub(crate) enum ResourceExcReason {
+    #[snafu(display("{source}"))]
+    PreCondition { source: FailedPredicate },
+    #[snafu(display("{source}"))]
+    RscExhausted { source: ResourceExhausted },
+}
+impl PartialOrd for ResourceExcReason {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.order_weight().cmp(&other.order_weight()))
+    }
+}
+impl Ord for ResourceExcReason {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.order_weight().cmp(&other.order_weight())
+    }
+}
+impl From<&ResourceExcReason> for ResourceKind {
+    fn from(value: &ResourceExcReason) -> Self {
+        match value {
+            ResourceExcReason::PreCondition { source } => source.into(),
+            ResourceExcReason::RscExhausted { source } => source.into(),
+        }
+    }
+}
+
+impl ResourceExcReason {
+    fn order_weight(&self) -> u8 {
+        match self {
+            Self::PreCondition { .. } => 0,
+            Self::RscExhausted { .. } => 1,
+        }
+    }
+    /// Get the equivalent `tonic::Code`.
+    pub(crate) fn tonic_code(&self) -> tonic::Code {
+        match self {
+            ResourceExcReason::PreCondition { .. } => tonic::Code::FailedPrecondition,
+            ResourceExcReason::RscExhausted { .. } => tonic::Code::ResourceExhausted,
+        }
+    }
+}
+impl From<FailedPredicate> for ResourceExcReason {
+    fn from(source: FailedPredicate) -> Self {
+        Self::PreCondition { source }
+    }
+}
+impl From<ResourceExhausted> for ResourceExcReason {
+    fn from(source: ResourceExhausted) -> Self {
+        Self::RscExhausted { source }
+    }
+}
+
 /// Default container of context and a list of items which must be filtered down and sorted.
 #[derive(Clone)]
 pub(crate) struct ResourceData<C, I: std::fmt::Debug> {
     context: C,
     list: Vec<I>,
+    out: BTreeMap<ResourceExcReason, Vec<I>>,
 }
 impl<C, I: std::fmt::Debug> ResourceData<C, I> {
     /// Create a new `Self`.
@@ -34,6 +142,7 @@ impl<C, I: std::fmt::Debug> ResourceData<C, I> {
         Self {
             context: request,
             list,
+            out: Default::default(),
         }
     }
     pub(crate) fn context(&self) -> &C {
@@ -63,6 +172,33 @@ pub(crate) trait ResourceFilter: Sized {
         data.list.retain(|v| filter(param, &data.context, v));
         self
     }
+    fn filter_param_expl<P, F>(
+        mut self,
+        param: &P,
+        filter: F,
+        reason: impl Into<ResourceExcReason>,
+    ) -> Self
+    where
+        F: Fn(&P, &Self::Request, &Self::Item) -> bool,
+    {
+        let data = self.data();
+        data.list.retain(|v| filter(param, &data.context, v));
+        let removed = data
+            .list
+            .extract_if(.., |v| !filter(param, &data.context, v))
+            .collect::<Vec<_>>();
+        if !removed.is_empty() {
+            match data.out.entry(reason.into()) {
+                Entry::Occupied(mut o) => {
+                    o.get_mut().extend(removed);
+                }
+                Entry::Vacant(v) => {
+                    v.insert(removed);
+                }
+            }
+        }
+        self
+    }
     #[allow(dead_code)]
     fn filter_iter(self, filter: fn(Self) -> Self) -> Self {
         filter(self)
@@ -80,6 +216,28 @@ pub(crate) trait ResourceFilter: Sized {
         data.list.retain(|v| filter(&data.context, v));
         self
     }
+    fn filter_expl<F: FnMut(&Self::Request, &Self::Item) -> bool>(
+        mut self,
+        mut filter: F,
+        reason: impl Into<ResourceExcReason>,
+    ) -> Self {
+        let data = self.data();
+        let removed = data
+            .list
+            .extract_if(.., |v| !filter(&data.context, v))
+            .collect::<Vec<_>>();
+        if !removed.is_empty() {
+            match data.out.entry(reason.into()) {
+                Entry::Occupied(mut o) => {
+                    o.get_mut().extend(removed);
+                }
+                Entry::Vacant(v) => {
+                    v.insert(removed);
+                }
+            }
+        }
+        self
+    }
     fn sort<F: FnMut(&Self::Item, &Self::Item) -> std::cmp::Ordering>(mut self, sort: F) -> Self {
         let data = self.data();
         data.list.sort_unstable_by(sort);
@@ -94,6 +252,15 @@ pub(crate) trait ResourceFilter: Sized {
         self
     }
     fn collect(self) -> Vec<Self::Item>;
+    #[allow(clippy::type_complexity)]
+    fn collect_ext(
+        self,
+    ) -> (
+        Vec<Self::Item>,
+        BTreeMap<ResourceExcReason, Vec<Self::Item>>,
+    ) {
+        (self.collect(), Default::default())
+    }
     #[allow(dead_code)]
     fn group_by<K, V, F: Fn(&Self::Request, &Vec<Self::Item>) -> HashMap<K, V>>(
         mut self,

@@ -24,7 +24,7 @@ use grpc::{
 use std::{collections::HashMap, sync::Arc};
 
 /// Node's Service
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct Service {
     registry: Registry,
     /// Deadline for receiving keepalive/Register messages.
@@ -33,6 +33,15 @@ pub(crate) struct Service {
     comms_timeouts: NodeCommsTimeout,
     /// Simulated node endpoint.
     sim_socket: Option<std::net::SocketAddr>,
+}
+impl std::fmt::Debug for Service {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Service")
+            .field("deadline", &self.deadline)
+            .field("comms_timeouts", &self.comms_timeouts)
+            .field("sim_socket", &self.sim_socket)
+            .finish()
+    }
 }
 
 /// Node communication Timeouts for establishing the connection to a node and
