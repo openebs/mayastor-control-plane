@@ -414,6 +414,7 @@ impl PoolDisplay {
                     .collect();
             }
         }
+        pools_labels.sort_unstable();
         pools_labels
     }
 }
