@@ -74,16 +74,16 @@ impl DefaultBasePolicy {
 /// Return true if all the keys present in volume's pool/node inclusion matches with the pool/node
 /// labels otherwise returns false.
 pub(crate) fn qualifies_label_criteria(
-    vol_pool_inc_labels: HashMap<String, String>,
-    pool_labels: &HashMap<String, String>,
+    vol_labels: &HashMap<String, String>,
+    labels: &HashMap<String, String>,
 ) -> bool {
-    for (vol_inc_key, vol_inc_value) in vol_pool_inc_labels.iter() {
-        match pool_labels.get(vol_inc_key) {
+    for (vol_key, vol_value) in vol_labels.iter() {
+        match labels.get(vol_key) {
             Some(pool_val) => {
-                if vol_inc_value.is_empty() {
+                if vol_value.is_empty() {
                     continue;
                 }
-                if pool_val != vol_inc_value {
+                if pool_val != vol_value {
                     return false;
                 }
             }

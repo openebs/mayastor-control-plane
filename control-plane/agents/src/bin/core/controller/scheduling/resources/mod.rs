@@ -16,7 +16,7 @@ use stor_port::types::v0::{
     transport::{Child, ChildUri, NodeId, PoolId, Replica},
 };
 
-use std::{collections::HashMap, ops::Deref};
+use std::{cmp::Ordering, collections::HashMap, ops::Deref};
 
 /// Item for pool scheduling logic.
 #[derive(Debug, Clone)]
@@ -94,9 +94,7 @@ impl PoolItemLister {
                 n.pool_wrappers()
                     .into_iter()
                     .filter_map(|p| {
-                        let cordoned = registry
-                            .specs()
-                            .pool_with(&p.id, |p| p.lock().cordoned().cloned());
+                        let cordoned = registry.specs().pool_with(&p.id, |p| p.cordoned().cloned());
                         let cordoned = cordoned.ok()?;
                         let ag_rep_count =
                             pool_ag_rep.as_ref().and_then(|map| map.get(&p.id).cloned());
@@ -119,7 +117,7 @@ impl PoolItemLister {
                     .and_then(|node| {
                         let cordoned = registry
                             .specs()
-                            .pool_with(&item.pool().id, |p| p.lock().cordoned().cloned());
+                            .pool_with(&item.pool().id, |p| p.cordoned().cloned());
                         let pool =
                             PoolItem::new(node.clone(), item.pool().clone(), None, cordoned.ok()?);
                         Some(pool)
@@ -188,6 +186,49 @@ impl PoolItemLister {
     }
 }
 
+/// Topology information to aid in selecting the "worst" replica which is the "best" removal.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct TopologyRmInfo {
+    /// The topology is valid (ie has required labels).
+    valid: bool,
+    /// In case of exclusion, track how many others this replica clashes with.
+    clashes: u64,
+}
+impl PartialOrd for TopologyRmInfo {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for TopologyRmInfo {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Best removal candidate should be lesser as the list is reversed later on.
+        match (self.valid, other.valid) {
+            (true, true) => other.clashes.cmp(&self.clashes),
+            (false, false) => Ordering::Equal,
+            (true, false) => Ordering::Greater,
+            (false, true) => Ordering::Less,
+        }
+    }
+}
+
+impl TopologyRmInfo {
+    /// There's no topology involved.
+    pub(crate) fn new_no_topology() -> Option<Self> {
+        None
+    }
+    /// This resource has an invalid topology.
+    pub(crate) fn new_invalid() -> Option<Self> {
+        Some(Self::new(false, 0))
+    }
+    /// A valid topology, but with clashes.
+    pub(crate) fn new_clashes(clashes: u64) -> Option<Self> {
+        Some(Self::new(true, clashes))
+    }
+    fn new(valid: bool, clashes: u64) -> Self {
+        Self { valid, clashes }
+    }
+}
+
 /// A replica item used for scheduling.
 #[derive(Debug, Clone)]
 pub(crate) struct ReplicaItem {
@@ -203,7 +244,7 @@ pub(crate) struct ReplicaItem {
     /// on this pool.
     ag_replicas_on_pool: Option<u64>,
     valid_pool_topology: Option<bool>,
-    valid_node_topology: Option<bool>,
+    node_topology_info: Option<TopologyRmInfo>,
     node_spec: Option<NodeSpec>,
 }
 
@@ -229,15 +270,20 @@ impl ReplicaItem {
             child_info,
             ag_replicas_on_pool,
             valid_pool_topology: None,
-            valid_node_topology: None,
+            node_topology_info: None,
             node_spec,
         }
     }
     /// Set the validity of the replica's node topology.
     /// If set to false, this means the replica is not in sync with the volume topology and
     /// therefore should be replaced by another replica which is in sync.
-    pub(crate) fn with_node_topology(mut self, valid_node_topology: Option<bool>) -> ReplicaItem {
-        self.valid_node_topology = valid_node_topology;
+    pub(crate) fn with_node_topology<F: Fn(&NodeSpec) -> Option<TopologyRmInfo>>(
+        mut self,
+        f: F,
+    ) -> ReplicaItem {
+        if let Some(node_spec) = &self.node_spec {
+            self.node_topology_info = f(node_spec);
+        }
         self
     }
     /// Set the validity of the replica's pool topology.
@@ -247,9 +293,13 @@ impl ReplicaItem {
         self.valid_pool_topology = valid_pool_topology;
         self
     }
+    /// Get a reference to the node topology validity information.
+    pub(crate) fn node_topology_info(&self) -> &Option<TopologyRmInfo> {
+        &self.node_topology_info
+    }
     /// Get a reference to the node topology validity flag.
-    pub(crate) fn valid_node_topology(&self) -> &Option<bool> {
-        &self.valid_node_topology
+    pub(crate) fn valid_node_topology(&self) -> Option<bool> {
+        self.node_topology_info.as_ref().map(|t| t.valid)
     }
     /// Get a reference to the node topology validity flag.
     pub(crate) fn node_spec(&self) -> &Option<NodeSpec> {

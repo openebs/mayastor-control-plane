@@ -79,7 +79,7 @@ impl PoolBaseFilters {
         }
     }
     /// Should only attempt to use pools with sufficient free space for a full rebuild.
-    /// Currently the data-plane fully rebuilds a volume, meaning a thin provisioned volume
+    /// Currently, the data-plane fully rebuilds a volume, meaning a thin provisioned volume
     /// becomes fully allocated.
     pub(crate) fn min_free_space_full_rebuild(
         request: &GetSuitablePoolsContext,
@@ -115,7 +115,7 @@ impl PoolBaseFilters {
 
     /// Should only attempt to use pools having specific creation label if topology has it.
     pub(crate) fn topology_(volume: &VolumeSpec, registry: &Registry, pool_id: &PoolId) -> bool {
-        let volume_pool_topology_inclusion_labels: HashMap<String, String>;
+        let inclusion_labels: &HashMap<String, String>;
         match &volume.topology {
             None => return true,
             Some(topology) => match &topology.pool {
@@ -128,21 +128,19 @@ impl PoolBaseFilters {
                             // todo: missing exclusion check?
                             return true;
                         }
-                        volume_pool_topology_inclusion_labels = labelled_topology.inclusion.clone()
+                        inclusion_labels = &labelled_topology.inclusion
                     }
                 },
             },
         };
 
         // We will reach this part of code only if the volume has inclusion/exclusion labels.
-        match registry.specs().pool(pool_id) {
-            Ok(spec) => match spec.labels {
+        match registry.specs().pool_rsc(pool_id) {
+            Some(spec) => match &spec.lock().labels {
                 None => false,
-                Some(pool_labels) => {
-                    qualifies_label_criteria(volume_pool_topology_inclusion_labels, &pool_labels)
-                }
+                Some(pool_labels) => qualifies_label_criteria(inclusion_labels, pool_labels),
             },
-            Err(_) => false,
+            None => false,
         }
     }
 }
