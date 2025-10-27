@@ -8,7 +8,7 @@ mod volume_policy;
 use crate::controller::scheduling::{
     nexus::GetPersistedNexusChildrenCtx,
     resources::{ChildItem, PoolItem, ReplicaItem},
-    volume::{ReplicaResizePoolsContext, VolumeReplicasForNexusCtx},
+    volume::{GetChildForRemovalContext, ReplicaResizePoolsContext, VolumeReplicasForNexusCtx},
 };
 use std::{cmp::Ordering, collections::HashMap, future::Future};
 use weighted_scoring::{Criteria, Value, ValueGrading, WeightedScore};
@@ -164,20 +164,33 @@ pub(crate) struct ChildSorters {}
 impl ChildSorters {
     /// Sort replicas by their nexus child (state and rebuild progress)
     /// todo: should we use weights instead (like moac)?
-    pub(crate) fn sort(a: &ReplicaItem, b: &ReplicaItem) -> std::cmp::Ordering {
+    pub(crate) fn sort(
+        _request: &GetChildForRemovalContext,
+        a: &ReplicaItem,
+        b: &ReplicaItem,
+    ) -> std::cmp::Ordering {
         match Self::sort_by_health(a, b) {
             Ordering::Equal => match Self::sort_by_child(a, b) {
                 Ordering::Equal => {
                     // Remove replicas from nodes which are cordoned with most priority.
                     // remove mismatched topology replicas first
                     if let (Some(a), Some(b)) = (a.valid_node_topology(), b.valid_node_topology()) {
-                        match a.cmp(b) {
+                        match a.cmp(&b) {
                             Ordering::Equal => {}
                             // todo: what if the pool and node topology are at odds with each other?
                             _else => return _else,
                         }
                     }
+
                     if let (Some(a), Some(b)) = (a.valid_pool_topology(), b.valid_pool_topology()) {
+                        match a.cmp(b) {
+                            Ordering::Equal => {}
+                            _else => return _else,
+                        }
+                    }
+
+                    // in case node topology is valid but there are clashes, allow the pool topology first...
+                    if let (Some(a), Some(b)) = (a.node_topology_info(), b.node_topology_info()) {
                         match a.cmp(b) {
                             Ordering::Equal => {}
                             _else => return _else,

@@ -827,97 +827,6 @@ impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
 }
 
 #[async_trait::async_trait]
-impl ResourceLifecycleExt<CreateVolume> for OperationGuardArc<VolumeSpec> {
-    type CreateOutput = Self;
-
-    async fn create_ext(
-        registry: &Registry,
-        request: &CreateVolume,
-    ) -> Result<Self::CreateOutput, SvcError> {
-        let specs = registry.specs();
-        let mut volume = specs
-            .get_or_create_volume(&CreateVolumeSource::None(request))?
-            .operation_guard_wait()
-            .await?;
-        let volume_clone = volume.start_create(registry, request).await?;
-
-        // If the volume is a part of the ag, create or update accordingly.
-        registry.specs().get_or_create_affinity_group(&volume_clone);
-
-        // todo: pick nodes and pools using the Node&Pool Topology
-        // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
-        let result = create_volume_replicas(registry, request, &volume_clone).await;
-        let create_replica_candidate = volume
-            .validate_create_step_ext(registry, result, OnCreateFail::Delete)
-            .await?;
-
-        let mut replicas = Vec::<Replica>::new();
-        for replica in create_replica_candidate.candidates() {
-            if replicas.len() >= request.replicas as usize {
-                break;
-            } else if replicas.iter().any(|r| r.node == replica.node) {
-                // don't reuse the same node
-                continue;
-            }
-            let replica = if replicas.is_empty() {
-                let mut replica = replica.clone();
-                // the local replica needs to be connected via "bdev:///"
-                replica.share = Protocol::None;
-                replica
-            } else {
-                replica.clone()
-            };
-            match OperationGuardArc::<ReplicaSpec>::create(registry, &replica).await {
-                Ok(replica) => {
-                    replicas.push(replica);
-                }
-                Err(error) => {
-                    volume_clone.error(&format!(
-                        "Failed to create replica {:?} for volume, error: {}",
-                        replica,
-                        error.full_string()
-                    ));
-                    // continue trying...
-                }
-            };
-        }
-
-        // we can't fulfil the required replication factor, so let the caller
-        // decide what to do next
-        let result = if replicas.len() < request.replicas as usize {
-            for replica_state in replicas {
-                let result = match specs.replica(&replica_state.uuid).await {
-                    Ok(mut replica) => {
-                        let request = DestroyReplica::from(replica_state.clone());
-                        replica.destroy(registry, &request.with_disown_all()).await
-                    }
-                    Err(error) => Err(error),
-                };
-                if let Err(error) = result {
-                    volume_clone.error(&format!(
-                        "Failed to delete replica {:?} from volume, error: {}",
-                        replica_state,
-                        error.full_string()
-                    ));
-                }
-            }
-            Err(SvcError::ReplicaCreateNumber {
-                id: request.uuid.to_string(),
-            })
-        } else {
-            Ok(())
-        };
-
-        // we can destroy volume on error because there's no volume resource created on the nodes,
-        // only sub-resources (such as nexuses/replicas which will be garbage-collected later).
-        volume
-            .complete_create(result, registry, OnCreateFail::Delete)
-            .await?;
-        Ok(volume)
-    }
-}
-
-#[async_trait::async_trait]
 impl ResourceLifecycleExt<CreateVolumeSource<'_>> for OperationGuardArc<VolumeSpec> {
     type CreateOutput = Self;
 
@@ -1080,7 +989,7 @@ impl CreateVolumeExe for CreateVolume {
 
                 replicas
             }
-            _ => create(candidates, context).await,
+            None => create(candidates, context).await,
         }
     }
 
