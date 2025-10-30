@@ -5,6 +5,7 @@ use crate::{
     resources::{
         error::Error,
         node::NodeDisplayLabels,
+        pool::PoolDisplay,
         utils::{self, optional_cell, CreateRow, CreateRows, GetHeaderRow, OutputFormat},
         VolumeId,
     },
@@ -33,15 +34,42 @@ enum VolumeSource {
     Snapshot,
 }
 
-#[derive(Debug, Clone, clap::Args)]
+/// Volume topology args.
+#[derive(Debug, Default, Clone, clap::Args)]
+pub struct VolumeTopologyArgs {
+    /// Show the node labels for each replica (tabled output only).
+    #[clap(long)]
+    show_node_labels: bool,
+    /// Show the pool labels for each replica (tabled output only).
+    #[clap(long)]
+    show_pool_labels: bool,
+    /// Show both the pool and node labels for each replica (tabled output only).
+    #[clap(long)]
+    show_labels: bool,
+}
+/// Volume topologies args.
+#[derive(Debug, Default, Clone, clap::Args)]
+pub struct VolumeTopologiesArgs {
+    #[clap(flatten)]
+    args: VolumesArgs,
+    #[clap(flatten)]
+    labels: VolumeTopologyArgs,
+}
+impl From<&VolumeTopologyArgs> for VolumeTopologiesArgs {
+    fn from(labels: &VolumeTopologyArgs) -> Self {
+        Self {
+            labels: labels.clone(),
+            ..Default::default()
+        }
+    }
+}
+
 /// Volume args.
+#[derive(Debug, Default, Clone, clap::Args)]
 pub struct VolumesArgs {
     #[clap(long)]
     /// Shows only volumes created from specific source, viz none, snapshot
     source: Option<VolumeSource>,
-    /// Show the node labels for each replica (tabled output only).
-    #[clap(long)]
-    show_node_labels: bool,
 }
 
 impl CreateRow for openapi::models::Volume {
@@ -320,19 +348,23 @@ impl SetProperty for Volume {
 #[async_trait(?Send)]
 impl ReplicaTopology for Volume {
     type ID = VolumeId;
-    type Context = VolumesArgs;
+    type Context = VolumeTopologiesArgs;
     async fn topologies(output: &OutputFormat, context: &Self::Context) -> PluginResult {
         let volumes = VolumesTopologies::new(context).await?;
         utils::print_table(output, volumes);
         Ok(())
     }
-    async fn topology(id: &Self::ID, output: &OutputFormat) -> PluginResult {
+    async fn topology(
+        id: &Self::ID,
+        output: &OutputFormat,
+        context: &Self::Context,
+    ) -> PluginResult {
         match RestClient::client().volumes_api().get_volume(id).await {
             Ok(volume) => {
                 // Print table, json or yaml based on output format.
                 utils::print_table(
                     output,
-                    VolumeReplicaTopologies::new(volume.into_body()).await?,
+                    VolumeReplicaTopologies::new(&context.labels, volume.into_body()).await?,
                 );
             }
             Err(e) => {
@@ -372,15 +404,19 @@ impl RebuildHistory for Volume {
 #[derive(Default, Debug)]
 struct VolumesTopologies {
     volumes: Vec<openapi::models::Volume>,
-    nodes: Vec<openapi::models::Node>,
-    show_node_labels: bool,
+    nodes: Option<Vec<openapi::models::Node>>,
+    pools: Option<Vec<openapi::models::Pool>>,
 }
 impl VolumesTopologies {
-    async fn new(context: &VolumesArgs) -> Result<Self, Error> {
+    async fn new(context: &VolumeTopologiesArgs) -> Result<Self, Error> {
+        let show_node = context.labels.show_node_labels || context.labels.show_labels;
+        let show_pool = context.labels.show_pool_labels || context.labels.show_labels;
         Ok(Self {
-            volumes: get_paginated_volumes(context).await.unwrap_or_default(),
-            nodes: list_nodes(context.show_node_labels).await?,
-            show_node_labels: context.show_node_labels,
+            volumes: get_paginated_volumes(&context.args)
+                .await
+                .unwrap_or_default(),
+            nodes: list_nodes(show_node).await?,
+            pools: list_pools(show_pool).await?,
         })
     }
 }
@@ -401,8 +437,11 @@ impl GetHeaderRow for VolumesTopologies {
             .chain(utils::REPLICA_TOPOLOGY_HEADERS.iter())
             .cloned()
             .collect();
-        if self.show_node_labels {
+        if self.nodes.is_some() {
             row.extend(vec!["NODE-LABELS"]);
+        }
+        if self.pools.is_some() {
+            row.extend(vec!["POOL-LABELS"]);
         }
         row
     }
@@ -428,7 +467,10 @@ impl CreateRows for VolumesTopologies {
                             row!["└─"]
                         };
 
-                        for cell in VolumeReplicaTopology::new(r, &self.nodes).row().iter_mut() {
+                        for cell in VolumeReplicaTopology::new(r, &self.nodes, &self.pools)
+                            .row()
+                            .iter_mut()
+                        {
                             row.add_cell(cell.clone());
                         }
                         rows.push(row);
@@ -447,13 +489,21 @@ pub(crate) struct VolumeReplicaTopologies {
     #[serde(flatten)]
     replicas: HashMap<String, openapi::models::ReplicaTopology>,
     #[serde(skip)]
-    nodes: Vec<openapi::models::Node>,
+    nodes: Option<Vec<openapi::models::Node>>,
+    #[serde(skip)]
+    pools: Option<Vec<openapi::models::Pool>>,
 }
 impl VolumeReplicaTopologies {
-    async fn new(volume: openapi::models::Volume) -> Result<Self, Error> {
+    async fn new(
+        context: &VolumeTopologyArgs,
+        volume: openapi::models::Volume,
+    ) -> Result<Self, Error> {
+        let show_node = context.show_node_labels || context.show_labels;
+        let show_pool = context.show_pool_labels || context.show_labels;
         Ok(Self {
             replicas: volume.state.replica_topology,
-            nodes: list_nodes(false).await?,
+            nodes: list_nodes(show_node).await?,
+            pools: list_pools(show_pool).await?,
         })
     }
 }
@@ -461,14 +511,22 @@ impl From<HashMap<String, openapi::models::ReplicaTopology>> for VolumeReplicaTo
     fn from(replicas: HashMap<String, openapi::models::ReplicaTopology>) -> Self {
         Self {
             replicas,
-            nodes: vec![],
+            nodes: None,
+            pools: None,
         }
     }
 }
 
 impl GetHeaderRow for VolumeReplicaTopologies {
     fn get_header_row(&self) -> Row {
-        (*utils::REPLICA_TOPOLOGY_HEADERS).clone()
+        let mut headers = (*utils::REPLICA_TOPOLOGY_HEADERS).clone();
+        if self.nodes.is_some() {
+            headers.extend(vec!["NODE-LABELS"]);
+        }
+        if self.pools.is_some() {
+            headers.extend(vec!["POOL-LABELS"]);
+        }
+        headers
     }
 }
 
@@ -477,7 +535,7 @@ impl CreateRows for VolumeReplicaTopologies {
         self.replicas
             .iter()
             .sorted_by(|(a, _), (b, _)| a.cmp(b))
-            .map(|s| VolumeReplicaTopology::new(s, &self.nodes).row())
+            .map(|s| VolumeReplicaTopology::new(s, &self.nodes, &self.pools).row())
             .collect()
     }
     fn sort_rows(&self) -> bool {
@@ -488,17 +546,20 @@ impl CreateRows for VolumeReplicaTopologies {
 struct VolumeReplicaTopology<'a> {
     id: &'a String,
     topology: &'a openapi::models::ReplicaTopology,
-    nodes: &'a Vec<openapi::models::Node>,
+    nodes: &'a Option<Vec<openapi::models::Node>>,
+    pools: &'a Option<Vec<openapi::models::Pool>>,
 }
 impl<'a> VolumeReplicaTopology<'a> {
     fn new(
         (id, topology): (&'a String, &'a openapi::models::ReplicaTopology),
-        nodes: &'a Vec<openapi::models::Node>,
+        nodes: &'a Option<Vec<openapi::models::Node>>,
+        pools: &'a Option<Vec<openapi::models::Pool>>,
     ) -> Self {
         Self {
             id,
             topology,
             nodes,
+            pools,
         }
     }
 }
@@ -507,11 +568,18 @@ impl<'a> CreateRow for VolumeReplicaTopology<'a> {
     fn row(&self) -> Row {
         let topology = &self.topology;
         let usage = topology.usage.as_ref();
-        let labels = self
-            .nodes
-            .iter()
-            .find(|n| Some(&n.id) == topology.node.as_ref())
-            .map(|n| NodeDisplayLabels::get_node_label_list(n).join(", "));
+        let node_labels = self.nodes.as_ref().map(|nodes| {
+            nodes
+                .iter()
+                .find(|n| Some(&n.id) == topology.node.as_ref())
+                .map(|n| NodeDisplayLabels::get_node_label_list(n).join(", "))
+        });
+        let pool_labels = self.pools.as_ref().map(|pools| {
+            pools
+                .iter()
+                .find(|p| Some(&p.id) == topology.pool.as_ref())
+                .map(|p| PoolDisplay::pool_label_list(p).join(", "))
+        });
         let mut row = row![
             self.id,
             optional_cell(topology.node.as_ref()),
@@ -526,7 +594,10 @@ impl<'a> CreateRow for VolumeReplicaTopology<'a> {
             optional_cell(topology.rebuild_progress.map(|p| format!("{p}%"))),
             optional_cell(topology.healthy),
         ];
-        if !self.nodes.is_empty() {
+        if let Some(labels) = node_labels {
+            row.add_cell(prettytable::Cell::new(&optional_cell(labels)));
+        }
+        if let Some(labels) = pool_labels {
             row.add_cell(prettytable::Cell::new(&optional_cell(labels)));
         }
         row
@@ -587,14 +658,26 @@ fn to_human_readable(val: u64) -> String {
     ::utils::bytes::into_human(val)
 }
 
-async fn list_nodes(labels: bool) -> Result<Vec<openapi::models::Node>, Error> {
+async fn list_nodes(labels: bool) -> Result<Option<Vec<openapi::models::Node>>, Error> {
     if !labels {
-        return Ok(vec![]);
+        return Ok(None);
     }
-    Ok(RestClient::client()
+    let nodes = RestClient::client()
         .nodes_api()
         .get_nodes(None)
         .await
-        .map_err(|source| Error::ListNodesError { source })?
-        .into_body())
+        .map_err(|source| Error::ListNodesError { source })?;
+    Ok(Some(nodes.into_body()))
+}
+
+async fn list_pools(labels: bool) -> Result<Option<Vec<openapi::models::Pool>>, Error> {
+    if !labels {
+        return Ok(None);
+    }
+    let pools = RestClient::client()
+        .pools_api()
+        .get_pools(None)
+        .await
+        .map_err(|source| Error::ListPoolsError { source })?;
+    Ok(Some(pools.into_body()))
 }

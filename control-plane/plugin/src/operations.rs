@@ -145,7 +145,11 @@ pub trait ReplicaTopology {
     type ID;
     type Context;
     async fn topologies(output: &utils::OutputFormat, context: &Self::Context) -> PluginResult;
-    async fn topology(id: &Self::ID, output: &utils::OutputFormat) -> PluginResult;
+    async fn topology(
+        id: &Self::ID,
+        output: &utils::OutputFormat,
+        context: &Self::Context,
+    ) -> PluginResult;
 }
 
 /// Rebuild trait.
