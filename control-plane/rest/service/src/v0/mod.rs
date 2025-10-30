@@ -74,13 +74,13 @@ fn spec_uri() -> String {
 pub(crate) struct RestApi {}
 
 fn configure(cfg: &mut actix_web::web::ServiceConfig) {
+    // Register custom metrics endpoint before auto-generated routes
+    // Overrides auto-generated route so metric handler is used
+    metrics::configure(cfg);
+
     apis::actix_server::configure::<RestApi, BearerToken>(cfg);
     // todo: remove when the /states is added to the spec
     states::configure(cfg);
-    // Override the auto-generated metrics endpoint with our custom implementation
-    // The OpenAPI-generated handler doesn't properly support text/plain responses,
-    // so we register our custom handler after the auto-generated one to override it.
-    metrics::configure(cfg);
 }
 
 fn json_error(err: impl std::fmt::Display, _req: &actix_web::HttpRequest) -> actix_web::Error {

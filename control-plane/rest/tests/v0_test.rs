@@ -652,7 +652,7 @@ async fn metrics_endpoint() {
     for node in nodes {
         let node_id = node.id;
         assert!(
-            body.contains(&format!("{{node=\"{}\"}}", node_id)),
+            body.contains(&format!("{{node=\"{node_id}\"}}")),
             "Should have metrics for node {}",
             node_id
         );
@@ -683,10 +683,7 @@ async fn metrics_endpoint() {
 
     // Verify cordoned metric is now 1 for this node
     assert!(
-        body.contains(&format!(
-            "mayastor_node_cordoned{{node=\"{}\"}} 1",
-            test_node
-        )),
+        body.contains(&format!("mayastor_node_cordoned{{node=\"{test_node}\"}} 1")),
         "Cordoned metric should be 1 after cordoning node"
     );
 
@@ -711,10 +708,7 @@ async fn metrics_endpoint() {
 
     // Verify cordoned metric is back to 0
     assert!(
-        body.contains(&format!(
-            "mayastor_node_cordoned{{node=\"{}\"}} 0",
-            test_node
-        )),
+        body.contains(&format!("mayastor_node_cordoned{{node=\"{test_node}\"}} 0")),
         "Cordoned metric should be 0 after uncordoning node"
     );
 }
