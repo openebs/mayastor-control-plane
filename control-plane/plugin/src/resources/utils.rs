@@ -39,7 +39,7 @@ lazy_static! {
         "TOTAL-ALLOCATED-SIZE",
         "SOURCE-VOL",
         "RESTORES",
-        "SNAPSHOT_REPLICAS"
+        "REPLICAS"
     ];
     pub static ref POOLS_HEADERS: Row = row![
         "ID",
@@ -73,12 +73,12 @@ lazy_static! {
     ];
     pub static ref SNAPSHOT_TOPOLOGY_PREFIX: Row = row!["SNAPSHOT-ID"];
     pub static ref SNAPSHOT_TOPOLOGY_HEADERS: Row = row![
-        "ID",
+        "SNAPSHOT-REPLICA-ID",
         "POOL",
-        "SNAPSHOT_STATUS",
+        "STATUS",
         "SIZE",
-        "ALLOCATED_SIZE",
-        "SOURCE"
+        "ALLOCATED-SIZE",
+        "SOURCE-REPLICA-ID"
     ];
     pub static ref REBUILD_HISTORY_HEADER: Row = row![
         "DST",
@@ -201,6 +201,7 @@ where
     }
 }
 
+/// Output the object in json,yaml or non/tabled format.
 pub fn print_table<T>(output: &OutputFormat, obj: T)
 where
     T: ser::Serialize,
@@ -209,14 +210,10 @@ where
 {
     match output {
         OutputFormat::Yaml => {
-            // Show the YAML form output if output format is YAML.
-            let s = serde_yaml::to_string(&obj).unwrap();
-            println!("{s}");
+            println!("{s}", s = serde_yaml::to_string(&obj).unwrap());
         }
         OutputFormat::Json => {
-            // Show the JSON form output if output format is JSON.
-            let s = serde_json::to_string(&obj).unwrap();
-            println!("{s}");
+            println!("{s}", s = serde_json::to_string(&obj).unwrap());
         }
         OutputFormat::None => {
             // Show the tabular form if output format is not specified.
@@ -242,7 +239,7 @@ where
 /// # Parameters
 /// - `key`: A `char` representing the character to check.
 ///
-/// # Returns
+/// # Output
 /// Returns `true` if the character is allowed in topology keys; otherwise, returns `false`.
 ///
 /// # Examples

@@ -230,8 +230,8 @@ impl CreateRows for Vec<openapi::models::ReplicaSnapshotState> {
                         s.uuid,
                         s.pool_id,
                         "Online",
-                        s.size,
-                        s.allocated_size,
+                        ::utils::bytes::into_human(s.size),
+                        ::utils::bytes::into_human(s.allocated_size),
                         s.source_id
                     ]
                 }
