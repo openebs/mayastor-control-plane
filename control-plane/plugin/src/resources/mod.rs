@@ -3,7 +3,7 @@ use crate::resources::{
     node::{DrainNodeArgs, GetNodeArgs, GetNodesArgs},
     pool::{GetPoolArgs, GetPoolsArgs},
     snapshot::VolumeSnapshotArgs,
-    volume::VolumesArgs,
+    volume::{VolumeTopologiesArgs, VolumeTopologyArgs, VolumesArgs},
 };
 
 pub mod blockdevice;
@@ -40,9 +40,13 @@ pub enum GetResources {
     /// Get Rebuild history for the volume with the given ID.
     RebuildHistory { id: VolumeId },
     /// Get the replica topology for all volumes.
-    VolumeReplicaTopologies(VolumesArgs),
+    VolumeReplicaTopologies(VolumeTopologiesArgs),
     /// Get the replica topology for the volume with the given ID.
-    VolumeReplicaTopology { id: VolumeId },
+    VolumeReplicaTopology {
+        id: VolumeId,
+        #[clap(flatten)]
+        args: VolumeTopologyArgs,
+    },
     /// Get volume snapshots based on input args.
     VolumeSnapshots(VolumeSnapshotArgs),
 
@@ -57,7 +61,7 @@ pub enum GetResources {
     /// Get node with the given ID.
     Node(GetNodeArgs),
     /// Get BlockDevices present on the Node. Lists usable devices by default.
-    /// Currently disks having blobstore pools not created by control-plane are also shown as
+    /// Currently, disks having blobstore pools not created by control-plane are also shown as
     /// usable.
     BlockDevices(BlockDeviceArgs),
 }
