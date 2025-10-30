@@ -1,6 +1,8 @@
 #[cfg(test)]
 use crate::resources::utils::{print_table, CreateRows, GetHeaderRow, OutputFormat};
-use crate::{rest_wrapper::RestClient, ExecuteOperation};
+use crate::{
+    resources::volume::VolumeReplicaTopologies, rest_wrapper::RestClient, ExecuteOperation,
+};
 
 use deployer_cluster::{Cluster, ClusterBuilder};
 use gag::BufferRedirect;
@@ -361,7 +363,7 @@ async fn get_replica_topology() {
             replica.pool.as_ref().unwrap(),
             replica.state.to_string()
         ),
-        replica_topo,
+        VolumeReplicaTopologies::from(replica_topo),
     );
 }
 

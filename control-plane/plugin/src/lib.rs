@@ -15,9 +15,10 @@ use crate::{
         ReplicaTopology, Scale,
     },
     resources::{
-        blockdevice, cordon, drain, node, pool, snapshot, volume, CordonResources, DeleteArgs,
-        DeleteResources, DrainResources, ExpandResources, GetCordonArgs, GetDrainArgs,
-        GetResources, ScaleResources, SetPropertyResources, SetVolumeProperties, UnCordonResources,
+        blockdevice, cordon, drain, node, pool, snapshot, volume, volume::VolumeTopologiesArgs,
+        CordonResources, DeleteArgs, DeleteResources, DrainResources, ExpandResources,
+        GetCordonArgs, GetDrainArgs, GetResources, ScaleResources, SetPropertyResources,
+        SetVolumeProperties, UnCordonResources,
     },
 };
 
@@ -172,8 +173,9 @@ impl ExecuteOperation for GetResources {
             GetResources::VolumeReplicaTopologies(vol_args) => {
                 volume::Volume::topologies(&cli_args.output, vol_args).await
             }
-            GetResources::VolumeReplicaTopology { id } => {
-                volume::Volume::topology(id, &cli_args.output).await
+            GetResources::VolumeReplicaTopology { id, args } => {
+                volume::Volume::topology(id, &cli_args.output, &VolumeTopologiesArgs::from(args))
+                    .await
             }
             GetResources::Pools(args) => pool::Pools::list(args, &cli_args.output).await,
             GetResources::Pool(args) => {

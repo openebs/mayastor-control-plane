@@ -184,6 +184,7 @@ impl NodeDisplayLabels {
                     .collect();
             }
         }
+        node_labels.sort_unstable();
         node_labels
     }
 }

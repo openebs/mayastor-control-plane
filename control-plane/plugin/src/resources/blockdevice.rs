@@ -11,6 +11,7 @@ use crate::{
     rest_wrapper::RestClient,
 };
 use async_trait::async_trait;
+use itertools::Itertools;
 use openapi::apis::Url;
 use prettytable::Row;
 use serde::Serialize;
@@ -68,6 +69,7 @@ impl CreateRow for BlockDeviceAll {
             device
                 .devlinks
                 .iter()
+                .sorted()
                 .map(|s| format!("\"{s}\""))
                 .collect::<Vec<String>>()
                 .join(", "),
