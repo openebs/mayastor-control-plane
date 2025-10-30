@@ -951,7 +951,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                             Status::resource_exhausted(reason)
                         }
                         ApiClientError::PreconditionFailed(reason) => {
-                            Status::resource_exhausted(reason)
+                            Status::failed_precondition(reason)
                         }
                         error => error.into(),
                     })

@@ -136,6 +136,13 @@ pub enum SvcError {
         invalid_source_id: String,
         correct_source_id: String,
     },
+    #[snafu(display("Failed to take snapshot on pools {pools}: {reason}"))]
+    VolSnapshotPools {
+        pools: String,
+        reason: String,
+        kind: ResourceKind,
+        code: Code,
+    },
     #[snafu(display("{} '{}' not found", kind.to_string(), id))]
     NotFound { kind: ResourceKind, id: String },
     #[snafu(display("{} '{}' is still being created..", kind.to_string(), id))]
@@ -913,6 +920,12 @@ impl From<SvcError> for ReplyError {
             SvcError::NoSnapshotPools { .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::VolumeSnapshotClone,
+                source,
+                extra,
+            },
+            SvcError::VolSnapshotPools { code, kind, .. } => ReplyError {
+                kind: code.into(),
+                resource: kind,
                 source,
                 extra,
             },

@@ -27,6 +27,7 @@ mod path_provider;
 mod reporter;
 mod server;
 
+use crate::path_provider::UdevMonitor;
 use detector::PathFailureDetector;
 use server::NodeAgentApiServer;
 use utils::tracing_telemetry::{FmtLayer, FmtStyle};
@@ -76,6 +77,10 @@ struct Cli {
     /// NVMe subsystem refresh period when monitoring its state.
     #[clap(short, long, env = "SUBSYS_REFRESH_PERIOD", default_value = NVME_SUBSYS_REFRESH_PERIOD)]
     subsys_refresh_period: humantime::Duration,
+
+    /// Udev monitor with udev or kernel events.
+    #[arg(long, value_enum, default_value_t = UdevMonitor::default())]
+    udev_monitor: UdevMonitor,
 
     /// Sends opentelemetry spans to the Jaeger endpoint agent.
     #[clap(long, short)]

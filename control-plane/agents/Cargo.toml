@@ -70,7 +70,7 @@ weighted-scoring = { path = "../../utils/weighted-scoring" }
 events-api = { path = "../../utils/dependencies/apis/events" }
 
 [target.'cfg(target_os="linux")'.dependencies]
-tokio-udev = { version = "0.9.1" }
+tokio-udev = { version = "0.10.0" }
 
 [dev-dependencies]
 deployer-cluster = { path = "../../utils/deployer-cluster" }

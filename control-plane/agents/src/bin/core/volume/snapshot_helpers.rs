@@ -25,8 +25,6 @@ use stor_port::{
     },
 };
 
-use std::collections::HashSet;
-
 /// A request type for creating snapshot of a volume, which essentially
 /// means a snapshot of all(or selected) healthy replicas associated with that volume.
 pub(super) struct PrepareVolumeSnapshot {
@@ -116,14 +114,33 @@ pub(crate) async fn snapshoteable_replica(
 
     //todo: check for snapshot chain for all the replicas.
 
-    let pools =
+    let (pools, out) =
         SnapshotVolumeReplica::builder_with_defaults(registry, volume, children.candidates())
             .await
-            .collect();
-    let pools: HashSet<_> = pools.iter().map(|item| item.pool.id.clone()).collect();
+            .collect_ext();
+
+    // all healthy replicas must be snapshotted, so any excluded pools is a failure
+    // build a nice error message
+    // note that pools may be excluded due to different reasons, example, 1 pool may not be
+    // online and another may not have sufficient free space, or be cordoned
+    // there's no right answer in this case, but we know that ResourceExhausted has some unresolved
+    // issues in the csi snapshotter, so let's prefer pre-condition failed..
+
+    for (reason, pools) in out.iter() {
+        if !pools.is_empty() {
+            let ids = pools.iter().map(|item| item.pool.id.as_str());
+            return Err(SvcError::VolSnapshotPools {
+                reason: reason.to_string(),
+                pools: format!("{:?}", ids.collect::<Vec<_>>()),
+                code: reason.tonic_code(),
+                kind: reason.into(),
+            });
+        }
+    }
 
     for item in children.candidates() {
-        if !pools.contains(&item.pool().id) {
+        if !pools.iter().any(|p| p.pool.id == item.pool().id) {
+            // this should not happen since we excluded above, but just in case...
             return Err(SvcError::NotEnoughResources {
                 source: NotEnough::PoolFree {},
             });

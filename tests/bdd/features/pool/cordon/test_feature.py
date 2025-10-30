@@ -578,8 +578,8 @@ def schedule_snap(pool, cordoned):
 
     except openapi.exceptions.ApiException as exception:
         assert cordoned
-        assert exception.status == http.HTTPStatus.INSUFFICIENT_STORAGE
-        assert ApiClient.exception_to_error(exception).kind == "ResourceExhausted"
+        assert exception.status == http.HTTPStatus.PRECONDITION_FAILED
+        assert ApiClient.exception_to_error(exception).kind == "FailedPrecondition"
 
 
 def schedule_restore(pool, cordoned):

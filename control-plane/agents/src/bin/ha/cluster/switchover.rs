@@ -591,14 +591,14 @@ impl SwitchOverEngine {
             let errored_request = req.retry_count > 0;
             let retry_delay = if req.retry_count < ReQueue::NumFast as u64 {
                 match fast_requeue {
-                    None => ReQueue::Fast as u64,
-                    Some(duration) => duration.as_secs(),
+                    None => Duration::from_secs(ReQueue::Fast as u64),
+                    Some(duration) => duration.into(),
                 }
             } else {
-                ReQueue::Slow as u64
+                Duration::from_secs(ReQueue::Slow as u64)
             };
             if errored_request {
-                tokio::time::sleep(Duration::from_secs(retry_delay)).await;
+                tokio::time::sleep(retry_delay).await;
             }
             tx_clone.send(req)
         });

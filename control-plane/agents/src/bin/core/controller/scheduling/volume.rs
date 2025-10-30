@@ -5,7 +5,10 @@ use crate::controller::{
         affinity_group::{get_pool_ag_replica_count, get_restricted_nodes},
         pool::replica_rebuildable,
         resources::{ChildItem, PoolItem, PoolItemLister, ReplicaItem},
-        volume_policy::{node::NodeFilters, SimplePolicy, ThickPolicy},
+        volume_policy::{
+            node::{volume_node_spread_labels, volume_node_spread_labels_x, NodeFilters},
+            SimplePolicy, ThickPolicy,
+        },
         AddReplicaFilters, AddReplicaSorters, ChildSorters, ResourceData, ResourceFilter,
     },
     wrapper::PoolWrapper,
@@ -13,13 +16,17 @@ use crate::controller::{
 use agents::errors::SvcError;
 use stor_port::types::v0::{
     store::{
-        nexus::NexusSpec, nexus_persistence::NexusInfo, snapshots::replica::ReplicaSnapshot,
-        volume::VolumeSpec,
+        nexus::NexusSpec, nexus_persistence::NexusInfo, replica::ReplicaSpec,
+        snapshots::replica::ReplicaSnapshot, volume::VolumeSpec,
     },
     transport::{NodeId, PoolId, VolumeState},
 };
 
-use std::{collections::HashMap, ops::Deref};
+use crate::controller::scheduling::ResourceExcReason;
+use std::{
+    collections::{BTreeMap, HashMap},
+    ops::Deref,
+};
 
 /// Move replica to another pool.
 #[derive(Default, Clone)]
@@ -73,6 +80,7 @@ pub(crate) struct GetSuitablePoolsContext {
     move_repl: Option<MoveReplica>,
     snap_repl: bool,
     ag_restricted_nodes: Option<Vec<NodeId>>,
+    used_spread_labels: std::collections::HashMap<String, Vec<String>>,
 }
 impl GetSuitablePoolsContext {
     /// Get the registry.
@@ -106,6 +114,9 @@ impl GetSuitablePoolsContext {
         let max_cap_allowed = allowed_commit_percent * pool.capacity;
         (self.size + pool.commitment()) * 100 < max_cap_allowed
     }
+    pub(crate) fn spread_labels(&self) -> &std::collections::HashMap<String, Vec<String>> {
+        &self.used_spread_labels
+    }
 }
 
 impl Deref for GetSuitablePoolsContext {
@@ -135,6 +146,14 @@ impl AddVolumeReplica {
     // May return None if the replica nodes are offline.
     async fn allocated_bytes(registry: &Registry, volume: &VolumeSpec) -> Option<u64> {
         let replicas = registry.specs().volume_replicas(&volume.uuid);
+        Self::allocated_bytes_repl(registry, &replicas).await
+    }
+    // Return max allocated bytes from volume replicas.
+    // May return None if the replica nodes are offline.
+    async fn allocated_bytes_repl(
+        registry: &Registry,
+        replicas: &Vec<ResourceMutex<ReplicaSpec>>,
+    ) -> Option<u64> {
         if replicas.is_empty() {
             return Some(0);
         }
@@ -147,12 +166,16 @@ impl AddVolumeReplica {
                 }
             }
         }
-        used_bytes.iter().max().cloned()
+        used_bytes.into_iter().max()
     }
     async fn builder(request: GetSuitablePools, registry: &Registry) -> Self {
         let volume_spec = request.spec;
 
-        let allocated_bytes = Self::allocated_bytes(registry, &volume_spec).await;
+        let replicas = registry.specs().volume_replicas(&volume_spec.uuid);
+        // the spread keys and the currently used values which cannot be reused by new replicas
+        let exclude_labels = volume_node_spread_labels(&volume_spec, registry, &replicas);
+
+        let allocated_bytes = Self::allocated_bytes_repl(registry, &replicas).await;
 
         let mut ag_restricted_nodes: Option<Vec<NodeId>> = None;
         let mut pool_ag_replica_count_map: Option<HashMap<PoolId, u64>> = None;
@@ -180,6 +203,7 @@ impl AddVolumeReplica {
                     move_repl: request.move_repl,
                     snap_repl: false,
                     ag_restricted_nodes,
+                    used_spread_labels: exclude_labels,
                 },
                 PoolItemLister::list(registry, &pool_ag_replica_count_map).await,
             ),
@@ -291,53 +315,50 @@ impl GetChildForRemovalContext {
     }
 
     async fn list(&self, pool_ag_rep: &Option<HashMap<PoolId, u64>>) -> Vec<ReplicaItem> {
-        let replicas = self.registry.specs().volume_replicas(&self.spec.uuid);
+        let replicas = self.registry.specs().volume_replicas_cln(&self.spec.uuid);
         let nexus = self.registry.specs().volume_target_nexus_rsc(&self.spec);
-        let replicas = replicas.iter().map(|r| r.lock().clone());
+        let used_node_spread =
+            volume_node_spread_labels_x(&self.spec, &self.registry, replicas.iter());
 
         let replica_states = self.registry.replicas().await;
         replicas
+            .into_iter()
             .map(|replica_spec| {
                 let replica_node_spec = self.registry.specs().replica_node_spec(&replica_spec.uuid);
                 let ag_rep_count = pool_ag_rep
                     .as_ref()
                     .and_then(|map| map.get(replica_spec.pool_name()).cloned());
+                let replica_state = replica_states.iter().find(|r| r.uuid == replica_spec.uuid);
                 ReplicaItem::new(
                     replica_spec.clone(),
-                    replica_states.iter().find(|r| r.uuid == replica_spec.uuid),
-                    replica_states
-                        .iter()
-                        .find(|replica_state| replica_state.uuid == replica_spec.uuid)
-                        .and_then(|replica_state| {
-                            nexus.as_ref().and_then(|nexus_spec| {
-                                nexus_spec
-                                    .lock()
-                                    .children
-                                    .iter()
-                                    .find(|child| child.uri() == replica_state.uri)
-                                    .map(|child| child.uri())
-                            })
-                        }),
-                    replica_states
-                        .iter()
-                        .find(|replica_state| replica_state.uuid == replica_spec.uuid)
-                        .and_then(|replica_state| {
-                            self.state.target.as_ref().and_then(|nexus_state| {
-                                nexus_state
-                                    .children
-                                    .iter()
-                                    .find(|child| child.uri.as_str() == replica_state.uri)
-                                    .cloned()
-                            })
-                        }),
+                    replica_state,
+                    replica_state.and_then(|replica_state| {
+                        nexus.as_ref().and_then(|nexus_spec| {
+                            nexus_spec
+                                .lock()
+                                .children
+                                .iter()
+                                .find(|child| child.uri() == replica_state.uri)
+                                .map(|child| child.uri())
+                        })
+                    }),
+                    replica_state.and_then(|replica_state| {
+                        self.state.target.as_ref().and_then(|nexus_state| {
+                            nexus_state
+                                .children
+                                .iter()
+                                .find(|child| child.uri.as_str() == replica_state.uri)
+                                .cloned()
+                        })
+                    }),
                     nexus.as_ref().and_then(|nexus_spec| {
                         nexus_spec
                             .lock()
                             .children
                             .iter()
                             .find(|child| {
-                                child.as_replica().map(|uri| uri.uuid().clone())
-                                    == Some(replica_spec.uuid.clone())
+                                child.as_replica().as_ref().map(|uri| uri.uuid())
+                                    == Some(&replica_spec.uuid)
                             })
                             .cloned()
                     }),
@@ -351,12 +372,8 @@ impl GetChildForRemovalContext {
                     ag_rep_count,
                     replica_node_spec,
                 )
-                .with_node_topology({
-                    Some(NodeFilters::topology_replica(
-                        &self.spec,
-                        &self.registry,
-                        replica_spec.pool_name(),
-                    ))
+                .with_node_topology(|node_spec| {
+                    NodeFilters::topology_replica_removal(&self.spec, node_spec, &used_node_spread)
                 })
                 .with_pool_topology({
                     use crate::controller::scheduling::volume_policy::pool::PoolBaseFilters;
@@ -391,9 +408,8 @@ impl DecreaseVolumeReplica {
         request: &GetChildForRemoval,
         registry: &Registry,
     ) -> Result<Self, SvcError> {
-        Ok(Self::builder(request, registry)
-            .await?
-            .sort(ChildSorters::sort))
+        let remover = Self::builder(request, registry).await?;
+        Ok(remover.sort_ctx(ChildSorters::sort))
     }
     /// Get the `ReplicaRemovalCandidates` for this request, which splits the candidates into
     /// healthy and unhealthy candidates.
@@ -672,6 +688,7 @@ impl SnapshotVolumeReplica {
                     move_repl: None,
                     snap_repl: true,
                     ag_restricted_nodes: None,
+                    used_spread_labels: Default::default(),
                 },
                 PoolItemLister::list_for_snaps(registry, items).await,
             ),
@@ -714,6 +731,14 @@ impl ResourceFilter for SnapshotVolumeReplica {
     fn collect(self) -> Vec<Self::Item> {
         self.data.list
     }
+    fn collect_ext(
+        self,
+    ) -> (
+        Vec<Self::Item>,
+        BTreeMap<ResourceExcReason, Vec<Self::Item>>,
+    ) {
+        (self.data.list, self.data.out)
+    }
 }
 
 /// Clone volume snapshot replicas.
@@ -737,6 +762,7 @@ impl CloneVolumeSnapshot {
                     move_repl: None,
                     snap_repl: false,
                     ag_restricted_nodes: None,
+                    used_spread_labels: Default::default(),
                 },
                 PoolItemLister::list_for_clones(registry, snapshots).await,
             ),

@@ -121,6 +121,7 @@ impl CreateVolumeExe for SnapshotCloneOp<'_> {
     type Candidates = Vec<SnapshotCloneSpecParams>;
 
     async fn setup<'a>(&'a self, context: &mut Context<'a>) -> Result<Self::Candidates, SvcError> {
+        // todo: topology is not being used here at all
         let clonable_snapshots = self.cloneable_snapshot(context).await?;
         let volume = context.volume.as_ref();
         if volume.num_replicas > clonable_snapshots.len() as u8 {
@@ -142,20 +143,19 @@ impl CreateVolumeExe for SnapshotCloneOp<'_> {
         let volume_replicas = context.volume.as_ref().num_replicas as usize;
         // todo: need to add new replica and do full rebuild, if clonable snapshots
         // count is less than volume replicas count.
-        for (idx, clone_replica) in clone_replicas.iter().enumerate() {
-            match OperationGuardArc::<ReplicaSpec>::create_ext(context.registry, clone_replica)
+        for clone_replica in clone_replicas {
+            match OperationGuardArc::<ReplicaSpec>::create_ext(context.registry, &clone_replica)
                 .await
             {
                 Ok(replica) => {
                     replicas.push(replica);
-                    if idx + 1 == volume_replicas {
+                    if replicas.len() == volume_replicas {
                         break;
                     }
                 }
                 Err(error) => {
                     context.volume.error(&format!(
-                        "Failed to create replica {:?} for volume, error: {}",
-                        clone_replica,
+                        "Failed to create replica {clone_replica:?} for volume, error: {}",
                         error.full_string()
                     ));
                 }
@@ -166,6 +166,7 @@ impl CreateVolumeExe for SnapshotCloneOp<'_> {
 
     async fn undo<'a>(&'a self, _context: &mut Context<'a>, _replicas: Vec<Replica>) {
         // nothing to undo since we only support 1-replica snapshot
+        // todo: we do support multi-replica snapshots, this should have been tweaked :(
     }
 }
 
@@ -186,22 +187,29 @@ impl SnapshotCloneOp<'_> {
             }),
         }?;
 
-        let mut pools = CloneVolumeSnapshot::builder_with_defaults(registry, new_volume, snapshots)
+        let pools = CloneVolumeSnapshot::builder_with_defaults(registry, new_volume, snapshots)
             .await
             .collect();
-        if pools.len() != snapshots.len() || pools.is_empty() {
+        if pools.len() < new_volume.num_replicas as usize || pools.is_empty() {
             return Err(SvcError::NoSnapshotPools {
                 id: snapshot.spec().uuid().to_string(),
             });
         }
 
-        let mut clone_spec_params = vec![];
+        let mut clone_spec_params = Vec::with_capacity(pools.len());
         for snapshot in snapshots {
+            let Some(pool) = pools
+                .iter()
+                .find(|p| &p.pool().id == snapshot.spec().source_id().pool_id())
+            else {
+                continue;
+            };
+
             let clone_id = SnapshotCloneId::new();
             let clone_name = clone_id.to_string();
             let repl_params =
                 SnapshotCloneParameters::new(snapshot.spec().uuid().clone(), clone_name, clone_id);
-            let pool = pools.remove(0);
+
             let clone_spec_param = SnapshotCloneSpecParams::new(
                 repl_params,
                 snapshot.meta().source_spec_size(),

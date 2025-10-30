@@ -44,6 +44,7 @@ use stor_port::{
     },
 };
 
+use itertools::Itertools;
 use std::{fmt::Debug, ops::Deref};
 
 #[async_trait::async_trait]
@@ -826,97 +827,6 @@ impl ResourceShutdownOperations for OperationGuardArc<VolumeSpec> {
 }
 
 #[async_trait::async_trait]
-impl ResourceLifecycleExt<CreateVolume> for OperationGuardArc<VolumeSpec> {
-    type CreateOutput = Self;
-
-    async fn create_ext(
-        registry: &Registry,
-        request: &CreateVolume,
-    ) -> Result<Self::CreateOutput, SvcError> {
-        let specs = registry.specs();
-        let mut volume = specs
-            .get_or_create_volume(&CreateVolumeSource::None(request))?
-            .operation_guard_wait()
-            .await?;
-        let volume_clone = volume.start_create(registry, request).await?;
-
-        // If the volume is a part of the ag, create or update accordingly.
-        registry.specs().get_or_create_affinity_group(&volume_clone);
-
-        // todo: pick nodes and pools using the Node&Pool Topology
-        // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
-        let result = create_volume_replicas(registry, request, &volume_clone).await;
-        let create_replica_candidate = volume
-            .validate_create_step_ext(registry, result, OnCreateFail::Delete)
-            .await?;
-
-        let mut replicas = Vec::<Replica>::new();
-        for replica in create_replica_candidate.candidates() {
-            if replicas.len() >= request.replicas as usize {
-                break;
-            } else if replicas.iter().any(|r| r.node == replica.node) {
-                // don't reuse the same node
-                continue;
-            }
-            let replica = if replicas.is_empty() {
-                let mut replica = replica.clone();
-                // the local replica needs to be connected via "bdev:///"
-                replica.share = Protocol::None;
-                replica
-            } else {
-                replica.clone()
-            };
-            match OperationGuardArc::<ReplicaSpec>::create(registry, &replica).await {
-                Ok(replica) => {
-                    replicas.push(replica);
-                }
-                Err(error) => {
-                    volume_clone.error(&format!(
-                        "Failed to create replica {:?} for volume, error: {}",
-                        replica,
-                        error.full_string()
-                    ));
-                    // continue trying...
-                }
-            };
-        }
-
-        // we can't fulfil the required replication factor, so let the caller
-        // decide what to do next
-        let result = if replicas.len() < request.replicas as usize {
-            for replica_state in replicas {
-                let result = match specs.replica(&replica_state.uuid).await {
-                    Ok(mut replica) => {
-                        let request = DestroyReplica::from(replica_state.clone());
-                        replica.destroy(registry, &request.with_disown_all()).await
-                    }
-                    Err(error) => Err(error),
-                };
-                if let Err(error) = result {
-                    volume_clone.error(&format!(
-                        "Failed to delete replica {:?} from volume, error: {}",
-                        replica_state,
-                        error.full_string()
-                    ));
-                }
-            }
-            Err(SvcError::ReplicaCreateNumber {
-                id: request.uuid.to_string(),
-            })
-        } else {
-            Ok(())
-        };
-
-        // we can destroy volume on error because there's no volume resource created on the nodes,
-        // only sub-resources (such as nexuses/replicas which will be garbage-collected later).
-        volume
-            .complete_create(result, registry, OnCreateFail::Delete)
-            .await?;
-        Ok(volume)
-    }
-}
-
-#[async_trait::async_trait]
 impl ResourceLifecycleExt<CreateVolumeSource<'_>> for OperationGuardArc<VolumeSpec> {
     type CreateOutput = Self;
 
@@ -978,6 +888,24 @@ pub(super) struct Context<'a> {
     pub(super) registry: &'a Registry,
     pub(super) volume: &'a mut OperationGuardArc<VolumeSpec>,
 }
+impl<'a> Context<'a> {
+    fn is_node_spread(&self) -> bool {
+        self.node_exclusion().is_some()
+    }
+    fn node_exclusion(&self) -> Option<&std::collections::HashMap<String, String>> {
+        let topology = self.volume.as_ref().topology.as_ref();
+        let node_topology = topology.and_then(|topology| topology.node.as_ref());
+
+        match node_topology {
+            Some(NodeTopology::Labelled(labelled_topology))
+                if !labelled_topology.exclusion.is_empty() =>
+            {
+                Some(&labelled_topology.exclusion)
+            }
+            _ => None,
+        }
+    }
+}
 
 /// Trait that abstracts away the pre-flight validation checks when creating a volume.
 pub(super) trait CreateVolumeExeVal: Sync + Send {
@@ -991,6 +919,7 @@ pub(super) trait CreateVolumeExe: CreateVolumeExeVal {
 
     async fn run<'a>(&'a self, mut context: Context<'a>) -> Result<Vec<Replica>, SvcError> {
         let result = self.setup(&mut context).await;
+
         let candidates = context
             .volume
             .validate_create_step_ext(context.registry, result, OnCreateFail::Delete)
@@ -1035,6 +964,13 @@ impl CreateVolumeExe for CreateVolume {
         &'a self,
         context: &mut Context<'a>,
     ) -> Result<CreateReplicaCandidate, SvcError> {
+        if context.is_node_spread() {
+            // clean up any previous leftover attempts
+            // this is required because with spread and delayed affinity, the creation of replicas may
+            // depend on the previous ones due to the exclusion requirements
+            undo_previous(context).await?;
+        }
+
         // todo: pick nodes and pools using the Node&Pool Topology
         // todo: virtually increase the pool usage to avoid a race for space with concurrent calls
         create_volume_replicas(context.registry, self, context.volume.as_ref()).await
@@ -1045,47 +981,16 @@ impl CreateVolumeExe for CreateVolume {
         context: &mut Context<'a>,
         candidates: CreateReplicaCandidate,
     ) -> Vec<Replica> {
-        let mut replicas = Vec::<Replica>::with_capacity(candidates.candidates().len());
-        for replica in candidates.candidates() {
-            if replicas.len() >= self.replicas as usize {
-                break;
-            } else if replicas.iter().any(|r| {
-                r.node == replica.node
-                    || spread_label_is_same(r, replica, context).unwrap_or_else(|error| {
-                        context.volume.error(&format!(
-                            "Failed to create replica {:?} for volume, error: {}",
-                            replica,
-                            error.full_string()
-                        ));
-                        false
-                    })
-            }) {
-                // don't re-use the same node or same exclusion labels
-                continue;
+        match context.node_exclusion() {
+            Some(keys) => {
+                let CreateVolumeResult { replicas, undo } =
+                    create_spread(candidates, keys, context).await;
+                self.undo(context, undo).await;
+
+                replicas
             }
-            let replica = if replicas.is_empty() {
-                let mut replica = replica.clone();
-                // the local replica needs to be connected via "bdev:///"
-                replica.share = Protocol::None;
-                replica
-            } else {
-                replica.clone()
-            };
-            match OperationGuardArc::<ReplicaSpec>::create(context.registry, &replica).await {
-                Ok(replica) => {
-                    replicas.push(replica);
-                }
-                Err(error) => {
-                    context.volume.error(&format!(
-                        "Failed to create replica {:?} for volume, error: {}",
-                        replica,
-                        error.full_string()
-                    ));
-                    // continue trying...
-                }
-            };
+            None => create(candidates, context).await,
         }
-        replicas
     }
 
     async fn undo<'a>(&'a self, context: &mut Context<'a>, replicas: Vec<Replica>) {
@@ -1119,35 +1024,173 @@ impl CreateVolumeExeVal for CreateVolumeSource<'_> {
     }
 }
 
-// spread_label_is_same checks if the node labels is same as that of all existing replicas.
-fn spread_label_is_same(
-    replica: &Replica,
-    replica_candidate: &CreateReplica,
+async fn create(candidates: CreateReplicaCandidate, context: &Context<'_>) -> Vec<Replica> {
+    let num_replicas = context.volume.as_ref().num_replicas as usize;
+    let mut replicas = Vec::<Replica>::with_capacity(candidates.candidates().len());
+    for replica in candidates.candidates() {
+        if replicas.len() >= num_replicas {
+            break;
+        } else if replicas.iter().any(|r| r.node == replica.node) {
+            // don't re-use the same node or same exclusion labels
+            continue;
+        }
+        let replica = if replicas.is_empty() {
+            let mut replica = replica.clone();
+            // the local replica needs to be connected via "bdev:///"
+            replica.share = Protocol::None;
+            replica
+        } else {
+            replica.clone()
+        };
+        match OperationGuardArc::<ReplicaSpec>::create(context.registry, &replica).await {
+            Ok(replica) => {
+                replicas.push(replica);
+            }
+            Err(error) => {
+                context.volume.error(&format!(
+                    "Failed to create replica {:?} for volume, error: {}",
+                    replica,
+                    error.full_string()
+                ));
+                // continue trying...
+            }
+        };
+    }
+    replicas
+}
+
+struct CreateVolumeResult {
+    replicas: Vec<Replica>,
+    undo: Vec<Replica>,
+}
+async fn create_spread(
+    candidates: CreateReplicaCandidate,
+    keys: &std::collections::HashMap<String, String>,
     context: &Context<'_>,
-) -> Result<bool, SvcError> {
-    let topology = context.volume.as_ref().topology.as_ref();
-    let node_topology = topology.and_then(|topology| topology.node.as_ref());
+) -> CreateVolumeResult {
+    let num_replicas = context.volume.as_ref().num_replicas;
+    let mut created = Vec::<Replica>::with_capacity(candidates.candidates().len());
+    let mut failed = Vec::<&CreateReplica>::with_capacity(candidates.candidates().len());
 
-    match node_topology {
-        Some(NodeTopology::Explicit(_)) => Ok(false),
-        Some(NodeTopology::Labelled(labelled_topology)) => {
-            if !labelled_topology.exclusion.is_empty() {
-                let candidate_node = context.registry.specs().node(&replica_candidate.node)?;
-                let replica_node = context.registry.specs().node(&replica.node)?;
+    let candidates = candidates.candidates();
+    for candidates in node_spread_combinations(candidates, keys, context) {
+        let mut replicas = Vec::<Replica>::with_capacity(num_replicas as usize);
 
-                for key in labelled_topology.exclusion.keys() {
-                    if let (Some(candidate_value), Some(replica_value)) = (
-                        candidate_node.labels().get(key),
-                        replica_node.labels().get(key),
-                    ) {
-                        if candidate_value == replica_value {
-                            return Ok(true);
+        for replica in candidates {
+            if let Some(replica) = created.iter().find(|r| r.uuid == replica.uuid) {
+                replicas.push(replica.clone());
+                continue; // we've already created this replica...
+            }
+            if failed.iter().any(|r| r.uuid == replica.uuid) {
+                break; // we've tried and failed already...
+            }
+
+            match OperationGuardArc::<ReplicaSpec>::create(context.registry, replica).await {
+                Ok(replica) => {
+                    created.push(replica.clone());
+                    replicas.push(replica);
+                }
+                Err(error) => {
+                    failed.push(replica);
+                    context.volume.error(&format!(
+                        "Failed to create replica {:?} for volume, error: {}",
+                        replica,
+                        error.full_string()
+                    ));
+                    // this combination has failed, try the next set
+                    break;
+                }
+            };
+
+            if replicas.len() >= num_replicas as usize {
+                break;
+            }
+        }
+
+        if replicas.len() >= num_replicas as usize {
+            created.retain(|s| replicas.iter().all(|r| r.uuid != s.uuid));
+            return CreateVolumeResult {
+                replicas,
+                undo: created,
+            };
+        }
+    }
+    CreateVolumeResult {
+        replicas: vec![],
+        undo: created,
+    }
+}
+
+/// Returns a list of all combinations of `CreateReplica` requests based on the exclusion labels.
+fn node_spread_combinations<'a>(
+    candidates: &'a [CreateReplica],
+    keys: &'a std::collections::HashMap<String, String>,
+    context: &Context<'a>,
+) -> impl Iterator<Item = Vec<&'a CreateReplica>> {
+    let num_replicas = context.volume.as_ref().num_replicas as usize;
+
+    candidates
+        .iter()
+        // order is deterministic so we keep the list in the same priority order as it were
+        .combinations(num_replicas)
+        .filter(|combi| {
+            let mut seen =
+                std::collections::HashMap::<&String, std::collections::HashSet<String>>::new();
+            let mut nodes = std::collections::HashSet::new();
+
+            let specs = context.registry.specs().read();
+
+            for candidate in combi {
+                if !nodes.insert(&candidate.node) {
+                    return false; // anti-affinity for the replica nodes
+                }
+
+                let Some(node) = specs.nodes.get(&candidate.node).map(|n| n.lock()) else {
+                    return false; // should not happen, but just in case
+                };
+                for key in keys.keys() {
+                    if let Some(value) = node.labels().get(key) {
+                        let entry = seen.entry(key).or_default();
+                        if entry.contains(value) {
+                            return false;
                         }
+                        entry.insert(value.clone());
                     }
                 }
             }
-            Ok(false)
+            true
+        })
+}
+
+/// Undoes a previous failed attempt, when the volume has a node spread topology.
+async fn undo_previous(context: &Context<'_>) -> Result<(), SvcError> {
+    let mut result = Ok(());
+
+    let replicas = context
+        .registry
+        .specs()
+        .volume_replicas(context.volume.uuid());
+
+    for replica in replicas {
+        let mut replica = replica.operation_guard()?;
+        if match context.registry.replica(replica.uuid()).await {
+            Ok(replica_state) => {
+                let request = DestroyReplica::from(replica_state);
+                replica
+                    .destroy(context.registry, &request.with_disown_all())
+                    .await
+                    .is_err()
+            }
+            Err(_) => true,
+        } {
+            if let Err(error) = replica
+                .remove_owners(context.registry, &ReplicaOwners::new_disown_all(), true)
+                .await
+            {
+                result = Err(error);
+            }
         }
-        _ => Ok(false),
     }
+
+    result
 }
