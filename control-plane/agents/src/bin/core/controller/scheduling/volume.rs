@@ -22,11 +22,12 @@ use stor_port::types::v0::{
     transport::{NodeId, PoolId, VolumeState},
 };
 
-use crate::controller::scheduling::ResourceExcReason;
+use crate::controller::scheduling::{affinity_group::ag_restricted_nodes, ResourceExcReason};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     ops::Deref,
 };
+use stor_port::types::v0::store::volume::AffinityGroupSpec;
 
 /// Move replica to another pool.
 #[derive(Default, Clone)]
@@ -273,6 +274,20 @@ impl GetChildForRemoval {
     }
 }
 
+/// Affinity Group useful information when scaling down.
+#[derive(Clone)]
+pub(crate) struct AffinityGroupRmCtx {
+    _group: AffinityGroupSpec,
+    pool_repl_cnt: HashMap<PoolId, u64>,
+    restricted_nodes: HashSet<NodeId>,
+}
+impl AffinityGroupRmCtx {
+    /// Get the Affinity Group restricted nodes.
+    pub(crate) fn restricted_nodes(&self) -> &HashSet<NodeId> {
+        &self.restricted_nodes
+    }
+}
+
 /// Used to filter nexus children in order to choose the best candidates for removal
 /// when the volume's replica count is being reduced.
 #[derive(Clone)]
@@ -282,6 +297,7 @@ pub(crate) struct GetChildForRemovalContext {
     state: VolumeState,
     nexus_info: Option<NexusInfo>,
     unused_only: bool,
+    affinity_group: Option<AffinityGroupRmCtx>,
 }
 impl std::fmt::Debug for GetChildForRemovalContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -295,7 +311,11 @@ impl std::fmt::Debug for GetChildForRemovalContext {
 }
 
 impl GetChildForRemovalContext {
-    async fn new(registry: &Registry, request: &GetChildForRemoval) -> Result<Self, SvcError> {
+    async fn new(
+        registry: &Registry,
+        request: &GetChildForRemoval,
+        affinity_group: Option<AffinityGroupSpec>,
+    ) -> Result<Self, SvcError> {
         let nexus_info = registry
             .nexus_info(
                 Some(&request.spec.uuid),
@@ -311,10 +331,19 @@ impl GetChildForRemovalContext {
             state: request.state.clone(),
             nexus_info,
             unused_only: request.unused_only,
+            affinity_group: match affinity_group {
+                None => None,
+                Some(group) => Some(AffinityGroupRmCtx {
+                    pool_repl_cnt: get_pool_ag_replica_count(&group, registry).await,
+                    restricted_nodes: ag_restricted_nodes(&group, registry).await,
+                    _group: group,
+                }),
+            },
         })
     }
 
-    async fn list(&self, pool_ag_rep: &Option<HashMap<PoolId, u64>>) -> Vec<ReplicaItem> {
+    async fn list(&self) -> Vec<ReplicaItem> {
+        let pool_ag_rep = self.affinity_group.as_ref().map(|g| &g.pool_repl_cnt);
         let replicas = self.registry.specs().volume_replicas_cln(&self.spec.uuid);
         let nexus = self.registry.specs().volume_target_nexus_rsc(&self.spec);
         let used_node_spread =
@@ -386,19 +415,22 @@ impl GetChildForRemovalContext {
             })
             .collect::<Vec<_>>()
     }
+
+    /// Get the volume's affinity group.
+    pub(crate) fn affinity_group(&self) -> Option<&AffinityGroupRmCtx> {
+        self.affinity_group.as_ref()
+    }
 }
 
 impl DecreaseVolumeReplica {
     async fn builder(request: &GetChildForRemoval, registry: &Registry) -> Result<Self, SvcError> {
-        let mut pool_ag_replica_count_map: Option<HashMap<PoolId, u64>> = None;
-        if let Some(affinity_group) = &request.spec.affinity_group {
-            let affinity_group_spec = registry.specs().affinity_group_spec(affinity_group.id())?;
-            pool_ag_replica_count_map =
-                Some(get_pool_ag_replica_count(&affinity_group_spec, registry).await);
-        }
+        let affinity_group = request.spec.affinity_group.as_ref();
+        let affinity_group = affinity_group
+            .map(|g| registry.specs().affinity_group_spec(g.id()))
+            .transpose()?;
 
-        let context = GetChildForRemovalContext::new(registry, request).await?;
-        let list = context.list(&pool_ag_replica_count_map).await;
+        let context = GetChildForRemovalContext::new(registry, request, affinity_group).await?;
+        let list = context.list().await;
         Ok(Self {
             data: ResourceData::new(context, list),
         })
@@ -448,6 +480,24 @@ impl ReplicaRemovalCandidates {
             None
         }
     }
+    fn ag_restricted_nodes(&self) -> Option<&HashSet<NodeId>> {
+        let ag = self.context.affinity_group.as_ref()?;
+        if ag.restricted_nodes.is_empty() {
+            return None;
+        }
+        //     N
+        // R 1 2 3
+        // 1 x x
+        // 2 x x
+        // 3 x x x
+        // todo: In this case, shouldn't we block removal or r3n3 ?
+        if self.context.spec.num_replicas > 2 {
+            // for now, we only restrict from 2->1
+            return None;
+        }
+        Some(&ag.restricted_nodes)
+    }
+
     /// Get the next unhealthy candidates (any is a good fit).
     fn next_unhealthy(&mut self) -> Option<ReplicaItem> {
         self.unhealthy.pop()
@@ -456,6 +506,46 @@ impl ReplicaRemovalCandidates {
     /// Unhealthy replicas are removed before healthy replicas.
     pub(crate) fn next(&mut self) -> Option<ReplicaItem> {
         self.next_unhealthy().or_else(|| self.next_healthy())
+    }
+    /// Get the next removal candidate.
+    /// Unhealthy replicas are removed before healthy replicas.
+    /// Use when scaling down the volume where we need to guard against restricted node usage.
+    pub(crate) fn next_down(&mut self) -> Option<Option<ReplicaItem>> {
+        // we don't want to leave place 1-r affinity volumes in the same node (potentially),
+        // so we should check whether we have other replicas available
+        let mut replicas_in_unrestricted_nodes = false;
+
+        let candidate = self.next_unhealthy().or_else(|| self.next_healthy())?;
+
+        let Some(restricted_nodes) = self.ag_restricted_nodes() else {
+            // no affinity groups, just remove the best candidate
+            return Some(Some(candidate));
+        };
+        // todo: still need a better way of controlling the priority of candidates when
+        //  scaling from X -> X-1, where X > 2
+        //  also we can block scale down to 1, if we don't have sufficient distinct nodes
+        //  to place all the other volume replicas
+
+        tracing::debug!("Restricted Affinity Group Nodes: {restricted_nodes:?}");
+        tracing::debug!("Candidate for removal: {}", candidate.spec().uuid);
+
+        for repl in &self.healthy {
+            let Some(node) = repl.node_spec() else {
+                continue;
+            };
+            if restricted_nodes.get(node.id()).is_none()
+                && (repl.valid_topology() || !candidate.valid_topology())
+            {
+                replicas_in_unrestricted_nodes = true;
+                break;
+            }
+        }
+
+        if replicas_in_unrestricted_nodes {
+            Some(Some(candidate))
+        } else {
+            Some(None)
+        }
     }
 
     fn new(context: GetChildForRemovalContext, items: Vec<ReplicaItem>) -> Self {

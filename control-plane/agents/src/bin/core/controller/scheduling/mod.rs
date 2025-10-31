@@ -332,13 +332,23 @@ impl ChildSorters {
     /// Sort replicas by their nexus child (state and rebuild progress)
     /// todo: should we use weights instead (like moac)?
     pub(crate) fn sort(
-        _request: &GetChildForRemovalContext,
+        request: &GetChildForRemovalContext,
         a: &ReplicaItem,
         b: &ReplicaItem,
     ) -> std::cmp::Ordering {
         match Self::sort_by_health(a, b) {
             Ordering::Equal => match Self::sort_by_child(a, b) {
                 Ordering::Equal => {
+                    if let Some(ag) = request.affinity_group() {
+                        match (
+                            a.ag_restricted_node(ag.restricted_nodes()),
+                            b.ag_restricted_node(ag.restricted_nodes()),
+                        ) {
+                            (Some(a), Some(b)) if a != b => return b.cmp(&a),
+                            _ => {}
+                        }
+                    }
+
                     // Remove replicas from nodes which are cordoned with most priority.
                     // remove mismatched topology replicas first
                     if let (Some(a), Some(b)) = (a.valid_node_topology(), b.valid_node_topology()) {
@@ -377,6 +387,7 @@ impl ChildSorters {
                     let childb_is_local = !b.spec().share.shared();
                     match (childa_is_local, childb_is_local) {
                         (true, true) | (false, false) => {
+                            // todo: this should probably be done regardless of child locality
                             b.ag_replicas_on_pool().cmp(&a.ag_replicas_on_pool())
                         }
                         (true, false) => Ordering::Greater,

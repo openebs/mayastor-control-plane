@@ -16,7 +16,11 @@ use stor_port::types::v0::{
     transport::{Child, ChildUri, NodeId, PoolId, Replica},
 };
 
-use std::{cmp::Ordering, collections::HashMap, ops::Deref};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    ops::Deref,
+};
 
 /// Item for pool scheduling logic.
 #[derive(Debug, Clone)]
@@ -293,6 +297,10 @@ impl ReplicaItem {
         self.valid_pool_topology = valid_pool_topology;
         self
     }
+    /// Check all topological information is valid!
+    pub(crate) fn valid_topology(&self) -> bool {
+        self.valid_pool_topology() == &Some(true) && self.valid_node_topology() == Some(true)
+    }
     /// Get a reference to the node topology validity information.
     pub(crate) fn node_topology_info(&self) -> &Option<TopologyRmInfo> {
         &self.node_topology_info
@@ -337,6 +345,13 @@ impl ReplicaItem {
     /// Count of ag replicas on the replica's pool.
     pub(crate) fn ag_replicas_on_pool(&self) -> u64 {
         self.ag_replicas_on_pool.unwrap_or(u64::MIN)
+    }
+    /// Check if this replica is in an Affinity Group restricted node.
+    /// A restricted node is a node where another single-replica volume (from the same AG) already
+    /// resides in.
+    pub(crate) fn ag_restricted_node(&self, restricted_nodes: &HashSet<NodeId>) -> Option<bool> {
+        let node_spec = self.node_spec.as_ref()?;
+        Some(restricted_nodes.get(node_spec.id()).is_some())
     }
 }
 
