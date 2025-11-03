@@ -46,7 +46,7 @@ jobs:
       - name: Build and push the release images
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            ./scripts/release.sh --tag ${{ inputs.tag }} --registry ghcr.io/openebs/mayastor-control-plane/dev
+            ./scripts/release.sh --tag ${{ inputs.tag }} --registry ghcr.io/openebs/mayastor/dev
           elif [[ "${{ github.event_name }}" == "push" ]]; then
             ./scripts/release.sh
           fi
