@@ -304,12 +304,8 @@ pub enum SvcError {
     NoHealthyReplicas { id: String },
     #[snafu(display("Pool not ready to take clone of snapshot '{}'", id))]
     NoSnapshotPools { id: String },
-    #[snafu(display(
-        "Replica Count of {} is not attainable for {}",
-        count,
-        resource.to_string()
-    ))]
-    RestrictedReplicaCount { resource: ResourceKind, count: u8 },
+    #[snafu(display("Cannot scale down volume due to affinity group restrictions"))]
+    RestrictedReplicaCount {},
     #[snafu(display("Entry with key '{}' not found in the persistent store.", key))]
     StoreMissingEntry { key: String },
     #[snafu(display("The uuid '{}' for kind '{}' is not valid.", uuid, kind.to_string()))]
@@ -1026,9 +1022,9 @@ impl From<SvcError> for ReplyError {
                 source,
                 extra,
             },
-            SvcError::RestrictedReplicaCount { resource, .. } => ReplyError {
+            SvcError::RestrictedReplicaCount { .. } => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
-                resource,
+                resource: ResourceKind::Volume,
                 source,
                 extra,
             },

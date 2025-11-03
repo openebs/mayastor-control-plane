@@ -20,12 +20,9 @@ use crate::{
     },
     volume::{operations::CreateVolumeSource, scheduling},
 };
-use agents::{
-    errors,
-    errors::{
-        NotEnough, SvcError,
-        SvcError::{VolSnapshotNotFound, VolumeNotFound},
-    },
+use agents::errors::{
+    NotEnough, SvcError,
+    SvcError::{VolSnapshotNotFound, VolumeNotFound},
 };
 use grpc::operations::{PaginatedResult, Pagination};
 use stor_port::{
@@ -48,7 +45,6 @@ use stor_port::{
     },
 };
 
-use snafu::OptionExt;
 use std::convert::From;
 
 /// CreateReplicaCandidate for volume and Affinity Group.
@@ -112,11 +108,13 @@ pub(crate) async fn volume_replica_remove_candidate(
 
     spec.trace_span(|| tracing::trace!("Volume Replica removal candidates: {:?}", candidates));
 
-    candidates
-        .next()
-        .context(errors::ReplicaRemovalNoCandidates {
+    match candidates.next_down() {
+        None => Err(SvcError::ReplicaRemovalNoCandidates {
             id: spec.uuid_str(),
-        })
+        }),
+        Some(None) => Err(SvcError::RestrictedReplicaCount {}),
+        Some(Some(candidate)) => Ok(candidate),
+    }
 }
 
 /// Get replica candidates to be removed from the volume.
@@ -1087,19 +1085,11 @@ impl SpecOperationsHelper for VolumeSpec {
                         volume_id: self.uuid_str(),
                         volume_state: state.status.to_string(),
                     })
+                } else if *replica_count > self.num_replicas && self.has_snapshots() {
+                    let fix = NodeBugFix::NexusRebuildReplicaAncestry;
+                    registry.volume_replica_nodes_fix(self, &fix)
                 } else {
-                    // Validation for Affinity Group volume's replica count cannot go below 2.
-                    if self.affinity_group.is_some() && *replica_count < 2 {
-                        Err(SvcError::RestrictedReplicaCount {
-                            resource: ResourceKind::AffinityGroup,
-                            count: *replica_count,
-                        })
-                    } else if *replica_count > self.num_replicas && self.has_snapshots() {
-                        let fix = NodeBugFix::NexusRebuildReplicaAncestry;
-                        registry.volume_replica_nodes_fix(self, &fix)
-                    } else {
-                        Ok(())
-                    }
+                    Ok(())
                 }
             }
             VolumeOperation::RemoveUnusedReplica(uuid) => {

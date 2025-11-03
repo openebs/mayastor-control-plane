@@ -1,5 +1,5 @@
 use crate::controller::{registry::Registry, resources::ResourceUid};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use stor_port::types::v0::{
     store::volume::{AffinityGroupSpec, VolumeOperation, VolumeSpec},
     transport::{NodeId, PoolId},
@@ -59,6 +59,27 @@ pub(crate) async fn get_pool_ag_replica_count(
         }
     }
     pool_ag_replica_count
+}
+
+/// Get a set of nodes which contain the replica of a single-replica volume, part of the affinity group.
+pub(crate) async fn ag_restricted_nodes(
+    affinity_group_spec: &AffinityGroupSpec,
+    registry: &Registry,
+) -> HashSet<NodeId> {
+    let mut nodes = HashSet::<NodeId>::new();
+    let specs = registry.specs();
+    for volume_id in affinity_group_spec.volumes() {
+        let Some(volume) = registry.specs().volume_rsc(volume_id) else {
+            // should not really happen
+            continue;
+        };
+        if volume.lock().num_replicas != 1 {
+            continue;
+        }
+
+        nodes.extend(specs.volume_replica_nodes(volume_id));
+    }
+    nodes
 }
 
 /// Get the map of node to the number of the Affinity Group nexuses on the node.
