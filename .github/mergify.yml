@@ -1,0 +1,13 @@
+pull_request_rules:
+  - name: auto-label and approve backport PRs
+    conditions:
+      - author=mergify[bot]
+      - title~=\(backport \#[0-9]+\)$
+    actions:
+      label:
+        add:
+          - kind/backport
+      review:
+        type: APPROVE
+        message: "Automatically approved backport PR"
+        bot_account: openebs-ci
