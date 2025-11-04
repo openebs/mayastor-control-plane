@@ -186,10 +186,10 @@ def the_volume_is_scaled_up_by_one():
 
 
 @when("we scale down the volume to 1 replica")
-def _():
+def _(volume_to_scale):
     """we scale down the volume to 1 replica."""
     try:
-        ApiClient.volumes_api().put_volume_replica_count(AG_VOLUME_UUID_3, 1)
+        ApiClient.volumes_api().put_volume_replica_count(volume_to_scale.spec.uuid, 1)
         pytest.error_body = None
     except openapi.exceptions.ApiException as e:
         pytest.error_body = json.loads(e.body)
@@ -205,11 +205,16 @@ def _():
     )
 
 
-@then("we scale the remaining 2-replica volume to 3 and then back to 2")
+@then(
+    "we scale the remaining 2-replica volume to 3 and then back to 2",
+    target_fixture="volume_to_scale",
+)
 def _():
     """we scale the remaining 2-replica volume to 3 and then back to 2."""
-    ApiClient.volumes_api().put_volume_replica_count(AG_VOLUME_UUID_3, 3)
-    ApiClient.volumes_api().put_volume_replica_count(AG_VOLUME_UUID_3, 2)
+    volume = get_affinity_group_2r_volume()
+    ApiClient.volumes_api().put_volume_replica_count(volume.spec.uuid, 3)
+    ApiClient.volumes_api().put_volume_replica_count(volume.spec.uuid, 2)
+    yield volume
 
 
 @then("3 new replicas should be created")
@@ -374,3 +379,10 @@ def get_affinity_group_volumes():
         if volume.spec.affinity_group
         and volume.spec.affinity_group.id == AG_PARAM["id"]
     ]
+
+
+def get_affinity_group_2r_volume():
+    volumes = get_affinity_group_volumes()
+    volumes_2r = list(filter(lambda volume: volume.spec.num_replicas == 2, volumes))
+    assert len(volumes_2r) == 1
+    return volumes_2r[0]
