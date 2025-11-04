@@ -28,8 +28,24 @@ Feature: Anti-Affinity for Affinity Group
     Given 3 pools, 1 on node A, 1 on node B, 1 on node C
     And 3 volumes belonging to an affinity group with <replicas> each and <thin>
     When the 3 volumes are scaled down to 1
+    Then the scale down operation should not fail
+    And all volumes should have exactly 1 replica
+    Examples:
+      | replicas | thin  |
+      | 2        | True  |
+      | 2        | False |
+
+  Scenario Outline: affinity group volumes are scaled down below 2 replicas with insufficient nodes
+    Given 2 pools, 1 on node A, 1 on node B
+    And 3 volumes belonging to an affinity group with <replicas> each and <thin>
+    When the 3 volumes are scaled down to 1
     Then the scale down operation should fail
-    And no volume should have less than 2 replicas
+    And exactly 2 volumes should have 1 replica, and 1 volume 2 replicas
+    Then we create another pool on node C
+    And we scale the remaining 2-replica volume to 3 and then back to 2
+    When we scale down the volume to 1 replica
+    Then the scale down operation should not fail
+    And all volumes should have exactly 1 replica
     Examples:
       | replicas | thin  |
       | 2        | True  |

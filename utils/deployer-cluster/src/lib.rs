@@ -438,6 +438,10 @@ impl Cluster {
     pub fn node(&self, index: u32) -> transport::NodeId {
         IoEngine::name(index, &self.builder.opts).into()
     }
+    /// How many io-engine nodes deployed.
+    pub fn nodes(&self) -> u32 {
+        self.builder.opts.io_engines
+    }
 
     /// The io-engine node nqn for `index`.
     pub fn node_nqn(&self, index: u32) -> transport::HostNqn {

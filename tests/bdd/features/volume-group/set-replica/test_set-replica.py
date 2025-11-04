@@ -56,6 +56,14 @@ def test_affinity_group_volumes_are_scaled_down_below_2_replicas():
     """affinity group volumes are scaled down below 2 replicas."""
 
 
+@scenario(
+    "feature.feature",
+    "affinity group volumes are scaled down below 2 replicas with insufficient nodes",
+)
+def test_affinity_group_volumes_are_scaled_down_below_2_replicas_with_insufficient_nodes():
+    """affinity group volumes are scaled down below 2 replicas with insufficient nodes."""
+
+
 @scenario("feature.feature", "affinity group volumes are scaled up")
 def test_affinity_group_volumes_are_scaled_up():
     """affinity group volumes are scaled up."""
@@ -72,6 +80,13 @@ def pools_1_on_node_a_0_on_node_b_1_on_node_c():
 def pools_1_on_node_a_1_on_node_b_1_on_node_c():
     """3 pools, 1 on node A, 1 on node B, 1 on node C."""
     node_pool_map = {NODE_NAME_1: 1, NODE_NAME_2: 1, NODE_NAME_3: 1}
+    create_node_pools(node_pool_map)
+
+
+@given("2 pools, 1 on node A, 1 on node B")
+def pools_1_on_node_a_1_on_node_b():
+    """2 pools, 1 on node A, 1 on node B."""
+    node_pool_map = {NODE_NAME_1: 1, NODE_NAME_2: 1}
     create_node_pools(node_pool_map)
 
 
@@ -109,6 +124,7 @@ def the_3_volumes_are_scaled_down_to_1():
     """the 3 volumes are scaled down to 1."""
     try:
         scale_affinity_group(1)
+        pytest.error_body = None
     except openapi.exceptions.ApiException as e:
         pytest.error_body = json.loads(e.body)
 
@@ -169,6 +185,38 @@ def the_volume_is_scaled_up_by_one():
     ApiClient.volumes_api().put_volume_replica_count(AG_VOLUME_UUID_1, 2)
 
 
+@when("we scale down the volume to 1 replica")
+def _(volume_to_scale):
+    """we scale down the volume to 1 replica."""
+    try:
+        ApiClient.volumes_api().put_volume_replica_count(volume_to_scale.spec.uuid, 1)
+        pytest.error_body = None
+    except openapi.exceptions.ApiException as e:
+        pytest.error_body = json.loads(e.body)
+
+
+@then("we create another pool on node C")
+def _():
+    """we create another pool on node C."""
+    ApiClient.pools_api().put_node_pool(
+        NODE_NAME_3,
+        "new_pool",
+        CreatePoolBody(disks=["malloc:///new_disk?size_mb=200"]),
+    )
+
+
+@then(
+    "we scale the remaining 2-replica volume to 3 and then back to 2",
+    target_fixture="volume_to_scale",
+)
+def _():
+    """we scale the remaining 2-replica volume to 3 and then back to 2."""
+    volume = get_affinity_group_2r_volume()
+    ApiClient.volumes_api().put_volume_replica_count(volume.spec.uuid, 3)
+    ApiClient.volumes_api().put_volume_replica_count(volume.spec.uuid, 2)
+    yield volume
+
+
 @then("3 new replicas should be created")
 def new_replicas_should_be_created():
     """3 new replicas should be created."""
@@ -210,6 +258,27 @@ def no_volume_should_have_less_than_2_replicas():
         assert vol.spec.num_replicas == 2
 
 
+@then("exactly 2 volumes should have 1 replica, and 1 volume 2 replicas")
+def _():
+    """exactly 2 volumes should have 1 replica, and 1 volume 2 replicas."""
+    ag_vols = get_affinity_group_volumes()
+    repl_counts = {1: 0, 2: 0}
+    for vol in ag_vols:
+        assert vol.spec.num_replicas in [1, 2]
+        repl_counts[vol.spec.num_replicas] += 1
+
+    assert repl_counts[1] == 2
+    assert repl_counts[2] == 1
+
+
+@then("all volumes should have exactly 1 replica")
+def all_volumes_should_have_exactly_1_replica():
+    """all volumes should have exactly 1 replica."""
+    ag_vols = get_affinity_group_volumes()
+    for vol in ag_vols:
+        assert vol.spec.num_replicas == 1
+
+
 @then("the creation should fail")
 def the_creation_should_fail():
     """the creation should fail."""
@@ -227,6 +296,12 @@ def the_scale_down_operation_should_fail():
     """the scale down operation should fail."""
     assert pytest.error_body["message"].startswith("SvcError :: RestrictedReplicaCount")
     assert pytest.error_body["kind"] == "FailedPrecondition"
+
+
+@then("the scale down operation should not fail")
+def the_scale_down_operation_should_not_fail():
+    """the scale down operation should not fail."""
+    assert pytest.error_body is None
 
 
 # HELPER METHODS
@@ -304,3 +379,10 @@ def get_affinity_group_volumes():
         if volume.spec.affinity_group
         and volume.spec.affinity_group.id == AG_PARAM["id"]
     ]
+
+
+def get_affinity_group_2r_volume():
+    volumes = get_affinity_group_volumes()
+    volumes_2r = list(filter(lambda volume: volume.spec.num_replicas == 2, volumes))
+    assert len(volumes_2r) == 1
+    return volumes_2r[0]

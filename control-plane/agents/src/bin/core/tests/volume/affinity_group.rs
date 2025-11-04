@@ -1,7 +1,15 @@
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{registry::traits::RegistryOperations, volume::traits::VolumeOperations};
-use stor_port::types::v0::transport::{
-    AffinityGroup, CreateVolume, DestroyVolume, GetSpecs, SetVolumeReplica, VolumeId,
+use std::collections::{HashMap, HashSet};
+use stor_port::{
+    transport_api::ReplyErrorKind,
+    types::v0::{
+        transport,
+        transport::{
+            AffinityGroup, CreateVolume, DestroyVolume, Filter, GetSpecs, NodeId, SetVolumeReplica,
+            VolumeId,
+        },
+    },
 };
 use tracing::info;
 
@@ -18,7 +26,7 @@ async fn affinity_group() {
         .unwrap();
 
     startup_test(&cluster).await;
-    scale_up_test(&cluster).await;
+    scale_up_down_test(&cluster).await;
 }
 
 async fn startup_test(cluster: &Cluster) {
@@ -105,14 +113,25 @@ async fn startup_test(cluster: &Cluster) {
     }
 }
 
-async fn scale_up_test(cluster: &Cluster) {
+async fn scale_up_down_test(cluster: &Cluster) {
     let vols = vec![
         (Some("ag1"), "eba487d9-0b57-407b-8b48-0b631a372183"),
         (Some("ag1"), "359b7e1a-b724-443b-98b4-e6d97fabbb60"),
         (Some("ag1"), "f2296d6a-77a6-401d-aad3-ccdc247b0a56"),
     ];
 
+    use grpc::operations::node::traits::NodeOperations;
     let registry_client = cluster.grpc_client().registry();
+
+    let mut affinity_labels = std::collections::HashMap::new();
+    affinity_labels.insert("r".to_string(), "r".to_string());
+
+    let noder = cluster.grpc_client().node();
+    for node in 0..cluster.nodes() {
+        let node = cluster.node(node);
+        let label = affinity_labels.clone();
+        noder.label(node, label, false).await.unwrap();
+    }
 
     // The Affinity Group specs should now have been loaded in memory.
     // Fetch the specs.
@@ -134,6 +153,15 @@ async fn scale_up_test(cluster: &Cluster) {
                     size: 5242880,
                     replicas: 1,
                     affinity_group: item.0.map(|val| AffinityGroup::new(val.to_string())),
+                    topology: Some(transport::Topology {
+                        pool: None,
+                        node: Some(transport::NodeTopology::Labelled(
+                            transport::LabelledTopology {
+                                inclusion: affinity_labels.clone(),
+                                ..Default::default()
+                            },
+                        )),
+                    }),
                     ..Default::default()
                 },
                 None,
@@ -181,7 +209,8 @@ async fn scale_up_test(cluster: &Cluster) {
             .expect("Scale down should not fail");
     }
 
-    for &item in &vols {
+    // Scale down 2 of the volumes
+    for &item in vols.iter().take(2) {
         volume_client
             .set_replica(
                 &SetVolumeReplica {
@@ -191,6 +220,72 @@ async fn scale_up_test(cluster: &Cluster) {
                 None,
             )
             .await
-            .expect_err("Scale down should fail");
+            .expect("Scale down should fail");
     }
+
+    // Replica location now looks like this:
+    // 1 2 3
+    // x
+    //   x
+    // x   x
+    let volumes = volume_client
+        .get(Filter::None, false, None, None)
+        .await
+        .unwrap();
+    let last_vol = volumes.entries.last().unwrap();
+    let mut node_replicas = HashMap::<NodeId, u32>::new();
+    let last_vol_nodes = last_vol
+        .state()
+        .replica_topology
+        .values()
+        .map(|topology| topology.node().as_ref().unwrap().clone())
+        .collect::<HashSet<_>>();
+    for volume in &volumes.entries {
+        for topology in volume.state().replica_topology.values() {
+            let node = topology.node().as_ref().unwrap();
+            *node_replicas.entry(node.clone()).or_default() += 1;
+        }
+    }
+    let node = node_replicas
+        .iter()
+        .filter(|(_, r)| **r == 1)
+        .map(|(n, _)| n)
+        .find(|n| last_vol_nodes.contains(n))
+        .unwrap();
+
+    let mut bad_labels = HashMap::new();
+    bad_labels.insert("r".to_string(), "x".to_string());
+
+    // Invalidate topology from the "good" removal candidate (with not conflict on restricted nodes)
+    noder.label(node.clone(), bad_labels, true).await.unwrap();
+
+    let error = volume_client
+        .set_replica(
+            &SetVolumeReplica {
+                uuid: last_vol.uuid().clone(),
+                replicas: 1,
+            },
+            None,
+        )
+        .await
+        .expect_err("Scale down should fail");
+    assert_eq!(error.kind, ReplyErrorKind::FailedPrecondition);
+    assert!(error.source.contains("RestrictedReplicaCount"));
+
+    // Revalidate topology
+    noder
+        .label(node.clone(), affinity_labels, true)
+        .await
+        .unwrap();
+
+    volume_client
+        .set_replica(
+            &SetVolumeReplica {
+                uuid: last_vol.uuid().clone(),
+                replicas: 1,
+            },
+            None,
+        )
+        .await
+        .expect("Scale down should succeed");
 }
