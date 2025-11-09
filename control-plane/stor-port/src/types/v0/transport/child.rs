@@ -99,30 +99,35 @@ impl ChildState {
 }
 impl PartialOrd for ChildState {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for ChildState {
+    fn cmp(&self, other: &Self) -> Ordering {
         match &self {
             ChildState::Unknown => match &other {
-                ChildState::Unknown => Some(Ordering::Equal),
-                ChildState::Online => Some(Ordering::Less),
-                ChildState::Degraded => Some(Ordering::Less),
-                ChildState::Faulted => Some(Ordering::Greater),
+                ChildState::Unknown => Ordering::Equal,
+                ChildState::Online => Ordering::Less,
+                ChildState::Degraded => Ordering::Less,
+                ChildState::Faulted => Ordering::Greater,
             },
             ChildState::Online => match &other {
-                ChildState::Unknown => Some(Ordering::Greater),
-                ChildState::Online => Some(Ordering::Equal),
-                ChildState::Degraded => Some(Ordering::Greater),
-                ChildState::Faulted => Some(Ordering::Greater),
+                ChildState::Unknown => Ordering::Greater,
+                ChildState::Online => Ordering::Equal,
+                ChildState::Degraded => Ordering::Greater,
+                ChildState::Faulted => Ordering::Greater,
             },
             ChildState::Degraded => match &other {
-                ChildState::Unknown => Some(Ordering::Greater),
-                ChildState::Online => Some(Ordering::Less),
-                ChildState::Degraded => Some(Ordering::Equal),
-                ChildState::Faulted => Some(Ordering::Greater),
+                ChildState::Unknown => Ordering::Greater,
+                ChildState::Online => Ordering::Less,
+                ChildState::Degraded => Ordering::Equal,
+                ChildState::Faulted => Ordering::Greater,
             },
             ChildState::Faulted => match &other {
-                ChildState::Unknown => Some(Ordering::Less),
-                ChildState::Online => Some(Ordering::Less),
-                ChildState::Degraded => Some(Ordering::Less),
-                ChildState::Faulted => Some(Ordering::Equal),
+                ChildState::Unknown => Ordering::Less,
+                ChildState::Online => Ordering::Less,
+                ChildState::Degraded => Ordering::Less,
+                ChildState::Faulted => Ordering::Equal,
             },
         }
     }
