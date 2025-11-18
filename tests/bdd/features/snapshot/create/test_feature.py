@@ -513,8 +513,11 @@ def snapshot_node(snapshot):
 
 @retry(wait_fixed=100, stop_max_attempt_number=40)
 def wait_snapshot_deleted():
-    with pytest.raises(NotFoundException) as e:
+    try:
         ApiClient.snapshots_api().get_volumes_snapshot(SNAP_UUID)
+        raise AssertionError("Snapshot still exists")
+    except NotFoundException:
+        return
 
 
 @retry(wait_fixed=100, stop_max_attempt_number=40)
