@@ -31,13 +31,46 @@ impl IoEngine {
         use std::io::{BufRead, BufReader};
 
         let bundle = std::path::PathBuf::from(std::env::var("SIM_BUNDLE")?);
+        let bundle = {
+            let umbrella_bundle = bundle.join("mayastor");
+            if umbrella_bundle.exists() && umbrella_bundle.is_dir() {
+                umbrella_bundle
+            } else {
+                bundle
+            }
+        };
         let etcd_dump = std::fs::File::open(bundle.join("etcd_dump"))?;
         let mut io_engine = IoEngine::default();
 
         let reader = BufReader::new(etcd_dump);
         let mut lines = reader.lines();
         let mut node_section = false;
-        while let (Some(Ok(key)), Some(Ok(value))) = (lines.next(), lines.next()) {
+        while let Some(Ok(key)) = lines.next() {
+            if key.is_empty() {
+                continue;
+            }
+            let Some(Ok(mut value)) = lines.next() else {
+                break;
+            };
+
+            let (compact, key) = match key.strip_suffix(":") {
+                Some(key) => (false, key),
+                None => (true, key.as_str()),
+            };
+
+            if !compact && value != "null" {
+                while let Some(Ok(more)) = lines.next() {
+                    value.push('\n');
+                    value.push_str(&more);
+                    if more == "}" {
+                        break;
+                    }
+                }
+                use std::str::FromStr;
+                let json_value = serde_json::Value::from_str(&value)?;
+                value = json_value.to_string();
+            }
+
             if !key.contains("/NodeSpec/") {
                 if node_section {
                     break;
