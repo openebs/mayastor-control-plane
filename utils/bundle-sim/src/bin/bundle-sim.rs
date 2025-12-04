@@ -59,13 +59,27 @@ struct SimulateOptions {
     /// Disable most start-time reconcilers (other than the pstor cleanup).
     #[clap(long)]
     no_start_event: bool,
+    #[clap(skip)]
+    umbrella: bool,
 }
 
 impl SimulateOptions {
+    fn etcd_dump_path(&self) -> std::path::PathBuf {
+        if self.umbrella {
+            self.untar_path.join("mayastor").join("etcd_dump")
+        } else {
+            self.untar_path.join("etcd_dump")
+        }
+    }
+    fn setup_bundle(&mut self) {
+        let umbrella_bundle = self.bundle.join("mayastor");
+        self.umbrella = umbrella_bundle.exists() && umbrella_bundle.is_dir();
+    }
     async fn simulate(&mut self, root: &std::path::Path) -> anyhow::Result<()> {
         self.extract()?;
+        self.setup_bundle();
 
-        let etcd_dump_path = self.untar_path.join("etcd_dump");
+        let etcd_dump_path = self.etcd_dump_path();
         let etcd_dump = std::fs::File::open(&etcd_dump_path)?;
         anyhow::ensure!(
             etcd_dump.metadata()?.size() > 0,
@@ -131,14 +145,40 @@ impl SimulateOptions {
         let mut lines = reader.lines();
         // Ignore old nexus health entries, from mayastor v0
         let ignore = "ffd20a56-8d97-4f68-8049-1cae2294a690".len();
-        while let (Some(Ok(key)), Some(Ok(value))) = (lines.next(), lines.next()) {
+
+        while let Some(Ok(key)) = lines.next() {
+            if key.is_empty() {
+                continue;
+            }
+            let Some(Ok(mut value)) = lines.next() else {
+                break;
+            };
+
+            let (compact, key) = match key.strip_suffix(":") {
+                Some(key) => (false, key),
+                None => (true, key.as_str()),
+            };
+
+            if !compact && value != "null" {
+                while let Some(Ok(more)) = lines.next() {
+                    value.push('\n');
+                    value.push_str(&more);
+                    if more == "}" {
+                        break;
+                    }
+                }
+                use std::str::FromStr;
+                let json_value = serde_json::Value::from_str(&value)?;
+                value = json_value.to_string();
+            }
+
             if key.len() == ignore {
                 break;
             }
             if key.contains("/AppNodeSpec/") || key.contains("StoreLeaseLock/CoreAgent") {
                 continue;
             }
-            etcd.put(key.clone(), value, None).await?;
+            etcd.put(key, value, None).await?;
         }
         Ok(())
     }
@@ -189,13 +229,18 @@ impl SimulateOptions {
 
             for entry in archive.entries()? {
                 let mut entry = entry?;
-                let path = entry.path()?;
+                let entry_path = entry.path()?;
+
+                // support umbrella bundles
+                let path = match entry_path.strip_prefix("mayastor") {
+                    Ok(path) => path,
+                    Err(_) => &entry_path,
+                };
 
                 // Check if the path starts with any of the target directories
                 if let Some(target_dir) = target_dirs.iter().find(|dir| path.starts_with(dir)) {
-                    tracing::trace!("Extracting {}", path.display());
                     if !unpacked_dirs.contains(target_dir) {
-                        tracing::info!("Extracting {target_dir}");
+                        tracing::info!("Extracting {}", entry_path.display());
                     }
                     entry.unpack_in(&self.untar_path)?;
 
