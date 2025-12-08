@@ -164,10 +164,10 @@ impl PvGarbageCollector {
             let pvcs = list.items.into_iter().filter_map(|p| p.uid());
             pvc_ids.extend(pvcs);
             match list.metadata.continue_ {
-                Some(token) => {
+                Some(token) if !token.is_empty() => {
                     params = params.continue_token(&token);
                 }
-                None => {
+                _ => {
                     break;
                 }
             }
