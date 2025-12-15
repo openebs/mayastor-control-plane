@@ -27,9 +27,9 @@ use rpc::{
 };
 
 use nix::{errno::Errno, sys};
-use std::{collections::HashMap, path::Path, time::Duration, vec::Vec};
+use std::{collections::HashMap, fs, path::Path, time::Duration, vec::Vec};
 use tonic::{Code, Request, Response, Status};
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
 macro_rules! failure {
@@ -393,16 +393,15 @@ impl node_server::Node for Node {
             if target_path.is_dir() {
                 unpublish_fs_volume(&msg).await?;
             } else {
+                // If we end up here it means the device and path are removed at this point
+                // and the file is no longer a special block file. It's better to remove the path
+                // and return success.
                 if target_path.is_file() {
-                    return Err(Status::new(
-                        Code::Unknown,
-                        format!(
-                            "Failed to unpublish volume {}: {} is a file.",
-                            &msg.volume_id, &msg.target_path
-                        ),
-                    ));
+                    if let Err(error) = fs::remove_file(target_path) {
+                        warn!("Volume {}: error removing target path {}, this is a regular file, error: {}", &msg.volume_id, &msg.target_path, error);
+                    }
+                    return Ok(Response::new(NodeUnpublishVolumeResponse {}));
                 }
-
                 unpublish_block_volume(&msg).await?;
             }
         }
