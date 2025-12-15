@@ -7,24 +7,24 @@ description = "Persistent store and transport associated information for the con
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-url = "2.5.4"
-uuid = { version = "1.11.0", features = ["v4"] }
-strum = "0.26.3"
-strum_macros = "0.26.4"
-serde_json = "1.0.132"
-percent-encoding = "2.3.1"
-tokio = { version = "1.43.1", features = ["full"] }
-serde = { version = "1.0.214", features = ["derive"] }
-serde_tuple = "1.0.0"
-async-trait = "0.1.83"
-dyn-clonable = "0.9.0"
-rand = "0.8.5"
-tonic = "0.12.3"
-chrono = { version = "0.4.38", features = ["serde"] }
-tracing = "0.1.40"
-prost-types = "0.13.3"
+url = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+serde_json = { workspace = true }
+percent-encoding = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true, features = ["derive"] }
+serde_tuple = { workspace = true }
+async-trait = { workspace = true }
+dyn-clonable = { workspace = true }
+rand = { workspace = true }
+tonic = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+tracing = { workspace = true }
+prost-types = { workspace = true }
 
-openapi = { path = "../../openapi", features = [ "actix-server", "tower-client", "tower-trace" ] }
-platform = { path = "../../utils/dependencies/platform" }
-pstor = { path = "../../utils/pstor" }
-utils = { path = "../../utils/utils-lib" }
+openapi = { workspace = true, features = [ "actix-server", "tower-client", "tower-trace", "tower-client-rls" ] }
+platform = { workspace = true }
+pstor = { workspace = true }
+utils = { workspace = true }

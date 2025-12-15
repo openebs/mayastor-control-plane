@@ -21,21 +21,21 @@ tls = ["openapi/tower-client-tls"]
 
 [dependencies]
 # CRD
-k8s-openapi = { version = "0.22.0", features = ["v1_24"] }
-kube = { version = "0.94.2", features = ["derive", "runtime"] }
-schemars = { version = "0.8.21" }
-serde = { version = "1.0.214" }
-serde_json = { version = "1.0.132" }
+k8s-openapi = { workspace = true }
+kube = { workspace = true, features = ["derive", "runtime"] }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 # Binary
-openapi = { path = "../../openapi", default-features = false, features = ["tower-client", "tower-trace"], optional = true }
-utils = { path = "../../utils/utils-lib", optional = true }
-anyhow = { version = "1.0.92", optional = true }
-chrono = { version = "0.4.38", optional = true }
-clap = { version = "4.5.20", features = ["color", "env", "string"], optional = true }
-futures = { version = "0.3.31", optional = true }
-snafu = { version = "0.8.5", optional = true }
-tokio = { version = "1.43.1", features = ["full"], optional = true }
-humantime = { version = "2.1.0", optional = true }
-tracing = { version = "0.1.40", optional = true }
-parse-size = "1.1.0"
+openapi = { workspace = true, default-features = false, features = ["tower-client", "tower-trace"], optional = true }
+utils = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+clap = { workspace = true, features = ["color", "env", "string"], optional = true }
+futures = { workspace = true, optional = true }
+snafu = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["full"], optional = true }
+humantime = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+parse-size = { workspace = true }
