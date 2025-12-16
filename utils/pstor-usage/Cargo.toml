@@ -7,16 +7,16 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.43.1", features = ["full"] }
-openapi = { path = "../../openapi", default-features = false, features = ["tower-client", "tower-trace"] }
-deployer-cluster = { path = "../../utils/deployer-cluster" }
-utils = { path = "../utils-lib" }
-anyhow = "1.0.92"
-clap = { version = "4.5.20", features = ["color", "derive", "env", "string"] }
-parse-size = { version = "1.1.0", features = ["std"] }
-async-trait = "0.1.83"
-etcd-client = "0.14.0"
-prettytable-rs = "0.10.0"
-serde = "1.0.214"
-serde_yaml = "0.9.34"
-itertools = "0.13.0"
+tokio = { workspace = true, features = ["full"] }
+openapi = { workspace = true, default-features = false, features = ["tower-client", "tower-trace"] }
+deployer-cluster = { workspace = true }
+utils = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["color", "derive", "env", "string"] }
+parse-size = { workspace = true, features = ["std"] }
+async-trait = { workspace = true }
+etcd-client = { workspace = true }
+prettytable-rs = { workspace = true }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+itertools = { workspace = true }

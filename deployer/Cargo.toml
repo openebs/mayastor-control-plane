@@ -15,24 +15,25 @@ name = "deployer_lib"
 path = "src/lib.rs"
 
 [dependencies]
-composer = { path = "../utils/dependencies/composer", default-features = false }
-stor-port = { path = "../control-plane/stor-port" }
-rpc = { path = "../rpc" }
-utils = { path = "../utils/utils-lib" }
-grpc = { path = "../control-plane/grpc" }
-clap = { version = "4.5.20", features = ["color", "derive", "env", "string"] }
-tokio = { version = "1.43.1", features = ["full"] }
-tonic = "0.12.3"
-async-trait = "0.1.83"
-hyper-util = "0.1.10"
-strum = "0.26.3"
-strum_macros = "0.26.4"
-paste = "1.0.15"
-humantime = "2.1.0"
-reqwest = { version = "0.12.9", default-features = false, features = ["multipart"] }
-futures = "0.3.31"
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-tower = { version = "0.5.1", features = ["timeout", "util"] }
-events-api = { path = "../utils/dependencies/apis/events" }
-anyhow = "1.0.92"
+composer = { workspace = true, default-features = false }
+stor-port = { workspace = true }
+rpc = { workspace = true }
+utils = { workspace = true }
+grpc = { workspace = true }
+
+clap = { workspace = true, features = ["color", "derive", "env", "string"] }
+tokio = { workspace = true, features = ["full"] }
+tonic = { workspace = true }
+async-trait = { workspace = true }
+hyper-util = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+paste = { workspace = true }
+humantime = { workspace = true }
+reqwest = { workspace = true, default-features = false, features = ["multipart"] }
+futures = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tower = { workspace = true, features = ["timeout", "util"] }
+events-api = { workspace = true }
+anyhow = { workspace = true }

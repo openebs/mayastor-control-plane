@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-hyper = { version = "1.5.0", default-features = false }
-http-body-util = { version = "0.1.2", default-features = false }
-tower = { version = "0.5.1", default-features = false }
+hyper = { workspace = true, default-features = false }
+http-body-util = { workspace = true, default-features = false }
+tower = { workspace = true, default-features = false }

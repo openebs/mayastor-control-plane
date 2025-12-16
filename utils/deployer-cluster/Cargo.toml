@@ -7,28 +7,28 @@ description = "Create and Manage local deployer clusters"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.43.1", features = ["full"] }
-openapi = { path = "../../openapi", features = ["tower-client", "tower-trace"] }
-composer = { path = "../../utils/dependencies/composer", default-features = false }
-deployer = { path = "../../deployer" }
-rpc = { path = "../../rpc" }
+tokio = { workspace = true, features = ["full"] }
+openapi = { workspace = true, features = ["tower-client", "tower-trace"] }
+composer = { workspace = true, default-features = false }
+deployer = { workspace = true }
+rpc = { workspace = true }
 csi-driver = { path = "../../control-plane/csi-driver" }
-utils = { path = "../../utils/utils-lib" }
-anyhow = "1.0.92"
-stor-port = { path = "../../control-plane/stor-port" }
-clap = { version = "4.5.20", features = ["derive", "env", "string"] }
+utils = { workspace = true }
+anyhow = { workspace = true }
+stor-port = { workspace = true }
+clap = { workspace = true, features = ["derive", "env", "string"] }
 backtrace = "0.3.74"
-etcd-client = "0.14.0"
-grpc = { path = "../../control-plane/grpc" }
-tonic = "0.12.3"
-tower = { version = "0.5.1", features = ["timeout", "util"] }
-hyper-util = "0.1.10"
+etcd-client = { workspace = true }
+grpc = { workspace = true }
+tonic = { workspace = true }
+tower = { workspace = true, features = ["timeout", "util"] }
+hyper-util = { workspace = true }
 # Tracing
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-tracing-opentelemetry = "0.27.0"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tracing-opentelemetry = { workspace = true }
 # Open Telemetry
-opentelemetry = { version = "0.26.0" }
-opentelemetry_sdk = { version = "0.26.0", features = ["rt-tokio-current-thread"] }
-opentelemetry-otlp = { version = "0.26.0" }
-opentelemetry-semantic-conventions = "0.26.0"
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true, features = ["rt-tokio-current-thread"] }
+opentelemetry-otlp = { workspace = true }
+opentelemetry-semantic-conventions = { workspace = true }

@@ -9,21 +9,21 @@ rls = ["event-publisher/rls-aws-lc-rs"]
 rls-ring = ["event-publisher/rls-ring"]
 
 [dependencies]
-tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
-tracing-opentelemetry = "0.27.0"
-tracing = "0.1.40"
+tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
+tracing-opentelemetry = { workspace = true }
+tracing = { workspace = true }
 
-opentelemetry = { version = "0.26.0" }
+opentelemetry = { workspace = true }
 
-opentelemetry_sdk = { version = "0.26.0", features = ["rt-tokio-current-thread"] }
-opentelemetry-otlp = { version = "0.26.0" }
-opentelemetry-semantic-conventions = "0.26.0"
+opentelemetry_sdk = { workspace = true, features = ["rt-tokio-current-thread"] }
+opentelemetry-otlp = { workspace = true }
+opentelemetry-semantic-conventions = { workspace = true }
 
-url = "2.5.4"
-strum = "0.26.3"
-strum_macros = "0.26.4"
-heck = "0.5.0"
-regex = "1.11.1"
+url = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+heck = { workspace = true }
+regex = { workspace = true }
 
 version-info = { path = "../dependencies/version-info", default-features = false }
 git-version-macro = { path = "../dependencies/git-version-macro" }

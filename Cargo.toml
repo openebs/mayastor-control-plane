@@ -38,3 +38,126 @@ exclude = [
     "utils/dependencies/*",
 ]
 resolver = "1"
+
+[workspace.dependencies]
+stor-port = { path = "./control-plane/stor-port" }
+grpc = { path = "./control-plane/grpc" }
+openapi = { path = "./openapi", default-features = false, features = ["tower-trace"] }
+rpc = { path = "./rpc" }
+deployer = { path = "./deployer" }
+utils = { path = "./utils/utils-lib" }
+pstor = { path = "./utils/pstor" }
+shutdown = { path = "./utils/shutdown" }
+weighted-scoring = { path = "./utils/weighted-scoring" }
+deployer-cluster = { path = "./utils/deployer-cluster" }
+platform = { path = "./utils/dependencies/platform" }
+events-api = { path = "./utils/dependencies/apis/events" }
+devinfo = { path = "./utils/dependencies/devinfo" }
+nvmeadm = { path = "./utils/dependencies/nvmeadm" }
+sysfs = { path = "./utils/dependencies/sysfs" }
+composer = { path = "./utils/dependencies/composer", default-features = false }
+
+rustls = { version = "0.23.19", default-features = false }
+rustls-pemfile = "2.2.0"
+webpki = "0.22.4"
+tokio-native-tls = "0.3.1"
+
+actix-web = { version = "4.9.0", features = ["rustls-0_23"] }
+actix-service = "2.0.3"
+awc = { version = "3.5.1" }
+tinytemplate = "1.2.1"
+jsonwebtoken = "9.3.0"
+
+tokio = { version = "1.45.1", features = ["sync"] }
+tokio-stream = { version = "0.1", features = ["net"] }
+futures = { version = "0.3.31", default-features = false }
+futures-util = { version = "0.3.31" }
+pin-project = "1.1.7"
+tokio-udev = { version = "0.10.0" }
+
+# tracing and telemetry
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-actix-web = { version = "0.7.14", features = ["opentelemetry_0_26"] }
+tracing-opentelemetry = { version = "0.27.0" }
+opentelemetry = { version = "0.26.0" }
+opentelemetry-otlp = { version = "0.26.0" }
+opentelemetry_sdk = { version = "0.26.0" }
+opentelemetry-http = { version = "0.26.0" }
+opentelemetry-semantic-conventions = "0.26.0"
+
+paste = "1.0.15"
+once_cell = "1.20.2"
+async-trait = "0.1.73"
+dyn-clonable = "0.9.0"
+lazy_static = "1.5.0"
+itertools = "0.13.0"
+parking_lot = "0.12.3"
+indexmap = "2.6.0"
+crossbeam-queue = "0.3.11"
+
+serde = { version = "1.0.214", features = ["derive"] }
+serde_derive = "1.0.214"
+serde_json = { version = "1.0.132", features = ["preserve_order"] }
+serde_yaml = "0.9.34"
+serde_tuple = "1.0.0"
+serde_urlencoded = "0.7.1"
+
+anyhow = "1.0.92"
+snafu = "0.8.5"
+thiserror = "1.0.68"
+url = "2.5.4"
+http = "1.1.0"
+http-body = { version = "1.0.1" }
+percent-encoding = "2.3.2"
+reqwest = { version = "0.12.9", default-features = false }
+state = "0.6.0"
+clap = { version = "4.5.20", features = ["color", "derive", "env", "string"] }
+humantime = "2.1.0"
+num_cpus = "1.16.0"
+rand = "0.8.5"
+uuid = { version = "1.4.1", features = ["v4"] }
+chrono = { version = "0.4.38", features = ["serde"] }
+parse-size = "1.1.0"
+shutdown_hooks = "0.1.0"
+gag = "1.0.0"
+regex = "1.11.1"
+glob = "0.3.1"
+which = "7.0.1"
+prettytable-rs = "0.10.0"
+inquire = { version = "0.7.5", default-features = false, features = ["crossterm"] }
+
+strum = "0.26.3"
+strum_macros = "0.26.4"
+heck = "0.5.0"
+
+tonic = "0.12.3"
+tonic-build = "0.12.3"
+prost-types = "0.13.3"
+prost = "0.13.2"
+prost-derive = "0.13.3"
+bytes = "1.8.0"
+tower = { version = "=0.5.1", default-features = false, features = ["timeout", "util"] }
+tower-http = { version = "0.5.2", features = ["trace", "map-response-body", "auth"] }
+hyper-util = "0.1.10"
+hyper = { version = "1.5.0", default-features = false, features = ["client", "http1", "http2"] }
+hyper-body = { path = "./utils/hyper-body" }
+http-body-util = { version = "0.1.3", default-features = false }
+hyper-rustls = { version = "0.27.3", default-features = false }
+hyper-tls = { version = "0.6.0" }
+
+udev = "0.9.1"
+sys-mount = { version = "3.0.1", default-features = false }
+nix = { version = "0.29.0", default-features = false, features = ["ioctl", "fs"] }
+ipnetwork = "0.20.0"
+bollard = "0.17.1"
+semver = "1.0.23"
+bindgen = "0.69.5"
+flate2 = "1.0"
+tar = "0.4"
+
+k8s-openapi = { version = "0.22.0", default-features = false, features = ["v1_24"] }
+kube = { version = "0.94.2", features = ["runtime", "derive"] }
+schemars = { version = "0.8.21" }
+async-nats = { version = "0.37.0", default-features = false }
+etcd-client = "0.14.0"

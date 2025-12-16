@@ -19,29 +19,28 @@ rls = ["openapi/tower-client-rls"]
 tls = ["openapi/tower-client-tls"]
 
 [dependencies]
-tracing = "0.1.40"
-openapi = { path = "../../openapi", default-features = false, features = ["tower-trace"] }
-utils = { path = "../../utils/utils-lib" }
-strum = "0.26.3"
-strum_macros = "0.26.4"
-tokio = { version = "1.43.1" }
-anyhow = "1.0.92"
-async-trait = "0.1.83"
-once_cell = "1.20.2"
-clap = { version = "4.5.20", features = ["color", "derive", "string"] }
-prettytable-rs = "0.10.0"
-lazy_static = "1.5.0"
-serde = "1.0.214"
-serde_json = "1.0.132"
-serde_yaml = "0.9.34"
-humantime = "2.1.0"
-chrono = "0.4.38"
-snafu = "0.8.5"
-inquire = { version = "0.7.5", default-features = false, features = ["crossterm"] }
-itertools = "0.13.0"
+tracing = { workspace = true }
+openapi = { workspace = true, default-features = false, features = ["tower-trace"] }
+utils = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+once_cell = { workspace = true }
+clap = { workspace = true, features = ["color", "derive", "string"] }
+prettytable-rs = { workspace = true }
+lazy_static = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+humantime = { workspace = true }
+chrono = { workspace = true }
+snafu = { workspace = true }
+inquire = { workspace = true, default-features = false, features = ["crossterm"] }
+itertools = { workspace = true }
 
 [dev-dependencies]
-# Test dependencies
-shutdown_hooks = "0.1.0"
-deployer-cluster = { path = "../../utils/deployer-cluster" }
-gag = "1.0.0"
+shutdown_hooks = { workspace = true }
+deployer-cluster = { workspace = true }
+gag = { workspace = true }

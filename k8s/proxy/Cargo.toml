@@ -13,15 +13,15 @@ tls = ["openapi/tower-client-tls"]
 
 [dependencies]
 kube-forward = { path = "../forward" }
-openapi = { path = "../../openapi", default-features = false, features = ["tower-trace"] }
-utils = { path = "../../utils/utils-lib" }
+openapi = { workspace = true, default-features = false, features = ["tower-trace"] }
+utils = { workspace = true }
 
-kube = { version = "0.94.2", features = ["derive"] }
-tower = { version = "0.5.1", features = ["timeout", "util"] }
-hyper-util = { version = "0.1.10", features = ["client", "client-legacy", "http1", "http2", "tokio", "service"] }
-hyper = { version = "1.5.0", features = ["client", "http1", "http2"] }
-hyper-body = { path = "../../utils/hyper-body" }
+kube = { workspace = true, features = ["derive"] }
+tower = { workspace = true, features = ["timeout", "util"] }
+hyper-util = { workspace = true, features = ["client", "client-legacy", "http1", "http2", "tokio", "service"] }
+hyper = { workspace = true, features = ["client", "http1", "http2"] }
+hyper-body = { workspace = true }
 
-anyhow = "1.0.92"
-thiserror = "1.0.68"
-url = "2.5.4"
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+url = { workspace = true }
