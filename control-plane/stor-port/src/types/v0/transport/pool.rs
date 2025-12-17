@@ -60,7 +60,7 @@ impl From<PoolStatus> for models::PoolStatus {
 #[serde(rename_all = "camelCase")]
 pub struct CtrlPoolState {
     /// The state, mostly as returned by the data-plane.
-    state: PoolState,
+    pub state: PoolState,
 }
 impl CtrlPoolState {
     /// Construct a new pool with spec and state.
@@ -78,6 +78,52 @@ impl Deref for CtrlPoolState {
     fn deref(&self) -> &Self::Target {
         &self.state
     }
+}
+
+/// Different pool errors
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+pub enum PoolErrorCode {
+    /// Unknown error
+    #[default]
+    ProbeUnknown,
+    /// Disk not found in the system
+    DiskNotFound,
+    /// Disk read IO errors
+    DiskReadIoError,
+    /// Pool on-disk name doesn't match the expected
+    ForeignPoolName,
+    /// Pool on-disk uuid doesn't match the expected
+    ForeignPoolUid,
+    /// Failed to check super block error
+    SuperBlock,
+    /// Invalid super block (eg: CRC error)
+    InvalidSuperBlock,
+}
+
+/// Pool error code and human-readable message.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+pub struct PoolError {
+    /// Code of the encountered error.
+    pub code: PoolErrorCode,
+    /// Human-readable message.
+    pub msg: String,
+}
+
+/// Pool Disk Errors.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+pub struct PoolDiskError {
+    /// Affected Disk.
+    pub disk: String,
+    /// Error encountered.
+    pub error: PoolError,
+}
+
+/// Pool diagnostic information.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PoolDiag {
+    /// Errors encountered when trying to import the pool.
+    pub import_errors: Vec<PoolDiskError>,
 }
 
 /// Pool state information - as reported by the io-engine.
@@ -167,15 +213,17 @@ impl PartialOrd for PoolStatus {
 /// A Storage Pool.
 /// It may have a spec which is the specification provided by the creator.
 /// It may have a state if such state is retrieved from a storage node.
-#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Pool {
     /// Pool identification.
     id: PoolId,
     /// Desired specification of the pool.
-    spec: Option<PoolSpec>,
+    pub spec: Option<PoolSpec>,
     /// Runtime state of the pool.
-    state: Option<CtrlPoolState>,
+    pub state: Option<CtrlPoolState>,
+    /// Diagnostic information for the pool.
+    pub diag: Option<PoolDiag>,
 }
 
 impl Pool {
@@ -185,6 +233,7 @@ impl Pool {
             id: spec.id.clone(),
             spec: Some(spec),
             state,
+            diag: None,
         }
     }
     /// Construct a new pool with spec but no state.
@@ -193,6 +242,7 @@ impl Pool {
             id: spec.id.clone(),
             spec: Some(spec),
             state: None,
+            diag: None,
         }
     }
     /// Construct a new pool with optional spec and state.
@@ -201,6 +251,7 @@ impl Pool {
             id: state.id.clone(),
             spec,
             state: Some(state),
+            diag: None,
         }
     }
     /// Try to construct a new pool from spec and state.

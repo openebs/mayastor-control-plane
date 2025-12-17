@@ -17,7 +17,8 @@ use stor_port::{
         },
         transport::{
             CreatePool, CtrlPoolState, DestroyPool, ExpandPool, Filter, LabelPool, NodeId, Pool,
-            PoolDeviceUri, PoolId, PoolState, PoolStatus, UnlabelPool, VolumeId,
+            PoolDeviceUri, PoolDiag, PoolDiskError, PoolErrorCode, PoolId, PoolState, PoolStatus,
+            UnlabelPool, VolumeId,
         },
     },
     IntoOption,
@@ -246,13 +247,40 @@ impl From<PoolState> for pool::PoolState {
     }
 }
 
+impl From<PoolErrorCode> for pool::ProbeErrorCode {
+    fn from(value: PoolErrorCode) -> Self {
+        match value {
+            PoolErrorCode::ProbeUnknown => Self::ProbeUnknown,
+            PoolErrorCode::DiskNotFound => Self::DiskNotFound,
+            PoolErrorCode::DiskReadIoError => Self::DiskReadIoError,
+            PoolErrorCode::ForeignPoolName => Self::ForeignPoolName,
+            PoolErrorCode::ForeignPoolUid => Self::ForeignPoolUid,
+            PoolErrorCode::SuperBlock => Self::SuperBlock,
+            PoolErrorCode::InvalidSuperBlock => Self::InvalidSuperBlock,
+        }
+    }
+}
+impl From<PoolDiag> for pool::PoolDiag {
+    fn from(diag: PoolDiag) -> Self {
+        let import_error = |value: PoolDiskError| pool::DiskError {
+            error: Some(pool::ProbeError {
+                code: pool::ProbeErrorCode::from(value.error.code) as i32,
+                msg: value.error.msg,
+            }),
+            disk: value.disk,
+        };
+        Self {
+            import_errors: diag.import_errors.into_iter().map(import_error).collect(),
+        }
+    }
+}
+
 impl From<Pool> for pool::Pool {
     fn from(pool: Pool) -> Self {
-        let definition = pool.spec().map(|pool_spec| pool_spec.into());
-        let state = pool.ctrl_state();
         pool::Pool {
-            definition,
-            state: state.map(|p| p.state()).cloned().into_opt(),
+            definition: pool.spec.map(|pool_spec| pool_spec.into()),
+            state: pool.state.map(|p| p.state).into_opt(),
+            diag: pool.diag.map(Into::into),
         }
     }
 }
