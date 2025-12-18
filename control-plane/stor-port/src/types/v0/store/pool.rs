@@ -1,12 +1,15 @@
 //! Definition of pool types that can be saved to the persistent store.
 
-use crate::types::v0::{
-    openapi::{models, models::PoolSpecEncryption},
-    store::{
-        definitions::{ObjectKey, StorableObject, StorableObjectType},
-        AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
+use crate::{
+    types::v0::{
+        openapi::{models, models::PoolSpecEncryption},
+        store::{
+            definitions::{ObjectKey, StorableObject, StorableObjectType},
+            AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
+        },
+        transport::{self, CreatePool, ImportPool, NodeId, PoolDeviceUri, PoolDiag, PoolId},
     },
-    transport::{self, CreatePool, ImportPool, NodeId, PoolDeviceUri, PoolId},
+    IntoOption,
 };
 
 pub const POOL_BS_CLUSTER_SIZE_DEFAULT: u32 = 4194304;
@@ -18,7 +21,6 @@ pub fn default_pool_cluster_size() -> u32 {
 // PoolLabel is the type for the labels
 pub type PoolLabel = HashMap<String, String>;
 
-use crate::IntoOption;
 use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, convert::From, fmt::Debug};
@@ -65,6 +67,7 @@ impl From<&CreatePool> for PoolSpec {
             // Default is 4MiB today.
             cluster_size: request.cluster_size.unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
             max_expansion: request.max_expansion.clone(),
+            metadata: PoolMetadata::default(),
         }
     }
 }
@@ -141,6 +144,32 @@ pub struct PoolSpec {
     /// Maximum expansion size for this pool.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_expansion: Option<String>,
+    /// Pool metadata information.
+    #[serde(default, skip_serializing_if = "super::is_default")]
+    pub metadata: PoolMetadata,
+}
+
+/// Pool meta information.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct PoolMetadata {
+    /// Persisted metadata information.
+    #[serde(default, skip_serializing_if = "super::is_default")]
+    pub persisted: PoolPersistedMetadata,
+    /// Runtime information, useful to quick checks without having to read out from PSTOR
+    /// or any other control-plane related registry.
+    #[serde(skip)]
+    pub runtime: PoolRuntimeMetadata,
+}
+
+/// Pool meta information.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct PoolPersistedMetadata {}
+
+/// Runtime pool information.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct PoolRuntimeMetadata {
+    /// Diagnostic info for the pool.
+    pub diag: Option<PoolDiag>,
 }
 
 impl PoolSpec {
@@ -341,13 +370,23 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
                 PoolOperation::Uncordon(op) => {
                     self.uncordon(op);
                 }
+                PoolOperation::Import(_) => {
+                    self.metadata.runtime.diag = None;
+                }
             }
         }
         self.clear_op();
     }
 
     fn clear_op(&mut self) {
-        self.operation = None;
+        let Some(op) = self.operation.take() else {
+            return;
+        };
+        if let PoolOperation::Import(op) = &op.operation {
+            if let Some(h) = op.report.lock().expect("not poisoned").take() {
+                self.metadata.runtime.diag = Some(h);
+            }
+        }
     }
 
     fn start_op(&mut self, operation: PoolOperation) {
@@ -378,6 +417,7 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
             PoolOperation::Unlabel(_) => (false, true),
             PoolOperation::Cordon(_) => (false, true),
             PoolOperation::Uncordon(_) => (false, true),
+            PoolOperation::Import(_) => (false, false),
         }
     }
 }
@@ -391,6 +431,20 @@ pub enum PoolOperation {
     Unlabel(PoolUnLabelOp),
     Cordon(PoolCordonOp),
     Uncordon(PoolCordonOp),
+    Import(PoolImportOp),
+}
+
+/// Pool importing info.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PoolImportOp {
+    /// The report which is used to retrieve the pool diagnostic info.
+    #[serde(skip)]
+    pub report: std::sync::Arc<std::sync::Mutex<Option<PoolDiag>>>,
+}
+impl PartialEq for PoolImportOp {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
 }
 
 /// Parameter for adding/removing pool cordons.

@@ -12,13 +12,13 @@ use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind},
     types::v0::{
         store::pool::{
-            CordonDrainState, CordonedState, Encryption, EncryptionSecret, PoolLabel, PoolSpec,
-            PoolSpecStatus, POOL_BS_CLUSTER_SIZE_DEFAULT,
+            CordonDrainState, CordonedState, Encryption, EncryptionSecret, PoolLabel, PoolMetadata,
+            PoolRuntimeMetadata, PoolSpec, PoolSpecStatus, POOL_BS_CLUSTER_SIZE_DEFAULT,
         },
         transport::{
             CreatePool, CtrlPoolState, DestroyPool, ExpandPool, Filter, LabelPool, NodeId, Pool,
-            PoolDeviceUri, PoolDiag, PoolDiskError, PoolErrorCode, PoolId, PoolState, PoolStatus,
-            UnlabelPool, VolumeId,
+            PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolId, PoolState,
+            PoolStatus, UnlabelPool, VolumeId,
         },
     },
     IntoOption,
@@ -126,6 +126,7 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
                 .cluster_size
                 .unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
             max_expansion: None,
+            metadata: Default::default(),
         })
     }
 }
@@ -161,6 +162,18 @@ impl TryFrom<pool::PoolState> for PoolState {
     }
 }
 
+fn pool_with_diag(mut pool_spec: PoolSpec, diag: Option<pool::PoolDiag>) -> PoolSpec {
+    if let Some(diag) = diag {
+        pool_spec.metadata = PoolMetadata {
+            persisted: Default::default(),
+            runtime: PoolRuntimeMetadata {
+                diag: Some(diag.into()),
+            },
+        };
+    }
+    pool_spec
+}
+
 impl TryFrom<pool::Pool> for Pool {
     type Error = ReplyError;
     fn try_from(pool: pool::Pool) -> Result<Self, Self::Error> {
@@ -174,8 +187,12 @@ impl TryFrom<pool::Pool> for Pool {
 
         let pool_spec = match pool.definition {
             None => None,
-            Some(pool_definition) => Some(PoolSpec::try_from(pool_definition)?),
+            Some(pool_definition) => Some(pool_with_diag(
+                PoolSpec::try_from(pool_definition)?,
+                pool.diag,
+            )),
         };
+
         match Pool::try_new(pool_spec, state) {
             Some(pool) => Ok(pool),
             None => Err(ReplyError::missing_argument(
@@ -250,7 +267,7 @@ impl From<PoolState> for pool::PoolState {
 impl From<PoolErrorCode> for pool::ProbeErrorCode {
     fn from(value: PoolErrorCode) -> Self {
         match value {
-            PoolErrorCode::ProbeUnknown => Self::ProbeUnknown,
+            PoolErrorCode::Unknown => Self::ProbeUnknown,
             PoolErrorCode::DiskNotFound => Self::DiskNotFound,
             PoolErrorCode::DiskReadIoError => Self::DiskReadIoError,
             PoolErrorCode::ForeignPoolName => Self::ForeignPoolName,
@@ -267,6 +284,38 @@ impl From<PoolDiag> for pool::PoolDiag {
                 code: pool::ProbeErrorCode::from(value.error.code) as i32,
                 msg: value.error.msg,
             }),
+            disk: value.disk,
+        };
+        Self {
+            import_errors: diag.import_errors.into_iter().map(import_error).collect(),
+        }
+    }
+}
+impl From<pool::ProbeErrorCode> for PoolErrorCode {
+    fn from(value: pool::ProbeErrorCode) -> Self {
+        match value {
+            pool::ProbeErrorCode::ProbeUnknown => Self::Unknown,
+            pool::ProbeErrorCode::DiskNotFound => Self::DiskNotFound,
+            pool::ProbeErrorCode::DiskReadIoError => Self::DiskReadIoError,
+            pool::ProbeErrorCode::ForeignPoolName => Self::ForeignPoolName,
+            pool::ProbeErrorCode::ForeignPoolUid => Self::ForeignPoolUid,
+            pool::ProbeErrorCode::SuperBlock => Self::SuperBlock,
+            pool::ProbeErrorCode::InvalidSuperBlock => Self::InvalidSuperBlock,
+        }
+    }
+}
+impl From<pool::PoolDiag> for PoolDiag {
+    fn from(diag: pool::PoolDiag) -> Self {
+        let import_error = |value: pool::DiskError| PoolDiskError {
+            error: {
+                let error = value.error.unwrap();
+                PoolError {
+                    code: PoolErrorCode::from(
+                        pool::ProbeErrorCode::try_from(error.code).unwrap_or_default(),
+                    ),
+                    msg: error.msg,
+                }
+            },
             disk: value.disk,
         };
         Self {

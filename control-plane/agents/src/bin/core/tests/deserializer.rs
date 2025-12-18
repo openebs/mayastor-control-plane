@@ -158,6 +158,7 @@ fn test_deserialization_v1_to_v2() {
                 cordon_drain: None,
                 cluster_size: 4194304,
                 max_expansion: None,
+                metadata: Default::default(),
             }),
         },
         TestEntry {

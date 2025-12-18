@@ -85,7 +85,7 @@ impl Deref for CtrlPoolState {
 pub enum PoolErrorCode {
     /// Unknown error
     #[default]
-    ProbeUnknown,
+    Unknown,
     /// Disk not found in the system
     DiskNotFound,
     /// Disk read IO errors
@@ -222,7 +222,8 @@ pub struct Pool {
     pub spec: Option<PoolSpec>,
     /// Runtime state of the pool.
     pub state: Option<CtrlPoolState>,
-    /// Diagnostic information for the pool.
+    /// Health of the pool.
+    /// todo: is this needed since we have it on the "spec" misnomer.
     pub diag: Option<PoolDiag>,
 }
 
@@ -231,27 +232,29 @@ impl Pool {
     pub fn new(spec: PoolSpec, state: Option<CtrlPoolState>) -> Self {
         Self {
             id: spec.id.clone(),
+            diag: spec.metadata.runtime.diag.clone(),
             spec: Some(spec),
             state,
-            diag: None,
         }
     }
     /// Construct a new pool with spec but no state.
     pub fn from_spec(spec: PoolSpec) -> Self {
         Self {
             id: spec.id.clone(),
+            diag: spec.metadata.runtime.diag.clone(),
             spec: Some(spec),
             state: None,
-            diag: None,
         }
     }
     /// Construct a new pool with optional spec and state.
     pub fn from_state(state: CtrlPoolState, spec: Option<PoolSpec>) -> Self {
         Self {
             id: state.id.clone(),
+            diag: spec
+                .as_ref()
+                .and_then(|spec| spec.metadata.runtime.diag.clone()),
             spec,
             state: Some(state),
-            diag: None,
         }
     }
     /// Try to construct a new pool from spec and state.
