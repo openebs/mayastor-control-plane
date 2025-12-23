@@ -59,20 +59,15 @@ impl CsiControllerSvc {
     }
 }
 
-/// Check whether target volume capabilities are valid. As of now, only
-/// SingleNodeWriter capability is supported.
-fn check_volume_capabilities(capabilities: &[VolumeCapability]) -> Result<(), tonic::Status> {
+/// Check whether target volume capabilities are valid
+fn check_volume_capabilities(
+    capabilities: &[VolumeCapability],
+    rwx_block: &Option<bool>,
+) -> Result<(), tonic::Status> {
     for c in capabilities {
-        if let Some(access_mode) = c.access_mode.as_ref() {
-            if access_mode.mode != volume_capability::access_mode::Mode::SingleNodeWriter as i32
-                && access_mode.mode
-                    != volume_capability::access_mode::Mode::MultiNodeMultiWriter as i32
-            {
-                return Err(Status::invalid_argument(format!(
-                    "Invalid volume access mode: {:?}",
-                    access_mode.mode
-                )));
-            }
+        if c.access_mode.is_some() {
+            // todo: isn't access_mode required?
+            check_volume_capability(c, rwx_block)?;
         }
     }
     Ok(())
@@ -80,6 +75,7 @@ fn check_volume_capabilities(capabilities: &[VolumeCapability]) -> Result<(), to
 
 fn check_volume_capability(
     capability: &VolumeCapability,
+    rwx_block: &Option<bool>,
 ) -> Result<volume_capability::access_mode::Mode, tonic::Status> {
     let Some(access_mode) = capability.access_mode.as_ref() else {
         return Err(tonic::Status::invalid_argument("missing access_mode"));
@@ -93,7 +89,13 @@ fn check_volume_capability(
         volume_capability::access_mode::Mode::SingleNodeWriter => Ok(access_mode),
         volume_capability::access_mode::Mode::MultiNodeMultiWriter => {
             if matches!(access_type, AccessType::Block(_)) {
-                Ok(access_mode)
+                if rwx_block == &Some(true) {
+                    Ok(access_mode)
+                } else {
+                    Err(Status::invalid_argument(
+                        "MultiNodeMultiWriter requested but RWX Block is disabled".to_string(),
+                    ))
+                }
             } else {
                 Err(Status::invalid_argument(format!(
                     "{access_mode:?} only allowed with access_type of Block",
@@ -381,7 +383,8 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             None
         };
 
-        check_volume_capabilities(&args.volume_capabilities)?;
+        let context = CreateParams::try_from(&args.parameters)?;
+        check_volume_capabilities(&args.volume_capabilities, context.rwx_block())?;
 
         // Check volume size.
         let size = match args.capacity_range {
@@ -400,7 +403,6 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             }
         };
 
-        let context = CreateParams::try_from(&args.parameters)?;
         let replica_count = context.replica_count();
 
         let parsed_vol_uuid = Uuid::parse_str(&volume_uuid).map_err(|_e| {
@@ -572,17 +574,17 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         })?;
         let _guard = csi_driver::limiter::VolumeOpGuard::new(volume_id)?;
 
+        let create_ctx = CreateParams::try_from(&args.volume_context)?;
         let access_mode = match args.volume_capability {
-            Some(c) => check_volume_capability(&c),
+            Some(c) => check_volume_capability(&c, create_ctx.rwx_block()),
             None => Err(Status::invalid_argument("Missing volume capability")),
         }?;
 
         // Check if the volume is already published.
         let volume = RestApiClient::get_client().get_volume(&volume_id).await?;
 
-        let params = PublishParams::try_from(&args.volume_context)?;
-
         // Prepare the context for the csi-node plugin.
+        let params = PublishParams::try_from(&args.volume_context)?;
         let mut publish_context = params.into_context();
 
         let uri =
@@ -764,34 +766,25 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             // todo: this seems wrong...
             .map_err(|_e| Status::unimplemented("Not implemented"))?;
 
-        use volume_capability::access_mode::Mode;
-        let supported_caps = vec![Mode::SingleNodeWriter, Mode::MultiNodeMultiWriter];
-        let caps: Vec<VolumeCapability> = args
-            .volume_capabilities
-            .into_iter()
-            .filter(|cap| {
-                let cap_mode = cap.access_mode.as_ref();
-                let access_mode = cap_mode.map(|m| m.mode()).unwrap_or_default();
-                supported_caps.contains(&access_mode)
-            })
-            .collect();
+        let context = CreateParams::try_from(&args.parameters)?;
+        let validation = check_volume_capabilities(&args.volume_capabilities, context.rwx_block());
 
-        // todo: this seems wrong? See https://github.com/container-storage-interface/spec/blob/e981e2a057ca10f4a7f81289c97a4e829fd69152/spec.md?plain=1#L1502
-        let response = if !caps.is_empty() {
-            ValidateVolumeCapabilitiesResponse {
+        // todo: We need to validate the context and parameters?
+        //  See https://github.com/container-storage-interface/spec/blob/e981e2a057ca10f4a7f81289c97a4e829fd69152/spec.md?plain=1#L1502
+        let response = match validation {
+            Ok(_) => ValidateVolumeCapabilitiesResponse {
                 confirmed: Some(validate_volume_capabilities_response::Confirmed {
                     volume_context: HashMap::new(),
                     parameters: HashMap::new(),
-                    volume_capabilities: caps,
+                    volume_capabilities: args.volume_capabilities,
                     mutable_parameters: HashMap::new(),
                 }),
                 message: "".to_string(),
-            }
-        } else {
-            ValidateVolumeCapabilitiesResponse {
+            },
+            Err(status) => ValidateVolumeCapabilitiesResponse {
                 confirmed: None,
-                message: format!("The only supported capabilities are {supported_caps:?}"),
-            }
+                message: status.to_string(),
+            },
         };
 
         Ok(Response::new(response))
@@ -852,7 +845,8 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let _ = csi_driver::trace::CsiRequest::new_trace("Get Node(s) Capacity");
 
         // Check capabilities.
-        check_volume_capabilities(&args.volume_capabilities)?;
+        let context = CreateParams::try_from(&args.parameters)?;
+        check_volume_capabilities(&args.volume_capabilities, context.rwx_block())?;
 
         // todo: this seems to be conflating app node vs storage node?
         // Determine target node, if requested.
