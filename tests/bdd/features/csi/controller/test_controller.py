@@ -165,7 +165,6 @@ def test_unpublish_volume_idempotency(setup):
     """unpublish volume idempotency"""
 
 
-@pytest.mark.skip("This test is no longer valid as local restriction is revoked")
 @scenario("controller.feature", "unpublish volume from a different node")
 def test_unpublish_volume_from_a_different_node(setup):
     """unpublish volume on a different node"""
@@ -339,9 +338,7 @@ def check_republish_volume_on_a_different_node(republish_volume_on_a_different_n
     target_fixture="unpublish_volume_on_a_different_node",
 )
 def unpublish_volume_on_a_different_node(populate_published_volume):
-    with pytest.raises(grpc.RpcError) as e:
-        do_unpublish_volume(VOLUME1_UUID, NODE2)
-    return e.value
+    return do_unpublish_volume(VOLUME1_UUID, NODE2)
 
 
 @when(
@@ -352,13 +349,10 @@ def unpublish_not_existing_volume():
     return do_unpublish_volume(NOT_EXISTING_VOLUME_UUID, NODE1)
 
 
-@then("a ControllerUnpublishVolume request should fail with NOT_FOUND error")
+@then("a ControllerUnpublishVolume request should succeed")
 def check_unpublish_volume_on_a_different_node(unpublish_volume_on_a_different_node):
     grpc_error = unpublish_volume_on_a_different_node
-
-    assert (
-        grpc_error.code() == grpc.StatusCode.NOT_FOUND
-    ), "Unexpected gRPC error code: %s" + str(grpc_error.code())
+    assert grpc_error == pb.ControllerUnpublishVolumeResponse()
 
 
 @when(

@@ -82,7 +82,7 @@ Scenario: unpublish volume idempotency
 Scenario: unpublish volume from a different node
     Given a volume published on a node
     When a ControllerUnpublishVolume request is sent to CSI controller to unpublish volume from a different node
-    Then a ControllerUnpublishVolume request should fail with NOT_FOUND error
+    Then a ControllerUnpublishVolume request should succeed
     And volume should report itself as published
 
 Scenario: unpublish not existing volume
