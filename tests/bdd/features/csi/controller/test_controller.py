@@ -180,6 +180,11 @@ def test_republish_volume_on_a_different_node(setup):
     """republish volume on a different node"""
 
 
+@scenario("controller.feature", "republish rwx volume on a different node")
+def test_republish_rwx_volume_on_a_different_node(setup):
+    """republish rwx volume on a different node"""
+
+
 @scenario("controller.feature", "unpublish volume when nexus node is offline")
 def test_unpublish_volume_with_offline_nexus_node(setup):
     """unpublish volume when nexus node is offline"""
@@ -223,6 +228,19 @@ def a_non_existing_volume():
 @given("a volume published on a node", target_fixture="populate_published_volume")
 def populate_published_volume(_create_1_replica_nvmf_volume):
     do_publish_volume(VOLUME1_UUID, NODE1)
+
+    # Make sure volume is published.
+    volume = ApiClient.volumes_api().get_volume(VOLUME1_UUID)
+
+    assert (
+        volume.spec.target.protocol.value == "nvmf"
+    ), "Protocol mismatches for published volume"
+    return volume
+
+
+@given("a rwx volume published on a node", target_fixture="populate_published_volume")
+def populate_published_rwx_volume(_create_1_replica_nvmf_rwx_volume):
+    do_publish_volume(VOLUME1_UUID, NODE1, rwx=True)
 
     # Make sure volume is published.
     volume = ApiClient.volumes_api().get_volume(VOLUME1_UUID)
@@ -309,6 +327,14 @@ def republish_volume_on_a_different_node(populate_published_volume):
     return e.value
 
 
+@when(
+    "a ControllerPublishVolume request is sent to CSI controller to re-publish rwx volume on a different node",
+    target_fixture="republish_volume_on_a_different_node",
+)
+def republish_volume_on_a_different_node():
+    return do_publish_volume(VOLUME1_UUID, NODE2, rwx=True)
+
+
 @then("a new local volume of requested size should be successfully created")
 def check_1_replica_local_nvmf_volume(create_1_replica_local_nvmf_volume):
     assert (
@@ -331,6 +357,13 @@ def check_republish_volume_on_a_different_node(republish_volume_on_a_different_n
     assert "is only accessible to nodes" in grpc_error.details(), (
         "Error message reflects a different failure: %s" % grpc_error.details()
     )
+
+
+@then("a ControllerPublishVolume request should succeed")
+def check_republish_volume_on_a_different_node_ok(republish_volume_on_a_different_node):
+    response = republish_volume_on_a_different_node
+
+    assert isinstance(response, pb.ControllerPublishVolumeResponse), f"{response}"
 
 
 @when(
@@ -389,19 +422,28 @@ def do_unpublish_volume(volume_id, node_id):
     return csi_rpc_handle().controller.ControllerUnpublishVolume(req)
 
 
-def do_publish_volume(volume_id, node_id, protocol=None):
+def do_publish_volume(volume_id, node_id, protocol=None, rwx=False):
     if protocol is None:
         protocol = "nvmf"
+
+    if rwx:
+        volume_context = {"protocol": protocol, "rwxBlock": "true" if rwx else "false"}
+    else:
+        volume_context = {"protocol": protocol}
 
     req = pb.ControllerPublishVolumeRequest(
         volume_id=volume_id,
         node_id=node_id,
-        volume_context={"protocol": protocol},
+        volume_context=volume_context,
         volume_capability={
             "access_mode": pb.VolumeCapability.AccessMode(
-                mode=pb.VolumeCapability.AccessMode.Mode.SINGLE_NODE_WRITER
+                mode=(
+                    pb.VolumeCapability.AccessMode.Mode.MULTI_NODE_MULTI_WRITER
+                    if rwx
+                    else pb.VolumeCapability.AccessMode.Mode.SINGLE_NODE_WRITER
+                )
             ),
-            "mount": pb.VolumeCapability.MountVolume(),
+            "block": pb.VolumeCapability.BlockVolume(),
         },
     )
     return csi_rpc_handle().controller.ControllerPublishVolume(req)
@@ -678,6 +720,23 @@ def csi_create_1_replica_nvmf_volume1():
     return csi_rpc_handle().controller.CreateVolume(req)
 
 
+def csi_create_1_replica_nvmf_rwx_volume1():
+    capacity = pb.CapacityRange(required_bytes=VOLUME1_SIZE, limit_bytes=0)
+    parameters = {
+        "protocol": "nvmf",
+        "ioTimeout": "30",
+        "repl": "1",
+        "local": "true",
+        "rwxBlock": "true",
+    }
+
+    req = pb.CreateVolumeRequest(
+        name=PVC_VOLUME1_NAME, capacity_range=capacity, parameters=parameters
+    )
+
+    return csi_rpc_handle().controller.CreateVolume(req)
+
+
 def csi_create_2_replica_nvmf_volume4():
     capacity = pb.CapacityRange(required_bytes=VOLUME4_SIZE, limit_bytes=0)
     parameters = {
@@ -812,6 +871,13 @@ def csi_delete_1_replica_nvmf_volume2():
 @pytest.fixture
 def _create_1_replica_nvmf_volume():
     yield csi_create_1_replica_nvmf_volume1()
+    if Cluster.fixture_cleanup():
+        csi_delete_1_replica_nvmf_volume1()
+
+
+@pytest.fixture
+def _create_1_replica_nvmf_rwx_volume():
+    yield csi_create_1_replica_nvmf_rwx_volume1()
     if Cluster.fixture_cleanup():
         csi_delete_1_replica_nvmf_volume1()
 
@@ -1037,6 +1103,13 @@ def check_volume_status_published():
     assert vol.state.target.device_uri.startswith(
         ("nvmf://", "nvmf+tcp://", "nvmf+rdma+tcp://")
     ), "Volume share URI mismatches"
+
+
+@then("both nodes should have access to the volume target")
+def check_volume_nodes_access():
+    vol = ApiClient.volumes_api().get_volume(VOLUME1_UUID)
+    assert vol.state.target.device_uri.__contains__("io-engine-1")
+    assert vol.state.target.device_uri.__contains__("io-engine-2")
 
 
 @then("volume should report itself as not published")

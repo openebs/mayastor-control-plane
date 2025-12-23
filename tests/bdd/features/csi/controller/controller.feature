@@ -96,6 +96,13 @@ Scenario: republish volume on a different node
     Then a ControllerPublishVolume request should fail with FAILED_PRECONDITION error mentioning node mismatch
     And volume should report itself as published
 
+Scenario: republish rwx volume on a different node
+    Given a rwx volume published on a node
+    When a ControllerPublishVolume request is sent to CSI controller to re-publish rwx volume on a different node
+    Then a ControllerPublishVolume request should succeed
+    And volume should report itself as published
+    And both nodes should have access to the volume target
+
 Scenario: unpublish volume when nexus node is offline
     Given a volume published on a node
     When a node that hosts the nexus becomes offline
