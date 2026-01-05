@@ -1198,43 +1198,28 @@ fn context_into_topology(context: &CreateParams) -> CreateVolumeTopology {
     let mut pool_inclusive_label_topology: HashMap<String, String> = HashMap::new();
     let mut node_inclusive_label_topology: HashMap<String, String> = HashMap::new();
     let mut node_exclusive_label_topology: HashMap<String, String> = HashMap::new();
-    let pool_affinity_label_topology: Option<Vec<String>> = context
-        .publish_params()
-        .pool_affinity_topology_key()
-        .clone();
+    let pool_affinity_label_topology: Option<Vec<String>> =
+        context.pool_affinity_topology_key().clone();
 
     pool_inclusive_label_topology.insert(dsp_created_by_key(), String::from(DSP_OPERATOR));
+    pool_inclusive_label_topology
+        .extend(context.pool_has_topology_key().clone().unwrap_or_default());
     pool_inclusive_label_topology.extend(
         context
-            .publish_params()
-            .pool_has_topology_key()
-            .clone()
-            .unwrap_or_default(),
-    );
-    pool_inclusive_label_topology.extend(
-        context
-            .publish_params()
             .pool_affinity_topology_label()
             .clone()
             .unwrap_or_default(),
     );
+    node_inclusive_label_topology
+        .extend(context.node_has_topology_key().clone().unwrap_or_default());
     node_inclusive_label_topology.extend(
         context
-            .publish_params()
-            .node_has_topology_key()
-            .clone()
-            .unwrap_or_default(),
-    );
-    node_inclusive_label_topology.extend(
-        context
-            .publish_params()
             .node_affinity_topology_label()
             .clone()
             .unwrap_or_default(),
     );
     node_exclusive_label_topology.extend(
         context
-            .publish_params()
             .node_spread_topology_key()
             .clone()
             .unwrap_or_default(),
