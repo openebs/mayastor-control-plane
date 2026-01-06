@@ -1,7 +1,7 @@
 use super::*;
 
 use crate::{
-    types::v0::store::pool::{Encryption, EncryptionSecret, PoolLabel, PoolSpec},
+    types::v0::store::pool::{Encryption, EncryptionSecret, PoolLabel, PoolSpec, PoolUSpec},
     IntoOption,
 };
 use serde::{Deserialize, Serialize};
@@ -219,7 +219,7 @@ pub struct Pool {
     /// Pool identification.
     id: PoolId,
     /// Desired specification of the pool.
-    pub spec: Option<PoolSpec>,
+    pub spec: Option<PoolUSpec>,
     /// Runtime state of the pool.
     pub state: Option<CtrlPoolState>,
     /// Health of the pool.
@@ -233,7 +233,7 @@ impl Pool {
         Self {
             id: spec.id.clone(),
             diag: spec.metadata.runtime.diag.clone(),
-            spec: Some(spec),
+            spec: Some(spec.spec),
             state,
         }
     }
@@ -242,7 +242,7 @@ impl Pool {
         Self {
             id: spec.id.clone(),
             diag: spec.metadata.runtime.diag.clone(),
-            spec: Some(spec),
+            spec: Some(spec.spec),
             state: None,
         }
     }
@@ -253,7 +253,7 @@ impl Pool {
             diag: spec
                 .as_ref()
                 .and_then(|spec| spec.metadata.runtime.diag.clone()),
-            spec,
+            spec: spec.map(|s| s.spec),
             state: Some(state),
         }
     }
@@ -267,7 +267,7 @@ impl Pool {
         }
     }
     /// Get the pool spec.
-    pub fn spec(&self) -> Option<PoolSpec> {
+    pub fn spec(&self) -> Option<PoolUSpec> {
         self.spec.clone()
     }
     /// Get the pool identification.

@@ -23,7 +23,12 @@ pub type PoolLabel = HashMap<String, String>;
 
 use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, convert::From, fmt::Debug};
+use std::{
+    collections::HashMap,
+    convert::From,
+    fmt::Debug,
+    ops::{Deref, DerefMut},
+};
 
 /// Pool data structure used by the persistent store.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -54,19 +59,21 @@ pub type PoolSpecStatus = SpecStatus<transport::PoolStatus>;
 impl From<&CreatePool> for PoolSpec {
     fn from(request: &CreatePool) -> Self {
         Self {
-            node: request.node.clone(),
-            id: request.id.clone(),
-            disks: request.disks.clone(),
-            status: PoolSpecStatus::Creating,
-            labels: request.labels.clone(),
-            sequencer: OperationSequence::new(),
-            operation: None,
-            creat_tsc: None,
-            encryption: request.encryption.clone(),
-            cordon_drain: None,
-            // Default is 4MiB today.
-            cluster_size: request.cluster_size.unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
-            max_expansion: request.max_expansion.clone(),
+            spec: PoolUSpec {
+                node: request.node.clone(),
+                id: request.id.clone(),
+                disks: request.disks.clone(),
+                status: PoolSpecStatus::Creating,
+                labels: request.labels.clone(),
+                sequencer: OperationSequence::new(),
+                operation: None,
+                creat_tsc: None,
+                encryption: request.encryption.clone(),
+                cordon_drain: None,
+                // Default is 4MiB today.
+                cluster_size: request.cluster_size.unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
+                max_expansion: request.max_expansion.clone(),
+            },
             metadata: PoolMetadata::default(),
         }
     }
@@ -112,6 +119,28 @@ pub struct EncryptionSecret {
 /// User specification of a pool.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct PoolSpec {
+    #[serde(flatten)]
+    pub spec: PoolUSpec,
+    /// Pool metadata information.
+    #[serde(default, skip_serializing_if = "super::is_default")]
+    pub metadata: PoolMetadata,
+}
+
+impl Deref for PoolSpec {
+    type Target = PoolUSpec;
+    fn deref(&self) -> &Self::Target {
+        &self.spec
+    }
+}
+impl DerefMut for PoolSpec {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.spec
+    }
+}
+
+/// User specification of a pool.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct PoolUSpec {
     /// id of the io-engine instance
     pub node: NodeId,
     /// id of the pool
@@ -144,9 +173,6 @@ pub struct PoolSpec {
     /// Maximum expansion size for this pool.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_expansion: Option<String>,
-    /// Pool metadata information.
-    #[serde(default, skip_serializing_if = "super::is_default")]
-    pub metadata: PoolMetadata,
 }
 
 /// Pool meta information.
@@ -314,6 +340,13 @@ impl AsOperationSequencer for PoolSpec {
 
 impl From<PoolSpec> for models::PoolSpec {
     fn from(src: PoolSpec) -> Self {
+        let spec = src.spec;
+        Self::from(spec)
+    }
+}
+
+impl From<PoolUSpec> for models::PoolSpec {
+    fn from(src: PoolUSpec) -> Self {
         let encryption = match src.encryption {
             None => None,
             Some(encr) => match encr {

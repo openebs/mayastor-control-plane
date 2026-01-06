@@ -13,7 +13,7 @@ use stor_port::{
     types::v0::{
         store::pool::{
             CordonDrainState, CordonedState, Encryption, EncryptionSecret, PoolLabel, PoolMetadata,
-            PoolRuntimeMetadata, PoolSpec, PoolSpecStatus, POOL_BS_CLUSTER_SIZE_DEFAULT,
+            PoolRuntimeMetadata, PoolSpec, PoolSpecStatus, PoolUSpec, POOL_BS_CLUSTER_SIZE_DEFAULT,
         },
         transport::{
             CreatePool, CtrlPoolState, DestroyPool, ExpandPool, Filter, LabelPool, NodeId, Pool,
@@ -95,37 +95,39 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
             }
         };
         Ok(PoolSpec {
-            node: pool_spec.node_id.into(),
-            id: pool_spec.pool_id.into(),
-            disks: pool_spec.disks.iter().map(|i| i.into()).collect(),
-            status: pool_spec_status,
-            labels: match pool_spec.labels {
-                Some(labels) => Some(labels.value),
-                None => None,
-            },
-            sequencer: Default::default(),
-            operation: None,
-            creat_tsc: None,
-            encryption: pool_spec
-                .secret
-                .map(|details| Encryption::Secret(EncryptionSecret { name: details.name })),
-            cordon_drain: match pool_spec.cordon_drain {
-                Some(state) => match state {
-                    pool::pool_spec::CordonDrain::Cordoned(state) => {
-                        Some(CordonDrainState::Cordoned(CordonedState {
-                            replicas: state.replicas,
-                            snapshots: state.snapshots,
-                            restores: state.restores,
-                            import: state.import,
-                        }))
-                    }
+            spec: PoolUSpec {
+                node: pool_spec.node_id.into(),
+                id: pool_spec.pool_id.into(),
+                disks: pool_spec.disks.iter().map(|i| i.into()).collect(),
+                status: pool_spec_status,
+                labels: match pool_spec.labels {
+                    Some(labels) => Some(labels.value),
+                    None => None,
                 },
-                None => None,
+                sequencer: Default::default(),
+                operation: None,
+                creat_tsc: None,
+                encryption: pool_spec
+                    .secret
+                    .map(|details| Encryption::Secret(EncryptionSecret { name: details.name })),
+                cordon_drain: match pool_spec.cordon_drain {
+                    Some(state) => match state {
+                        pool::pool_spec::CordonDrain::Cordoned(state) => {
+                            Some(CordonDrainState::Cordoned(CordonedState {
+                                replicas: state.replicas,
+                                snapshots: state.snapshots,
+                                restores: state.restores,
+                                import: state.import,
+                            }))
+                        }
+                    },
+                    None => None,
+                },
+                cluster_size: pool_spec
+                    .cluster_size
+                    .unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
+                max_expansion: None,
             },
-            cluster_size: pool_spec
-                .cluster_size
-                .unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
-            max_expansion: None,
             metadata: Default::default(),
         })
     }
@@ -203,8 +205,8 @@ impl TryFrom<pool::Pool> for Pool {
     }
 }
 
-impl From<PoolSpec> for pool::PoolDefinition {
-    fn from(pool_spec: PoolSpec) -> Self {
+impl From<PoolUSpec> for pool::PoolDefinition {
+    fn from(pool_spec: PoolUSpec) -> Self {
         let spec_status: common::SpecStatus = pool_spec.status.into();
         pool::PoolDefinition {
             spec: Some(pool::PoolSpec {

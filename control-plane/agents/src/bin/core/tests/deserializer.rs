@@ -5,7 +5,7 @@ use stor_port::types::v0::{
         nexus_child::NexusChild,
         nexus_persistence::{ChildInfo, NexusInfo},
         node::NodeSpec,
-        pool::{PoolSpec, PoolSpecStatus},
+        pool::{PoolSpec, PoolSpecStatus, PoolUSpec},
         replica::{PoolRef, ReplicaSpec, ReplicaSpecStatus},
         volume::{TargetConfig, VolumeSpec, VolumeSpecStatus, VolumeTarget},
     },
@@ -139,25 +139,27 @@ fn test_deserialization_v1_to_v2() {
         TestEntry {
             json_str: r#"{"node":"mayastor-node1","id":"pool-1-on-mayastor-node1","disks":["/dev/sdb"],"status":{"Created":"Online"},"labels":{"org.com/created-by":"msp-operator"},"operation":null, "cluster_size":4194304}"#,
             expected: Expected::PoolSpec(PoolSpec {
-                node: "mayastor-node1".into(),
-                id: "pool-1-on-mayastor-node1".into(),
-                disks: vec!["/dev/sdb".into()],
-                status: PoolSpecStatus::Created(PoolStatus::Online),
-                labels: {
-                    let mut labels = HashMap::new();
-                    labels.insert(
-                        "org.com/created-by".to_string(),
-                        "msp-operator".to_string(),
-                    );
-                    Some(labels)
+                spec: PoolUSpec {
+                    node: "mayastor-node1".into(),
+                    id: "pool-1-on-mayastor-node1".into(),
+                    disks: vec!["/dev/sdb".into()],
+                    status: PoolSpecStatus::Created(PoolStatus::Online),
+                    labels: {
+                        let mut labels = HashMap::new();
+                        labels.insert(
+                            "org.com/created-by".to_string(),
+                            "msp-operator".to_string(),
+                        );
+                        Some(labels)
+                    },
+                    sequencer: Default::default(),
+                    operation: None,
+                    creat_tsc: None,
+                    encryption: None,
+                    cordon_drain: None,
+                    cluster_size: 4194304,
+                    max_expansion: None,
                 },
-                sequencer: Default::default(),
-                operation: None,
-                creat_tsc: None,
-                encryption: None,
-                cordon_drain: None,
-                cluster_size: 4194304,
-                max_expansion: None,
                 metadata: Default::default(),
             }),
         },
