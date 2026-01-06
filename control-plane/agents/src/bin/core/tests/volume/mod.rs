@@ -301,6 +301,167 @@ async fn publishing_test(cluster: &Cluster) {
     tracing::info!("Volumes: {:?}", volumes);
     assert_eq!(Some(&volume), volumes.first());
 
+    let nodes = |v: &Volume| -> Option<usize> {
+        match v.spec_ref().target_cfg() {
+            None => Some(0),
+            Some(x) => {
+                let len = x.frontend().nodes_info().len();
+                if len == 0 {
+                    None
+                } else {
+                    Some(len)
+                }
+            }
+        }
+    };
+
+    let volume = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: volume.spec().uuid.clone(),
+                target_node: None,
+                share: Some(VolumeShareProtocol::Nvmf),
+                publish_context: HashMap::new(),
+                frontend_nodes: vec!["a".into()],
+            },
+            None,
+        )
+        .await
+        .expect("Should be able to publish a newly created volume");
+
+    let error = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: volume.spec().uuid.clone(),
+                target_node: None,
+                share: Some(VolumeShareProtocol::Nvmf),
+                publish_context: HashMap::new(),
+                frontend_nodes: vec!["a".into()],
+            },
+            None,
+        )
+        .await
+        .expect_err("Already published for a");
+    assert!(matches!(
+        error,
+        ReplyError {
+            kind: ReplyErrorKind::AlreadyPublished,
+            resource: ResourceKind::Volume,
+            ..
+        },
+    ));
+
+    let volume = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: volume.spec().uuid.clone(),
+                target_node: None,
+                share: Some(VolumeShareProtocol::Nvmf),
+                publish_context: HashMap::new(),
+                frontend_nodes: vec!["b".into()],
+            },
+            None,
+        )
+        .await
+        .expect("Should be able to publish for a new frontend node");
+
+    let volume = volume_client
+        .unpublish(
+            &UnpublishVolume::new(volume.uuid(), false, vec!["a".into(), "b".into()]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    let volume = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: volume.spec().uuid.clone(),
+                target_node: None,
+                share: Some(VolumeShareProtocol::Nvmf),
+                publish_context: HashMap::new(),
+                frontend_nodes: vec!["a".into(), "b".into()],
+            },
+            None,
+        )
+        .await
+        .expect("Should be able to publish a newly created volume");
+
+    let volume = volume_client
+        .unpublish(
+            &UnpublishVolume::new(volume.uuid(), false, vec!["a".into(), "c".into()]),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(nodes(&volume), Some(1));
+    let error = volume_client
+        .unpublish(
+            &UnpublishVolume::new(volume.uuid(), false, vec!["a".into()]),
+            None,
+        )
+        .await
+        .expect_err("node allowed to remove");
+    tracing::error!("error: {:?}", error);
+    assert!(matches!(
+        error,
+        ReplyError {
+            kind: ReplyErrorKind::PermissionDenied,
+            resource: ResourceKind::Volume,
+            ..
+        },
+    ));
+    let volume = volume_client
+        .unpublish(
+            &UnpublishVolume::new(volume.uuid(), false, vec!["b".into(), "c".into()]),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(nodes(&volume), Some(0));
+
+    let volume = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: volume.spec().uuid.clone(),
+                target_node: None,
+                share: None,
+                publish_context: HashMap::new(),
+                frontend_nodes: vec![],
+            },
+            None,
+        )
+        .await
+        .expect("Should be able to publish a newly created volume");
+    assert_eq!(nodes(&volume), None);
+    let volume = volume_client
+        .unpublish(
+            &UnpublishVolume::new(volume.uuid(), false, vec!["b".into(), "c".into()]),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(nodes(&volume), Some(0));
+
+    let volume = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: volume.spec().uuid.clone(),
+                target_node: None,
+                share: None,
+                publish_context: HashMap::new(),
+                frontend_nodes: vec!["a".into()],
+            },
+            None,
+        )
+        .await
+        .expect("Should be able to publish a newly created volume");
+    let volume = volume_client
+        .unpublish(&UnpublishVolume::new(volume.uuid(), false, vec![]), None)
+        .await
+        .unwrap();
+    assert_eq!(nodes(&volume), Some(0));
+
     let volume = volume_client
         .publish(
             &PublishVolume {

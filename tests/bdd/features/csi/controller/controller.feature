@@ -82,7 +82,7 @@ Scenario: unpublish volume idempotency
 Scenario: unpublish volume from a different node
     Given a volume published on a node
     When a ControllerUnpublishVolume request is sent to CSI controller to unpublish volume from a different node
-    Then a ControllerUnpublishVolume request should fail with NOT_FOUND error
+    Then a ControllerUnpublishVolume request should succeed
     And volume should report itself as published
 
 Scenario: unpublish not existing volume
@@ -95,6 +95,13 @@ Scenario: republish volume on a different node
     When a ControllerPublishVolume request is sent to CSI controller to re-publish volume on a different node
     Then a ControllerPublishVolume request should fail with FAILED_PRECONDITION error mentioning node mismatch
     And volume should report itself as published
+
+Scenario: republish rwx volume on a different node
+    Given a rwx volume published on a node
+    When a ControllerPublishVolume request is sent to CSI controller to re-publish rwx volume on a different node
+    Then a ControllerPublishVolume request should succeed
+    And volume should report itself as published
+    And both nodes should have access to the volume target
 
 Scenario: unpublish volume when nexus node is offline
     Given a volume published on a node

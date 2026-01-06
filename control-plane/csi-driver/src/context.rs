@@ -82,6 +82,8 @@ pub enum Parameters {
     OverrideGlobalFormatOpts,
     #[strum(serialize = "poolClusterSize")]
     PoolClusterSize,
+    #[strum(serialize = "rwxBlock")]
+    RwxBlock,
 }
 impl Parameters {
     fn parse_human_time(
@@ -177,6 +179,10 @@ impl Parameters {
             Some(value) => value.parse::<Uuid>().map(Some)?,
             None => None,
         })
+    }
+    /// Parse the value for `Self::RwxBlock`
+    pub fn rwx_block(value: Option<&String>) -> Result<Option<bool>, ParseBoolError> {
+        Self::parse_bool(value)
     }
     /// Parse the value for `Self::NvmeCtrlLossTmo`.
     pub fn ctrl_loss_tmo(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
@@ -382,7 +388,7 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
             .map_err(|_| tonic::Status::invalid_argument("Invalid I/O timeout"))?;
         let nvme_io_timeout =
             Parameters::nvme_io_timeout(args.get(Parameters::NvmeIoTimeout.as_ref()))
-                .map_err(|_| tonic::Status::invalid_argument("Invalid I/O timeout"))?;
+                .map_err(|_| tonic::Status::invalid_argument("Invalid nvme_io_timeout"))?;
         let ctrl_loss_tmo =
             Parameters::ctrl_loss_tmo(args.get(Parameters::NvmeCtrlLossTmo.as_ref()))
                 .map_err(|_| tonic::Status::invalid_argument("Invalid ctrl_loss_tmo"))?;
@@ -500,6 +506,7 @@ const ANNOTATION_KEY: &str = "openebs.io/stsAffinityGroup";
 #[derive(Debug)]
 pub struct CreateParams {
     publish_params: PublishParams,
+    rwx_block: Option<bool>,
     share_protocol: VolumeShareProtocol,
     replica_count: u8,
     sts_affinity_group: Option<bool>,
@@ -511,6 +518,10 @@ pub struct CreateParams {
     pool_cluster_size: Option<u64>,
 }
 impl CreateParams {
+    /// Get the `Parameters::RwxBlock` value.
+    pub fn rwx_block(&self) -> &Option<bool> {
+        &self.rwx_block
+    }
     /// Get the `Parameters::PublishParams` value.
     pub fn publish_params(&self) -> &PublishParams {
         &self.publish_params
@@ -663,6 +674,9 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
     fn try_from(args: &HashMap<String, String>) -> Result<Self, Self::Error> {
         let publish_params = PublishParams::try_from(args)?;
 
+        let rwx_block = Parameters::rwx_block(args.get(Parameters::RwxBlock.as_ref()))
+            .map_err(|_| tonic::Status::invalid_argument("Invalid rwx block boolean"))?;
+
         // Check storage protocol.
         let share_protocol = parse_protocol(args.get(Parameters::ShareProtocol.as_ref()))?;
 
@@ -718,6 +732,7 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
 
         Ok(Self {
             publish_params,
+            rwx_block,
             share_protocol,
             replica_count,
             sts_affinity_group,

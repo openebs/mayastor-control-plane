@@ -534,11 +534,11 @@ pub(super) async fn fixup_nexus_protocol(
             if nexus_spec.share.shared() {
                 match NexusShareProtocol::try_from(nexus_spec.share) {
                     Ok(protocol) => {
-                        let allowed_host = nexus.lock().allowed_hosts.clone();
+                        let allowed_hosts = nexus_spec.allowed_hosts.clone();
                         nexus
                             .share(
                                 context.registry(),
-                                &ShareNexus::new(&nexus_state, protocol, allowed_host),
+                                &ShareNexus::new(&nexus_state, protocol, allowed_hosts),
                             )
                             .await?;
                         nexus_spec
@@ -549,6 +549,33 @@ pub(super) async fn fixup_nexus_protocol(
                             tracing::error!(error=%error, "Invalid configuration for nexus protocol, cannot apply it...")
                         });
                     }
+                }
+            }
+        } else if nexus_state.allowed_hosts != nexus_spec.allowed_hosts {
+            nexus_spec.warn_span(|| {
+                tracing::warn!(
+                    "Attempting to fix nexus share allowed hosts, current: '{:?}', expected: '{:?}'",
+                    nexus_state.allowed_hosts,
+                    nexus_spec.allowed_hosts
+                )
+            });
+
+            match NexusShareProtocol::try_from(nexus_spec.share) {
+                Ok(protocol) => {
+                    let allowed_hosts = nexus_spec.allowed_hosts.clone();
+                    nexus
+                        .share(
+                            context.registry(),
+                            &ShareNexus::new(&nexus_state, protocol, allowed_hosts),
+                        )
+                        .await?;
+                    nexus_spec
+                        .info_span(|| tracing::info!("Nexus allowed hosts changed successfully"));
+                }
+                Err(error) => {
+                    nexus_spec.error_span(|| {
+                        tracing::error!(error=%error, "Invalid configuration for nexus protocol, cannot apply it...")
+                    });
                 }
             }
         }
