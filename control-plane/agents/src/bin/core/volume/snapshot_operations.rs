@@ -468,7 +468,7 @@ impl OperationGuardArc<VolumeSnapshot> {
         let source = replica_snapshot.spec().source_id();
 
         // Get the pool using the replica snapshot's pool and extract the node_id.
-        let node_id = specs.pool(source.pool_id())?.node;
+        let node_id = specs.pool(source.pool_id())?.spec.node;
 
         // Get the corresponding node wrapper for the same.
         let node_wrapper = registry.node_wrapper(&node_id).await?;
@@ -491,7 +491,7 @@ impl OperationGuardArc<VolumeSnapshot> {
         // Get the list of nodes from the list of replica_snaps.
         for snap in txns.flat_map(|(_, v)| v) {
             if let Ok(pool_spec) = registry.specs().pool(snap.spec().source_id().pool_id()) {
-                nodes.insert(pool_spec.node);
+                nodes.insert(pool_spec.spec.node);
             }
         }
         // If at least one node is online return true.

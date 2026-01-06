@@ -9,11 +9,9 @@ use crate::controller::{
     },
     task_poller::{PollContext, PollPeriods, PollResult, PollTimer, PollerState, TaskPoller},
 };
-
-use crate::controller::io_engine::PoolApi;
 use stor_port::types::v0::{
     store::pool::PoolSpec,
-    transport::{DestroyPool, ImportPool, NodeStatus},
+    transport::{DestroyPool, NodeStatus},
 };
 use tracing::Instrument;
 
@@ -149,13 +147,13 @@ async fn missing_pool_state_reconciler(
         async {
             pool_spec.warn_span(|| tracing::warn!("Attempting to import the pool"));
 
-            let request = ImportPool::new(&pool_spec.node, &pool_spec.id, &pool_spec.disks, &pool_spec.encryption);
-            match node.import_pool(&request).await {
+            match pool.import(context.registry(), &pool_spec, node).await {
                 Ok(_) => {
                     pool_spec.info_span(|| tracing::info!("Pool successfully imported"));
                     PollResult::Ok(PollerState::Idle)
                 }
                 Err(error) => {
+                    // todo: only if error is first runtime
                     pool_spec.error_span(
                         || tracing::error!(error=%error, "Failed to import the pool")
                     );

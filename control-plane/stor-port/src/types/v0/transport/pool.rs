@@ -1,7 +1,7 @@
 use super::*;
 
 use crate::{
-    types::v0::store::pool::{Encryption, EncryptionSecret, PoolLabel, PoolSpec},
+    types::v0::store::pool::{Encryption, EncryptionSecret, PoolLabel, PoolSpec, PoolUSpec},
     IntoOption,
 };
 use serde::{Deserialize, Serialize};
@@ -60,7 +60,7 @@ impl From<PoolStatus> for models::PoolStatus {
 #[serde(rename_all = "camelCase")]
 pub struct CtrlPoolState {
     /// The state, mostly as returned by the data-plane.
-    state: PoolState,
+    pub state: PoolState,
 }
 impl CtrlPoolState {
     /// Construct a new pool with spec and state.
@@ -78,6 +78,52 @@ impl Deref for CtrlPoolState {
     fn deref(&self) -> &Self::Target {
         &self.state
     }
+}
+
+/// Different pool errors
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+pub enum PoolErrorCode {
+    /// Unknown error
+    #[default]
+    Unknown,
+    /// Disk not found in the system
+    DiskNotFound,
+    /// Disk read IO errors
+    DiskReadIoError,
+    /// Pool on-disk name doesn't match the expected
+    ForeignPoolName,
+    /// Pool on-disk uuid doesn't match the expected
+    ForeignPoolUid,
+    /// Failed to check super block error
+    SuperBlock,
+    /// Invalid super block (eg: CRC error)
+    InvalidSuperBlock,
+}
+
+/// Pool error code and human-readable message.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+pub struct PoolError {
+    /// Code of the encountered error.
+    pub code: PoolErrorCode,
+    /// Human-readable message.
+    pub msg: String,
+}
+
+/// Pool Disk Errors.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+pub struct PoolDiskError {
+    /// Affected Disk.
+    pub disk: String,
+    /// Error encountered.
+    pub error: PoolError,
+}
+
+/// Pool diagnostic information.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PoolDiag {
+    /// Errors encountered when trying to import the pool.
+    pub import_errors: Vec<PoolDiskError>,
 }
 
 /// Pool state information - as reported by the io-engine.
@@ -167,15 +213,18 @@ impl PartialOrd for PoolStatus {
 /// A Storage Pool.
 /// It may have a spec which is the specification provided by the creator.
 /// It may have a state if such state is retrieved from a storage node.
-#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Pool {
     /// Pool identification.
     id: PoolId,
     /// Desired specification of the pool.
-    spec: Option<PoolSpec>,
+    pub spec: Option<PoolUSpec>,
     /// Runtime state of the pool.
-    state: Option<CtrlPoolState>,
+    pub state: Option<CtrlPoolState>,
+    /// Health of the pool.
+    /// todo: is this needed since we have it on the "spec" misnomer.
+    pub diag: Option<PoolDiag>,
 }
 
 impl Pool {
@@ -183,7 +232,8 @@ impl Pool {
     pub fn new(spec: PoolSpec, state: Option<CtrlPoolState>) -> Self {
         Self {
             id: spec.id.clone(),
-            spec: Some(spec),
+            diag: spec.metadata.runtime.diag.clone(),
+            spec: Some(spec.spec),
             state,
         }
     }
@@ -191,7 +241,8 @@ impl Pool {
     pub fn from_spec(spec: PoolSpec) -> Self {
         Self {
             id: spec.id.clone(),
-            spec: Some(spec),
+            diag: spec.metadata.runtime.diag.clone(),
+            spec: Some(spec.spec),
             state: None,
         }
     }
@@ -199,7 +250,10 @@ impl Pool {
     pub fn from_state(state: CtrlPoolState, spec: Option<PoolSpec>) -> Self {
         Self {
             id: state.id.clone(),
-            spec,
+            diag: spec
+                .as_ref()
+                .and_then(|spec| spec.metadata.runtime.diag.clone()),
+            spec: spec.map(|s| s.spec),
             state: Some(state),
         }
     }
@@ -213,7 +267,7 @@ impl Pool {
         }
     }
     /// Get the pool spec.
-    pub fn spec(&self) -> Option<PoolSpec> {
+    pub fn spec(&self) -> Option<PoolUSpec> {
         self.spec.clone()
     }
     /// Get the pool identification.

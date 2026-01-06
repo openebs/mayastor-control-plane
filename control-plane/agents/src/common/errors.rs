@@ -8,7 +8,6 @@ use stor_port::{
         },
     },
 };
-use tonic::Code;
 
 /// Common error type for send/receive
 #[derive(Debug, Snafu)]
@@ -141,7 +140,7 @@ pub enum SvcError {
         pools: String,
         reason: String,
         kind: ResourceKind,
-        code: Code,
+        code: tonic::Code,
     },
     #[snafu(display("{} '{}' not found", kind.to_string(), id))]
     NotFound { kind: ResourceKind, id: String },
@@ -1189,6 +1188,7 @@ fn grpc_to_reply_error(error: SvcError) -> ReplyError {
             request,
             resource,
         } => {
+            use tonic::Code;
             let kind = match source.code() {
                 Code::Ok => ReplyErrorKind::Internal,
                 Code::Cancelled => ReplyErrorKind::Cancelled,

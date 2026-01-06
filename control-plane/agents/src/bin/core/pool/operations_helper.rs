@@ -1,8 +1,6 @@
-use crate::controller::io_engine::HostApi;
-use crate::node::wrapper::NodeWrapper;
 use crate::{
     controller::{
-        io_engine::PoolApi,
+        io_engine::{HostApi, PoolApi},
         registry::Registry,
         resources::{
             operations::ResourceLifecycle,
@@ -10,25 +8,27 @@ use crate::{
             OperationGuardArc,
         },
     },
-    node::wrapper::GetterOps,
+    node::wrapper::{GetterOps, NodeWrapper},
 };
 use agents::{errors, errors::SvcError};
-use stor_port::transport_api::ResourceKind;
-use stor_port::types::v0::transport::{GetBlockDevices, PoolDeviceUri};
-use stor_port::types::v0::{
-    store::{
-        pool::PoolSpec,
-        replica::{PoolRef, ReplicaSpec},
+use stor_port::{
+    transport_api::ResourceKind,
+    types::v0::{
+        store::{
+            pool::{PoolImportOp, PoolOperation, PoolSpec},
+            replica::{PoolRef, ReplicaSpec},
+        },
+        transport::{
+            CreatePool, DestroyReplica, GetBlockDevices, ImportPool, NodeId, PoolDeviceUri,
+            PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolState, ReplicaOwners,
+        },
     },
-    transport::{CreatePool, DestroyReplica, NodeId, ReplicaOwners},
 };
 
 use itertools::Itertools;
 use regex::Regex;
 use snafu::OptionExt;
-use std::collections::HashSet;
-use std::ops::Deref;
-use std::sync::Arc;
+use std::{collections::HashSet, ops::Deref, sync::Arc};
 use tokio::sync::RwLock;
 
 impl OperationGuardArc<PoolSpec> {
@@ -58,6 +58,56 @@ impl OperationGuardArc<PoolSpec> {
             .await?;
 
         Ok(())
+    }
+
+    /// Attempt to import a pool.
+    /// # NOTE
+    /// In case the import fails, we try to map the failure reason into the pool diagnostics.
+    /// This should give the user more visibility into the failure.
+    pub(crate) async fn import(
+        &mut self,
+        registry: &Registry,
+        spec: &PoolSpec,
+        node: Arc<RwLock<NodeWrapper>>,
+    ) -> Result<PoolState, SvcError> {
+        let reporter = Arc::new(std::sync::Mutex::new(None));
+        let operation = PoolOperation::Import(PoolImportOp {
+            report: reporter.clone(),
+        });
+        let pool_spec = self.start_update(registry, spec, operation).await?;
+
+        let request = ImportPool::new(
+            &pool_spec.node,
+            &pool_spec.id,
+            &pool_spec.disks,
+            &pool_spec.encryption,
+        );
+        let result = node.import_pool(&request).await;
+        if let Err(error) = &result {
+            let code_map = |code: tonic::Code| -> PoolError {
+                let code = match code {
+                    tonic::Code::InvalidArgument => PoolErrorCode::InvalidSuperBlock,
+                    tonic::Code::NotFound => PoolErrorCode::DiskNotFound,
+                    _ => PoolErrorCode::Unknown,
+                };
+                // todo: this is rather long as it includes details and metadata... trim it?
+                let msg = error.to_string();
+                PoolError { code, msg }
+            };
+            match error.tonic_code() {
+                tonic::Code::NotFound | tonic::Code::InvalidArgument => {
+                    let disks = pool_spec.disks.first().map(|d| d.to_string());
+                    *reporter.lock().expect("not poisoned") = Some(PoolDiag {
+                        import_errors: vec![PoolDiskError {
+                            error: code_map(error.tonic_code()),
+                            disk: disks.unwrap_or_default(),
+                        }],
+                    });
+                }
+                _ => {}
+            }
+        }
+        self.complete_update(registry, result, pool_spec).await
     }
 
     /// Ge the `OnCreateFail` policy.

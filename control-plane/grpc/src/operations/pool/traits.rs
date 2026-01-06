@@ -12,12 +12,13 @@ use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind},
     types::v0::{
         store::pool::{
-            CordonDrainState, CordonedState, Encryption, EncryptionSecret, PoolLabel, PoolSpec,
-            PoolSpecStatus, POOL_BS_CLUSTER_SIZE_DEFAULT,
+            CordonDrainState, CordonedState, Encryption, EncryptionSecret, PoolLabel, PoolMetadata,
+            PoolRuntimeMetadata, PoolSpec, PoolSpecStatus, PoolUSpec, POOL_BS_CLUSTER_SIZE_DEFAULT,
         },
         transport::{
             CreatePool, CtrlPoolState, DestroyPool, ExpandPool, Filter, LabelPool, NodeId, Pool,
-            PoolDeviceUri, PoolId, PoolState, PoolStatus, UnlabelPool, VolumeId,
+            PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolId, PoolState,
+            PoolStatus, UnlabelPool, VolumeId,
         },
     },
     IntoOption,
@@ -94,37 +95,40 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
             }
         };
         Ok(PoolSpec {
-            node: pool_spec.node_id.into(),
-            id: pool_spec.pool_id.into(),
-            disks: pool_spec.disks.iter().map(|i| i.into()).collect(),
-            status: pool_spec_status,
-            labels: match pool_spec.labels {
-                Some(labels) => Some(labels.value),
-                None => None,
-            },
-            sequencer: Default::default(),
-            operation: None,
-            creat_tsc: None,
-            encryption: pool_spec
-                .secret
-                .map(|details| Encryption::Secret(EncryptionSecret { name: details.name })),
-            cordon_drain: match pool_spec.cordon_drain {
-                Some(state) => match state {
-                    pool::pool_spec::CordonDrain::Cordoned(state) => {
-                        Some(CordonDrainState::Cordoned(CordonedState {
-                            replicas: state.replicas,
-                            snapshots: state.snapshots,
-                            restores: state.restores,
-                            import: state.import,
-                        }))
-                    }
+            spec: PoolUSpec {
+                node: pool_spec.node_id.into(),
+                id: pool_spec.pool_id.into(),
+                disks: pool_spec.disks.iter().map(|i| i.into()).collect(),
+                status: pool_spec_status,
+                labels: match pool_spec.labels {
+                    Some(labels) => Some(labels.value),
+                    None => None,
                 },
-                None => None,
+                sequencer: Default::default(),
+                operation: None,
+                creat_tsc: None,
+                encryption: pool_spec
+                    .secret
+                    .map(|details| Encryption::Secret(EncryptionSecret { name: details.name })),
+                cordon_drain: match pool_spec.cordon_drain {
+                    Some(state) => match state {
+                        pool::pool_spec::CordonDrain::Cordoned(state) => {
+                            Some(CordonDrainState::Cordoned(CordonedState {
+                                replicas: state.replicas,
+                                snapshots: state.snapshots,
+                                restores: state.restores,
+                                import: state.import,
+                            }))
+                        }
+                    },
+                    None => None,
+                },
+                cluster_size: pool_spec
+                    .cluster_size
+                    .unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
+                max_expansion: None,
             },
-            cluster_size: pool_spec
-                .cluster_size
-                .unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
-            max_expansion: None,
+            metadata: Default::default(),
         })
     }
 }
@@ -160,6 +164,18 @@ impl TryFrom<pool::PoolState> for PoolState {
     }
 }
 
+fn pool_with_diag(mut pool_spec: PoolSpec, diag: Option<pool::PoolDiag>) -> PoolSpec {
+    if let Some(diag) = diag {
+        pool_spec.metadata = PoolMetadata {
+            persisted: Default::default(),
+            runtime: PoolRuntimeMetadata {
+                diag: Some(diag.into()),
+            },
+        };
+    }
+    pool_spec
+}
+
 impl TryFrom<pool::Pool> for Pool {
     type Error = ReplyError;
     fn try_from(pool: pool::Pool) -> Result<Self, Self::Error> {
@@ -173,8 +189,12 @@ impl TryFrom<pool::Pool> for Pool {
 
         let pool_spec = match pool.definition {
             None => None,
-            Some(pool_definition) => Some(PoolSpec::try_from(pool_definition)?),
+            Some(pool_definition) => Some(pool_with_diag(
+                PoolSpec::try_from(pool_definition)?,
+                pool.diag,
+            )),
         };
+
         match Pool::try_new(pool_spec, state) {
             Some(pool) => Ok(pool),
             None => Err(ReplyError::missing_argument(
@@ -185,8 +205,8 @@ impl TryFrom<pool::Pool> for Pool {
     }
 }
 
-impl From<PoolSpec> for pool::PoolDefinition {
-    fn from(pool_spec: PoolSpec) -> Self {
+impl From<PoolUSpec> for pool::PoolDefinition {
+    fn from(pool_spec: PoolUSpec) -> Self {
         let spec_status: common::SpecStatus = pool_spec.status.into();
         pool::PoolDefinition {
             spec: Some(pool::PoolSpec {
@@ -246,13 +266,72 @@ impl From<PoolState> for pool::PoolState {
     }
 }
 
+impl From<PoolErrorCode> for pool::ProbeErrorCode {
+    fn from(value: PoolErrorCode) -> Self {
+        match value {
+            PoolErrorCode::Unknown => Self::ProbeUnknown,
+            PoolErrorCode::DiskNotFound => Self::DiskNotFound,
+            PoolErrorCode::DiskReadIoError => Self::DiskReadIoError,
+            PoolErrorCode::ForeignPoolName => Self::ForeignPoolName,
+            PoolErrorCode::ForeignPoolUid => Self::ForeignPoolUid,
+            PoolErrorCode::SuperBlock => Self::SuperBlock,
+            PoolErrorCode::InvalidSuperBlock => Self::InvalidSuperBlock,
+        }
+    }
+}
+impl From<PoolDiag> for pool::PoolDiag {
+    fn from(diag: PoolDiag) -> Self {
+        let import_error = |value: PoolDiskError| pool::DiskError {
+            error: Some(pool::ProbeError {
+                code: pool::ProbeErrorCode::from(value.error.code) as i32,
+                msg: value.error.msg,
+            }),
+            disk: value.disk,
+        };
+        Self {
+            import_errors: diag.import_errors.into_iter().map(import_error).collect(),
+        }
+    }
+}
+impl From<pool::ProbeErrorCode> for PoolErrorCode {
+    fn from(value: pool::ProbeErrorCode) -> Self {
+        match value {
+            pool::ProbeErrorCode::ProbeUnknown => Self::Unknown,
+            pool::ProbeErrorCode::DiskNotFound => Self::DiskNotFound,
+            pool::ProbeErrorCode::DiskReadIoError => Self::DiskReadIoError,
+            pool::ProbeErrorCode::ForeignPoolName => Self::ForeignPoolName,
+            pool::ProbeErrorCode::ForeignPoolUid => Self::ForeignPoolUid,
+            pool::ProbeErrorCode::SuperBlock => Self::SuperBlock,
+            pool::ProbeErrorCode::InvalidSuperBlock => Self::InvalidSuperBlock,
+        }
+    }
+}
+impl From<pool::PoolDiag> for PoolDiag {
+    fn from(diag: pool::PoolDiag) -> Self {
+        let import_error = |value: pool::DiskError| PoolDiskError {
+            error: {
+                let error = value.error.unwrap();
+                PoolError {
+                    code: PoolErrorCode::from(
+                        pool::ProbeErrorCode::try_from(error.code).unwrap_or_default(),
+                    ),
+                    msg: error.msg,
+                }
+            },
+            disk: value.disk,
+        };
+        Self {
+            import_errors: diag.import_errors.into_iter().map(import_error).collect(),
+        }
+    }
+}
+
 impl From<Pool> for pool::Pool {
     fn from(pool: Pool) -> Self {
-        let definition = pool.spec().map(|pool_spec| pool_spec.into());
-        let state = pool.ctrl_state();
         pool::Pool {
-            definition,
-            state: state.map(|p| p.state()).cloned().into_opt(),
+            definition: pool.spec.map(|pool_spec| pool_spec.into()),
+            state: pool.state.map(|p| p.state).into_opt(),
+            diag: pool.diag.map(Into::into),
         }
     }
 }

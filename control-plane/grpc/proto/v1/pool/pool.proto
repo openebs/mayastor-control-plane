@@ -5,6 +5,36 @@ import "google/protobuf/wrappers.proto";
 
 package v1.pool;
 
+message PoolDiag {
+  // Errors encountered when importing the pool.
+  repeated DiskError import_errors = 2;
+}
+message DiskError {
+  string disk = 1;
+  ProbeError error = 2;
+}
+enum ProbeErrorCode {
+  // Unknown error
+  ProbeUnknown = 0;
+  // Disk not found in the system
+  DiskNotFound = 1;
+  // Disk read IO errors
+  DiskReadIoError = 2;
+  // Pool on-disk name doesn't match the expected
+  ForeignPoolName = 3;
+  // Pool on-disk uuid doesn't match the expected
+  ForeignPoolUid = 4;
+  // Failed to check super block error
+  SuperBlock = 5;
+  // Invalid super block (eg: CRC error)
+  InvalidSuperBlock = 6;
+}
+message ProbeError {
+  ProbeErrorCode code = 1;
+  // additional as human readable
+  string          msg = 2;
+}
+
 // An IoEngine Storage Pool
 // It may have a spec which is the specification provided by the creator
 // It may have a state if such state is retrieved from a io-engine storage node
@@ -13,6 +43,8 @@ message Pool {
   optional PoolDefinition definition = 1;
   // Runtime state of the pool as seen by the dataplane.
   optional PoolState state = 2;
+  // Diagnostic information about the pool
+  optional PoolDiag diag = 3;
 }
 
 // Multiple pools

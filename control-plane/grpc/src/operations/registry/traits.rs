@@ -119,7 +119,7 @@ impl From<transport::Specs> for registry::Specs {
             pools: value
                 .pools
                 .into_iter()
-                .map(|pool_spec| pool_spec.into())
+                .map(|pool_spec| pool_spec.spec.into())
                 .collect(),
             nexuses: value
                 .nexuses

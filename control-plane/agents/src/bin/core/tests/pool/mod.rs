@@ -28,9 +28,9 @@ use stor_port::{
         },
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, ExpandPool, Filter,
-            GetBlockDevices, GetSpecs, NexusId, NodeId, NodeStatus, Protocol, Replica, ReplicaId,
-            ReplicaName, ReplicaOwners, ReplicaShareProtocol, ReplicaStatus, ShareReplica,
-            UnshareReplica, Volume, VolumeId,
+            GetBlockDevices, GetSpecs, NexusId, NodeId, NodeStatus, PoolErrorCode, Protocol,
+            Replica, ReplicaId, ReplicaName, ReplicaOwners, ReplicaShareProtocol, ReplicaStatus,
+            ShareReplica, UnshareReplica, Volume, VolumeId,
         },
     },
 };
@@ -845,8 +845,9 @@ async fn reconciler_missing_pool_state() {
         .with_rest(true)
         .with_io_engines(1)
         .with_pool(0, disk.uri())
-        .with_cache_period("1s")
-        .with_reconcile_period(Duration::from_secs(1), Duration::from_millis(1))
+        .with_cache_period("100ms")
+        .with_node_deadline("100ms")
+        .with_reconcile_period(Duration::from_millis(200), Duration::from_millis(1))
         .build()
         .await
         .unwrap();
@@ -880,7 +881,7 @@ async fn reconciler_missing_pool_state() {
     let maya = cluster.node(0);
     async fn pool_checker(cluster: &Cluster, state: Option<&PoolState>) {
         let maya = cluster.node(0);
-        let tm = Duration::from_secs(3);
+        let tm = Duration::from_secs(1);
 
         let pool = wait_till_pool_state(cluster, (0, 0), false, tm).await;
         assert!(pool.state.is_none());
@@ -907,6 +908,19 @@ async fn reconciler_missing_pool_state() {
     let new_disk = deployer_cluster::TmpDiskFile::new(POOL_FILE_NAME, POOL_SIZE_BYTES);
     pool_checker(&cluster, None).await;
 
+    let pool_client = cluster.grpc_client().pool();
+    let pools = pool_client
+        .get(Filter::Pool(pool.id.clone().into()), None)
+        .await
+        .unwrap();
+    tracing::info!("Pools: {:?}", pools);
+
+    let hpool = pools.0.first().unwrap();
+    let pool_diag = hpool.diag.as_ref().unwrap();
+    assert_eq!(pool_diag.import_errors.len(), 1);
+    let error = pool_diag.import_errors.first().unwrap();
+    assert_eq!(error.error.code, PoolErrorCode::InvalidSuperBlock);
+
     // move original disk back and now import should succeed!
     drop(new_disk);
     disk.rename(POOL_FILE_NAME).unwrap();
@@ -925,6 +939,28 @@ async fn reconciler_missing_pool_state() {
             .sorted_by(|a, b| a.uuid.cmp(&b.uuid))
             .collect::<Vec<_>>()
     );
+
+    cluster.composer().kill(maya.as_str()).await.unwrap();
+
+    // move pool disk to another location
+    // this means import should fail with not found error
+    assert_ne!(POOL_FILE_NAME, POOL_FILE_NAME_2);
+    disk.rename(POOL_FILE_NAME_2).unwrap();
+
+    pool_checker(&cluster, None).await;
+
+    let pool_client = cluster.grpc_client().pool();
+    let pools = pool_client
+        .get(Filter::Pool(pool.id.clone().into()), None)
+        .await
+        .unwrap();
+    tracing::info!("Pools: {:?}", pools);
+
+    let hpool = pools.0.first().unwrap();
+    let pool_diag = hpool.diag.as_ref().unwrap();
+    assert_eq!(pool_diag.import_errors.len(), 1);
+    let error = pool_diag.import_errors.first().unwrap();
+    assert_eq!(error.error.code, PoolErrorCode::DiskNotFound);
 }
 
 /// Wait until the specified pool state option presence matches the `has_state` flag
@@ -953,7 +989,7 @@ async fn wait_till_pool_state(
                 "Timeout waiting for the pool to have 'has_state': '{has_state}'. Pool: '{pool:#?}'"
             );
         }
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        tokio::time::sleep(Duration::from_millis(250)).await;
     }
 }
 
