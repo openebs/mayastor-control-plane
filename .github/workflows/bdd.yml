@@ -58,7 +58,7 @@ jobs:
           sudo debconf-communicate <<< "set man-db/auto-update false" || true
           sudo dpkg-reconfigure man-db || true
           sudo sysctl -w vm.nr_hugepages=3072
-          sudo apt-get update
+          sudo apt-get update || (sleep 5; sudo apt-get update)
           sudo apt-get install linux-modules-extra-$(uname -r)
           sudo modprobe nvme_tcp
           # Check if nvme config is valid, otherwise apply it
