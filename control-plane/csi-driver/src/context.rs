@@ -295,12 +295,6 @@ pub struct PublishParams {
     keep_alive_tmo: Option<u32>,
     fs_type: Option<FileSystem>,
     fs_id: Option<Uuid>,
-    pool_affinity_topology_label: Option<HashMap<String, String>>,
-    pool_affinity_topology_key: Option<Vec<String>>,
-    pool_has_topology_key: Option<HashMap<String, String>>,
-    node_affinity_topology_label: Option<HashMap<String, String>>,
-    node_has_topology_key: Option<HashMap<String, String>>,
-    node_spread_topology_key: Option<HashMap<String, String>>,
 }
 impl PublishParams {
     /// Get the `Parameters::IoTimeout` value.
@@ -322,30 +316,6 @@ impl PublishParams {
     /// Get the `Parameters::FsId` value.
     pub fn fs_id(&self) -> &Option<Uuid> {
         &self.fs_id
-    }
-    /// Get the `Parameters::PoolAffinityTopologyLabel` value.
-    pub fn pool_affinity_topology_label(&self) -> &Option<HashMap<String, String>> {
-        &self.pool_affinity_topology_label
-    }
-    /// Get the `Parameters::PoolAffinityTopologyKey` value.
-    pub fn pool_affinity_topology_key(&self) -> &Option<Vec<String>> {
-        &self.pool_affinity_topology_key
-    }
-    /// Get the `Parameters::PoolHasTopologyKey` value.
-    pub fn pool_has_topology_key(&self) -> &Option<HashMap<String, String>> {
-        &self.pool_has_topology_key
-    }
-    /// Get the `Parameters::NodeAffinityTopologyLabel` value.
-    pub fn node_affinity_topology_label(&self) -> &Option<HashMap<String, String>> {
-        &self.node_affinity_topology_label
-    }
-    /// Get the `Parameters::NodeHasTopologyKey` value.
-    pub fn node_has_topology_key(&self) -> &Option<HashMap<String, String>> {
-        &self.node_has_topology_key
-    }
-    /// Get the `Parameters::NodeSpreadTopologyKey` value.
-    pub fn node_spread_topology_key(&self) -> &Option<HashMap<String, String>> {
-        &self.node_spread_topology_key
     }
     /// Convert `Self` into a publish context.
     pub fn into_context(self) -> HashMap<String, String> {
@@ -398,45 +368,6 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
         let fs_id = Parameters::fs_id(args.get(Parameters::FsId.as_ref()))
             .map_err(|_| tonic::Status::invalid_argument("Invalid fs_id"))?;
 
-        let pool_affinity_topology_label = Parameters::pool_affinity_topology_label(
-            args.get(Parameters::PoolAffinityTopologyLabel.as_ref()),
-        )
-        .map_err(|_| tonic::Status::invalid_argument("Invalid pool_affinity_topology_label"))?;
-
-        let pool_affinity_topology_key = Parameters::pool_affinity_topology_key(
-            args.get(Parameters::PoolAffinityTopologyKey.as_ref()),
-        )
-        .map_err(|_| tonic::Status::invalid_argument("Invalid pool_affinity_topology_key"))?;
-
-        let pool_has_topology_key =
-            Parameters::pool_has_topology_key(args.get(Parameters::PoolHasTopologyKey.as_ref()))
-                .map_err(|_| tonic::Status::invalid_argument("Invalid pool_has_topology_key"))?;
-
-        let node_affinity_topology_label = Parameters::node_affinity_topology_label(
-            args.get(Parameters::NodeAffinityTopologyLabel.as_ref()),
-        )
-        .map_err(|_| tonic::Status::invalid_argument("Invalid node_affinity_topology_label"))?;
-
-        let node_has_topology_key =
-            Parameters::node_has_topology_key(args.get(Parameters::NodeHasTopologyKey.as_ref()))
-                .map_err(|_| tonic::Status::invalid_argument("Invalid node_has_topology_key"))?;
-        let node_spread_topology_key = Parameters::node_spread_topology_key(
-            args.get(Parameters::NodeSpreadTopologyKey.as_ref()),
-        )
-        .map_err(|_| tonic::Status::invalid_argument("Invalid node_spread_topology_key"))?;
-
-        // add validation for one-to-one mapping of topology params to storage class
-        validate_single_topology_param(
-            &pool_affinity_topology_label,
-            &pool_has_topology_key,
-            &node_affinity_topology_label,
-            &node_has_topology_key,
-            &node_spread_topology_key,
-        )?;
-
-        validate_topology_params(&node_affinity_topology_label, &node_spread_topology_key)?;
-        validate_topology_params(&node_has_topology_key, &node_spread_topology_key)?;
-
         Ok(Self {
             io_timeout,
             nvme_io_timeout,
@@ -444,12 +375,6 @@ impl TryFrom<&HashMap<String, String>> for PublishParams {
             keep_alive_tmo,
             fs_type,
             fs_id,
-            pool_affinity_topology_label,
-            pool_affinity_topology_key,
-            pool_has_topology_key,
-            node_affinity_topology_label,
-            node_has_topology_key,
-            node_spread_topology_key,
         })
     }
 }
@@ -516,6 +441,12 @@ pub struct CreateParams {
     pvc_name: Option<String>,
     pvc_namespace: Option<String>,
     pool_cluster_size: Option<u64>,
+    pool_affinity_topology_label: Option<HashMap<String, String>>,
+    pool_affinity_topology_key: Option<Vec<String>>,
+    pool_has_topology_key: Option<HashMap<String, String>>,
+    node_affinity_topology_label: Option<HashMap<String, String>>,
+    node_has_topology_key: Option<HashMap<String, String>>,
+    node_spread_topology_key: Option<HashMap<String, String>>,
 }
 impl CreateParams {
     /// Get the `Parameters::RwxBlock` value.
@@ -550,6 +481,31 @@ impl CreateParams {
     pub fn pool_cluster_size(&self) -> Option<u64> {
         self.pool_cluster_size
     }
+    /// Get the `Parameters::PoolAffinityTopologyLabel` value.
+    pub fn pool_affinity_topology_label(&self) -> &Option<HashMap<String, String>> {
+        &self.pool_affinity_topology_label
+    }
+    /// Get the `Parameters::PoolAffinityTopologyKey` value.
+    pub fn pool_affinity_topology_key(&self) -> &Option<Vec<String>> {
+        &self.pool_affinity_topology_key
+    }
+    /// Get the `Parameters::PoolHasTopologyKey` value.
+    pub fn pool_has_topology_key(&self) -> &Option<HashMap<String, String>> {
+        &self.pool_has_topology_key
+    }
+    /// Get the `Parameters::NodeAffinityTopologyLabel` value.
+    pub fn node_affinity_topology_label(&self) -> &Option<HashMap<String, String>> {
+        &self.node_affinity_topology_label
+    }
+    /// Get the `Parameters::NodeHasTopologyKey` value.
+    pub fn node_has_topology_key(&self) -> &Option<HashMap<String, String>> {
+        &self.node_has_topology_key
+    }
+    /// Get the `Parameters::NodeSpreadTopologyKey` value.
+    pub fn node_spread_topology_key(&self) -> &Option<HashMap<String, String>> {
+        &self.node_spread_topology_key
+    }
+
     /// Get the sts_affinity_group name from annotations if exists else generate it.
     pub async fn sts_affinity_group(&self) -> Result<Option<StsAffinityGroupInfo>, tonic::Status> {
         if !self.sts_affinity_group.unwrap_or(false) {
@@ -730,6 +686,45 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
         let pool_cluster_size =
             Parameters::pool_cluster_size(args.get(Parameters::PoolClusterSize.as_ref()))?;
 
+        let pool_affinity_topology_label = Parameters::pool_affinity_topology_label(
+            args.get(Parameters::PoolAffinityTopologyLabel.as_ref()),
+        )
+        .map_err(|_| tonic::Status::invalid_argument("Invalid pool_affinity_topology_label"))?;
+
+        let pool_affinity_topology_key = Parameters::pool_affinity_topology_key(
+            args.get(Parameters::PoolAffinityTopologyKey.as_ref()),
+        )
+        .map_err(|_| tonic::Status::invalid_argument("Invalid pool_affinity_topology_key"))?;
+
+        let pool_has_topology_key =
+            Parameters::pool_has_topology_key(args.get(Parameters::PoolHasTopologyKey.as_ref()))
+                .map_err(|_| tonic::Status::invalid_argument("Invalid pool_has_topology_key"))?;
+
+        let node_affinity_topology_label = Parameters::node_affinity_topology_label(
+            args.get(Parameters::NodeAffinityTopologyLabel.as_ref()),
+        )
+        .map_err(|_| tonic::Status::invalid_argument("Invalid node_affinity_topology_label"))?;
+
+        let node_has_topology_key =
+            Parameters::node_has_topology_key(args.get(Parameters::NodeHasTopologyKey.as_ref()))
+                .map_err(|_| tonic::Status::invalid_argument("Invalid node_has_topology_key"))?;
+        let node_spread_topology_key = Parameters::node_spread_topology_key(
+            args.get(Parameters::NodeSpreadTopologyKey.as_ref()),
+        )
+        .map_err(|_| tonic::Status::invalid_argument("Invalid node_spread_topology_key"))?;
+
+        // add validation for one-to-one mapping of topology params to storage class
+        validate_single_topology_param(
+            &pool_affinity_topology_label,
+            &pool_has_topology_key,
+            &node_affinity_topology_label,
+            &node_has_topology_key,
+            &node_spread_topology_key,
+        )?;
+
+        validate_topology_params(&node_affinity_topology_label, &node_spread_topology_key)?;
+        validate_topology_params(&node_has_topology_key, &node_spread_topology_key)?;
+
         Ok(Self {
             publish_params,
             rwx_block,
@@ -742,6 +737,12 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
             pvc_name,
             pvc_namespace,
             pool_cluster_size,
+            pool_affinity_topology_label,
+            pool_affinity_topology_key,
+            pool_has_topology_key,
+            node_affinity_topology_label,
+            node_has_topology_key,
+            node_spread_topology_key,
         })
     }
 }
