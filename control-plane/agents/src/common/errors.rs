@@ -1,4 +1,5 @@
 use snafu::{Error, Snafu};
+use std::collections::HashMap;
 use stor_port::{
     transport_api::{ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
@@ -167,16 +168,21 @@ pub enum SvcError {
         share: String,
     },
     #[snafu(display(
-        "Volume '{}' is already published on node '{}' with protocol '{}'",
-        vol_id,
-        node,
-        protocol
+        "Volume '{vol_id}' is already published on node '{node}' with protocol '{protocol}'"
     ))]
     VolumeAlreadyPublished {
         vol_id: String,
         node: String,
         protocol: String,
     },
+    #[snafu(display("Volume '{vol_id}' is already published with current context ({current:?}) != requested ({requested:?})"))]
+    VolumePublishCtxDiffer {
+        vol_id: String,
+        current: HashMap<String, String>,
+        requested: HashMap<String, String>,
+    },
+    #[snafu(display("Volume '{vol_id}' is already published for nodes '{nodes:?}'"))]
+    VolumePublishSingle { vol_id: String, nodes: Vec<String> },
     #[snafu(display(
         "Volume '{}' - required size is invalid. Current size: '{}', requested size: '{}'",
         vol_id,
@@ -800,6 +806,18 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::VolumeAlreadyPublished { .. } => ReplyError {
                 kind: ReplyErrorKind::AlreadyPublished,
+                resource: ResourceKind::Volume,
+                source,
+                extra,
+            },
+            SvcError::VolumePublishCtxDiffer { .. } => ReplyError {
+                kind: ReplyErrorKind::PublishedCtxDiffer,
+                resource: ResourceKind::Volume,
+                source,
+                extra,
+            },
+            SvcError::VolumePublishSingle { .. } => ReplyError {
+                kind: ReplyErrorKind::FrontendLimitExceeded,
                 resource: ResourceKind::Volume,
                 source,
                 extra,

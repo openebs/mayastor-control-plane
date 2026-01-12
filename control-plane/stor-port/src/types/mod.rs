@@ -106,6 +106,14 @@ impl From<ReplyError> for RestError<RestJsonError> {
                 let error = RestJsonError::new(details, message, Kind::AlreadyPublished);
                 (StatusCode::PRECONDITION_FAILED, error)
             }
+            ReplyErrorKind::PublishedCtxDiffer => {
+                let error = RestJsonError::new(details, message, Kind::PublishedCtxDiffer);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
+            ReplyErrorKind::FrontendLimitExceeded => {
+                let error = RestJsonError::new(details, message, Kind::FrontendLimitExceeded);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
             ReplyErrorKind::Deleting => {
                 let error = RestJsonError::new(details, message, Kind::Deleting);
                 (StatusCode::CONFLICT, error)

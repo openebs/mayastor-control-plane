@@ -72,6 +72,8 @@ enum ReplyErrorKind {
   Cancelled = 32;
   DiskNotExtended = 33;
   DiskRescanFailed = 34;
+  PublishedCtxDiffer = 35;
+  FrontendLimitExceeded = 36;
 }
 
 // ResourceKind for the resource which has undergone this error

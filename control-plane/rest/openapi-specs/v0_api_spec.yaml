@@ -3436,6 +3436,8 @@ components:
             - Cancelled
             - DiskNotExtended
             - DiskRescanFailed
+            - PublishedCtxDiffer
+            - FrontendLimitExceeded
       required:
         - details
         - kind

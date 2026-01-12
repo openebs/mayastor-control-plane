@@ -11,8 +11,8 @@ use crate::{
         },
         transport::{
             self, AffinityGroup, CreateVolume, HostNqn, NexusId, NexusNvmfConfig, NodeId,
-            ReplicaId, SnapshotId, Topology, VolumeId, VolumeLabels, VolumePolicy, VolumeProperty,
-            VolumeShareProtocol, VolumeStatus,
+            PublishVolume, ReplicaId, SnapshotId, Topology, VolumeAccessMode, VolumeId,
+            VolumeLabels, VolumePolicy, VolumeProperty, VolumeShareProtocol, VolumeStatus,
         },
     },
     IntoOption,
@@ -680,15 +680,20 @@ pub struct OldPublishOperation {
 /// The `PublishOperation` which is easier to manage and update.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PublishOperation {
+    /// The new target configuration, considering a successful completion.
     config: TargetConfig,
     publish_context: HashMap<String, String>,
+    access_mode: VolumeAccessMode,
+    frontend_nodes: Vec<String>,
 }
 impl PublishOperation {
     /// Return new `Self` from the given parameters.
-    pub fn new(config: TargetConfig, publish_context: HashMap<String, String>) -> Self {
+    pub fn new(config: TargetConfig, publish_volume: &PublishVolume) -> Self {
         Self {
             config,
-            publish_context,
+            publish_context: publish_volume.publish_context.clone(),
+            access_mode: publish_volume.access_mode,
+            frontend_nodes: publish_volume.frontend_nodes.clone(),
         }
     }
     /// Get the share protocol.
@@ -696,8 +701,20 @@ impl PublishOperation {
         self.config.target.protocol
     }
     /// Get the publish context.
-    pub fn publish_context(&self) -> HashMap<String, String> {
-        self.publish_context.clone()
+    pub fn publish_context(&self) -> &HashMap<String, String> {
+        &self.publish_context
+    }
+    /// Get a reference to the new frontend configuration.
+    pub fn new_frontend(&self) -> &FrontendConfig {
+        self.config.frontend()
+    }
+    /// Get a reference to the new frontend nodes.
+    pub fn new_frontend_nodes(&self) -> &Vec<String> {
+        &self.frontend_nodes
+    }
+    /// Get the volume access mode.
+    pub fn access_mode(&self) -> VolumeAccessMode {
+        self.access_mode
     }
 }
 
