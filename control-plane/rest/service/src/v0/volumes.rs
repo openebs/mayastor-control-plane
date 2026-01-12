@@ -267,6 +267,7 @@ impl apis::actix_server::Volumes for RestApi {
                             share: Some(publish_volume_body.protocol.into()),
                             publish_context: publish_volume_body.publish_context,
                             frontend_nodes: publish_volume_body.frontend_node.into_iter().collect(),
+                            access_mode: publish_volume_body.access_mode.unwrap_or_default().into(),
                         },
                         None,
                     )

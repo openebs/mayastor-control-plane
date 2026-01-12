@@ -14,7 +14,7 @@ use stor_port::{
         store::volume::VolumeSpec,
         transport::{
             CreateReplica, CreateVolume, DestroyReplica, DestroyVolume, Filter, GetReplicas,
-            GetSpecs, PublishVolume, ReplicaId, ReplicaOwners,
+            GetSpecs, PublishVolume, ReplicaId, ReplicaOwners, VolumeAccessMode,
         },
     },
 };
@@ -68,6 +68,7 @@ async fn hotspare_faulty_children(cluster: &Cluster) {
                 None,
                 HashMap::new(),
                 vec![],
+                VolumeAccessMode::SingleNodeWriter,
             ),
             None,
         )
@@ -137,6 +138,7 @@ async fn hotspare_unknown_children(cluster: &Cluster) {
                 None,
                 HashMap::new(),
                 vec![],
+                VolumeAccessMode::SingleNodeWriter,
             ),
             None,
         )
@@ -211,6 +213,7 @@ async fn hotspare_missing_children(cluster: &Cluster) {
                 None,
                 HashMap::new(),
                 vec![],
+                VolumeAccessMode::SingleNodeWriter,
             ),
             None,
         )
@@ -453,6 +456,7 @@ async fn hotspare_nexus_replica_count(cluster: &Cluster) {
                 None,
                 HashMap::new(),
                 vec![],
+                VolumeAccessMode::SingleNodeWriter,
             ),
             None,
         )

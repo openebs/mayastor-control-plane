@@ -67,6 +67,7 @@ async fn rebuild_history_for_full_rebuild() {
                 models::VolumeShareProtocol::Nvmf,
                 None,
                 cluster.csi_node(0),
+                None,
             ),
         )
         .await
@@ -197,6 +198,7 @@ async fn rebuild_history_for_partial_rebuild() {
                 models::VolumeShareProtocol::Nvmf,
                 None,
                 cluster.csi_node(0),
+                None,
             ),
         )
         .await
@@ -359,6 +361,7 @@ async fn rebuild_partial_disabled() {
                 models::VolumeShareProtocol::Nvmf,
                 None,
                 cluster.csi_node(0),
+                None,
             ),
         )
         .await

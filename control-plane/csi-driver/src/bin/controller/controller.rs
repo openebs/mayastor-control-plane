@@ -14,7 +14,7 @@ use stor_port::types::v0::openapi::{
     models,
     models::{
         AffinityGroup, AppNode, LabelledTopology, NodeSpec, NodeStatus, Pool, PoolStatus,
-        PoolTopology, SpecStatus, Volume, VolumeShareProtocol,
+        PoolTopology, SpecStatus, Volume, VolumeAccessMode, VolumeShareProtocol,
     },
 };
 use utils::{dsp_created_by_key, DEFAULT_REQ_TIMEOUT, DSP_OPERATOR};
@@ -24,7 +24,6 @@ use std::{collections::HashMap, str::FromStr, time::Duration};
 use tonic::{transport::Uri, Code, Request, Response, Status};
 use tracing::{debug, error, instrument, trace, warn};
 use uuid::Uuid;
-use volume_capability::AccessType;
 
 const VOLUME_NAME_PATTERN: &str =
     r"pvc-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
@@ -76,7 +75,7 @@ fn check_volume_capabilities(
 fn check_volume_capability(
     capability: &VolumeCapability,
     rwx_block: &Option<bool>,
-) -> Result<volume_capability::access_mode::Mode, tonic::Status> {
+) -> Result<models::VolumeAccessMode, tonic::Status> {
     let Some(access_mode) = capability.access_mode.as_ref() else {
         return Err(tonic::Status::invalid_argument("missing access_mode"));
     };
@@ -86,11 +85,13 @@ fn check_volume_capability(
         return Err(tonic::Status::invalid_argument("missing access_type"));
     };
     match access_mode {
-        volume_capability::access_mode::Mode::SingleNodeWriter => Ok(access_mode),
+        volume_capability::access_mode::Mode::SingleNodeWriter => {
+            Ok(VolumeAccessMode::SingleNodeWriter)
+        }
         volume_capability::access_mode::Mode::MultiNodeMultiWriter => {
-            if matches!(access_type, AccessType::Block(_)) {
+            if matches!(access_type, volume_capability::AccessType::Block(_)) {
                 if rwx_block == &Some(true) {
-                    Ok(access_mode)
+                    Ok(VolumeAccessMode::MultiNodeMultiWriter)
                 } else {
                     Err(Status::invalid_argument(
                         "MultiNodeMultiWriter requested but RWX Block is disabled".to_string(),
@@ -604,7 +605,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                         // Make sure volume is accessible from the same app node.
                         if let Err(allowed) = frontend_nodes_allowed(target, &node_id) {
 
-                            if access_mode == volume_capability::access_mode::Mode::SingleNodeWriter {
+                            if access_mode == VolumeAccessMode::SingleNodeWriter {
                                 let m = format!(
                                     "Volume {volume_id} is only accessible to nodes: {allowed:?}, and not to {node_id}"
                                 );
@@ -621,7 +622,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                             }
 
                             let v = RestApiClient::get_client()
-                                .publish_volume(&volume_id, Some(&node), protocol, args.node_id.clone(), &publish_context)
+                                .publish_volume(&volume_id, Some(&node), protocol, args.node_id.clone(), &publish_context, access_mode)
                                 .await?;
 
                             if let Some((node, uri)) = get_volume_share_location(&v) {
@@ -679,7 +680,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
                     // Volume is not published.
                     let v = RestApiClient::get_client()
-                        .publish_volume(&volume_id, target_node, protocol, args.node_id.clone(), &publish_context)
+                        .publish_volume(&volume_id, target_node, protocol, args.node_id.clone(), &publish_context, access_mode)
                         .await?;
 
                     if let Some((node, uri)) = get_volume_share_location(&v) {
@@ -1130,7 +1131,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         // Block type volume.
         let node_expansion_required = !matches!(
             args.volume_capability.as_ref(),
-            Some(vc) if matches!(vc.access_type, Some(AccessType::Block(_)))
+            Some(vc) if matches!(vc.access_type, Some(volume_capability::AccessType::Block(_)))
         );
 
         let _guard = csi_driver::limiter::VolumeOpGuard::new(vol_uuid)?;

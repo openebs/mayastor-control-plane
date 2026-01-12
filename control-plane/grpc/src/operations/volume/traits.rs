@@ -7,7 +7,7 @@ use crate::{
     operations::{Event, Pagination},
     replica, volume,
     volume::{
-        get_volumes_request, CreateSnapshotVolumeRequest, CreateVolumeRequest,
+        get_volumes_request, AccessMode, CreateSnapshotVolumeRequest, CreateVolumeRequest,
         DestroyShutdownTargetRequest, DestroyVolumeRequest, PublishVolumeRequest,
         RegisteredTargets, RepublishVolumeRequest, ResizeVolumeRequest, SetVolumePropertyRequest,
         SetVolumeReplicaRequest, ShareVolumeRequest, UnpublishVolumeRequest, UnshareVolumeRequest,
@@ -31,8 +31,9 @@ use stor_port::{
             NexusNvmfConfig, NodeId, NodeTopology, NvmeNqn, PoolTopology, PublishVolume, ReplicaId,
             ReplicaStatus, ReplicaTopology, ReplicaUsage, RepublishVolume, ResizeVolume,
             SetVolumeProperty, SetVolumeReplica, ShareVolume, SnapshotId, Topology,
-            UnpublishVolume, UnshareVolume, Volume, VolumeHealth, VolumeId, VolumeLabels,
-            VolumePolicy, VolumeProperty, VolumeShareProtocol, VolumeState, VolumeUsage,
+            UnpublishVolume, UnshareVolume, Volume, VolumeAccessMode, VolumeHealth, VolumeId,
+            VolumeLabels, VolumePolicy, VolumeProperty, VolumeShareProtocol, VolumeState,
+            VolumeUsage,
         },
     },
     IntoOption, IntoVec, TryIntoOption,
@@ -1415,6 +1416,8 @@ pub trait PublishVolumeInfo: Send + Sync + std::fmt::Debug {
     fn publish_context(&self) -> HashMap<String, String>;
     /// Hosts allowed to access the nexus.
     fn frontend_nodes(&self) -> Vec<String>;
+    /// Access Mode for the volume.
+    fn access_mode(&self) -> VolumeAccessMode;
 }
 
 impl PublishVolumeInfo for PublishVolume {
@@ -1436,6 +1439,10 @@ impl PublishVolumeInfo for PublishVolume {
 
     fn frontend_nodes(&self) -> Vec<String> {
         self.frontend_nodes.clone()
+    }
+
+    fn access_mode(&self) -> VolumeAccessMode {
+        self.access_mode
     }
 }
 
@@ -1459,6 +1466,11 @@ impl PublishVolumeInfo for RepublishVolume {
     fn frontend_nodes(&self) -> Vec<String> {
         unimplemented!()
     }
+
+    fn access_mode(&self) -> VolumeAccessMode {
+        // Ignore for republish, access mode is kept...
+        VolumeAccessMode::default()
+    }
 }
 
 /// Intermediate structure that validates the conversion to PublishVolumeRequest type.
@@ -1468,6 +1480,7 @@ pub struct ValidatedPublishVolumeRequest {
     uuid: VolumeId,
     share: Option<VolumeShareProtocol>,
     frontend_nodes: Vec<String>,
+    access_mode: VolumeAccessMode,
 }
 
 impl PublishVolumeInfo for ValidatedPublishVolumeRequest {
@@ -1493,6 +1506,10 @@ impl PublishVolumeInfo for ValidatedPublishVolumeRequest {
     fn frontend_nodes(&self) -> Vec<String> {
         self.frontend_nodes.clone()
     }
+
+    fn access_mode(&self) -> VolumeAccessMode {
+        self.access_mode
+    }
 }
 
 impl ValidateRequestTypes for PublishVolumeRequest {
@@ -1515,6 +1532,9 @@ impl ValidateRequestTypes for PublishVolumeRequest {
             },
             inner: self.clone(),
             frontend_nodes: self.frontend_nodes,
+            access_mode: AccessMode::try_from(self.access_mode.unwrap_or_default())
+                .unwrap_or_default()
+                .into(),
         })
     }
 }
@@ -1527,6 +1547,7 @@ impl From<&dyn PublishVolumeInfo> for PublishVolume {
             share: data.share(),
             publish_context: data.publish_context(),
             frontend_nodes: data.frontend_nodes(),
+            access_mode: data.access_mode(),
         }
     }
 }
@@ -1546,6 +1567,24 @@ impl From<&dyn PublishVolumeInfo> for PublishVolumeRequest {
             share,
             publish_context: data.publish_context(),
             frontend_nodes: data.frontend_nodes(),
+            access_mode: Some(AccessMode::from(data.access_mode()) as i32),
+        }
+    }
+}
+
+impl From<VolumeAccessMode> for AccessMode {
+    fn from(value: VolumeAccessMode) -> Self {
+        match value {
+            VolumeAccessMode::SingleNodeWriter => Self::SingleNodeWriter,
+            VolumeAccessMode::MultiNodeMultiWriter => Self::MultiNodeMultiWriter,
+        }
+    }
+}
+impl From<AccessMode> for VolumeAccessMode {
+    fn from(value: AccessMode) -> Self {
+        match value {
+            AccessMode::SingleNodeWriter => VolumeAccessMode::SingleNodeWriter,
+            AccessMode::MultiNodeMultiWriter => VolumeAccessMode::MultiNodeMultiWriter,
         }
     }
 }

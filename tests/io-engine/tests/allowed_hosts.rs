@@ -152,6 +152,7 @@ async fn volume_allowed_host() {
                 models::VolumeShareProtocol::Nvmf,
                 None,
                 cluster.csi_node(0),
+                None,
             ),
         )
         .await

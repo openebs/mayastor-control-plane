@@ -61,6 +61,7 @@ async fn upgrade() {
                 models::VolumeShareProtocol::Nvmf,
                 None,
                 cluster.csi_node(0),
+                None,
             ),
         )
         .await

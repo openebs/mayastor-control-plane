@@ -32,8 +32,8 @@ use stor_port::{
         transport::{
             self, Child, ChildState, CreateVolume, DestroyVolume, Filter, GetNexuses, GetReplicas,
             GetVolumes, Nexus, NodeId, PublishVolume, SetVolumeReplica, ShareVolume, Topology,
-            UnpublishVolume, UnshareVolume, Volume, VolumeHealth, VolumeId, VolumeShareProtocol,
-            VolumeState, VolumeStatus,
+            UnpublishVolume, UnshareVolume, Volume, VolumeAccessMode, VolumeHealth, VolumeId,
+            VolumeShareProtocol, VolumeState, VolumeStatus,
         },
     },
 };
@@ -131,6 +131,7 @@ async fn nexus_persistence_test_iteration(
                 share: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -212,6 +213,7 @@ async fn nexus_persistence_test_iteration(
                 share: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -323,6 +325,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: Some(VolumeShareProtocol::Nvmf),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec!["a".into()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -337,6 +340,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: Some(VolumeShareProtocol::Nvmf),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec!["a".into()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -359,6 +363,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: Some(VolumeShareProtocol::Nvmf),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec!["b".into()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -381,6 +386,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: Some(VolumeShareProtocol::Nvmf),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec!["a".into(), "b".into()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -428,6 +434,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -451,6 +458,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec!["a".into()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -470,6 +478,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -537,6 +546,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -559,6 +569,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: Some(VolumeShareProtocol::Nvmf),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -594,6 +605,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: Some(VolumeShareProtocol::Iscsi),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -608,6 +620,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: Some(VolumeShareProtocol::Nvmf),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -630,6 +643,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -1323,6 +1337,7 @@ async fn health() {
                 None,
                 HashMap::new(),
                 vec![],
+                VolumeAccessMode::SingleNodeWriter,
             ),
             None,
         )
@@ -1422,6 +1437,7 @@ async fn health() {
                 None,
                 HashMap::new(),
                 vec![],
+                VolumeAccessMode::SingleNodeWriter,
             ),
             None,
         )

@@ -17,7 +17,7 @@ use stor_port::types::v0::{
     store::{nexus::ReplicaUri, nexus_child::NexusChild},
     transport::{
         strip_queries, CreateNexus, CreateVolume, DestroyVolume, Filter, NexusId, PublishVolume,
-        ReplicaId, VolumeId, VolumeShareProtocol,
+        ReplicaId, VolumeAccessMode, VolumeId, VolumeShareProtocol,
     },
 };
 
@@ -67,6 +67,7 @@ async fn deleting_volume_reconcile(cluster: &Cluster) {
                 target_node: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -167,6 +168,7 @@ async fn offline_replicas_reconcile(cluster: &Cluster, reconcile_period: Duratio
                 models::VolumeShareProtocol::Nvmf,
                 None,
                 cluster.csi_node(0),
+                None,
             ),
         )
         .await
@@ -241,6 +243,7 @@ async fn unused_nexus_reconcile(cluster: &Cluster) {
                 models::VolumeShareProtocol::Nvmf,
                 None,
                 cluster.csi_node(0),
+                None,
             ),
         )
         .await
@@ -334,6 +337,7 @@ async fn unused_reconcile(cluster: &Cluster) {
                 models::VolumeShareProtocol::Nvmf,
                 None,
                 cluster.csi_node(0),
+                None,
             ),
         )
         .await
@@ -362,6 +366,7 @@ async fn unused_reconcile(cluster: &Cluster) {
                 models::VolumeShareProtocol::Nvmf,
                 None,
                 cluster.csi_node(0),
+                None,
             ),
         )
         .await
@@ -450,6 +455,7 @@ async fn missing_nexus_reconcile(cluster: &Cluster) {
                 models::VolumeShareProtocol::Nvmf,
                 None,
                 cluster.csi_node(0),
+                None,
             ),
         )
         .await

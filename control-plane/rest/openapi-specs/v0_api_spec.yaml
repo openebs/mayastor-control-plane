@@ -2587,9 +2587,9 @@ components:
           minimum: 4194304
           multipleOf: 4194304
           description: |-
-           Blobstore cluster size for the pool, in bytes. Must be >= 4 MiB and in multiples of 4MiB.
-           This is an advanced option. Please refer documentation to understand the implications
-           of changing this.
+            Blobstore cluster size for the pool, in bytes. Must be >= 4 MiB and in multiples of 4MiB.
+            This is an advanced option. Please refer documentation to understand the implications
+            of changing this.
         max_expansion:
           type: string
           description: |-
@@ -2815,8 +2815,8 @@ components:
           type: boolean
         cluster_size:
           description: |-
-           Choose only the pools matching this cluster_size for the replicas of this volume.
-           This is an advanced option. Please refer documentation to understand the usage.
+            Choose only the pools matching this cluster_size for the replicas of this volume.
+            This is an advanced option. Please refer documentation to understand the usage.
           type: integer
           format: int64
           minimum: 4194304
@@ -2930,12 +2930,22 @@ components:
             The node where the front-end workload resides.
             If the workload moves then the volume must be republished.
           type: string
+        access_mode:
+          description: Volume publish access mode, a la CSI.
+          allOf:
+            - $ref: '#/components/schemas/VolumeAccessMode'
       required:
         - publish_context
         - protocol
     JsonGeneric:
       description: 'Generic JSON value eg: { "size": 1024 }'
       type: object
+    VolumeAccessMode:
+      description: Volume Access Mode, a la CSI
+      type: string
+      enum:
+        - SingleNodeWriter
+        - MultiNodeMultiWriter
     NexusState:
       description: State of the Nexus
       type: string

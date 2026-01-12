@@ -62,6 +62,7 @@ async fn concurrent_rebuilds() {
                     models::VolumeShareProtocol::Nvmf,
                     None,
                     "".to_string(),
+                    None,
                 ),
             )
             .await
@@ -408,6 +409,7 @@ async fn repeated_volume_rebuilds() {
                     models::VolumeShareProtocol::Nvmf,
                     None,
                     cluster.csi_node(0),
+                    None,
                 ),
             )
             .await
@@ -653,6 +655,7 @@ async fn repeated_volume_double_rebuilds() {
                     models::VolumeShareProtocol::Nvmf,
                     None,
                     cluster.csi_node(0),
+                    None,
                 ),
             )
             .await
@@ -832,6 +835,7 @@ async fn fault_rebuild_verify() {
                 models::VolumeShareProtocol::Nvmf,
                 None,
                 cluster.csi_node(0),
+                None,
             ),
         )
         .await
@@ -959,6 +963,7 @@ async fn destroy_rebuilding_nexus() {
                     models::VolumeShareProtocol::Nvmf,
                     None,
                     cluster.csi_node(0),
+                    None,
                 ),
             )
             .await

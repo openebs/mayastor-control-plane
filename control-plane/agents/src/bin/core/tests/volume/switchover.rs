@@ -23,7 +23,7 @@ use stor_port::{
         transport::{
             CreateReplica, CreateVolume, DestroyReplica, DestroyShutdownTargets, DestroyVolume,
             Filter, GetSpecs, Nexus, NodeStatus, PublishVolume, ReplicaId, RepublishVolume,
-            VolumeShareProtocol,
+            VolumeAccessMode, VolumeShareProtocol,
         },
     },
 };
@@ -76,6 +76,7 @@ async fn old_nexus_delete_after_vol_destroy() {
                 target_node: Some(cluster.node(0)),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![cluster.node(1).to_string()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -244,6 +245,7 @@ async fn lazy_delete_shutdown_targets() {
                 target_node: Some(cluster.node(0)),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![cluster.node(1).to_string()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -397,6 +399,7 @@ async fn volume_republish_nexus_recreation() {
                 target_node: Some(replica_node.into()),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![cluster.node(1).to_string()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -504,6 +507,7 @@ async fn node_exhaustion() {
                 target_node: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![cluster.node(1).to_string()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -607,6 +611,7 @@ async fn shutdown_failed_replica_owner() {
                 target_node: Some(cluster.node(0)),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![cluster.node(1).to_string()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -737,6 +742,7 @@ async fn reshutdown(cluster: &Cluster) {
                 target_node: Some(cluster.node(1)),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![cluster.node(1).to_string()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -864,6 +870,7 @@ async fn republished_nexus_io_engine_txn_fail() {
                 target_node: Some(node_idx0.clone()),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![node_idx0.to_string()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -1079,6 +1086,7 @@ async fn republished_nexus_core_agent_txn_fail() {
                 target_node: Some(node_idx0.clone()),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![node_idx0.to_string()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
