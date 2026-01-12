@@ -458,11 +458,13 @@ impl VolumeSpec {
     pub fn active_config(&self) -> Option<&TargetConfig> {
         self.target_config.as_ref().filter(|t| t.active)
     }
-    /// Deactivate the current target but keep it's information around.
+    /// Deactivate the current target but keep its information around.
     pub fn deactivate_target(&mut self) {
         if let Some(cfg) = self.target_config.as_mut() {
             cfg.active = false;
         }
+        // todo: is there any case where we might want to keep it around?
+        self.publish_context = None;
     }
     /// Get the health info key which is used to retrieve the volume's replica health information.
     pub fn health_info_id(&self) -> Option<&NexusId> {

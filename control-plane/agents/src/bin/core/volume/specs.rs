@@ -1067,10 +1067,7 @@ impl SpecOperationsHelper for VolumeSpec {
                     vol_id: self.uuid_str(),
                 })
             }
-            VolumeOperation::UnpublishOld | VolumeOperation::Unpublish(_) => {
-                self.publish_context = None;
-                Ok(())
-            }
+            VolumeOperation::UnpublishOld | VolumeOperation::Unpublish(_) => Ok(()),
 
             VolumeOperation::SetReplica(replica_count) => {
                 if *replica_count == self.num_replicas {
