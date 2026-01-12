@@ -20,11 +20,11 @@ apiServer:
   timeoutForControlPlane: 4m0s
   certSANs:
     - ${cert_sans}
-  extraArgs:
-    "feature-gates": "LegacyServiceAccountTokenNoAutoGeneration=false"
+  # extraArgs:
+  #   "feature-gates": "LegacyServiceAccountTokenNoAutoGeneration=false"
 controllerManager:
-  extraArgs:
-    "feature-gates": "LegacyServiceAccountTokenNoAutoGeneration=false"
+  # extraArgs:
+  #   "feature-gates": "LegacyServiceAccountTokenNoAutoGeneration=false"
 clusterName: castrol
 kind: ClusterConfiguration
 networking:
