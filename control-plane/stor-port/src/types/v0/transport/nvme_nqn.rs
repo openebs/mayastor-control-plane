@@ -18,7 +18,7 @@ const DOMAIN_LABEL_MAX_LEN: usize = 63;
 /// For more information please refer to the NVMe SPEC, eg:
 /// https://nvmexpress.org/wp-content/uploads/NVMe-NVM-Express-2.0a-2021.07.26-Ratified.pdf
 /// Chapter 4.5.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum NvmeNqn {
     /// This naming format 1 may be used to create a human interpretable string to describe
     /// the host or NVM subsystem. This format consists of:
@@ -55,6 +55,25 @@ pub enum NvmeNqn {
     /// Invalid Nqn Format, may be useful as a temporary placeholder.
     Invalid { nqn: String },
 }
+impl Ord for NvmeNqn {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.to_string().cmp(&other.to_string())
+    }
+}
+
+impl PartialOrd for NvmeNqn {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for NvmeNqn {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_string() == other.to_string()
+    }
+}
+
+impl Eq for NvmeNqn {}
 impl Default for NvmeNqn {
     fn default() -> Self {
         let uuid = uuid::Uuid::default();

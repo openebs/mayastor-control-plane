@@ -64,6 +64,7 @@ impl FrontendConfig {
                 self.host_acl.push(host);
             }
         }
+        self.host_acl.sort();
     }
     /// Extend the existing host list.
     pub fn remove_acls(&mut self, host_acl: Vec<InitiatorAC>) {
@@ -71,6 +72,7 @@ impl FrontendConfig {
             self.host_acl.drain(..);
         }
         self.host_acl.retain(|h| !host_acl.contains(h));
+        self.host_acl.sort();
     }
     /// Check if the nodename is allowed.
     pub fn nodename_allowed(&self, nodename: &str) -> bool {
@@ -99,7 +101,7 @@ impl FrontendConfig {
 }
 
 /// Volume Frontend
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Default)]
 pub struct InitiatorAC {
     /// The nodename where front-end IO will be sent from.
     node_name: String,

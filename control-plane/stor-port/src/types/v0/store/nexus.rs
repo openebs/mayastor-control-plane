@@ -335,6 +335,13 @@ pub enum NexusOperation {
     OwnerUpdate(NexusOwners),
     Resize(u64),
 }
+impl NexusOperation {
+    /// Create a new sorted share operation.
+    pub fn new_share(share: NexusShareProtocol, mut allowed_hosts: Vec<HostNqn>) -> Self {
+        allowed_hosts.sort();
+        Self::Share(share, allowed_hosts)
+    }
+}
 
 /// Key used by the store to uniquely identify a NexusSpec structure.
 pub struct NexusSpecKey(NexusId);
