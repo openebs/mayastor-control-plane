@@ -696,7 +696,10 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 }
             };
 
-        publish_context.insert("uri".to_string(), uri);
+        publish_context.insert(
+            "uri".to_string(),
+            csi_driver::parse_host_uri(&node_id, &uri)?,
+        );
 
         tracing::info!(?publish_context, "{}", req.log_str());
         Ok(Response::new(ControllerPublishVolumeResponse {

@@ -116,7 +116,7 @@ impl NvmeNqn {
         Self::Unique { uuid }
     }
     /// Generate a product type name.
-    pub fn from_nodename(name: &String) -> Self {
+    pub fn from_nodename(name: &str) -> Self {
         Self::Org {
             date: utils::constants::NVME_NQN_DATE.to_string(),
             domain: utils::constants::NVME_NQN_ORG.to_string(),

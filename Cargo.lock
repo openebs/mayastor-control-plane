@@ -1048,6 +1048,7 @@ dependencies = [
  "nvmeadm",
  "once_cell",
  "parse-size",
+ "percent-encoding",
  "prost",
  "prost-types",
  "regex",
