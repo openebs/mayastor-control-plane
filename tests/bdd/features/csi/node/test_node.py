@@ -329,7 +329,7 @@ def publish_nexus(setup, volumes, published_nexuses):
                 publish_context={},
                 protocol=VolumeShareProtocol("nvmf"),
                 node=NODE1,
-                frontend_node=Deployer.csi_node_name(0),
+                frontend_node=Deployer.app_node_name(0),
             ),
         )
         nexus = Nexus(uuid, protocol, volume.state.target.device_uri)

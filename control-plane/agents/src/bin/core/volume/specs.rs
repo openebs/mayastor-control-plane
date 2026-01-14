@@ -329,7 +329,11 @@ pub(crate) async fn healthy_volume_replicas(
     }
 }
 
-fn validate_publish(volume: &mut VolumeSpec, args: &PublishOperation) -> Result<(), SvcError> {
+fn validate_publish(
+    volume: &mut VolumeSpec,
+    args: &PublishOperation,
+    registry: &Registry,
+) -> Result<(), SvcError> {
     match args.protocol() {
         None => {
             // This can't happen in prod today as we always set a protocol, and it's not clear
@@ -364,7 +368,7 @@ fn validate_publish(volume: &mut VolumeSpec, args: &PublishOperation) -> Result<
             });
         }
 
-        if args.new_frontend_nodes().is_empty() {
+        if args.new_frontend_nodes().is_empty() && !frontend.nodes_info().is_empty() {
             return Err(SvcError::Internal {
                 details: "Can't re-publish for 0 frontend-nodes".to_string(),
             });
@@ -387,7 +391,7 @@ fn validate_publish(volume: &mut VolumeSpec, args: &PublishOperation) -> Result<
             });
         }
     } else if (args.new_frontend().nodes_info().len() > 1
-        || args.new_frontend().nodes_info().is_empty())
+        || (args.new_frontend().nodes_info().is_empty() && !registry.deprecated_access_mode()))
         && args.access_mode() == VolumeAccessMode::SingleNodeWriter
     {
         return Err(SvcError::VolumePublishSingle {
@@ -1099,7 +1103,7 @@ impl SpecOperationsHelper for VolumeSpec {
                 _ => Ok(()),
             },
             VolumeOperation::PublishOld(_) => Err(SvcError::InvalidArguments {}),
-            VolumeOperation::Publish(args) => validate_publish(self, args),
+            VolumeOperation::Publish(args) => validate_publish(self, args, registry),
             VolumeOperation::Republish(args) => match args.protocol() {
                 VolumeShareProtocol::Nvmf => Ok(()),
                 VolumeShareProtocol::Iscsi => Err(SvcError::InvalidShareProtocol {

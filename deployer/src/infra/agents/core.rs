@@ -77,6 +77,9 @@ impl ComponentAction for CoreAgent {
         if let Some(cluster_size) = options.pool_cluster_size {
             binary = binary.with_args(vec!["--pool-cluster-size", &cluster_size.to_string()]);
         }
+        if !options.no_deprecated_access_mode {
+            binary = binary.with_arg("--deprecated-access-mode");
+        }
 
         Ok(cfg.add_container_spec(
             ContainerSpec::from_binary(name, binary).with_portmap("50051", "50051"),
