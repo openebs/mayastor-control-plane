@@ -304,6 +304,11 @@ message CreateVolumeRequest {
   optional uint32 cluster_size = 13;
 }
 
+enum AccessMode {
+    SingleNodeWriter = 0;
+    MultiNodeMultiWriter = 1;
+}
+
 // Publish a volume on a node
 // Unpublishes the nexus if it's published somewhere else and creates a nexus on the given node.
 // Then, share the nexus via the provided share protocol.-
@@ -316,8 +321,10 @@ message PublishVolumeRequest {
   optional VolumeShareProtocol share = 3;
   // publish context
   map<string, string> publish_context = 4;
-  /// Hosts allowed to access target.
+  // Hosts allowed to access target.
   repeated string frontend_nodes = 5;
+  // Defaults to access mode of SingleNodeWriter.
+  optional AccessMode access_mode = 6;
 }
 
 // Republish a volume on a node by shutting down existing target

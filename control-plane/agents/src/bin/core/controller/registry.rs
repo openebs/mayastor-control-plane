@@ -122,6 +122,7 @@ pub(crate) struct RegistryInner<S: Store> {
     /// Blobstore cluster size(in bytes) required for pool creation and replica scheduling. This is
     /// not per-pool.
     pool_cluster_size: Option<u32>,
+    deprecated_access_mode: bool,
     /// Running in simulation mode.
     sim_args: Option<SimArgs>,
 }
@@ -153,6 +154,7 @@ impl Registry {
         allow_non_persistent_devlinks: bool,
         encrypted_pools_soft_scheduling: bool,
         pool_cluster_size: Option<u32>,
+        deprecated_access_mode: bool,
         sim_args: Option<SimArgs>,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
@@ -216,6 +218,7 @@ impl Registry {
                 allow_non_persistent_devlinks,
                 encrypted_pools_soft_scheduling,
                 pool_cluster_size: pool_cluster_size.or(Some(POOL_BS_CLUSTER_SIZE_DEFAULT)),
+                deprecated_access_mode,
                 sim_args,
             }),
         };
@@ -241,6 +244,11 @@ impl Registry {
         }
 
         Ok(registry)
+    }
+
+    // Check if we allow single access mode for an empty list of hostnqn (any access).
+    pub(crate) fn deprecated_access_mode(&self) -> bool {
+        self.deprecated_access_mode
     }
 
     /// Check if the HA feature is disabled.

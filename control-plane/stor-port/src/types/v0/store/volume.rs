@@ -11,8 +11,8 @@ use crate::{
         },
         transport::{
             self, AffinityGroup, CreateVolume, HostNqn, NexusId, NexusNvmfConfig, NodeId,
-            ReplicaId, SnapshotId, Topology, VolumeId, VolumeLabels, VolumePolicy, VolumeProperty,
-            VolumeShareProtocol, VolumeStatus,
+            PublishVolume, ReplicaId, SnapshotId, Topology, VolumeAccessMode, VolumeId,
+            VolumeLabels, VolumePolicy, VolumeProperty, VolumeShareProtocol, VolumeStatus,
         },
     },
     IntoOption,
@@ -64,6 +64,7 @@ impl FrontendConfig {
                 self.host_acl.push(host);
             }
         }
+        self.host_acl.sort();
     }
     /// Extend the existing host list.
     pub fn remove_acls(&mut self, host_acl: Vec<InitiatorAC>) {
@@ -71,6 +72,7 @@ impl FrontendConfig {
             self.host_acl.drain(..);
         }
         self.host_acl.retain(|h| !host_acl.contains(h));
+        self.host_acl.sort();
     }
     /// Check if the nodename is allowed.
     pub fn nodename_allowed(&self, nodename: &str) -> bool {
@@ -99,7 +101,7 @@ impl FrontendConfig {
 }
 
 /// Volume Frontend
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Default)]
 pub struct InitiatorAC {
     /// The nodename where front-end IO will be sent from.
     node_name: String,
@@ -458,11 +460,13 @@ impl VolumeSpec {
     pub fn active_config(&self) -> Option<&TargetConfig> {
         self.target_config.as_ref().filter(|t| t.active)
     }
-    /// Deactivate the current target but keep it's information around.
+    /// Deactivate the current target but keep its information around.
     pub fn deactivate_target(&mut self) {
         if let Some(cfg) = self.target_config.as_mut() {
             cfg.active = false;
         }
+        // todo: is there any case where we might want to keep it around?
+        self.publish_context = None;
     }
     /// Get the health info key which is used to retrieve the volume's replica health information.
     pub fn health_info_id(&self) -> Option<&NexusId> {
@@ -678,15 +682,20 @@ pub struct OldPublishOperation {
 /// The `PublishOperation` which is easier to manage and update.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PublishOperation {
+    /// The new target configuration, considering a successful completion.
     config: TargetConfig,
     publish_context: HashMap<String, String>,
+    access_mode: VolumeAccessMode,
+    frontend_nodes: Vec<String>,
 }
 impl PublishOperation {
     /// Return new `Self` from the given parameters.
-    pub fn new(config: TargetConfig, publish_context: HashMap<String, String>) -> Self {
+    pub fn new(config: TargetConfig, publish_volume: &PublishVolume) -> Self {
         Self {
             config,
-            publish_context,
+            publish_context: publish_volume.publish_context.clone(),
+            access_mode: publish_volume.access_mode,
+            frontend_nodes: publish_volume.frontend_nodes.clone(),
         }
     }
     /// Get the share protocol.
@@ -694,8 +703,20 @@ impl PublishOperation {
         self.config.target.protocol
     }
     /// Get the publish context.
-    pub fn publish_context(&self) -> HashMap<String, String> {
-        self.publish_context.clone()
+    pub fn publish_context(&self) -> &HashMap<String, String> {
+        &self.publish_context
+    }
+    /// Get a reference to the new frontend configuration.
+    pub fn new_frontend(&self) -> &FrontendConfig {
+        self.config.frontend()
+    }
+    /// Get a reference to the new frontend nodes.
+    pub fn new_frontend_nodes(&self) -> &Vec<String> {
+        &self.frontend_nodes
+    }
+    /// Get the volume access mode.
+    pub fn access_mode(&self) -> VolumeAccessMode {
+        self.access_mode
     }
 }
 

@@ -54,6 +54,7 @@ utils = { workspace = true }
 shutdown = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 parse-size = { workspace = true }
+percent-encoding = { workspace = true }
 
 [target.'cfg(target_os="linux")'.dependencies]
 udev = { workspace = true }

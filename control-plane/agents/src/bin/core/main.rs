@@ -163,6 +163,11 @@ pub(crate) struct CliArgs {
     #[clap(long)]
     pool_cluster_size: Option<u32>,
 
+    /// Allow any hostnqn access with single node access.
+    /// This is to be used for testing only.
+    #[clap(long)]
+    deprecated_access_mode: bool,
+
     /// Running in simulation mode.
     #[clap(long, env = "SIMULATION", requires = "bundle")]
     simulation: bool,
@@ -281,6 +286,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         cli_args.allow_non_persistent_devlink,
         cli_args.encrypted_pools_soft_scheduling,
         cli_args.pool_cluster_size,
+        cli_args.deprecated_access_mode,
         sim_args,
     )
     .await?;

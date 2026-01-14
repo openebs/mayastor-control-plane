@@ -606,6 +606,22 @@ pub struct RemoveVolumeNexus {
     pub node: Option<NodeId>,
 }
 
+/// The access mode a la CSI.
+#[derive(Serialize, Deserialize, Default, Debug, Copy, Clone, PartialEq)]
+pub enum VolumeAccessMode {
+    #[default]
+    SingleNodeWriter,
+    MultiNodeMultiWriter,
+}
+impl From<models::VolumeAccessMode> for VolumeAccessMode {
+    fn from(value: models::VolumeAccessMode) -> Self {
+        match value {
+            models::VolumeAccessMode::SingleNodeWriter => Self::SingleNodeWriter,
+            models::VolumeAccessMode::MultiNodeMultiWriter => Self::MultiNodeMultiWriter,
+        }
+    }
+}
+
 /// Publish a volume on a target node.
 /// If requested, it'll also share the nexus via the provided share protocol.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
@@ -621,6 +637,8 @@ pub struct PublishVolume {
     pub publish_context: HashMap<String, String>,
     /// Hosts allowed to access nexus.
     pub frontend_nodes: Vec<String>,
+    /// The access mode (a la csi) for the volume.
+    pub access_mode: VolumeAccessMode,
 }
 impl PublishVolume {
     /// Create new `PublishVolume` based on the provided arguments.
@@ -630,6 +648,7 @@ impl PublishVolume {
         share: Option<VolumeShareProtocol>,
         publish_context: HashMap<String, String>,
         frontend_nodes: Vec<String>,
+        access_mode: VolumeAccessMode,
     ) -> Self {
         Self {
             uuid,
@@ -637,6 +656,7 @@ impl PublishVolume {
             share,
             publish_context,
             frontend_nodes,
+            access_mode,
         }
     }
 }

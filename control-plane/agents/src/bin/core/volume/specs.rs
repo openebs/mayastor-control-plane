@@ -34,13 +34,15 @@ use stor_port::{
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
             snapshots::volume::{VolumeSnapshot, VolumeSnapshotUserSpec},
-            volume::{AffinityGroupId, AffinityGroupSpec, VolumeOperation, VolumeSpec},
+            volume::{
+                AffinityGroupId, AffinityGroupSpec, PublishOperation, VolumeOperation, VolumeSpec,
+            },
             SpecStatus, SpecTransaction,
         },
         transport::{
             CreateReplica, CreateVolume, NodeBugFix, NodeId, PoolId, Protocol, Replica, ReplicaId,
-            ReplicaName, ReplicaOwners, SnapshotId, VolumeId, VolumeShareProtocol, VolumeState,
-            VolumeStatus,
+            ReplicaName, ReplicaOwners, SnapshotId, VolumeAccessMode, VolumeId,
+            VolumeShareProtocol, VolumeState, VolumeStatus,
         },
     },
 };
@@ -325,6 +327,81 @@ pub(crate) async fn healthy_volume_replicas(
     } else {
         Ok(children)
     }
+}
+
+fn validate_publish(
+    volume: &mut VolumeSpec,
+    args: &PublishOperation,
+    registry: &Registry,
+) -> Result<(), SvcError> {
+    match args.protocol() {
+        None => {
+            // This can't happen in prod today as we always set a protocol, and it's not clear
+            // how it should be handled, so just set an internal error for now.
+            // This may become more appropriate once we do offline rebuilds...
+            if volume.target_cfg().is_some() {
+                return Err(SvcError::Internal {
+                    details: "Can't re-publish with no protocol".to_string(),
+                });
+            }
+            return Ok(());
+        }
+        Some(protocol) => match protocol {
+            VolumeShareProtocol::Nvmf => Ok(()),
+            VolumeShareProtocol::Iscsi => Err(SvcError::InvalidShareProtocol {
+                kind: ResourceKind::Volume,
+                id: volume.uuid_str(),
+                share: format!("{:?}", args.protocol()),
+            }),
+        }?,
+    }
+
+    if let Some(target_cfg) = volume.target_cfg() {
+        let target = target_cfg.target();
+        let frontend = target_cfg.frontend();
+
+        if volume.publish_context.as_ref() != Some(args.publish_context()) {
+            return Err(SvcError::VolumePublishCtxDiffer {
+                vol_id: volume.uuid_str(),
+                current: volume.publish_context.clone().unwrap_or_default(),
+                requested: args.publish_context().clone(),
+            });
+        }
+
+        if args.new_frontend_nodes().is_empty() && !frontend.nodes_info().is_empty() {
+            return Err(SvcError::Internal {
+                details: "Can't re-publish for 0 frontend-nodes".to_string(),
+            });
+        }
+
+        if !frontend.needs_update(args.new_frontend().nodes_info()) {
+            return Err(SvcError::VolumeAlreadyPublished {
+                vol_id: volume.uuid_str(),
+                node: target.node().to_string(),
+                protocol: format!("{:?}", target.protocol()),
+            });
+        }
+
+        // Volume already published to different frontend node, and specified mode is SNW,
+        // then we must error out since this is not allowed
+        if args.access_mode() == VolumeAccessMode::SingleNodeWriter {
+            return Err(SvcError::VolumePublishSingle {
+                vol_id: volume.uuid_str(),
+                nodes: target_cfg.frontend().node_names(),
+            });
+        }
+    } else if (args.new_frontend().nodes_info().len() > 1
+        || (args.new_frontend().nodes_info().is_empty() && !registry.deprecated_access_mode()))
+        && args.access_mode() == VolumeAccessMode::SingleNodeWriter
+    {
+        return Err(SvcError::VolumePublishSingle {
+            vol_id: volume.uuid_str(),
+            nodes: args.new_frontend().node_names(),
+        });
+    }
+
+    volume.publish_context = Some(args.publish_context().clone());
+    Ok(())
 }
 
 /// Check if any replica is on a pool that doesn't have sufficient space for
@@ -1026,32 +1103,7 @@ impl SpecOperationsHelper for VolumeSpec {
                 _ => Ok(()),
             },
             VolumeOperation::PublishOld(_) => Err(SvcError::InvalidArguments {}),
-            VolumeOperation::Publish(args) => match args.protocol() {
-                None => Ok(()),
-                Some(protocol) => match protocol {
-                    VolumeShareProtocol::Nvmf => {
-                        if let Some(target) = self.target() {
-                            if self.publish_context == Some(args.publish_context()) {
-                                Ok(())
-                            } else {
-                                Err(SvcError::VolumeAlreadyPublished {
-                                    vol_id: self.uuid_str(),
-                                    node: target.node().to_string(),
-                                    protocol: format!("{:?}", target.protocol()),
-                                })
-                            }
-                        } else {
-                            self.publish_context = Some(args.publish_context());
-                            Ok(())
-                        }
-                    }
-                    VolumeShareProtocol::Iscsi => Err(SvcError::InvalidShareProtocol {
-                        kind: ResourceKind::Volume,
-                        id: self.uuid_str(),
-                        share: format!("{:?}", args.protocol()),
-                    }),
-                },
-            },
+            VolumeOperation::Publish(args) => validate_publish(self, args, registry),
             VolumeOperation::Republish(args) => match args.protocol() {
                 VolumeShareProtocol::Nvmf => Ok(()),
                 VolumeShareProtocol::Iscsi => Err(SvcError::InvalidShareProtocol {
@@ -1067,10 +1119,7 @@ impl SpecOperationsHelper for VolumeSpec {
                     vol_id: self.uuid_str(),
                 })
             }
-            VolumeOperation::UnpublishOld | VolumeOperation::Unpublish(_) => {
-                self.publish_context = None;
-                Ok(())
-            }
+            VolumeOperation::UnpublishOld | VolumeOperation::Unpublish(_) => Ok(()),
 
             VolumeOperation::SetReplica(replica_count) => {
                 if *replica_count == self.num_replicas {

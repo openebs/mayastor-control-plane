@@ -1,13 +1,13 @@
 use crate::CsiControllerConfig;
-use stor_port::types::v0::openapi::{client::Error, models::rest_json_error::Kind};
 use stor_port::types::v0::openapi::{
+    client::Error,
     clients,
     clients::tower::StatusCode,
     models,
     models::{
-        AffinityGroup, AppNode, CreateVolumeBody, Node, NodeTopology, Pool, PoolTopology,
-        PublishVolumeBody, ResizeVolumeBody, RestJsonError, Topology, Volume, VolumePolicy,
-        VolumeShareProtocol, Volumes,
+        rest_json_error::Kind, AffinityGroup, AppNode, CreateVolumeBody, Node, NodeTopology, Pool,
+        PoolTopology, PublishVolumeBody, ResizeVolumeBody, RestJsonError, Topology, Volume,
+        VolumeAccessMode, VolumePolicy, VolumeShareProtocol, Volumes,
     },
 };
 
@@ -429,6 +429,7 @@ impl RestApiClient {
         protocol: VolumeShareProtocol,
         frontend_node: String,
         publish_context: &HashMap<String, String>,
+        access_mode: VolumeAccessMode,
     ) -> Result<Volume, ApiClientError> {
         let publish_volume_body = PublishVolumeBody::new_all(
             publish_context.clone(),
@@ -437,6 +438,7 @@ impl RestApiClient {
             protocol,
             None,
             frontend_node,
+            Some(access_mode),
         );
         let volume = match self
             .rest_client

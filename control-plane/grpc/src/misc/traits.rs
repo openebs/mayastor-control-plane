@@ -105,6 +105,8 @@ impl From<ReplyErrorKind> for common::ReplyErrorKind {
             ReplyErrorKind::Cancelled => Self::Cancelled,
             ReplyErrorKind::DiskNotExtended => Self::DiskNotExtended,
             ReplyErrorKind::DiskRescanFailed => Self::DiskRescanFailed,
+            ReplyErrorKind::PublishedCtxDiffer => Self::PublishedCtxDiffer,
+            ReplyErrorKind::FrontendLimitExceeded => Self::FrontendLimitExceeded,
         }
     }
 }
@@ -147,6 +149,8 @@ impl From<common::ReplyErrorKind> for ReplyErrorKind {
             common::ReplyErrorKind::Cancelled => Self::Cancelled,
             common::ReplyErrorKind::DiskNotExtended => Self::DiskNotExtended,
             common::ReplyErrorKind::DiskRescanFailed => Self::DiskRescanFailed,
+            common::ReplyErrorKind::PublishedCtxDiffer => Self::PublishedCtxDiffer,
+            common::ReplyErrorKind::FrontendLimitExceeded => Self::FrontendLimitExceeded,
         }
     }
 }

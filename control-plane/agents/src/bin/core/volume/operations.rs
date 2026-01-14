@@ -326,43 +326,37 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
     ) -> Result<Self::PublishOutput, SvcError> {
         let state = registry.volume_state(&request.uuid).await?;
 
-        if let Some(target_cfg) = self.as_ref().target_cfg() {
-            let target = target_cfg.target();
-
+        if let Some(mut target_cfg) = self.as_ref().target_cfg().cloned() {
             let host_acl =
                 registry.host_acl_nodename(HostAccessControl::Nexuses, &request.frontend_nodes);
-            if target_cfg.frontend().needs_update(&host_acl) {
-                let mut nexus = registry.specs().nexus(target.nexus()).await?;
-                let nexus_state = registry.nexus(target.nexus()).await?;
+            target_cfg.frontend_mut().add_acls(host_acl);
 
-                let mut target_cfg = target_cfg.clone();
-                target_cfg.frontend_mut().add_acls(host_acl);
+            let target = target_cfg.target();
+            let mut nexus = registry.specs().nexus(target.nexus()).await?;
+            let nexus_state = registry.nexus(target.nexus()).await?;
 
-                let operation = VolumeOperation::Publish(PublishOperation::new(
-                    target_cfg.clone(),
-                    request.publish_context.clone(),
-                ));
-                let spec_clone = self.start_update(registry, &state, operation).await?;
+            let operation =
+                VolumeOperation::Publish(PublishOperation::new(target_cfg.clone(), request));
+            let spec_clone = self.start_update(registry, &state, operation).await?;
 
-                let result = nexus
-                    .share(
-                        registry,
-                        &ShareNexus::new(
-                            &nexus_state,
-                            VolumeShareProtocol::Nvmf,
-                            target_cfg.frontend().node_nqns(),
-                        ),
-                    )
-                    .await;
+            let result = nexus
+                .share(
+                    registry,
+                    &ShareNexus::new(
+                        &nexus_state,
+                        VolumeShareProtocol::Nvmf,
+                        target_cfg.frontend().node_nqns(),
+                    ),
+                )
+                .await;
 
-                self.complete_update(registry, result, spec_clone).await?;
+            self.complete_update(registry, result, spec_clone).await?;
 
-                let volume = registry.volume(&request.uuid).await?;
-                registry
-                    .notify_if_degraded(&volume, PollTriggerEvent::VolumeDegraded)
-                    .await;
-                return Ok(volume);
-            }
+            let volume = registry.volume(&request.uuid).await?;
+            registry
+                .notify_if_degraded(&volume, PollTriggerEvent::VolumeDegraded)
+                .await;
+            return Ok(volume);
         }
 
         let nexus_node = self
@@ -380,10 +374,8 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             )
             .await;
 
-        let operation = VolumeOperation::Publish(PublishOperation::new(
-            target_cfg.clone(),
-            request.publish_context.clone(),
-        ));
+        let operation =
+            VolumeOperation::Publish(PublishOperation::new(target_cfg.clone(), request));
         let spec_clone = self.start_update(registry, &state, operation).await?;
 
         // Create a Nexus on the requested or auto-selected node.

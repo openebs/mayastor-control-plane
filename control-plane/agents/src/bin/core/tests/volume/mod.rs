@@ -32,8 +32,8 @@ use stor_port::{
         transport::{
             self, Child, ChildState, CreateVolume, DestroyVolume, Filter, GetNexuses, GetReplicas,
             GetVolumes, Nexus, NodeId, PublishVolume, SetVolumeReplica, ShareVolume, Topology,
-            UnpublishVolume, UnshareVolume, Volume, VolumeHealth, VolumeId, VolumeShareProtocol,
-            VolumeState, VolumeStatus,
+            UnpublishVolume, UnshareVolume, Volume, VolumeAccessMode, VolumeHealth, VolumeId,
+            VolumeShareProtocol, VolumeState, VolumeStatus,
         },
     },
 };
@@ -46,7 +46,10 @@ async fn volume() {
         .with_io_engines(3)
         .with_tmpfs_pool(100 * 1024 * 1024)
         .with_cache_period("1s")
-        .with_options(|o| o.with_isolated_io_engine(true))
+        .with_options(|o| {
+            o.with_isolated_io_engine(true)
+                .no_deprecated_access_mode(true)
+        })
         // don't let the reconcile interfere with the tests
         .with_reconcile_period(Duration::from_secs(1000), Duration::from_secs(1000))
         .build()
@@ -131,6 +134,7 @@ async fn nexus_persistence_test_iteration(
                 share: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -212,6 +216,7 @@ async fn nexus_persistence_test_iteration(
                 share: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -315,6 +320,29 @@ async fn publishing_test(cluster: &Cluster) {
         }
     };
 
+    let error = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: volume.spec().uuid.clone(),
+                target_node: None,
+                share: Some(VolumeShareProtocol::Nvmf),
+                publish_context: HashMap::new(),
+                frontend_nodes: vec!["a".into(), "b".into()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
+            },
+            None,
+        )
+        .await
+        .expect_err("Can't publish multi nodes in single mode");
+    assert!(matches!(
+        error,
+        ReplyError {
+            kind: ReplyErrorKind::FrontendLimitExceeded,
+            resource: ResourceKind::Volume,
+            ..
+        },
+    ));
+
     let volume = volume_client
         .publish(
             &PublishVolume {
@@ -323,6 +351,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: Some(VolumeShareProtocol::Nvmf),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec!["a".into()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -336,7 +365,30 @@ async fn publishing_test(cluster: &Cluster) {
                 target_node: None,
                 share: Some(VolumeShareProtocol::Nvmf),
                 publish_context: HashMap::new(),
+                frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::MultiNodeMultiWriter,
+            },
+            None,
+        )
+        .await
+        .expect_err("Can't republish for all");
+    assert!(matches!(
+        error,
+        ReplyError {
+            kind: ReplyErrorKind::Internal,
+            ..
+        },
+    ));
+
+    let error = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: volume.spec().uuid.clone(),
+                target_node: None,
+                share: Some(VolumeShareProtocol::Nvmf),
+                publish_context: HashMap::new(),
                 frontend_nodes: vec!["a".into()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -351,6 +403,52 @@ async fn publishing_test(cluster: &Cluster) {
         },
     ));
 
+    let error = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: volume.spec().uuid.clone(),
+                target_node: None,
+                share: Some(VolumeShareProtocol::Nvmf),
+                publish_context: HashMap::from([("".into(), "".into())]),
+                frontend_nodes: vec!["a".into()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
+            },
+            None,
+        )
+        .await
+        .expect_err("Publish context differs!");
+    assert!(matches!(
+        error,
+        ReplyError {
+            kind: ReplyErrorKind::PublishedCtxDiffer,
+            resource: ResourceKind::Volume,
+            ..
+        },
+    ));
+
+    let error = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: volume.spec().uuid.clone(),
+                target_node: None,
+                share: Some(VolumeShareProtocol::Nvmf),
+                publish_context: HashMap::new(),
+                frontend_nodes: vec!["b".into()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
+            },
+            None,
+        )
+        .await
+        .expect_err("Can't add frontend nodes in single mode");
+    assert!(matches!(
+        error,
+        ReplyError {
+            kind: ReplyErrorKind::FrontendLimitExceeded,
+            resource: ResourceKind::Volume,
+            ..
+        },
+    ));
+
     let volume = volume_client
         .publish(
             &PublishVolume {
@@ -359,6 +457,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: Some(VolumeShareProtocol::Nvmf),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec!["b".into()],
+                access_mode: VolumeAccessMode::MultiNodeMultiWriter,
             },
             None,
         )
@@ -381,6 +480,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: Some(VolumeShareProtocol::Nvmf),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec!["a".into(), "b".into()],
+                access_mode: VolumeAccessMode::MultiNodeMultiWriter,
             },
             None,
         )
@@ -428,6 +528,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -451,6 +552,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec!["a".into()],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -470,6 +572,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -537,6 +640,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -551,6 +655,29 @@ async fn publishing_test(cluster: &Cluster) {
         .await
         .unwrap();
 
+    let error = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: volume_state.uuid.clone(),
+                target_node: Some(cluster.node(0)),
+                share: Some(VolumeShareProtocol::Nvmf),
+                publish_context: HashMap::new(),
+                frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
+            },
+            None,
+        )
+        .await
+        .expect_err("Need Multi Node Writer");
+    assert!(matches!(
+        error,
+        ReplyError {
+            kind: ReplyErrorKind::FrontendLimitExceeded,
+            resource: ResourceKind::Volume,
+            ..
+        },
+    ));
+
     let volume = volume_client
         .publish(
             &PublishVolume {
@@ -559,6 +686,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: Some(VolumeShareProtocol::Nvmf),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::MultiNodeMultiWriter,
             },
             None,
         )
@@ -594,6 +722,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: Some(VolumeShareProtocol::Iscsi),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -608,6 +737,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: Some(VolumeShareProtocol::Nvmf),
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -630,6 +760,7 @@ async fn publishing_test(cluster: &Cluster) {
                 share: None,
                 publish_context: HashMap::new(),
                 frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
         )
@@ -1323,6 +1454,7 @@ async fn health() {
                 None,
                 HashMap::new(),
                 vec![],
+                VolumeAccessMode::SingleNodeWriter,
             ),
             None,
         )
@@ -1422,6 +1554,7 @@ async fn health() {
                 None,
                 HashMap::new(),
                 vec![],
+                VolumeAccessMode::SingleNodeWriter,
             ),
             None,
         )

@@ -323,6 +323,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
                 models::VolumeShareProtocol::Nvmf,
                 None,
                 cluster.csi_node(0),
+                None,
             ),
         )
         .await
@@ -551,6 +552,7 @@ async fn unpublish_from_nonfrontend_node() {
                 models::VolumeShareProtocol::Nvmf,
                 None,
                 cluster.csi_node(0),
+                None,
             ),
         )
         .await

@@ -352,6 +352,8 @@ pub struct StartOptions {
     /// to configure cluster size per-pool.
     #[clap(long)]
     pool_cluster_size: Option<u32>,
+    #[clap(long, hide = true)]
+    no_deprecated_access_mode: bool,
 }
 
 /// List of KeyValues
@@ -634,6 +636,11 @@ impl StartOptions {
         let mut sorted = self.io_engine_api_versions.clone();
         sorted.sort();
         *sorted.last().unwrap_or(&IoEngineApiVersion::V1)
+    }
+    #[must_use]
+    pub fn no_deprecated_access_mode(mut self, value: bool) -> Self {
+        self.no_deprecated_access_mode = value;
+        self
     }
 }
 

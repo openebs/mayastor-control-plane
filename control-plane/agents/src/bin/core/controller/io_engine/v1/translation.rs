@@ -22,6 +22,7 @@ use stor_port::{
     IntoOption,
 };
 
+use itertools::Itertools;
 use std::{convert::TryFrom, time::UNIX_EPOCH};
 
 /// Trait for converting agent messages to io-engine messages.
@@ -373,6 +374,7 @@ impl TryIoEngineToAgent for v1::nexus::Nexus {
                     transport::HostNqn::try_from(n)
                         .unwrap_or(transport::HostNqn::Invalid { nqn: n.to_string() })
                 })
+                .sorted()
                 .collect(),
         })
     }

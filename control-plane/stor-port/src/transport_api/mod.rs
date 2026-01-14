@@ -447,6 +447,8 @@ pub enum ReplyErrorKind {
     Cancelled,
     DiskNotExtended,
     DiskRescanFailed,
+    PublishedCtxDiffer,
+    FrontendLimitExceeded,
 }
 
 impl From<tonic::Code> for ReplyErrorKind {
