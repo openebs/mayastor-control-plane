@@ -7,6 +7,7 @@ use agents::eventing::Event;
 use events_api::event::{EventAction, EventCategory, EventMessage, EventMeta, EventSource};
 use nvmeadm::nvmf_subsystem::Subsystem;
 use std::{collections::HashMap, convert::From, rc::Rc, sync::Arc};
+use stor_port::types::v0::transport::NvmeNqn;
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{sleep, Duration},
@@ -279,12 +280,24 @@ impl PathFailureDetector {
 
         tracing::trace!(epoch=self.epoch, suspected=?self.suspected_paths, "Rescanning");
 
+        // Generate host NQN for this node.
+        let gen_hostnqn = NvmeNqn::from_nodename(self.reporter.node_name()).to_string();
+        let host_nqn_prefix = NvmeNqn::from_nodename("").to_string();
+        let in_deployer = stor_port::platform::current_platform_type()
+            == stor_port::platform::PlatformType::Deployer;
         // Scan all reported NVMe paths on system and check for connectivity.
         for ctrlr in path_collection.get_entries() {
             // Silently ignore errors when we can't get a subsystem for target path,
             // as we might see lots of false-positive errors when removing a failed path
             // from a multi-pathed NVMe subsystem.
             if let Ok(subsystem) = Subsystem::new(ctrlr.path()) {
+                // Check if this subsystem is associated with host NQN. Only
+                // such subsystems are relevant for path failure detection else ignore.
+                if subsystem.hostnqn != gen_hostnqn
+                    && (subsystem.hostnqn.starts_with(&host_nqn_prefix) || !in_deployer)
+                {
+                    continue;
+                }
                 match subsystem.state.as_str() {
                     "connecting" => {
                         // Add a new record in case no record exists for target NQN.
