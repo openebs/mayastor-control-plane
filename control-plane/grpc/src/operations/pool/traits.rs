@@ -160,6 +160,9 @@ impl TryFrom<pool::PoolState> for PoolState {
                 .unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
             disk_capacity: pool_state.disk_capacity,
             max_expandable_size: pool_state.max_expandable_size,
+            // todo: add grpc proto
+            disk_info: vec![],
+            errors: None,
         })
     }
 }
@@ -601,6 +604,7 @@ impl From<pool::PoolStatus> for PoolStatus {
         match src {
             pool::PoolStatus::Online => Self::Online,
             pool::PoolStatus::Degraded => Self::Degraded,
+            pool::PoolStatus::Suspected => Self::Suspected,
             pool::PoolStatus::Faulted => Self::Faulted,
             pool::PoolStatus::Unknown => Self::Unknown,
         }
@@ -613,6 +617,7 @@ impl From<PoolStatus> for pool::PoolStatus {
             PoolStatus::Unknown => Self::Unknown,
             PoolStatus::Online => Self::Online,
             PoolStatus::Degraded => Self::Degraded,
+            PoolStatus::Suspected => Self::Suspected,
             PoolStatus::Faulted => Self::Faulted,
         }
     }

@@ -153,6 +153,7 @@ pub enum PoolStatus {
     Degraded,
     /// The pool is completely inaccessible.
     Faulted,
+    Suspected,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, JsonSchema)]
@@ -263,6 +264,7 @@ impl From<RestPoolStatus> for PoolStatus {
             RestPoolStatus::Unknown => Self::Unknown,
             RestPoolStatus::Online => Self::Online,
             RestPoolStatus::Degraded => Self::Degraded,
+            RestPoolStatus::Suspected => Self::Suspected,
             RestPoolStatus::Faulted => Self::Faulted,
         }
     }

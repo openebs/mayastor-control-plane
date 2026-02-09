@@ -124,6 +124,8 @@ enum PoolStatus {
   Degraded = 2;
   // the pool is unable to be used
   Faulted = 3;
+  // pool is in a suspected state, with warning alerts or higher
+  Suspected = 4;
 }
 
 // Get all pools based on the filter criteria

@@ -179,6 +179,7 @@ impl From<RestPoolStatus> for PoolStatus {
     fn from(p: RestPoolStatus) -> Self {
         match p {
             RestPoolStatus::Unknown => Self::Unknown,
+            RestPoolStatus::Suspected => Self::Unknown,
             RestPoolStatus::Online => Self::Online,
             RestPoolStatus::Degraded => Self::Degraded,
             RestPoolStatus::Faulted => Self::Faulted,
