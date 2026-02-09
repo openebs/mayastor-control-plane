@@ -175,6 +175,36 @@ impl From<CtrlPoolState> for models::PoolState {
     }
 }
 
+impl From<PoolDiag> for models::PoolDiag {
+    fn from(src: PoolDiag) -> Self {
+        Self::new_all(src.import_errors)
+    }
+}
+
+impl From<PoolDiskError> for models::PoolDiskError {
+    fn from(value: PoolDiskError) -> Self {
+        Self::new_all(value.disk, value.error)
+    }
+}
+impl From<PoolError> for models::PoolProbeError {
+    fn from(value: PoolError) -> Self {
+        Self::new_all(value.msg, value.code)
+    }
+}
+impl From<PoolErrorCode> for models::PoolProbeErrorCode {
+    fn from(value: PoolErrorCode) -> Self {
+        match value {
+            PoolErrorCode::Unknown => Self::Unknown,
+            PoolErrorCode::DiskNotFound => Self::DiskNotFound,
+            PoolErrorCode::DiskReadIoError => Self::DiskReadIoError,
+            PoolErrorCode::ForeignPoolName => Self::ForeignPoolName,
+            PoolErrorCode::ForeignPoolUid => Self::ForeignPoolUid,
+            PoolErrorCode::SuperBlock => Self::SuperBlock,
+            PoolErrorCode::InvalidSuperBlock => Self::InvalidSuperBlock,
+        }
+    }
+}
+
 rpc_impl_string_id!(PoolId, "ID of a pool");
 rpc_impl_string_uuid!(PoolUuid, "UUID of a pool");
 
@@ -223,7 +253,6 @@ pub struct Pool {
     /// Runtime state of the pool.
     pub state: Option<CtrlPoolState>,
     /// Health of the pool.
-    /// todo: is this needed since we have it on the "spec" misnomer.
     pub diag: Option<PoolDiag>,
 }
 
@@ -295,7 +324,12 @@ impl Pool {
 
 impl From<Pool> for models::Pool {
     fn from(src: Pool) -> Self {
-        models::Pool::new_all(src.id, src.spec.into_opt(), src.state.into_opt())
+        models::Pool::new_all(
+            src.id,
+            src.spec.into_opt(),
+            src.state.into_opt(),
+            src.diag.into_opt(),
+        )
     }
 }
 
