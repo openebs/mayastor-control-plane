@@ -3394,6 +3394,8 @@ components:
           description: Maximum size underlying disk can be grown to, in bytes
           type: integer
           format: uint64
+        errorInfo:
+          $ref: '#/components/schemas/PoolErrorInfo'
       required:
         - capacity
         - disks

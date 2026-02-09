@@ -112,6 +112,10 @@ message PoolState {
   optional uint64 disk_capacity = 10;
   // Maximum disk_capacity this pool can be expanded to, in bytes
   optional uint64 max_expandable_size = 11;
+  // Information for each pool disk.
+  repeated DiskInfo disk_info = 12;
+  // Error information at the pool top-level.
+  optional PoolErrors errors = 13;
 }
 
 // status of the pool
@@ -260,14 +264,117 @@ message CordonedState {
   bool import = 4;
 }
 
+message PoolErrors {
+  // These are generated from the below metrics
+  PoolAlerts                    alerts = 1;
+
+  // Disk IO errors
+  uint64                io_error_count = 2;
+  uint64            io_error_threshold = 3;
+
+  // Disk IO stalls
+  bool                      io_stalled = 4;
+  uint64     io_stall_transition_count = 5;
+  uint64 io_stall_transition_threshold = 6;
+}
+
+message PoolAlerts {
+  PoolAlertStatus       status = 1;
+
+  // No status alerts are raised
+  repeated PoolAlert    notice = 2;
+  repeated PoolAlert attention = 3;
+  // Warnings downgrades the pool state to Suspected
+  repeated PoolAlert   warning = 4;
+  // Pools with critical alerts should not be used
+  repeated PoolAlert  critical = 5;
+}
+
+enum PoolAlertStatus {
+  // No issues detected; pool is operating normally
+  Healthy   = 0;
+
+  // Non‑critical issues present; user attention is recommended
+  Attention = 1;
+
+  // Conditions have exceeded warning thresholds (fixed or based on trends over a defined time window)
+  Warning   = 2;
+
+  // Severe issues detected; pool usage should be avoided
+  Critical  = 3;
+
+  // Unknown Alert Status
+  StatusUnknown = 4;
+}
+
+enum PoolAlert {
+  // Unrecognized or unsupported alert type
+  AlertUnknown           = 0;
+
+  // Pool I/O is currently stalled
+  IoStalled              = 1;
+
+  // I/O is not stalled as of now, but stalls have occurred over a defined time window
+  IoStallIntermittent    = 2;
+
+  // I/O is not stalled as of now, but stalls have occurred too frequently over a defined time window
+  IoStallIntermittentExc = 3;
+
+  // I/O errors have been detected for the pool
+  IoError                = 4;
+
+  // I/O errors exceed defined thresholds
+  IoErrorExc             = 5;
+}
+
+message DiskInfo {
+  // The disk uri used to open the disk
+  string uri = 1;
+  // Errors seen for this disk
+  PoolErrors errors = 2;
+}
+
+message ClearErrorsRequest {
+  // Name of the node
+  optional string node_id = 1;
+
+  // Name of the pool
+  string pool_id = 2;
+
+  // If one or more disks is specified, only those errors associated with the specified disk or disks are cleared.
+  repeated string disks = 3;
+
+  // Error clearing request
+  ClearErrors clear = 4;
+}
+
+enum ClearErrors {
+  // Clears all counted errors and related alerts
+  // Example, it clears the io stall transitions, but doesn't clear an io stall
+  ClearAll = 0;
+}
+
+message ClearErrorsReply {
+  oneof reply {
+    Pool pool = 1;
+    common.ReplyError error = 2;
+  }
+}
+
 // Service for managing storage pools
 service PoolGrpc {
   rpc CreatePool (CreatePoolRequest) returns (CreatePoolReply) {}
   rpc DestroyPool (DestroyPoolRequest) returns (DestroyPoolReply) {}
   rpc GetPools (GetPoolsRequest) returns (GetPoolsReply) {}
+
   rpc LabelPool (LabelPoolRequest) returns (LabelPoolReply) {}
   rpc UnlabelPool (UnlabelPoolRequest) returns (UnlabelPoolReply) {}
+
   rpc CordonPool (CordonPoolRequest) returns (CordonPoolReply) {}
   rpc UncordonPool (CordonPoolRequest) returns (CordonPoolReply) {}
+
   rpc ExpandPool (ExpandPoolRequest) returns (ExpandPoolReply) {}
+
+  // Clear error counters and alerts
+  rpc ClearErrors (ClearErrorsRequest) returns (ClearErrorsReply) {}
 }

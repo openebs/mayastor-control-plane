@@ -1,4 +1,4 @@
-use super::traits::UnlabelPoolInfo;
+use super::traits::{ClearErrorsRequest, UnlabelPoolInfo};
 use crate::{
     common::{CommonFilter, NodeFilter, NodePoolFilter, PoolFilter},
     context::{Client, Context, TracedChannel},
@@ -6,9 +6,9 @@ use crate::{
         CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo, PoolOperations,
     },
     pool::{
-        cordon_pool_reply, create_pool_reply, expand_pool_reply, get_pools_reply,
-        get_pools_request, label_pool_reply, pool_grpc_client::PoolGrpcClient, unlabel_pool_reply,
-        CordonPoolRequest, ExpandPoolRequest, GetPoolsRequest,
+        self, clear_errors_reply, cordon_pool_reply, create_pool_reply, expand_pool_reply,
+        get_pools_reply, get_pools_request, label_pool_reply, pool_grpc_client::PoolGrpcClient,
+        unlabel_pool_reply, CordonPoolRequest, ExpandPoolRequest, GetPoolsRequest,
     },
 };
 use std::{convert::TryFrom, ops::Deref};
@@ -179,9 +179,22 @@ impl PoolOperations for PoolClient {
         let req = ExpandPoolRequest::from(request);
         let response = self.client().expand_pool(req).await?.into_inner();
         match response.reply {
-            Some(expand_pool_reply) => match expand_pool_reply {
+            Some(reply) => match reply {
                 expand_pool_reply::Reply::Pool(pool) => Ok(Pool::try_from(pool)?),
                 expand_pool_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
+        }
+    }
+
+    #[tracing::instrument(name = "PoolClient::clear_errors", level = "info", skip(self), err)]
+    async fn clear_errors(&self, request: &ClearErrorsRequest) -> Result<Pool, ReplyError> {
+        let request = pool::ClearErrorsRequest::from(request);
+        let response = self.client().clear_errors(request).await?.into_inner();
+        match response.reply {
+            Some(reply) => match reply {
+                clear_errors_reply::Reply::Pool(pool) => Ok(Pool::try_from(pool)?),
+                clear_errors_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
         }

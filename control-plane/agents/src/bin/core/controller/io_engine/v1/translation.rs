@@ -14,9 +14,9 @@ use stor_port::{
         store::pool::{Encryption, EncryptionSecret},
         transport::{
             self, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
-            NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState, PoolUuid, Protocol,
-            Replica, ReplicaId, ReplicaKind, ReplicaName, ReplicaStatus, SetReplicaEntityId,
-            SnapshotId, VolumeId,
+            NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolAlertStatus, PoolAlerts,
+            PoolState, PoolUuid, Protocol, Replica, ReplicaId, ReplicaKind, ReplicaName,
+            ReplicaStatus, SetReplicaEntityId, SnapshotId, VolumeId,
         },
     },
     IntoOption,
@@ -701,8 +701,12 @@ impl From<ExternalType<v1::pool::DiskInfo>> for transport::DiskInfo {
 impl From<ExternalType<v1::pool::PoolErrors>> for transport::PoolErrorInfo {
     fn from(value: ExternalType<v1::pool::PoolErrors>) -> Self {
         let value = value.0;
+        let alerts = value.alerts.map(ExternalType);
         Self {
-            alerts: ExternalType(value.alerts.unwrap_or_default()).into(),
+            alerts: alerts.map(Into::into).unwrap_or_else(|| PoolAlerts {
+                status: PoolAlertStatus::Healthy,
+                ..Default::default()
+            }),
             io_error_count: value.io_error_count,
             io_error_threshold: value.io_error_threshold,
             io_stalled: value.io_stalled,

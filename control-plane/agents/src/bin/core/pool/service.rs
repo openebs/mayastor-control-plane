@@ -37,7 +37,7 @@ use stor_port::{
 };
 
 use crate::controller::resources::{operations::ResourceCordon, ResourceUid};
-use grpc::operations::pool::traits::PoolCordonRequest;
+use grpc::operations::pool::traits::{ClearErrorsRequest, PoolCordonRequest};
 use snafu::OptionExt;
 
 #[derive(Debug, Clone)]
@@ -126,6 +126,10 @@ impl PoolOperations for Service {
         let service = self.clone();
         let pool = Context::spawn(async move { service.expand(&req).await }).await??;
         Ok(pool)
+    }
+
+    async fn clear_errors(&self, _request: &ClearErrorsRequest) -> Result<Pool, ReplyError> {
+        todo!()
     }
 }
 

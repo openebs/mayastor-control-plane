@@ -2,12 +2,13 @@ use crate::{
     misc::traits::ValidateRequestTypes,
     operations::pool::traits::PoolOperations,
     pool::{
-        self, cordon_pool_reply, create_pool_reply, expand_pool_reply, get_pools_reply,
-        label_pool_reply,
+        self, clear_errors_reply, cordon_pool_reply, create_pool_reply, expand_pool_reply,
+        get_pools_reply, label_pool_reply,
         pool_grpc_server::{PoolGrpc, PoolGrpcServer},
-        unlabel_pool_reply, CordonPoolReply, CordonPoolRequest, CreatePoolReply, CreatePoolRequest,
-        DestroyPoolReply, DestroyPoolRequest, ExpandPoolReply, ExpandPoolRequest, GetPoolsReply,
-        GetPoolsRequest, LabelPoolReply, LabelPoolRequest, UnlabelPoolReply, UnlabelPoolRequest,
+        unlabel_pool_reply, ClearErrorsReply, ClearErrorsRequest, CordonPoolReply,
+        CordonPoolRequest, CreatePoolReply, CreatePoolRequest, DestroyPoolReply,
+        DestroyPoolRequest, ExpandPoolReply, ExpandPoolRequest, GetPoolsReply, GetPoolsRequest,
+        LabelPoolReply, LabelPoolRequest, UnlabelPoolReply, UnlabelPoolRequest,
     },
 };
 use std::sync::Arc;
@@ -159,6 +160,21 @@ impl PoolGrpc for PoolServer {
             })),
             Err(err) => Ok(Response::new(ExpandPoolReply {
                 reply: Some(expand_pool_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn clear_errors(
+        &self,
+        request: Request<ClearErrorsRequest>,
+    ) -> Result<tonic::Response<ClearErrorsReply>, tonic::Status> {
+        let request = request.into_inner();
+        match self.service.clear_errors(&request.into()).await {
+            Ok(pool) => Ok(Response::new(ClearErrorsReply {
+                reply: Some(clear_errors_reply::Reply::Pool(pool.into())),
+            })),
+            Err(err) => Ok(Response::new(ClearErrorsReply {
+                reply: Some(clear_errors_reply::Reply::Error(err.into())),
             })),
         }
     }

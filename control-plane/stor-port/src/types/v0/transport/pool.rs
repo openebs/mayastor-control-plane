@@ -256,7 +256,59 @@ impl From<CtrlPoolState> for models::PoolState {
             Some(src.cluster_size as u64),
             src.disk_capacity,
             src.max_expandable_size,
+            src.errors.into_opt(),
         )
+    }
+}
+
+impl From<PoolErrorInfo> for models::PoolErrorInfo {
+    fn from(value: PoolErrorInfo) -> Self {
+        Self {
+            alerts: value.alerts.into(),
+            io_error_count: value.io_error_count,
+            io_error_threshold: value.io_error_threshold,
+            io_stalled: value.io_stalled,
+            io_stall_transition_count: value.io_stall_transition_count,
+            io_stall_transition_threshold: value.io_stall_transition_threshold,
+        }
+    }
+}
+
+impl From<PoolAlerts> for models::PoolAlerts {
+    fn from(value: PoolAlerts) -> Self {
+        use crate::IntoVec;
+        Self {
+            status: value.status.into(),
+            notice: value.notice.into_vec(),
+            attention: value.attention.into_vec(),
+            warning: value.warning.into_vec(),
+            critical: value.critical.into_vec(),
+        }
+    }
+}
+
+impl From<PoolAlert> for models::PoolAlert {
+    fn from(value: PoolAlert) -> Self {
+        match value {
+            PoolAlert::Unknown => Self::Unknown,
+            PoolAlert::IoStalled => Self::IoStalled,
+            PoolAlert::IoStallIntermittent => Self::IoStallIntermittent,
+            PoolAlert::IoStallIntermittentExc => Self::IoStallIntermittentExc,
+            PoolAlert::IoError => Self::IoError,
+            PoolAlert::IoErrorExc => Self::IoErrorExc,
+        }
+    }
+}
+
+impl From<PoolAlertStatus> for models::PoolAlertStatus {
+    fn from(value: PoolAlertStatus) -> Self {
+        match value {
+            PoolAlertStatus::Healthy => Self::Healthy,
+            PoolAlertStatus::Attention => Self::Attention,
+            PoolAlertStatus::Warning => Self::Warning,
+            PoolAlertStatus::Critical => Self::Critical,
+            PoolAlertStatus::Unknown => Self::Unknown,
+        }
     }
 }
 
