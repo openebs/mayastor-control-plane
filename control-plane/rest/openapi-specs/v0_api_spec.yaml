@@ -1462,11 +1462,11 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
-  '/pools/{pool_id}/clear-errors':
-    put:
+  '/pools/{pool_id}/errors':
+    delete:
       tags:
         - Pools
-      operationId: put_pool_clearerrors
+      operationId: del_pool_errors
       parameters:
         - in: path
           name: pool_id

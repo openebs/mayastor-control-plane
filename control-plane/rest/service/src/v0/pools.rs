@@ -176,7 +176,7 @@ impl apis::actix_server::Pools for RestApi {
         Ok(pool.into())
     }
 
-    async fn put_pool_clearerrors(
+    async fn del_pool_errors(
         Path(pool_id): Path<String>,
         Body(body): Body<Option<models::PoolClearErrReq>>,
     ) -> Result<models::Pool, RestError<RestJsonError>> {
