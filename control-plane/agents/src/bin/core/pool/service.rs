@@ -128,8 +128,11 @@ impl PoolOperations for Service {
         Ok(pool)
     }
 
-    async fn clear_errors(&self, _request: &ClearErrorsRequest) -> Result<Pool, ReplyError> {
-        todo!()
+    async fn clear_errors(&self, request: &ClearErrorsRequest) -> Result<Pool, ReplyError> {
+        let request = request.clone();
+        let service = self.clone();
+        let pool = Context::spawn(async move { service.clear_errors(request).await }).await??;
+        Ok(pool)
     }
 }
 
@@ -443,6 +446,14 @@ impl Service {
     async fn expand(&self, request: &ExpandPool) -> Result<Pool, SvcError> {
         let mut pool = self.pool_opt(&request.id).await?;
         let pool = pool.resize(&self.registry, request).await?;
+        Ok(pool)
+    }
+
+    /// Clear errors from the specified pool.
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %request.pool_id))]
+    async fn clear_errors(&self, request: ClearErrorsRequest) -> Result<Pool, SvcError> {
+        let mut guarded_pool = self.specs().guarded_pool(&request.pool_id).await?;
+        let pool = guarded_pool.clear_errors(&self.registry, &request).await?;
         Ok(pool)
     }
 }

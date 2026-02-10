@@ -37,6 +37,7 @@ use stor_port::{
     },
 };
 
+use grpc::operations::pool::traits::ClearErrorsRequest;
 use parking_lot::RwLock;
 use std::{future::Future, ops::DerefMut, sync::Arc};
 use tracing::{debug, trace, warn};
@@ -1313,6 +1314,15 @@ impl PoolApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
     async fn expand_pool(&self, request: &ExpandPool) -> Result<PoolState, SvcError> {
         let dataplane = self.grpc_client_locked(request.id()).await?;
         Ok(dataplane.expand_pool(request).await?)
+    }
+
+    async fn clear_errors(&self, request: &ClearErrorsRequest) -> Result<PoolState, SvcError> {
+        let dataplane = self
+            .grpc_client_locked(MessageIdVs::ClearPoolErrors.into())
+            .await?;
+        let pool = dataplane.clear_errors(request).await?;
+        self.update_pool_state(Either::Insert(pool.clone())).await;
+        Ok(pool)
     }
 }
 

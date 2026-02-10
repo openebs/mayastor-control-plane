@@ -198,6 +198,7 @@ pub enum MessageIdVs {
     GetAppNode,
     /// List app nodes.
     ListAppNodes,
+    ClearPoolErrors,
 }
 
 impl From<MessageIdVs> for MessageId {

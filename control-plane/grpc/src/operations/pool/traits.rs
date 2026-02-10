@@ -956,7 +956,7 @@ impl From<PoolCordonRequest> for CordonPoolRequest {
 }
 
 /// Pool clear errors request.
-#[derive(Debug)]
+#[derive(Debug, Clone, Default)]
 pub struct ClearErrorsRequest {
     /// Node ID of where the pool resides on.
     /// This is optional and may be used for stricter checks.
@@ -968,6 +968,25 @@ pub struct ClearErrorsRequest {
     pub disks: Vec<String>,
     /// Error clearing request
     pub clear: ClearErrors,
+}
+
+impl ClearErrorsRequest {
+    /// Create a new `Self`.
+    pub fn new(pool_id: PoolId) -> Self {
+        Self {
+            pool_id,
+            ..Default::default()
+        }
+    }
+    /// Create a new `Self`.
+    pub fn new_ext(pool_id: PoolId, disks: Vec<String>, clear: ClearErrors) -> Self {
+        Self {
+            pool_id,
+            disks,
+            clear,
+            ..Default::default()
+        }
+    }
 }
 
 /// Clear errors variants.

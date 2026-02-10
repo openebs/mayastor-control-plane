@@ -1462,6 +1462,36 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  '/pools/{pool_id}/clear-errors':
+    put:
+      tags:
+        - Pools
+      operationId: put_pool_clearerrors
+      parameters:
+        - in: path
+          name: pool_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoolClearErrReq'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pool'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/pools/{pool_id}/expand':
     put:
       tags:
@@ -4593,6 +4623,27 @@ components:
         - snapshots
         - restores
         - import
+    PoolClearErrReq:
+      description: The cordon and drain state
+      type: object
+      properties:
+        disks:
+          description: |-
+            If one or more disks is specified, only those errors associated with the 
+            specified disk or disks are cleared.
+          type: array
+          items:
+            type: string
+        clear:
+          $ref: '#/components/schemas/PoolClearErr'
+      required:
+        - disks
+        - clear
+    PoolClearErr:
+      description: Clear errors variants
+      type: string
+      enum:
+        - All
     CordonDrainState:
       description: The cordon and drain state
       type: object

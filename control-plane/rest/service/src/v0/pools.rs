@@ -1,6 +1,8 @@
 use super::*;
-use grpc::operations::pool::traits::{PoolCordonRequest, PoolOperations};
-use rest_client::versions::v0::apis::Uuid;
+use grpc::operations::pool::traits::{
+    ClearErrors, ClearErrorsRequest, PoolCordonRequest, PoolOperations,
+};
+use rest_client::versions::v0::{apis::Uuid, models::PoolClearErr};
 use std::collections::HashMap;
 use stor_port::{
     transport_api::{ReplyError, ReplyErrorKind, ResourceKind},
@@ -171,6 +173,22 @@ impl apis::actix_server::Pools for RestApi {
     ) -> Result<models::Pool, RestError<models::RestJsonError>> {
         let expand_request = ExpandPool { id: pool_id.into() };
         let pool = client().expand(&expand_request).await?;
+        Ok(pool.into())
+    }
+
+    async fn put_pool_clearerrors(
+        Path(pool_id): Path<String>,
+        Body(body): Body<Option<models::PoolClearErrReq>>,
+    ) -> Result<models::Pool, RestError<RestJsonError>> {
+        let request = if let Some(body) = body {
+            let clear = match body.clear {
+                PoolClearErr::All => ClearErrors::All,
+            };
+            ClearErrorsRequest::new_ext(pool_id.into(), body.disks, clear)
+        } else {
+            ClearErrorsRequest::new(pool_id.into())
+        };
+        let pool = client().clear_errors(&request).await?;
         Ok(pool.into())
     }
 }

@@ -22,6 +22,7 @@ use stor_port::{
     IntoOption,
 };
 
+use grpc::operations::pool::traits::ClearErrorsRequest;
 use itertools::Itertools;
 use std::{convert::TryFrom, time::UNIX_EPOCH};
 
@@ -1005,6 +1006,18 @@ impl From<ExternalType<EncryptionSecret>> for v1::pb::EncryptionSecret {
     fn from(value: ExternalType<EncryptionSecret>) -> Self {
         Self {
             secret: value.0.name,
+        }
+    }
+}
+
+impl AgentToIoEngine for ClearErrorsRequest {
+    type IoEngineMessage = v1::pool::ClearErrorRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        v1::pool::ClearErrorRequest {
+            name: self.pool_id.to_string(),
+            uuid: None,
+            disks: vec![],
+            clear: 0,
         }
     }
 }
