@@ -47,6 +47,7 @@ lazy_static! {
         "MANAGED",
         "NODE",
         "STATUS",
+        "ALERTS",
         "CAPACITY",
         "ALLOCATED",
         "AVAILABLE",

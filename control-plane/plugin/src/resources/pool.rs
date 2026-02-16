@@ -60,12 +60,26 @@ impl CreateRow for openapi::models::Pool {
                 format!("{:?}, {}", state.status, PoolCordonDrainState::Cordoned)
             }
         };
+        let error_info = state.error_info.unwrap_or_default();
+        let status = error_info.alerts.status;
+        let alerts = { error_info.alerts.attention.iter() }
+            .chain(&error_info.alerts.warning)
+            .chain(&error_info.alerts.critical)
+            .map(|x| x.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let alerts = if alerts.is_empty() {
+            status.to_string()
+        } else {
+            format!("{status} ({alerts})")
+        };
         row![
             self.id,
             disks,
             managed,
             state.node,
             statuses,
+            alerts,
             ::utils::bytes::into_human(state.capacity),
             ::utils::bytes::into_human(state.used),
             ::utils::bytes::into_human(free),
