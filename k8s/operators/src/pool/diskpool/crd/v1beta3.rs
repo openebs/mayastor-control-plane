@@ -147,6 +147,8 @@ pub enum CrPoolState {
 pub enum PoolStatus {
     /// State is Unknown.
     Unknown,
+    /// State is Offline.
+    Offline,
     /// The pool is in normal working order.
     Online,
     /// The pool has experienced a failure but can still function.
@@ -262,6 +264,7 @@ impl From<RestPoolStatus> for PoolStatus {
     fn from(p: RestPoolStatus) -> Self {
         match p {
             RestPoolStatus::Unknown => Self::Unknown,
+            RestPoolStatus::Offline => Self::Offline,
             RestPoolStatus::Online => Self::Online,
             RestPoolStatus::Degraded => Self::Degraded,
             RestPoolStatus::Suspected => Self::Suspected,

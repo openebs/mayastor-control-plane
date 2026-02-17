@@ -6,8 +6,12 @@ import "google/protobuf/wrappers.proto";
 package v1.pool;
 
 message PoolDiag {
+  // The inferred status of the pool.
+  PoolStatus status = 1;
   // Errors encountered when importing the pool.
   repeated DiskError import_errors = 2;
+  /// Inferred error of the pool, if any.
+  optional ProbeError error = 3;
 }
 message DiskError {
   string disk = 1;
@@ -28,6 +32,16 @@ enum ProbeErrorCode {
   SuperBlock = 5;
   // Invalid super block (eg: CRC error)
   InvalidSuperBlock = 6;
+  // Disk is a directory (can happen when setting up incorrect volume mounts)
+  DiskIsADirectory = 7;
+  // Node hosting the pool is offline.
+  NodeIsOffline = 8;
+  // Node hosting the pool is in unknown state.
+  NodeIsUnknown = 9;
+  // The pool is cordoned for imports, so it cannot be imported.
+  ImportDisabled = 10;
+  // Import/Create has timed out.
+  TimeOut = 11;
 }
 message ProbeError {
   ProbeErrorCode code = 1;
@@ -130,6 +144,8 @@ enum PoolStatus {
   Faulted = 3;
   // pool is in a suspected state, with warning alerts or higher
   Suspected = 4;
+  // pool is in an offline state.
+  Offline   = 5;
 }
 
 // Get all pools based on the filter criteria

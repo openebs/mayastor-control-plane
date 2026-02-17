@@ -17,7 +17,10 @@ use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
         store::pool::{PoolCordonOp, PoolOperation, PoolSpec},
-        transport::{CreatePool, CtrlPoolState, DestroyPool, ExpandPool, Pool},
+        transport::{
+            CreatePool, CtrlPoolState, DestroyPool, ExpandPool, Pool, PoolDiag, PoolDiskError,
+            PoolStatus,
+        },
     },
 };
 use utils::dsp_created_by_key;
@@ -77,6 +80,21 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
 
         let result = node.create_pool(request).await;
         let on_fail = OnCreateFail::on_pool_create_err(&result);
+        if matches!(on_fail, OnCreateFail::LeaveAsIs) {
+            if let Err(error) = &result {
+                if let Some(error) = Self::pool_import_error(error) {
+                    let disks = pool.as_ref().disks.first().map(|d| d.to_string());
+                    pool.lock().metadata.runtime.diag = Some(PoolDiag {
+                        import_errors: vec![PoolDiskError {
+                            error: error.clone(),
+                            disk: disks.unwrap_or_default(),
+                        }],
+                        status: PoolStatus::Unknown,
+                        error: Some(error),
+                    });
+                }
+            }
+        }
         let state = pool.complete_create(result, registry, on_fail).await?;
         let spec = pool.lock().clone();
         Ok(Pool::new(spec, Some(CtrlPoolState::new(state))))
@@ -106,6 +124,16 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
                     Err(error) => match error.tonic_code() {
                         tonic::Code::NotFound if allow_not_found => Ok(()),
                         tonic::Code::InvalidArgument => Ok(()),
+                        tonic::Code::Cancelled | tonic::Code::Aborted => {
+                            if let Some(error) = Self::pool_import_error(&error) {
+                                self.lock().metadata.runtime.diag = Some(PoolDiag {
+                                    import_errors: vec![],
+                                    status: PoolStatus::Unknown,
+                                    error: Some(error),
+                                });
+                            }
+                            Err(error)
+                        }
                         _other => Err(error),
                     },
                 }

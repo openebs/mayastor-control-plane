@@ -36,32 +36,42 @@ impl CreateRow for openapi::models::Pool {
         // control plane.
         let managed = self.spec.is_some();
         let spec = self.spec.clone().unwrap_or_default();
+        let diag = self.diag.clone().unwrap_or_default();
         // In case the state is not coming as filled, either due to pool, node lost, fill in
         // spec data and mark the status as Unknown.
         let state = self.state.clone().unwrap_or(openapi::models::PoolState {
-            capacity: 0,
             disks: spec.disks,
             id: spec.id,
             node: spec.node,
-            status: openapi::models::PoolStatus::Unknown,
-            used: 0,
-            committed: None,
             encrypted: spec.encryption.is_some(),
             cluster_size: Some(0),
-            disk_capacity: None,
-            max_expandable_size: None,
-            error_info: None,
+            ..Default::default()
         });
         let free = state.capacity.saturating_sub(state.used);
-        let disks = state.disks.join(", ");
-        let statuses = match spec.cordon_drain {
-            None => format!("{:?}", state.status),
-            Some(_) => {
-                format!("{:?}, {}", state.status, PoolCordonDrainState::Cordoned)
+
+        let status = match &self.diag {
+            Some(diag) => diag.status,
+            None => state.status,
+        };
+        let status = if managed && spec.status != models::SpecStatus::Created {
+            format!("{}/{status}", spec.status)
+        } else {
+            status.to_string()
+        };
+
+        let pool_diag_error = diag.error.as_ref().map(|e| e.code);
+        let statuses = match (spec.cordon_drain, pool_diag_error) {
+            (None, None) => status.to_string(),
+            (None, Some(error)) => format!("{status} ({error})"),
+            (Some(_), None) => {
+                format!("{status}, {}", PoolCordonDrainState::Cordoned)
+            }
+            (Some(_), Some(error)) => {
+                format!("{status} ({error}), {}", PoolCordonDrainState::Cordoned)
             }
         };
+        let alert_status = state.error_info.as_ref().map(|e| e.alerts.status);
         let error_info = state.error_info.unwrap_or_default();
-        let status = error_info.alerts.status;
         let alerts = { error_info.alerts.attention.iter() }
             .chain(&error_info.alerts.warning)
             .chain(&error_info.alerts.critical)
@@ -69,17 +79,33 @@ impl CreateRow for openapi::models::Pool {
             .collect::<Vec<_>>()
             .join(",");
         let alerts = if alerts.is_empty() {
-            status.to_string()
+            alert_status.map(|s| s.to_string())
         } else {
-            format!("{status} ({alerts})")
+            let alert_status = alert_status.unwrap_or_default();
+            Some(format!("{alert_status} ({alerts})"))
         };
+        let disk_status = |disk: &str| -> Option<models::PoolProbeError> {
+            diag.import_errors
+                .iter()
+                .find(|d| d.disk == disk)
+                .map(|d| d.error.clone())
+        };
+        let disks = state.disks.into_iter().map(|d| {
+            let Some(probe) = disk_status(&d) else {
+                return d;
+            };
+            if Some(probe.code) == pool_diag_error {
+                return d;
+            }
+            format!("{d} ({})", probe.code)
+        });
         row![
             self.id,
-            disks,
+            disks.collect::<Vec<_>>().join(", "),
             managed,
             state.node,
             statuses,
-            alerts,
+            optional_cell(alerts),
             ::utils::bytes::into_human(state.capacity),
             ::utils::bytes::into_human(state.used),
             ::utils::bytes::into_human(free),

@@ -3213,6 +3213,7 @@ components:
       type: string
       enum:
         - Unknown
+        - Offline
         - Online
         - Suspected
         - Degraded
@@ -3241,8 +3242,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PoolDiskError'
+        status:
+          $ref: '#/components/schemas/PoolStatus'
+        error:
+          $ref: '#/components/schemas/PoolProbeError'
       required:
         - import_errors
+        - status
     PoolDiskError:
       description: Errors seen on the given pool disk
       type: object
@@ -3263,11 +3269,11 @@ components:
         message:
           description: Human-Readable message error
           type: string
-        error:
+        code:
           $ref: '#/components/schemas/PoolProbeErrorCode'
       required:
         - message
-        - error
+        - code
     PoolProbeErrorCode:
       description: Pool Disk Probe Errors
       type: string
@@ -3279,6 +3285,11 @@ components:
         - ForeignPoolUid
         - SuperBlock
         - InvalidSuperBlock
+        - DiskIsADirectory
+        - NodeIsUnknown
+        - NodeIsOffline
+        - ImportDisabled
+        - TimeOut
     PoolErrorInfo:
       type: object
       description: Pool alerts and error information

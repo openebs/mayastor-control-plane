@@ -98,6 +98,7 @@ impl PartialEq<CreatePool> for PoolSpec {
         other.status = self.status.clone();
         other.sequencer = self.sequencer.clone();
         other.creat_tsc = self.creat_tsc;
+        other.metadata = self.metadata.clone();
         &other == self
     }
 }
@@ -390,6 +391,7 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
                 }
                 PoolOperation::Create => {
                     self.status = SpecStatus::Created(transport::PoolStatus::Online);
+                    self.metadata.runtime.diag = None;
                 }
                 PoolOperation::Label(PoolLabelOp { labels, .. }) => {
                     self.label(labels);
