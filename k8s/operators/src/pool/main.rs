@@ -421,7 +421,7 @@ pub(crate) async fn migrate_and_clean_msps(k8s: &Client, namespace: &str) -> Res
                 })
             }
         },
-        Ok(false) => warn!("MayastorPool CRD was not found in the cluster, skipping migration"),
+        Ok(false) => info!("MayastorPool CRD was not found in the cluster, skipping migration"),
         Err(error) => {
             return Err(Error::Generic {
                 message: format!("Failed to check for MayastorPool CRD: {error:?}"),
