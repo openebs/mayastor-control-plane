@@ -1,7 +1,6 @@
 use super::crd::v1beta3::{DiskPool, DiskPoolSpec, EncryptionSource};
 use crate::{diskpool::crd::diskpools_name, error::Error, ApiVersion};
-use openapi::models::PoolSpecEncryption;
-use openapi::{apis::StatusCode, clients};
+use openapi::{apis::StatusCode, clients, models::PoolSpecEncryption};
 
 use crate::diskpool::crd::v1beta3;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
@@ -38,12 +37,13 @@ pub(crate) async fn create_crd(k8s: Client) -> Result<CustomResourceDefinition, 
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
     let new_crd = DiskPool::crd();
     info!(
-        "Creating CRD: {}",
-        serde_json::to_string_pretty(&new_crd).unwrap_or_default()
+        "Creating DiskPool CRD: {}",
+        serde_json::to_string(&new_crd).unwrap_or_default()
     );
     let pp = PostParams::default();
     let result = crd_api.create(&pp, &new_crd).await;
     let crd = result.map_err(|e| Error::Kube { source: e })?;
+    info!("Created DiskPool CRD");
     Ok(crd)
 }
 

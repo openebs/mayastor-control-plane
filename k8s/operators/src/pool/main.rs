@@ -35,10 +35,7 @@ use kube::{
     },
     Client, ResourceExt,
 };
-use std::fs::File;
-use std::io::Write;
-use std::path::Path;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, fs::File, io::Write, path::Path, sync::Arc, time::Duration};
 
 const PAGINATION_LIMIT: u32 = 100;
 const BACKOFF_PERIOD: u64 = 20;
@@ -88,7 +85,6 @@ async fn reconcile(dsp: Arc<DiskPool>, ctx: Arc<OperatorContext>) -> Result<Acti
         None => dsp.init_cr().await,
     }
 }
-
 /// Api version of DSP.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ApiVersion {
@@ -117,9 +113,7 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
             | ApiVersion::V1Beta3 => {
                 ensure_and_migrate_crd(k8s.clone(), namespace, &version, LATEST_API_VERSION)
                     .await?;
-            } //ApiVersion::V1Beta3 => {
-              //    info!("CRD has the latest schema. Skipping CRD Operations");
-              //}
+            }
         },
         None => {
             create_crd(k8s.clone()).await?;

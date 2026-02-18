@@ -29,11 +29,11 @@ pub(crate) async fn ensure_and_migrate_crd(
 ) -> Result<(), Error> {
     match ensure_crd(&k8s, api_version).await {
         Ok(o) => {
-            info!(crd = ?o.name_any(), "Created");
+            info!(crd = ?o.name_any(), "Updated DiskPool CRD");
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
         Err(error) => {
-            error!(%error, "Failed to create CRD");
+            error!(%error, "Failed to create DiskPool CRD");
             tokio::time::sleep(Duration::from_secs(1)).await;
             return Err(error);
         }
@@ -54,12 +54,11 @@ pub(crate) async fn ensure_crd(
 ) -> Result<CustomResourceDefinition, Error> {
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
 
-    let mut crd = if api_version == &ApiVersion::V1Alpha1 {
-        AlphaDiskPool::crd()
-    } else if api_version == &ApiVersion::V1Beta1 {
-        Beta1DiskPool::crd()
-    } else {
-        Beta2DiskPool::crd()
+    let mut crd = match api_version {
+        ApiVersion::V1Alpha1 => AlphaDiskPool::crd(),
+        ApiVersion::V1Beta1 => Beta1DiskPool::crd(),
+        ApiVersion::V1Beta2 => Beta2DiskPool::crd(),
+        ApiVersion::V1Beta3 => Beta2DiskPool::crd(),
     };
 
     let crd_name = crd.metadata.name.as_ref().ok_or(Error::InvalidCRField {
@@ -75,8 +74,9 @@ pub(crate) async fn ensure_crd(
     let result = match crd_api.get(crd_name).await {
         Ok(_) => {
             info!(
-                "Replacing CRD: {}",
-                serde_json::to_string_pretty(&new_crd).unwrap_or_default()
+                crd = new_crd.name_any(),
+                "Replacing DiskPool CRD: {}",
+                serde_json::to_string(&new_crd).unwrap_or_default()
             );
             let param = if api_version == &ApiVersion::V1Alpha1 {
                 PatchParams::apply("merge_v1alpha1_v1beta3").force()
@@ -109,9 +109,7 @@ async fn run_cr_migration(
         ApiVersion::V1Alpha1 | ApiVersion::V1Beta1 | ApiVersion::V1Beta2 | ApiVersion::V1Beta3 => {
             migrate_to_v1beta3(k8s.clone(), namespace, PAGINATION_LIMIT).await?;
             _ = discard_older_schema(&k8s, target_schema).await;
-        } //ApiVersion::V1Beta3 => {
-          //    info!("CRD has the latest schema. Skipping CRD Operations");
-          //}
+        }
     }
     Ok(())
 }
@@ -138,7 +136,7 @@ pub(crate) async fn migrate_to_v1beta3(
                     DiskPoolSpec::new(node, disk, topology, None, None, None),
                 )
                 .await?;
-                info!(crd = ?dsp.name_any(), "CR creation successful");
+                info!(dsp.name = ?dsp.name_any(), "DiskPool CR migration successful");
             } else {
                 return Err(Error::CrdFieldMissing {
                     name: dsp.name_any(),
