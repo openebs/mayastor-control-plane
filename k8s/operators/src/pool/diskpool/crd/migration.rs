@@ -7,7 +7,7 @@ use super::{
 use crate::{
     diskpool::client::{discard_older_schema, list_existing_cr, v1beta3_api},
     error::Error,
-    ApiVersion,
+    ApiVersion, PrevApiVersion,
 };
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::{
@@ -24,8 +24,7 @@ const PAGINATION_LIMIT: u32 = 100;
 pub(crate) async fn ensure_and_migrate_crd(
     k8s: Client,
     namespace: &str,
-    api_version: &ApiVersion,
-    target_schema: &str,
+    api_version: ApiVersion,
 ) -> Result<(), Error> {
     match ensure_crd(&k8s, api_version).await {
         Ok(o) => {
@@ -38,7 +37,7 @@ pub(crate) async fn ensure_and_migrate_crd(
             return Err(error);
         }
     }
-    run_cr_migration(k8s.clone(), namespace, api_version, target_schema).await?;
+    run_cr_migration(k8s.clone(), namespace, api_version).await?;
     Ok(())
 }
 
@@ -50,15 +49,18 @@ pub(crate) async fn ensure_and_migrate_crd(
 /// is wrong would be to consult the logs.
 pub(crate) async fn ensure_crd(
     k8s: &Client,
-    api_version: &ApiVersion,
+    api_version: ApiVersion,
 ) -> Result<CustomResourceDefinition, Error> {
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
 
+    let api_version = match api_version {
+        ApiVersion::Deprecated(api_version) => api_version,
+        ApiVersion::Latest => todo!("should be obvious now that we have a bug here"),
+    };
     let mut crd = match api_version {
-        ApiVersion::V1Alpha1 => AlphaDiskPool::crd(),
-        ApiVersion::V1Beta1 => Beta1DiskPool::crd(),
-        ApiVersion::V1Beta2 => Beta2DiskPool::crd(),
-        ApiVersion::V1Beta3 => Beta2DiskPool::crd(),
+        PrevApiVersion::V1Alpha1 => AlphaDiskPool::crd(),
+        PrevApiVersion::V1Beta1 => Beta1DiskPool::crd(),
+        PrevApiVersion::V1Beta2 => Beta2DiskPool::crd(),
     };
 
     let crd_name = crd.metadata.name.as_ref().ok_or(Error::InvalidCRField {
@@ -78,13 +80,8 @@ pub(crate) async fn ensure_crd(
                 "Replacing DiskPool CRD: {}",
                 serde_json::to_string(&new_crd).unwrap_or_default()
             );
-            let param = if api_version == &ApiVersion::V1Alpha1 {
-                PatchParams::apply("merge_v1alpha1_v1beta3").force()
-            } else if api_version == &ApiVersion::V1Beta1 {
-                PatchParams::apply("merge_v1beta1_v1beta3").force()
-            } else {
-                PatchParams::apply("merge_v1beta2_v1beta3").force()
-            };
+            let manager = format!("merge_{api_version}_{}", ApiVersion::Latest);
+            let param = PatchParams::apply(&manager).force();
             crd_api
                 .patch(&super::diskpools_name(), &param, &Patch::Apply(&new_crd))
                 .await
@@ -100,17 +97,10 @@ pub(crate) async fn ensure_crd(
 async fn run_cr_migration(
     k8s: Client,
     namespace: &str,
-    api_version: &ApiVersion,
-    target_schema: &str,
+    _api_version: ApiVersion,
 ) -> Result<(), Error> {
-    match api_version {
-        // Handle migration irrespective of version, for cases where some new changes to
-        // CRD come in within same CRD version.
-        ApiVersion::V1Alpha1 | ApiVersion::V1Beta1 | ApiVersion::V1Beta2 | ApiVersion::V1Beta3 => {
-            migrate_to_v1beta3(k8s.clone(), namespace, PAGINATION_LIMIT).await?;
-            _ = discard_older_schema(&k8s, target_schema).await;
-        }
-    }
+    migrate_to_v1beta3(k8s.clone(), namespace, PAGINATION_LIMIT).await?;
+    _ = discard_older_schema(&k8s).await;
     Ok(())
 }
 

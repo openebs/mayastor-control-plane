@@ -48,7 +48,7 @@ pub(crate) async fn create_crd(k8s: Client) -> Result<CustomResourceDefinition, 
 }
 
 /// This discards older unserved schema from the crd.
-pub(crate) async fn discard_older_schema(k8s: &Client, new_version: &str) -> Result<(), Error> {
+pub(crate) async fn discard_older_schema(k8s: &Client) -> Result<(), Error> {
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
     let mut new_crd = DiskPool::crd();
     let crd_name = new_crd
@@ -63,7 +63,7 @@ pub(crate) async fn discard_older_schema(k8s: &Client, new_version: &str) -> Res
             "Replacing CRD: {}",
             serde_json::to_string_pretty(&new_crd).unwrap()
         );
-        update_stored_version(k8s, crd_name, new_version).await?;
+        update_stored_version(k8s, crd_name).await?;
         if let Ok(modified_crd) = crd_api.get(crd_name).await {
             new_crd.metadata.resource_version = modified_crd.resource_version();
             let pp = PostParams::default();
@@ -122,19 +122,16 @@ pub(crate) async fn create_missing_cr(
     Ok(())
 }
 
-/// Updates stored version in CRD status to the new version passed as arg,
+/// Updates stored version in CRD status to the latest version.
 /// Please ensure that older versions are served:false, stored:false before calling this method,
 /// This would allow us to remove older schema from CRD versions.
-async fn update_stored_version(
-    k8s: &Client,
-    crd_name: &str,
-    new_version: &str,
-) -> Result<(), Error> {
+/// todo: Shouldn't we just ensure that here rather leave it for chance??
+async fn update_stored_version(k8s: &Client, crd_name: &str) -> Result<(), Error> {
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
     if let Ok(mut crd) = crd_api.get_status(crd_name).await {
         let param = PatchParams::apply("status_patch").force();
         if let Some(status) = crd.status.as_mut() {
-            status.stored_versions = Some(vec![new_version.to_string()]);
+            status.stored_versions = Some(vec![ApiVersion::Latest.to_string()]);
         } else {
             return Err(Error::CrdFieldMissing {
                 name: crd_name.to_string(),
@@ -177,24 +174,24 @@ pub(crate) async fn list_existing_cr(
     Ok(pools)
 }
 
-/// Return the api_version of the present crd if any, otherwise retuen None.
-pub(crate) async fn get_api_version(k8s: Client) -> Option<ApiVersion> {
+/// Returns the [`ApiVersion`] of the present crd, if any.
+pub(crate) async fn runtime_api_version(k8s: Client) -> Result<Option<ApiVersion>, kube::Error> {
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s);
-    if let Ok(crd) = crd_api.get_status(&diskpools_name()).await {
-        if let Some(status) = crd.status {
-            if status.stored_versions == Some(vec!["v1alpha1".to_string()]) {
-                return Some(ApiVersion::V1Alpha1);
-            } else if status.stored_versions == Some(vec!["v1beta1".to_string()]) {
-                return Some(ApiVersion::V1Beta1);
-            } else if status.stored_versions == Some(vec!["v1beta2".to_string()]) {
-                return Some(ApiVersion::V1Beta2);
-            } else if status.stored_versions == Some(vec!["v1beta3".to_string()]) {
-                return Some(ApiVersion::V1Beta3);
-            } else {
-                return None;
-            }
-        }
-    }
-    // Return None if no crd present i.e. fresh installation
-    None
+
+    let crd = match crd_api.get_status(&diskpools_name()).await {
+        // CRD not installed yet, this is fine.
+        Err(kube::Error::Api(r)) if r.code == 404 => return Ok(None),
+        _else => _else,
+    }?;
+
+    let crd_version = |crd: CustomResourceDefinition| -> Option<ApiVersion> {
+        // todo: shouldn't this be an error?
+        let status = crd.status?;
+
+        // todo: is this right? Can't we have multiple stored versions during upgrade?
+        let stored_version = status.stored_versions.as_ref()?.first()?;
+        stored_version.parse().ok()
+    };
+
+    Ok(crd_version(crd))
 }
