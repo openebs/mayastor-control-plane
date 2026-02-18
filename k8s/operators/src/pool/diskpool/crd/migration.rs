@@ -5,7 +5,7 @@ use super::{
     v1beta3::{DiskPool, DiskPoolSpec},
 };
 use crate::{
-    diskpool::client::{discard_older_schema, list_existing_cr, v1beta3_api},
+    diskpool::client::{discard_older_schema, dsp_api, list_existing_cr},
     error::Error,
     ApiVersion, PrevApiVersion,
 };
@@ -37,7 +37,7 @@ pub(crate) async fn ensure_and_migrate_crd(
             return Err(error);
         }
     }
-    run_cr_migration(k8s.clone(), namespace, api_version).await?;
+    run_cr_migration(k8s.clone(), namespace).await?;
     Ok(())
 }
 
@@ -102,20 +102,16 @@ pub(crate) async fn ensure_crd(
     Ok(crd)
 }
 
-/// Migrate existing v1alpha1/v1beta1/v1beta2 CR in cluster to v1beta3 CR.
-async fn run_cr_migration(
-    k8s: Client,
-    namespace: &str,
-    _api_version: ApiVersion,
-) -> Result<(), Error> {
-    migrate_to_v1beta3(k8s.clone(), namespace, PAGINATION_LIMIT).await?;
+/// Migrate existing deprecated CRs in cluster to the latest CR.
+async fn run_cr_migration(k8s: Client, namespace: &str) -> Result<(), Error> {
+    migrate_to_latest(k8s.clone(), namespace, PAGINATION_LIMIT).await?;
     _ = discard_older_schema(&k8s).await;
     Ok(())
 }
 
-/// Lists existing v1alpha1/v1beta1/v1beta2 CR in cluster and replaces them with v1beta3 CR.
-/// This ensures that there is no v1alpha1/v1beta1/v1beta2 stored objects in cluster.
-pub(crate) async fn migrate_to_v1beta3(
+/// Lists existing deprecated CRs in cluster and replaces them with the latest CR.
+/// This ensures that there is no deprecated stored objects in cluster.
+pub(crate) async fn migrate_to_latest(
     k8s: Client,
     ns: &str,
     pagination_limit: u32,
@@ -127,7 +123,7 @@ pub(crate) async fn migrate_to_v1beta3(
                 let node = dsp.spec.node();
                 let disk = dsp.spec.disks();
                 let topology = dsp.spec.topology();
-                replace_with_v1beta3(
+                replace_with_latest(
                     &k8s,
                     &name,
                     ns,
@@ -151,8 +147,8 @@ pub(crate) async fn migrate_to_v1beta3(
     Ok(())
 }
 
-/// Replaces a given disk pool CR with v1beta3 schema CR.
-pub(crate) async fn replace_with_v1beta3(
+/// Replaces a given disk pool CR with the latest schema CR.
+pub(crate) async fn replace_with_latest(
     client: &Client,
     cr_name: &str,
     namespace: &str,
@@ -160,12 +156,15 @@ pub(crate) async fn replace_with_v1beta3(
     spec: DiskPoolSpec,
 ) -> Result<(), Error> {
     let post_params = PostParams::default();
-    let api = v1beta3_api(client, namespace);
+    let api = dsp_api(client, namespace);
+    let latest_api = ApiVersion::Latest;
+
     let mut new_disk_pool: DiskPool = DiskPool::new(cr_name, spec);
     new_disk_pool.metadata.resource_version = res_ver;
+
     info!(
         pool.cr_name = cr_name,
-        "Patching existing pool with v1beta3 schema"
+        "Patching existing pool with {latest_api} schema"
     );
     match api.replace(cr_name, &post_params, &new_disk_pool).await {
         Ok(_) => Ok(()),
@@ -173,7 +172,7 @@ pub(crate) async fn replace_with_v1beta3(
             error!(
                 ?error,
                 pool.cr_name = cr_name,
-                "Failed to patch pool with v1beta3 schema"
+                "Failed to patch pool with {latest_api} schema"
             );
             Err(error.into())
         }

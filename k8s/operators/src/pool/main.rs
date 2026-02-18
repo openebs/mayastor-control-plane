@@ -9,7 +9,7 @@ pub(crate) mod error;
 mod mayastorpool;
 
 use crate::diskpool::client::{
-    create_crd, create_missing_cr, create_v1beta3_cr, runtime_api_version, v1beta3_api,
+    create_crd, create_missing_cr, create_v1beta3_cr, dsp_api, runtime_api_version,
 };
 
 use context::OperatorContext;
@@ -156,7 +156,7 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
     // Migrate the MayastorPool CRs to the DiskPool.
     migrate_and_clean_msps(&k8s, namespace).await?;
 
-    let newdsp: Api<DiskPool> = v1beta3_api(&k8s, namespace);
+    let newdsp: Api<DiskPool> = dsp_api(&k8s, namespace);
 
     let url = Url::parse(args.get_one::<String>("endpoint").unwrap())
         .expect("endpoint is not a valid URL");

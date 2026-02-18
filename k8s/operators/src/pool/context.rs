@@ -1,24 +1,21 @@
-use super::v1beta3_api;
 use super::{
     diskpool::crd::v1beta3::{CrPoolState, DiskPool, DiskPoolStatus},
+    dsp_api,
     error::Error,
 };
 use crate::diskpool::crd::v1beta3::{EncryptionSecretConfig, EncryptionSource};
-use openapi::models::rest_json_error::Kind;
-use openapi::models::{Encryption, EncryptionSecret};
 use openapi::{
     apis::StatusCode,
     clients,
-    models::{CreatePoolBody, Pool},
+    models::{rest_json_error::Kind, CreatePoolBody, Encryption, EncryptionSecret, Pool},
 };
 use tracing::{debug, error, info};
 use utils::{disk::normalize_disk, dsp_created_by_key};
 
 use chrono::Utc;
 use k8s_openapi::{api::core::v1::Event, apimachinery::pkg::apis::meta::v1::MicroTime};
-use kube::api::{Patch, PostParams};
 use kube::{
-    api::{Api, ObjectMeta, PatchParams},
+    api::{Api, ObjectMeta, Patch, PatchParams, PostParams},
     runtime::{controller::Action, finalizer},
     Client, Resource, ResourceExt,
 };
@@ -186,7 +183,7 @@ impl ResourceContext {
 
     /// Construct an API handle for the resource
     fn api(&self) -> Api<DiskPool> {
-        v1beta3_api(&self.ctx.k8s, &self.namespace().unwrap())
+        dsp_api(&self.ctx.k8s, &self.namespace().unwrap())
     }
 
     /// Construct an API handle for the k8s secret

@@ -11,7 +11,7 @@ use kube::{
 use tracing::{info, warn};
 
 /// Get the DiskPool v1beta3 api.
-pub(crate) fn v1beta3_api(client: &Client, namespace: &str) -> Api<DiskPool> {
+pub(crate) fn dsp_api(client: &Client, namespace: &str) -> Api<DiskPool> {
     Api::namespaced(client.clone(), namespace)
 }
 
@@ -23,7 +23,7 @@ pub(crate) async fn create_v1beta3_cr(
     spec: DiskPoolSpec,
 ) -> Result<(), Error> {
     let post_params = PostParams::default();
-    let api = v1beta3_api(client, namespace);
+    let api = dsp_api(client, namespace);
     let new_disk_pool: DiskPool = DiskPool::new(name, spec);
     match api.create(&post_params, &new_disk_pool).await {
         Ok(_) => Ok(()),
@@ -81,7 +81,7 @@ pub(crate) async fn create_missing_cr(
     namespace: &str,
 ) -> Result<(), Error> {
     if let Ok(pools) = control_client.pools_api().get_pools(None).await {
-        let pools_api: Api<DiskPool> = v1beta3_api(k8s, namespace);
+        let pools_api: Api<DiskPool> = dsp_api(k8s, namespace);
         let param = PostParams::default();
         for pool in pools.into_body().iter_mut() {
             match pools_api.get(&pool.id).await {
@@ -154,11 +154,11 @@ pub(crate) async fn list_existing_cr(
 ) -> Result<Vec<DiskPool>, Error> {
     // Create the list params with pagination limit.
     let mut list_params = ListParams::default().limit(pagination_limit);
-    // Since v1alpha1/v1beta1/v1beta2 is not served at this stage we cannot use v1alpha1/v1beta1/v1beta2 api client
-    // to list existing CRs. Existing CRs which were created and stored as v1alpha1/v1beta1/v1beta2 can
-    // be retrieved using v1beta3 client. Kube api server performs the required conversions and
+    // Since older/deprecated versions are not served at this stage we cannot use their api client
+    // to list existing CRs. Existing CRs which were created and stored as deprecated versions can
+    // be retrieved using the latest client. Kube api server performs the required conversions and
     // returns us the resources.
-    let pools_api: Api<DiskPool> = v1beta3_api(client, namespace);
+    let pools_api: Api<DiskPool> = dsp_api(client, namespace);
     let mut pools: Vec<DiskPool> = vec![];
     loop {
         let mut result = pools_api.list(&list_params).await?;
