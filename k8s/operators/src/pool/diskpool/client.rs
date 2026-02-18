@@ -58,18 +58,13 @@ pub(crate) async fn discard_older_schema(k8s: &Client) -> Result<(), Error> {
         .ok_or(Error::InvalidCRField {
             field: "diskpool.metadata.name".to_string(),
         })?;
-    if crd_api.get(crd_name).await.is_ok() {
-        info!(
-            "Replacing CRD: {}",
-            serde_json::to_string_pretty(&new_crd).unwrap()
-        );
-        update_stored_version(k8s, crd_name).await?;
-        if let Ok(modified_crd) = crd_api.get(crd_name).await {
-            new_crd.metadata.resource_version = modified_crd.resource_version();
-            let pp = PostParams::default();
-            crd_api.replace(crd_name, &pp, &new_crd).await?;
-        }
-    }
+    let crd = update_stored_version(k8s, crd_name).await?;
+
+    // todo: is this replace to erase the stale api versions?
+    new_crd.metadata.resource_version = crd.resource_version();
+    crd_api
+        .replace(crd_name, &PostParams::default(), &new_crd)
+        .await?;
     Ok(())
 }
 
@@ -126,24 +121,40 @@ pub(crate) async fn create_missing_cr(
 /// Please ensure that older versions are served:false, stored:false before calling this method,
 /// This would allow us to remove older schema from CRD versions.
 /// todo: Shouldn't we just ensure that here rather leave it for chance??
-async fn update_stored_version(k8s: &Client, crd_name: &str) -> Result<(), Error> {
+async fn update_stored_version(
+    k8s: &Client,
+    crd_name: &str,
+) -> Result<CustomResourceDefinition, Error> {
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
-    if let Ok(mut crd) = crd_api.get_status(crd_name).await {
-        let param = PatchParams::apply("status_patch").force();
-        if let Some(status) = crd.status.as_mut() {
-            status.stored_versions = Some(vec![ApiVersion::Latest.to_string()]);
-        } else {
-            return Err(Error::CrdFieldMissing {
-                name: crd_name.to_string(),
-                field: "status".to_string(),
-            });
-        }
-        crd.metadata.managed_fields = None;
-        let _ = crd_api
-            .patch_status(crd_name, &param, &Patch::Apply(&crd))
-            .await?;
+
+    let mut crd = crd_api.get_status(crd_name).await?;
+
+    let status = crd.status.as_mut().ok_or(Error::CrdFieldMissing {
+        name: crd_name.to_string(),
+        field: "status".to_string(),
+    })?;
+
+    let set_latest = Some(vec![ApiVersion::Latest.to_string()]);
+    if status.stored_versions == set_latest {
+        return Ok(crd);
     }
-    Ok(())
+
+    warn!(
+        stored_versions = ?status.stored_versions,
+        latest = ?set_latest,
+        "Replacing stored version with the latest version"
+    );
+
+    status.stored_versions = set_latest;
+    // todo: why is this being cleared?
+    crd.metadata.managed_fields = None;
+
+    let param = PatchParams::apply("status_patch").force();
+    let crd = crd_api
+        .patch_status(crd_name, &param, &Patch::Apply(&crd))
+        .await?;
+
+    Ok(crd)
 }
 
 /// List of all pools.

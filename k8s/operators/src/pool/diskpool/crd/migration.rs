@@ -85,8 +85,7 @@ pub(crate) async fn ensure_crd(
     let result = match crd_api.get(&crd_name).await {
         Ok(_) => {
             info!(
-                crd = new_crd.name_any(),
-                "Replacing DiskPool CRD: {}",
+                "Merging {api_version} DiskPool CRD with {latest_api_version}: {}",
                 serde_json::to_string(&new_crd).unwrap_or_default()
             );
             let manager = format!("merge_{api_version}_{}", ApiVersion::Latest);
