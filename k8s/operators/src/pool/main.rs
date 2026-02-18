@@ -35,7 +35,7 @@ use kube::{
     Client, CustomResourceExt, Resource, ResourceExt,
 };
 use std::{collections::HashMap, fs::File, io::Write, path::Path, sync::Arc, time::Duration};
-use strum_macros::{Display, EnumString, VariantNames};
+use strum_macros::{Display, EnumString};
 
 const PAGINATION_LIMIT: u32 = 100;
 const BACKOFF_PERIOD: u64 = 20;
@@ -85,7 +85,7 @@ async fn reconcile(dsp: Arc<DiskPool>, ctx: Arc<OperatorContext>) -> Result<Acti
     }
 }
 /// Previous Api versions for the [`DiskPool`].
-#[derive(Debug, Clone, Copy, PartialEq, Display, EnumString, VariantNames)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Display, EnumString)]
 #[strum(serialize_all = "lowercase")]
 pub enum PrevApiVersion {
     /// Represents v1alpha1
@@ -97,10 +97,15 @@ pub enum PrevApiVersion {
 }
 
 /// Current Api versions for the [`DiskPool`].
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ApiVersion {
     Deprecated(PrevApiVersion),
     Latest,
+}
+impl From<PrevApiVersion> for ApiVersion {
+    fn from(value: PrevApiVersion) -> Self {
+        Self::Deprecated(value)
+    }
 }
 impl std::fmt::Display for ApiVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -117,7 +122,7 @@ impl std::str::FromStr for ApiVersion {
         if s == Self::Latest.to_string() {
             Ok(Self::Latest)
         } else {
-            Ok(Self::Deprecated(s.parse::<PrevApiVersion>()?))
+            Ok(s.parse::<PrevApiVersion>()?.into())
         }
     }
 }
@@ -448,11 +453,28 @@ mod tests {
             ApiVersion::Deprecated(PrevApiVersion::V1Alpha1).to_string(),
             PrevApiVersion::V1Alpha1.to_string()
         );
-        let latest_v = "v1beta3";
-        assert_eq!(latest_v, DiskPool::version(&()));
+        let latest_v = DiskPool::version(&());
         assert_eq!(latest_v.parse::<ApiVersion>(), Ok(ApiVersion::Latest));
         assert_eq!(ApiVersion::Latest.to_string(), DiskPool::version(&()));
         assert_eq!(ApiVersion::Latest.to_string(), latest_v);
+    }
+
+    #[test]
+    fn test_api_version_order() {
+        let mut versions = vec![
+            ApiVersion::Latest,
+            ApiVersion::Deprecated(PrevApiVersion::V1Alpha1),
+            ApiVersion::Deprecated(PrevApiVersion::V1Beta2),
+        ];
+        versions.sort();
+        assert_eq!(
+            versions,
+            vec![
+                ApiVersion::Deprecated(PrevApiVersion::V1Alpha1),
+                ApiVersion::Deprecated(PrevApiVersion::V1Beta2),
+                ApiVersion::Latest,
+            ]
+        )
     }
 
     #[test]

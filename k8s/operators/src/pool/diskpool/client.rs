@@ -186,7 +186,7 @@ pub(crate) async fn list_existing_cr(
 }
 
 /// Returns the [`ApiVersion`] of the present crd, if any.
-pub(crate) async fn runtime_api_version(k8s: Client) -> Result<Option<ApiVersion>, kube::Error> {
+pub(crate) async fn runtime_api_version(k8s: Client) -> Result<Option<ApiVersion>, Error> {
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s);
 
     let crd = match crd_api.get_status(&diskpools_name()).await {
@@ -195,14 +195,39 @@ pub(crate) async fn runtime_api_version(k8s: Client) -> Result<Option<ApiVersion
         _else => _else,
     }?;
 
-    let crd_version = |crd: CustomResourceDefinition| -> Option<ApiVersion> {
-        // todo: shouldn't this be an error?
-        let status = crd.status?;
+    let status = crd.status.as_ref().ok_or(Error::CrdFieldMissing {
+        name: crd.name_any(),
+        field: "status".to_string(),
+    })?;
 
-        // todo: is this right? Can't we have multiple stored versions during upgrade?
-        let stored_version = status.stored_versions.as_ref()?.first()?;
-        stored_version.parse().ok()
-    };
+    let versions = status.stored_versions.iter().flatten();
+    let mut api_versions = versions
+        .map(|v| {
+            v.parse().map_err(|e| Error::Generic {
+                message: format!("DiskPool CRD version {v} is unrecognized: {e}"),
+            })
+        })
+        .collect::<Result<Vec<ApiVersion>, _>>()?;
+    api_versions.sort();
 
-    Ok(crd_version(crd))
+    let version = match api_versions.as_slice() {
+        [] => Err(Error::Generic {
+            message: "No api versions found in the CRD".to_string(),
+        }),
+        [any] => Ok(*any),
+        [deprecated, latest] => {
+            if latest != &ApiVersion::Latest {
+                Err(Error::Generic {
+                    message: format!("More than 1 deprecated versions: {api_versions:?}"),
+                })
+            } else {
+                Ok(*deprecated)
+            }
+        }
+        _ => Err(Error::Generic {
+            message: format!("More than 2 api versions is not supported: {api_versions:?}"),
+        }),
+    }?;
+
+    Ok(Some(version))
 }
