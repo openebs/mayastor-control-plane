@@ -51,11 +51,20 @@ pub(crate) async fn ensure_crd(
     k8s: &Client,
     api_version: ApiVersion,
 ) -> Result<CustomResourceDefinition, Error> {
+    let dsp_name = super::diskpools_name();
+    let latest_api_version = ApiVersion::Latest;
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
 
     let api_version = match api_version {
         ApiVersion::Deprecated(api_version) => api_version,
-        ApiVersion::Latest => todo!("should be obvious now that we have a bug here"),
+        ApiVersion::Latest => {
+            let manager = format!("merge_{api_version}_{latest_api_version}");
+            let param = PatchParams::apply(&manager).force();
+            let crd = crd_api
+                .patch(&dsp_name, &param, &Patch::Apply(&DiskPool::crd()))
+                .await?;
+            return Ok(crd);
+        }
     };
     let mut crd = match api_version {
         PrevApiVersion::V1Alpha1 => AlphaDiskPool::crd(),
@@ -63,17 +72,17 @@ pub(crate) async fn ensure_crd(
         PrevApiVersion::V1Beta2 => Beta2DiskPool::crd(),
     };
 
-    let crd_name = crd.metadata.name.as_ref().ok_or(Error::InvalidCRField {
+    let crd_name = crd.metadata.name.clone().ok_or(Error::InvalidCRField {
         field: "diskpool.metadata.name".to_string(),
     })?;
     crd.spec.versions[0].served = false;
     let new_crd = DiskPool::crd();
-    let all_crds = vec![crd.clone(), new_crd.clone()];
-    let new_crd =
-        merge_crds(all_crds, "v1beta3").map_err(|source| Error::CrdMergeError { source })?;
+    let all_crds = vec![crd, new_crd];
+    let new_crd = merge_crds(all_crds, &latest_api_version.to_string())
+        .map_err(|source| Error::CrdMergeError { source })?;
 
     // If diskpool exist then replace it with new generated one.
-    let result = match crd_api.get(crd_name).await {
+    let result = match crd_api.get(&crd_name).await {
         Ok(_) => {
             info!(
                 crd = new_crd.name_any(),
@@ -83,7 +92,7 @@ pub(crate) async fn ensure_crd(
             let manager = format!("merge_{api_version}_{}", ApiVersion::Latest);
             let param = PatchParams::apply(&manager).force();
             crd_api
-                .patch(&super::diskpools_name(), &param, &Patch::Apply(&new_crd))
+                .patch(&crd_name, &param, &Patch::Apply(&new_crd))
                 .await
         }
         Err(err) => return Err(Error::Kube { source: err }),

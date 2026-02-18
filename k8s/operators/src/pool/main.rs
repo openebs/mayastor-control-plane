@@ -433,9 +433,9 @@ pub(crate) async fn migrate_and_clean_msps(k8s: &Client, namespace: &str) -> Res
 
 #[cfg(test)]
 mod tests {
-    use crate::{ApiVersion, PrevApiVersion};
+    use crate::{diskpool::crd::diskpools_name, ApiVersion, PrevApiVersion};
     use k8s_operators::diskpool::crd::DiskPool;
-    use kube::Resource;
+    use kube::{CustomResourceExt, Resource};
 
     #[test]
     fn test_parse_api_version() {
@@ -453,5 +453,12 @@ mod tests {
         assert_eq!(latest_v.parse::<ApiVersion>(), Ok(ApiVersion::Latest));
         assert_eq!(ApiVersion::Latest.to_string(), DiskPool::version(&()));
         assert_eq!(ApiVersion::Latest.to_string(), latest_v);
+    }
+
+    #[test]
+    fn test_crd_name() {
+        let crd = DiskPool::crd();
+        let crd_name = crd.metadata.name.as_ref();
+        assert_eq!(Some(&diskpools_name()), crd_name)
     }
 }
