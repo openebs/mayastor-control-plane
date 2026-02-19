@@ -100,7 +100,7 @@ impl OperatorContext {
         };
 
         let mut i = self.inventory.write().await;
-        debug!(count = ?i.keys().count(), "current number of CRs");
+        debug!(count = i.keys().count(), "current number of CRs");
 
         match i.get_mut(&resource.name_any()) {
             Some(p) => {
@@ -115,7 +115,7 @@ impl OperatorContext {
                         return p.clone();
                     }
 
-                    debug!(status =? resource.status, "duplicate event or long running operation");
+                    debug!(status = ?resource.status, "duplicate event or long running operation");
 
                     // The status should be the same here as well
                     assert_eq!(&p.status, &resource.status);
@@ -143,7 +143,7 @@ impl OperatorContext {
     pub(crate) async fn remove(&self, name: String) -> Option<ResourceContext> {
         let mut i = self.inventory.write().await;
         if let Some(removed) = i.remove(&name) {
-            info!(name =? removed.name_any(), "removed from inventory");
+            info!(name = ?removed.name_any(), "removed from inventory");
             return Some(removed);
         }
         None
@@ -152,13 +152,13 @@ impl OperatorContext {
 
 impl ResourceContext {
     /// Called when putting our finalizer on top of the resource.
-    #[tracing::instrument(fields(name = ?_dsp.name_any()))]
+    #[tracing::instrument(fields(name = _dsp.name_any()))]
     pub(crate) async fn put_finalizer(_dsp: Arc<DiskPool>) -> Result<Action, Error> {
         Ok(Action::await_change())
     }
 
     /// Remove pool from control plane if exist, Then delete it from map.
-    #[tracing::instrument(fields(name = ?resource.name_any()) skip(resource))]
+    #[tracing::instrument(fields(name = resource.name_any()), skip(resource))]
     pub(crate) async fn delete_finalizer(
         resource: ResourceContext,
         attempt_delete: bool,
@@ -170,7 +170,7 @@ impl ResourceContext {
         if ctx.remove(resource.name_any()).await.is_none() {
             // In an unlikely event where we cant remove from inventory. We will requeue and
             // reattempt again in 10 seconds.
-            error!(name = ?resource.name_any(), "Failed to remove from inventory");
+            error!("Failed to remove from inventory");
             return Ok(Action::requeue(Duration::from_secs(10)));
         }
         Ok(Action::await_change())
@@ -215,7 +215,7 @@ impl ResourceContext {
             .await
             .map_err(|source| Error::Kube { source })?;
 
-        debug!(name = ?o.name_any(), old = ?self.status, new =?o.status, "status changed");
+        debug!(name = o.name_any(), old = ?self.status, new = ?o.status, "status changed");
         Ok(o)
     }
 
@@ -232,7 +232,7 @@ impl ResourceContext {
     async fn mark_pool_not_found(&self) -> Result<Action, Error> {
         self.patch_status(DiskPoolStatus::not_found(&self.inner.status))
             .await?;
-        error!(name = ?self.name_any(), "Pool not found, clearing status");
+        error!(name = self.name_any(), "Pool not found, clearing status");
         Ok(Action::requeue(Duration::from_secs(30)))
     }
 
@@ -359,7 +359,7 @@ impl ResourceContext {
                                 "Critical",
                             )
                             .await;
-                            error!("Unable to create or import pool {}", error);
+                            error!("Unable to create or import pool {error}");
                             Err(error.into())
                         }
                     }
@@ -384,7 +384,7 @@ impl ResourceContext {
                             "Critical",
                         )
                         .await;
-                        error!("Unable to create or import pool {}", error);
+                        error!("Unable to create or import pool {error}");
                         Err(error.into())
                     }
                 };
@@ -403,7 +403,7 @@ impl ResourceContext {
     }
 
     /// Delete the pool from the io-engine instance
-    #[tracing::instrument(fields(name = ?self.name_any(), status = ?self.status) skip(self))]
+    #[tracing::instrument(fields(name = self.name_any(), status = ?self.status), skip(self))]
     async fn delete_pool(&self) -> Result<Action, Error> {
         let res = self
             .pools_api()
@@ -438,7 +438,7 @@ impl ResourceContext {
     }
 
     /// Gets pool from control plane and sets state as applicable.
-    #[tracing::instrument(fields(name = ?self.name_any(), status = ?self.status) skip(self))]
+    #[tracing::instrument(fields(name = self.name_any(), status = ?self.status), skip(self))]
     async fn pool_created(self) -> Result<Action, Error> {
         let pool = self
             .pools_api()
@@ -477,31 +477,27 @@ impl ResourceContext {
     /// accordingly. If the control plane returns a pool state, set the CRD to 'Online'. If the
     /// control plane does not return a pool state (occurs when a node is missing), set the CRD to
     /// 'Unknown' and let the reconciler retry later.
-    #[tracing::instrument(fields(name = ?self.name_any(), status = ?self.status) skip(self))]
+    #[tracing::instrument(fields(name = self.name_any(), status = ?self.status), skip(self))]
     pub(crate) async fn pool_check(&self) -> Result<Action, Error> {
+        let name = self.name_any();
         if let Some(annotation) = self.metadata.annotations.clone() {
-            if let Some(value) = annotation.get("openebs.io/expand") {
-                if value == "true" {
-                    info!("Attempting to expand {}", self.name_any());
-                    match self.pools_api().put_pool_expand(&self.name_any()).await {
-                        Err(e) => {
-                            if matches!(
+            if Some("true") == annotation.get("openebs.io/expand").map(|s| s.as_str()) {
+                info!("Attempting to expand DiskPool");
+                match self.pools_api().put_pool_expand(&name).await {
+                    Err(e) => {
+                        if matches!(
                             e.error_body(),
-                            Some(body) if matches!(body.kind, Kind::OutOfRange | Kind::DiskNotExtended | Kind::DiskRescanFailed )
-                            ) {
-                                error!(
-                                    "DiskPool expansion failed, Stopping reconciliation err: {:?}",
-                                    e
-                                );
-                                let _ = self.remove_expand_annotation().await;
-                            } else {
-                                error!("DiskPool expansion failed, {:?}", e);
-                            }
-                        }
-                        Ok(_) => {
-                            info!("DiskPool {} expanded successfully", self.name_any());
+                            Some(body) if matches!(body.kind, Kind::OutOfRange | Kind::DiskNotExtended | Kind::DiskRescanFailed)
+                        ) {
+                            error!("DiskPool expansion failed, Stopping reconciliation err: {e:?}");
                             let _ = self.remove_expand_annotation().await;
+                        } else {
+                            error!("DiskPool expansion failed, {e:?}");
                         }
+                    }
+                    Ok(_) => {
+                        info!("DiskPool expanded successfully");
+                        let _ = self.remove_expand_annotation().await;
                     }
                 }
             }
@@ -509,30 +505,32 @@ impl ResourceContext {
 
         let pool = match self
             .pools_api()
-            .get_node_pool(&self.spec.node(), &self.name_any())
+            .get_node_pool(&self.spec.node(), &name)
             .await
         {
             Ok(response) => response,
             Err(clients::tower::Error::Response(response)) => {
                 return if response.status() == clients::tower::StatusCode::NOT_FOUND {
                     if self.metadata.deletion_timestamp.is_some() {
-                        tracing::debug!(name = ?self.name_any(), "deleted stopping checker");
+                        tracing::debug!("DiskPool deleted, exiting pool_check");
                         Ok(Action::await_change())
                     } else {
-                        tracing::warn!(pool = ?self.name_any(), "deleted by external event NOT recreating");
+                        tracing::warn!("deleted by external event NOT recreating");
                         self.k8s_notify(
                             "Notfound",
                             "Check",
                             "The pool has been deleted through an external API request",
                             "Warning",
                         )
-                            .await;
+                        .await;
 
                         // We expected the control plane to have a spec for this pool. It didn't so
                         // set the pool_status in CRD to None.
                         self.mark_pool_not_found().await
                     }
-                } else if response.status() == clients::tower::StatusCode::SERVICE_UNAVAILABLE || response.status() == clients::tower::StatusCode::REQUEST_TIMEOUT {
+                } else if response.status() == clients::tower::StatusCode::SERVICE_UNAVAILABLE
+                    || response.status() == clients::tower::StatusCode::REQUEST_TIMEOUT
+                {
                     // Probably grpc server is not yet up
                     self.k8s_notify(
                         "Unreachable",
@@ -540,25 +538,25 @@ impl ResourceContext {
                         "Could not reach Rest API service. Please check control plane health",
                         "Warning",
                     )
-                        .await;
+                    .await;
                     self.mark_pool_not_found().await
-                }
-                else {
+                } else {
                     self.k8s_notify(
                         "Missing",
                         "Check",
                         &format!("The pool information is not available: {response}"),
                         "Warning",
                     )
-                        .await;
+                    .await;
                     self.is_missing().await
-                }
+                };
             }
             Err(clients::tower::Error::Request(_)) => {
                 // Probably grpc server is not yet up
-                return self.mark_pool_not_found().await
+                return self.mark_pool_not_found().await;
             }
-        }.into_body();
+        }
+        .into_body();
         // As pool exists, set the status based on the presence of pool state.
         self.set_status_or_unknown(pool).await
     }
@@ -566,24 +564,24 @@ impl ResourceContext {
     /// If the pool, has a state we set that status to the CR and if it does not have a state
     /// we set the status as unknown so that we can try again later.
     async fn set_status_or_unknown(&self, pool: Pool) -> Result<Action, Error> {
-        if pool.state.is_some() {
-            if let Some(status) = &self.status {
-                let mut new_status = DiskPoolStatus::from(pool);
-                if self.metadata.deletion_timestamp.is_some() {
-                    new_status.cr_state = CrPoolState::Terminating;
-                }
-                if status != &new_status {
-                    // update the usage state such that users can see the values changes
-                    // as replica's are added and/or removed.
-                    let _ = self.patch_status(new_status).await;
-                }
-            }
-        } else {
+        if pool.state.is_none() {
             return if self.metadata.deletion_timestamp.is_some() {
                 self.mark_terminating_when_unknown().await
             } else {
                 self.mark_unknown().await
             };
+        }
+
+        if let Some(status) = &self.status {
+            let mut new_status = DiskPoolStatus::from(pool);
+            if self.metadata.deletion_timestamp.is_some() {
+                new_status.cr_state = CrPoolState::Terminating;
+            }
+            if status != &new_status {
+                // update the usage state such that users can see the values changes
+                // as replica's are added and/or removed.
+                let _ = self.patch_status(new_status).await;
+            }
         }
 
         // always reschedule though
@@ -610,44 +608,44 @@ impl ResourceContext {
         let e: Api<Event> = Api::namespaced(client.clone(), &ns);
         let pp = PostParams::default();
         let time = Utc::now();
-        let contains = {
-            self.event_info
-                .lock()
-                .unwrap()
-                .contains(&message.to_string())
-        };
-        if !contains {
-            self.event_info.lock().unwrap().push(message.to_string());
-            let metadata = ObjectMeta {
-                // the name must be unique for all events we post
-                generate_name: Some(format!("{}.{:x}", self.name_any(), time.timestamp())),
-                namespace: Some(ns),
-                ..Default::default()
-            };
-
-            let _ = e
-                .create(
-                    &pp,
-                    &Event {
-                        event_time: Some(MicroTime(time)),
-                        involved_object: self.object_ref(&()),
-                        action: Some(action.into()),
-                        reason: Some(reason.into()),
-                        type_: Some(type_.into()),
-                        metadata,
-                        reporting_component: Some(WHO_AM_I_SHORT.into()),
-                        reporting_instance: Some(
-                            std::env::var("MY_POD_NAME")
-                                .ok()
-                                .unwrap_or_else(|| WHO_AM_I_SHORT.into()),
-                        ),
-                        message: Some(message.into()),
-                        ..Default::default()
-                    },
-                )
-                .await
-                .map_err(|error| error!(?error));
+        if self
+            .event_info
+            .lock()
+            .unwrap()
+            .contains(&message.to_string())
+        {
+            return;
         }
+        self.event_info.lock().unwrap().push(message.to_string());
+        let metadata = ObjectMeta {
+            // the name must be unique for all events we post
+            generate_name: Some(format!("{}.{:x}", self.name_any(), time.timestamp())),
+            namespace: Some(ns),
+            ..Default::default()
+        };
+
+        _ = e
+            .create(
+                &pp,
+                &Event {
+                    event_time: Some(MicroTime(time)),
+                    involved_object: self.object_ref(&()),
+                    action: Some(action.into()),
+                    reason: Some(reason.into()),
+                    type_: Some(type_.into()),
+                    metadata,
+                    reporting_component: Some(WHO_AM_I_SHORT.into()),
+                    reporting_instance: Some(
+                        std::env::var("MY_POD_NAME")
+                            .ok()
+                            .unwrap_or_else(|| WHO_AM_I_SHORT.into()),
+                    ),
+                    message: Some(message.into()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .inspect_err(|error| error!(?error, "Failed to create event"));
     }
 
     /// Callback hooks for the finalizers
@@ -659,28 +657,25 @@ impl ResourceContext {
             |event| async move {
                 match event {
                     finalizer::Event::Apply(dsp) => Self::put_finalizer(dsp).await,
-                    finalizer::Event::Cleanup(dsp) => {
-                        match self
-                            .pools_api()
-                            .get_node_pool(&self.spec.node(), &self.name_any())
-                            .await
-                        {
-                            Ok(pool) => {
-                                if dsp.status.as_ref().unwrap().cr_state != CrPoolState::Terminating
-                                {
-                                    let new_status = DiskPoolStatus::terminating(pool.into_body());
-                                    let _ = self.patch_status(new_status).await?;
-                                }
-                                Self::delete_finalizer(self.clone(), true).await
+                    finalizer::Event::Cleanup(dsp) => match self
+                        .pools_api()
+                        .get_node_pool(&self.spec.node(), &self.name_any())
+                        .await
+                    {
+                        Ok(pool) => {
+                            if dsp.status.as_ref().unwrap().cr_state != CrPoolState::Terminating {
+                                let new_status = DiskPoolStatus::terminating(pool.into_body());
+                                let _ = self.patch_status(new_status).await?;
                             }
-                            Err(clients::tower::Error::Response(response))
-                                if response.status() == StatusCode::NOT_FOUND =>
-                            {
-                                Self::delete_finalizer(self.clone(), false).await
-                            }
-                            Err(error) => Err(error.into()),
+                            Self::delete_finalizer(self.clone(), true).await
                         }
-                    }
+                        Err(clients::tower::Error::Response(response))
+                            if response.status() == StatusCode::NOT_FOUND =>
+                        {
+                            Self::delete_finalizer(self.clone(), false).await
+                        }
+                        Err(error) => Err(error.into()),
+                    },
                 }
             },
         )
@@ -693,21 +688,18 @@ impl ResourceContext {
         &self,
         config: EncryptionSecretConfig,
     ) -> Result<Encryption, Error> {
-        if let Err(error) = self.secret_api().get(&config.name).await {
+        let name = config.name;
+        if let Err(error) = self.secret_api().get(&name).await {
             self.k8s_notify(
                 "Create or Import Failure",
                 "Failure",
-                format!(
-                    "Failed to get k8s secret for encryption {}, error: {error}",
-                    &config.name
-                )
-                .as_str(),
+                &format!("Failed to get k8s secret for encryption {name}, error: {error}"),
                 "Critical",
             )
             .await;
             return Err(Error::Kube { source: error });
         }
 
-        Ok(Encryption::secret(EncryptionSecret { name: config.name }))
+        Ok(Encryption::secret(EncryptionSecret { name }))
     }
 }
