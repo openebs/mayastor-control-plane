@@ -2548,6 +2548,8 @@ dependencies = [
  "serde",
  "serde_json",
  "snafu",
+ "strum",
+ "strum_macros",
  "tokio",
  "tracing",
  "utils",

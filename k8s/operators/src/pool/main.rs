@@ -9,7 +9,7 @@ pub(crate) mod error;
 mod mayastorpool;
 
 use crate::diskpool::client::{
-    create_crd, create_missing_cr, create_v1beta3_cr, get_api_version, v1beta3_api,
+    create_crd, create_missing_cr, create_v1beta3_cr, dsp_api, runtime_api_version,
 };
 
 use context::OperatorContext;
@@ -18,7 +18,6 @@ use diskpool::crd::{
     v1beta3::{CrPoolState, DiskPool, DiskPoolSpec, DiskPoolStatus},
 };
 use error::Error;
-use kube::CustomResourceExt;
 use mayastorpool::client::{check_crd, delete, list};
 use openapi::clients::{self, tower::Url};
 use tracing::{error, info, trace, warn};
@@ -33,16 +32,13 @@ use kube::{
         controller::{Action, Controller},
         watcher,
     },
-    Client, ResourceExt,
+    Client, CustomResourceExt, Resource, ResourceExt,
 };
-use std::fs::File;
-use std::io::Write;
-use std::path::Path;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, fs::File, io::Write, path::Path, sync::Arc, time::Duration};
+use strum_macros::{Display, EnumString};
 
 const PAGINATION_LIMIT: u32 = 100;
 const BACKOFF_PERIOD: u64 = 20;
-const LATEST_API_VERSION: &str = "v1beta3";
 /// Determine what we want to do when dealing with errors from the
 /// reconciliation loop
 fn error_policy(_object: Arc<DiskPool>, error: &Error, _ctx: Arc<OperatorContext>) -> Action {
@@ -88,39 +84,75 @@ async fn reconcile(dsp: Arc<DiskPool>, ctx: Arc<OperatorContext>) -> Result<Acti
         None => dsp.init_cr().await,
     }
 }
-
-/// Api version of DSP.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ApiVersion {
+/// Previous Api versions for the [`DiskPool`].
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Display, EnumString)]
+#[strum(serialize_all = "lowercase")]
+pub enum PrevApiVersion {
     /// Represents v1alpha1
     V1Alpha1,
     /// Represents v1beta1
     V1Beta1,
     /// Represents v1beta2
     V1Beta2,
-    /// Represents v1beta3
-    V1Beta3,
 }
 
+/// Current Api versions for the [`DiskPool`].
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub enum ApiVersion {
+    Deprecated(PrevApiVersion),
+    Latest,
+}
+impl From<PrevApiVersion> for ApiVersion {
+    fn from(value: PrevApiVersion) -> Self {
+        Self::Deprecated(value)
+    }
+}
+impl std::fmt::Display for ApiVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            ApiVersion::Deprecated(version) => version.to_string(),
+            ApiVersion::Latest => DiskPool::version(&()).to_string(),
+        };
+        write!(f, "{s}")
+    }
+}
+impl std::str::FromStr for ApiVersion {
+    type Err = strum::ParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == Self::Latest.to_string() {
+            Ok(Self::Latest)
+        } else {
+            Ok(s.parse::<PrevApiVersion>()?.into())
+        }
+    }
+}
+
+impl ApiVersion {
+    /// The [`ApiVersion`] we want to use.
+    /// > It should be the latest version.
+    pub fn validate_latest() -> anyhow::Result<()> {
+        use kube::Resource;
+        let version = DiskPool::version(&());
+        let latest: Self = version.parse().map_err(|e| {
+            anyhow::anyhow!("Please update ApiVersion to account for {version}: {e}")
+        })?;
+
+        anyhow::ensure!(latest == Self::Latest, "Please update ApiVersion::Latest");
+
+        Ok(())
+    }
+}
 async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
     let k8s = Client::try_default().await?;
     let namespace = args.get_one::<String>("namespace").unwrap();
-    let api_version = get_api_version(k8s.clone()).await;
+    let api_version = runtime_api_version(k8s.clone()).await?;
+
+    ApiVersion::validate_latest()?;
 
     match api_version {
-        Some(version) => match version {
-            // Run the ensure and merge flow also for cases where some new changes to
-            // CRD come in within same/existing CRD version.
-            ApiVersion::V1Alpha1
-            | ApiVersion::V1Beta1
-            | ApiVersion::V1Beta2
-            | ApiVersion::V1Beta3 => {
-                ensure_and_migrate_crd(k8s.clone(), namespace, &version, LATEST_API_VERSION)
-                    .await?;
-            } //ApiVersion::V1Beta3 => {
-              //    info!("CRD has the latest schema. Skipping CRD Operations");
-              //}
-        },
+        Some(version) => {
+            ensure_and_migrate_crd(k8s.clone(), namespace, version).await?;
+        }
         None => {
             create_crd(k8s.clone()).await?;
         }
@@ -129,7 +161,7 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
     // Migrate the MayastorPool CRs to the DiskPool.
     migrate_and_clean_msps(&k8s, namespace).await?;
 
-    let newdsp: Api<DiskPool> = v1beta3_api(&k8s, namespace);
+    let newdsp: Api<DiskPool> = dsp_api(&k8s, namespace);
 
     let url = Url::parse(args.get_one::<String>("endpoint").unwrap())
         .expect("endpoint is not a valid URL");
@@ -394,7 +426,7 @@ pub(crate) async fn migrate_and_clean_msps(k8s: &Client, namespace: &str) -> Res
                 })
             }
         },
-        Ok(false) => warn!("MayastorPool CRD was not found in the cluster, skipping migration"),
+        Ok(false) => info!("MayastorPool CRD was not found in the cluster, skipping migration"),
         Err(error) => {
             return Err(Error::Generic {
                 message: format!("Failed to check for MayastorPool CRD: {error:?}"),
@@ -402,4 +434,53 @@ pub(crate) async fn migrate_and_clean_msps(k8s: &Client, namespace: &str) -> Res
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{diskpool::crd::diskpools_name, ApiVersion, PrevApiVersion};
+    use k8s_operators::diskpool::crd::DiskPool;
+    use kube::{CustomResourceExt, Resource};
+
+    #[test]
+    fn test_parse_api_version() {
+        assert_eq!(PrevApiVersion::V1Alpha1.to_string(), "v1alpha1");
+        assert_eq!(
+            "v1alpha1".parse::<ApiVersion>().unwrap(),
+            ApiVersion::Deprecated(PrevApiVersion::V1Alpha1)
+        );
+        assert_eq!(
+            ApiVersion::Deprecated(PrevApiVersion::V1Alpha1).to_string(),
+            PrevApiVersion::V1Alpha1.to_string()
+        );
+        let latest_v = DiskPool::version(&());
+        assert_eq!(latest_v.parse::<ApiVersion>(), Ok(ApiVersion::Latest));
+        assert_eq!(ApiVersion::Latest.to_string(), DiskPool::version(&()));
+        assert_eq!(ApiVersion::Latest.to_string(), latest_v);
+    }
+
+    #[test]
+    fn test_api_version_order() {
+        let mut versions = vec![
+            ApiVersion::Latest,
+            ApiVersion::Deprecated(PrevApiVersion::V1Alpha1),
+            ApiVersion::Deprecated(PrevApiVersion::V1Beta2),
+        ];
+        versions.sort();
+        assert_eq!(
+            versions,
+            vec![
+                ApiVersion::Deprecated(PrevApiVersion::V1Alpha1),
+                ApiVersion::Deprecated(PrevApiVersion::V1Beta2),
+                ApiVersion::Latest,
+            ]
+        )
+    }
+
+    #[test]
+    fn test_crd_name() {
+        let crd = DiskPool::crd();
+        let crd_name = crd.metadata.name.as_ref();
+        assert_eq!(Some(&diskpools_name()), crd_name)
+    }
 }

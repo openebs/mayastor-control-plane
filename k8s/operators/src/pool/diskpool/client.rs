@@ -1,7 +1,6 @@
 use super::crd::v1beta3::{DiskPool, DiskPoolSpec, EncryptionSource};
 use crate::{diskpool::crd::diskpools_name, error::Error, ApiVersion};
-use openapi::models::PoolSpecEncryption;
-use openapi::{apis::StatusCode, clients};
+use openapi::{apis::StatusCode, clients, models::PoolSpecEncryption};
 
 use crate::diskpool::crd::v1beta3;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
@@ -12,7 +11,7 @@ use kube::{
 use tracing::{info, warn};
 
 /// Get the DiskPool v1beta3 api.
-pub(crate) fn v1beta3_api(client: &Client, namespace: &str) -> Api<DiskPool> {
+pub(crate) fn dsp_api(client: &Client, namespace: &str) -> Api<DiskPool> {
     Api::namespaced(client.clone(), namespace)
 }
 
@@ -24,7 +23,7 @@ pub(crate) async fn create_v1beta3_cr(
     spec: DiskPoolSpec,
 ) -> Result<(), Error> {
     let post_params = PostParams::default();
-    let api = v1beta3_api(client, namespace);
+    let api = dsp_api(client, namespace);
     let new_disk_pool: DiskPool = DiskPool::new(name, spec);
     match api.create(&post_params, &new_disk_pool).await {
         Ok(_) => Ok(()),
@@ -38,17 +37,18 @@ pub(crate) async fn create_crd(k8s: Client) -> Result<CustomResourceDefinition, 
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
     let new_crd = DiskPool::crd();
     info!(
-        "Creating CRD: {}",
-        serde_json::to_string_pretty(&new_crd).unwrap_or_default()
+        "Creating DiskPool CRD: {}",
+        serde_json::to_string(&new_crd).unwrap_or_default()
     );
     let pp = PostParams::default();
     let result = crd_api.create(&pp, &new_crd).await;
     let crd = result.map_err(|e| Error::Kube { source: e })?;
+    info!("Created DiskPool CRD");
     Ok(crd)
 }
 
 /// This discards older unserved schema from the crd.
-pub(crate) async fn discard_older_schema(k8s: &Client, new_version: &str) -> Result<(), Error> {
+pub(crate) async fn discard_older_schema(k8s: &Client) -> Result<(), Error> {
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
     let mut new_crd = DiskPool::crd();
     let crd_name = new_crd
@@ -58,18 +58,13 @@ pub(crate) async fn discard_older_schema(k8s: &Client, new_version: &str) -> Res
         .ok_or(Error::InvalidCRField {
             field: "diskpool.metadata.name".to_string(),
         })?;
-    if crd_api.get(crd_name).await.is_ok() {
-        info!(
-            "Replacing CRD: {}",
-            serde_json::to_string_pretty(&new_crd).unwrap()
-        );
-        update_stored_version(k8s, crd_name, new_version).await?;
-        if let Ok(modified_crd) = crd_api.get(crd_name).await {
-            new_crd.metadata.resource_version = modified_crd.resource_version();
-            let pp = PostParams::default();
-            crd_api.replace(crd_name, &pp, &new_crd).await?;
-        }
-    }
+    let crd = update_stored_version(k8s, crd_name).await?;
+
+    // todo: is this replace to erase the stale api versions?
+    new_crd.metadata.resource_version = crd.resource_version();
+    crd_api
+        .replace(crd_name, &PostParams::default(), &new_crd)
+        .await?;
     Ok(())
 }
 
@@ -81,7 +76,7 @@ pub(crate) async fn create_missing_cr(
     namespace: &str,
 ) -> Result<(), Error> {
     if let Ok(pools) = control_client.pools_api().get_pools(None).await {
-        let pools_api: Api<DiskPool> = v1beta3_api(k8s, namespace);
+        let pools_api: Api<DiskPool> = dsp_api(k8s, namespace);
         let param = PostParams::default();
         for pool in pools.into_body().iter_mut() {
             match pools_api.get(&pool.id).await {
@@ -122,31 +117,44 @@ pub(crate) async fn create_missing_cr(
     Ok(())
 }
 
-/// Updates stored version in CRD status to the new version passed as arg,
+/// Updates stored version in CRD status to the latest version.
 /// Please ensure that older versions are served:false, stored:false before calling this method,
 /// This would allow us to remove older schema from CRD versions.
+/// todo: Shouldn't we just ensure that here rather leave it for chance??
 async fn update_stored_version(
     k8s: &Client,
     crd_name: &str,
-    new_version: &str,
-) -> Result<(), Error> {
+) -> Result<CustomResourceDefinition, Error> {
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s.clone());
-    if let Ok(mut crd) = crd_api.get_status(crd_name).await {
-        let param = PatchParams::apply("status_patch").force();
-        if let Some(status) = crd.status.as_mut() {
-            status.stored_versions = Some(vec![new_version.to_string()]);
-        } else {
-            return Err(Error::CrdFieldMissing {
-                name: crd_name.to_string(),
-                field: "status".to_string(),
-            });
-        }
-        crd.metadata.managed_fields = None;
-        let _ = crd_api
-            .patch_status(crd_name, &param, &Patch::Apply(&crd))
-            .await?;
+
+    let mut crd = crd_api.get_status(crd_name).await?;
+
+    let status = crd.status.as_mut().ok_or(Error::CrdFieldMissing {
+        name: crd_name.to_string(),
+        field: "status".to_string(),
+    })?;
+
+    let set_latest = Some(vec![ApiVersion::Latest.to_string()]);
+    if status.stored_versions == set_latest {
+        return Ok(crd);
     }
-    Ok(())
+
+    warn!(
+        stored_versions = ?status.stored_versions,
+        latest = ?set_latest,
+        "Replacing stored version with the latest version"
+    );
+
+    status.stored_versions = set_latest;
+    // todo: why is this being cleared?
+    crd.metadata.managed_fields = None;
+
+    let param = PatchParams::apply("status_patch").force();
+    let crd = crd_api
+        .patch_status(crd_name, &param, &Patch::Apply(&crd))
+        .await?;
+
+    Ok(crd)
 }
 
 /// List of all pools.
@@ -157,11 +165,11 @@ pub(crate) async fn list_existing_cr(
 ) -> Result<Vec<DiskPool>, Error> {
     // Create the list params with pagination limit.
     let mut list_params = ListParams::default().limit(pagination_limit);
-    // Since v1alpha1/v1beta1/v1beta2 is not served at this stage we cannot use v1alpha1/v1beta1/v1beta2 api client
-    // to list existing CRs. Existing CRs which were created and stored as v1alpha1/v1beta1/v1beta2 can
-    // be retrieved using v1beta3 client. Kube api server performs the required conversions and
+    // Since older/deprecated versions are not served at this stage we cannot use their api client
+    // to list existing CRs. Existing CRs which were created and stored as deprecated versions can
+    // be retrieved using the latest client. Kube api server performs the required conversions and
     // returns us the resources.
-    let pools_api: Api<DiskPool> = v1beta3_api(client, namespace);
+    let pools_api: Api<DiskPool> = dsp_api(client, namespace);
     let mut pools: Vec<DiskPool> = vec![];
     loop {
         let mut result = pools_api.list(&list_params).await?;
@@ -177,24 +185,49 @@ pub(crate) async fn list_existing_cr(
     Ok(pools)
 }
 
-/// Return the api_version of the present crd if any, otherwise retuen None.
-pub(crate) async fn get_api_version(k8s: Client) -> Option<ApiVersion> {
+/// Returns the [`ApiVersion`] of the present crd, if any.
+pub(crate) async fn runtime_api_version(k8s: Client) -> Result<Option<ApiVersion>, Error> {
     let crd_api: Api<CustomResourceDefinition> = Api::all(k8s);
-    if let Ok(crd) = crd_api.get_status(&diskpools_name()).await {
-        if let Some(status) = crd.status {
-            if status.stored_versions == Some(vec!["v1alpha1".to_string()]) {
-                return Some(ApiVersion::V1Alpha1);
-            } else if status.stored_versions == Some(vec!["v1beta1".to_string()]) {
-                return Some(ApiVersion::V1Beta1);
-            } else if status.stored_versions == Some(vec!["v1beta2".to_string()]) {
-                return Some(ApiVersion::V1Beta2);
-            } else if status.stored_versions == Some(vec!["v1beta3".to_string()]) {
-                return Some(ApiVersion::V1Beta3);
+
+    let crd = match crd_api.get_status(&diskpools_name()).await {
+        // CRD not installed yet, this is fine.
+        Err(kube::Error::Api(r)) if r.code == 404 => return Ok(None),
+        _else => _else,
+    }?;
+
+    let status = crd.status.as_ref().ok_or(Error::CrdFieldMissing {
+        name: crd.name_any(),
+        field: "status".to_string(),
+    })?;
+
+    let versions = status.stored_versions.iter().flatten();
+    let mut api_versions = versions
+        .map(|v| {
+            v.parse().map_err(|e| Error::Generic {
+                message: format!("DiskPool CRD version {v} is unrecognized: {e}"),
+            })
+        })
+        .collect::<Result<Vec<ApiVersion>, _>>()?;
+    api_versions.sort();
+
+    let version = match api_versions.as_slice() {
+        [] => Err(Error::Generic {
+            message: "No api versions found in the CRD".to_string(),
+        }),
+        [any] => Ok(*any),
+        [deprecated, latest] => {
+            if latest != &ApiVersion::Latest {
+                Err(Error::Generic {
+                    message: format!("More than 1 deprecated versions: {api_versions:?}"),
+                })
             } else {
-                return None;
+                Ok(*deprecated)
             }
         }
-    }
-    // Return None if no crd present i.e. fresh installation
-    None
+        _ => Err(Error::Generic {
+            message: format!("More than 2 api versions is not supported: {api_versions:?}"),
+        }),
+    }?;
+
+    Ok(Some(version))
 }
