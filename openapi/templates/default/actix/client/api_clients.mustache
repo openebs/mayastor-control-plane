@@ -30,7 +30,7 @@ pub trait {{{classname}}}: Clone {
     {{#notes}}
     /// {{{notes}}}
     {{/notes}}
-    async fn {{{operationId}}}(&self, {{#allParams}}{{{paramName}}}: {{^required}}Option<{{/required}}{{#required}}{{#isNullable}}Option<{{/isNullable}}{{/required}}{{#isString}}{{#isArray}}Vec<{{/isArray}}&str{{#isArray}}>{{/isArray}}{{/isString}}{{#isUuid}}{{#isArray}}Vec<{{/isArray}}&uuid::Uuid{{#isArray}}>{{/isArray}}{{/isUuid}}{{^isString}}{{^isUuid}}{{^isPrimitiveType}}{{^isContainer}}crate::models::{{/isContainer}}{{/isPrimitiveType}}{{{dataType}}}{{/isUuid}}{{/isString}}{{^required}}>{{/required}}{{#required}}{{#isNullable}}>{{/isNullable}}{{/required}}{{^-last}}, {{/-last}}{{/allParams}}) -> Result<{{#supportMultipleResponses}}ResponseContent<{{{operationIdCamelCase}}}Success>{{/supportMultipleResponses}}{{^supportMultipleResponses}}{{^returnType}}(){{/returnType}}{{#returnType}}{{{returnType}}}{{/returnType}}{{/supportMultipleResponses}}, Error<crate::models::RestJsonError>>;
+    async fn {{{operationId}}}(&self, {{#allParams}}{{{paramName}}}: {{^required}}Option<{{/required}}{{#required}}{{#isNullable}}Option<{{/isNullable}}{{/required}}{{#isString}}{{#isArray}}Vec<{{/isArray}}&str{{#isArray}}>{{/isArray}}{{/isString}}{{#isUuid}}{{#isArray}}Vec<{{/isArray}}&uuid::Uuid{{#isArray}}>{{/isArray}}{{/isUuid}}{{^isString}}{{^isUuid}}{{^isPrimitiveType}}{{^isContainer}}crate::models::{{/isContainer}}{{/isPrimitiveType}}{{{dataType}}}{{/isUuid}}{{/isString}}{{^required}}>{{/required}}{{#required}}{{#isNullable}}>{{/isNullable}}{{/required}}{{^-last}}, {{/-last}}{{/allParams}}) -> Result<{{#supportMultipleResponses}}ResponseContent<{{{operationIdCamelCase}}}Success>{{/supportMultipleResponses}}{{^supportMultipleResponses}}{{#vendorExtensions}}{{#x-return-enum}}Option<{{{returnType}}}>{{/x-return-enum}}{{^x-return-enum}}{{^returnType}}(){{/returnType}}{{#returnType}}{{{returnType}}}{{/returnType}}{{/x-return-enum}}{{/vendorExtensions}}{{^vendorExtensions}}{{^returnType}}(){{/returnType}}{{#returnType}}{{{returnType}}}{{/returnType}}{{/vendorExtensions}}{{/supportMultipleResponses}}, Error<crate::models::RestJsonError>>;
     {{/operation}}
     {{/operations}}
 }
@@ -40,7 +40,7 @@ impl {{{classname}}} for {{{classname}}}Client {
     {{#operations}}
     {{#operation}}
     {{#vendorExtensions.x-group-parameters}}
-    async fn {{{operationId}}}(&self{{#allParams}}{{#-first}}, params: {{{operationIdCamelCase}}}Params{{/-first}}{{/allParams}}) -> Result<{{#supportMultipleResponses}}ResponseContent<{{{operationIdCamelCase}}}Success>{{/supportMultipleResponses}}{{^supportMultipleResponses}}{{^returnType}}(){{/returnType}}{{#returnType}}{{{returnType}}}{{/returnType}}{{/supportMultipleResponses}}, Error<crate::models::RestJsonError>> {
+    async fn {{{operationId}}}(&self{{#allParams}}{{#-first}}, params: {{{operationIdCamelCase}}}Params{{/-first}}{{/allParams}}) -> Result<{{#supportMultipleResponses}}ResponseContent<{{{operationIdCamelCase}}}Success>{{/supportMultipleResponses}}{{^supportMultipleResponses}}{{#vendorExtensions}}{{#x-return-enum}}Option<{{{returnType}}}>{{/x-return-enum}}{{^x-return-enum}}{{^returnType}}(){{/returnType}}{{#returnType}}{{{returnType}}}{{/returnType}}{{/x-return-enum}}{{/vendorExtensions}}{{^vendorExtensions}}{{^returnType}}(){{/returnType}}{{#returnType}}{{{returnType}}}{{/returnType}}{{/vendorExtensions}}{{/supportMultipleResponses}}, Error<crate::models::RestJsonError>> {
         // unbox the parameters
         {{#allParams}}
         let {{paramName}} = params.{{paramName}};
@@ -48,7 +48,7 @@ impl {{{classname}}} for {{{classname}}}Client {
 
     {{/vendorExtensions.x-group-parameters}}
     {{^vendorExtensions.x-group-parameters}}
-    async fn {{{operationId}}}(&self, {{#allParams}}{{{paramName}}}: {{^required}}Option<{{/required}}{{#required}}{{#isNullable}}Option<{{/isNullable}}{{/required}}{{#isString}}{{#isArray}}Vec<{{/isArray}}&str{{#isArray}}>{{/isArray}}{{/isString}}{{#isUuid}}{{#isArray}}Vec<{{/isArray}}&uuid::Uuid{{#isArray}}>{{/isArray}}{{/isUuid}}{{^isString}}{{^isUuid}}{{^isPrimitiveType}}{{^isContainer}}crate::models::{{/isContainer}}{{/isPrimitiveType}}{{{dataType}}}{{/isUuid}}{{/isString}}{{^required}}>{{/required}}{{#required}}{{#isNullable}}>{{/isNullable}}{{/required}}{{^-last}}, {{/-last}}{{/allParams}}) -> Result<{{#supportMultipleResponses}}ResponseContent<{{{operationIdCamelCase}}}Success>{{/supportMultipleResponses}}{{^supportMultipleResponses}}{{^returnType}}(){{/returnType}}{{#returnType}}{{{returnType}}}{{/returnType}}{{/supportMultipleResponses}}, Error<crate::models::RestJsonError>> {
+    async fn {{{operationId}}}(&self, {{#allParams}}{{{paramName}}}: {{^required}}Option<{{/required}}{{#required}}{{#isNullable}}Option<{{/isNullable}}{{/required}}{{#isString}}{{#isArray}}Vec<{{/isArray}}&str{{#isArray}}>{{/isArray}}{{/isString}}{{#isUuid}}{{#isArray}}Vec<{{/isArray}}&uuid::Uuid{{#isArray}}>{{/isArray}}{{/isUuid}}{{^isString}}{{^isUuid}}{{^isPrimitiveType}}{{^isContainer}}crate::models::{{/isContainer}}{{/isPrimitiveType}}{{{dataType}}}{{/isUuid}}{{/isString}}{{^required}}>{{/required}}{{#required}}{{#isNullable}}>{{/isNullable}}{{/required}}{{^-last}}, {{/-last}}{{/allParams}}) -> Result<{{#supportMultipleResponses}}ResponseContent<{{{operationIdCamelCase}}}Success>{{/supportMultipleResponses}}{{^supportMultipleResponses}}{{#vendorExtensions}}{{#x-return-enum}}Option<{{{returnType}}}>{{/x-return-enum}}{{^x-return-enum}}{{^returnType}}(){{/returnType}}{{#returnType}}{{{returnType}}}{{/returnType}}{{/x-return-enum}}{{/vendorExtensions}}{{^vendorExtensions}}{{^returnType}}(){{/returnType}}{{#returnType}}{{{returnType}}}{{/returnType}}{{/vendorExtensions}}{{/supportMultipleResponses}}, Error<crate::models::RestJsonError>> {
     {{/vendorExtensions.x-group-parameters}}
 
         let configuration = &self.configuration;
@@ -173,8 +173,21 @@ impl {{{classname}}} for {{{classname}}}Client {
             Ok(())
             {{/returnType}}
             {{#returnType}}
-            let local_var_content = local_var_resp.json::<{{#supportMultipleResponses}}ResponseContent<{{{operationIdCamelCase}}}Success>{{/supportMultipleResponses}}{{^supportMultipleResponses}}{{^returnType}}(){{/returnType}}{{#returnType}}{{{returnType}}}{{/returnType}}{{/supportMultipleResponses}}>().await?;
+            {{#vendorExtensions}}{{#x-return-enum}}
+            if local_var_status == awc::http::StatusCode::NO_CONTENT {
+                Ok(None)
+            } else {
+                let local_var_content = local_var_resp.json::<{{{returnType}}}>().await?;
+                Ok(Some(local_var_content))
+            }
+            {{/x-return-enum}}{{^x-return-enum}}
+            let local_var_content = local_var_resp.json::<{{{returnType}}}>().await?;
             Ok(local_var_content)
+            {{/x-return-enum}}{{/vendorExtensions}}
+            {{^vendorExtensions}}
+            let local_var_content = local_var_resp.json::<{{{returnType}}}>().await?;
+            Ok(local_var_content)
+            {{/vendorExtensions}}
             {{/returnType}}
             {{/supportMultipleResponses}}
             {{#supportMultipleResponses}}
@@ -199,3 +212,4 @@ impl {{{classname}}} for {{{classname}}}Client {
     {{/operation}}
     {{/operations}}
 }
+
