@@ -313,8 +313,8 @@ impl SwitchOverRequest {
             _ => None,
         };
         if self.new_path.is_none() {
-            error!(volume.uuid=%self.volume_id, "Could not find device uri for the volume");
-            return Err(anyhow!("Couldnt find device uri for the volume"));
+            error!(volume.uuid=%self.volume_id, "Couldn't find device uri for the volume");
+            return Err(anyhow!("Couldn't find device uri for the volume"));
         }
         self.complete_op(true, "".to_string(), etcd).await?;
         self.update_next_stage();

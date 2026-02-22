@@ -7,7 +7,15 @@ use std::collections::HashMap;
 use tracing::{info, warn};
 
 #[derive(Debug, Default)]
-pub(crate) struct NvmeOperationsSvc {}
+pub(crate) struct NvmeOperationsSvc {
+    node_name: String,
+}
+impl NvmeOperationsSvc {
+    /// Create a new `NvmeOperationsSvc` for the given node.
+    pub(crate) fn new(node_name: String) -> Self {
+        Self { node_name }
+    }
+}
 
 #[tonic::async_trait]
 impl NvmeOperations for NvmeOperationsSvc {
@@ -18,8 +26,9 @@ impl NvmeOperations for NvmeOperationsSvc {
         let req = request.into_inner();
         info!(request=?req, "Nvme connection request to replace path");
 
-        let uri: &str = req.uri.as_str();
-        let uuid = volume_uuid_from_url_str(uri)?;
+        let uri = csi_driver::parse_host_uri(&self.node_name, &req.uri)?;
+
+        let uuid = volume_uuid_from_url_str(&uri)?;
 
         // Create a new Volume Operation Guard.
         let _guard = VolumeOpGuard::new(uuid)?;
@@ -30,7 +39,7 @@ impl NvmeOperations for NvmeOperationsSvc {
         };
 
         // Get the nvmf device object from the uri.
-        let mut device = Device::parse(uri)?;
+        let mut device = Device::parse(&uri)?;
 
         // Parse the parameters from publish context.
         device.parse_parameters(&publish_context).await?;
