@@ -554,6 +554,16 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             }),
         }?;
 
+        let frontend = &request.frontend_node;
+        if self
+            .rerepublish(registry, &state, target_cfg, frontend)
+            .await?
+        {
+            tracing::info!(%frontend, "No changes, just re-republishing volume target");
+            let volume = registry.volume(&request.uuid).await?;
+            return Ok(volume);
+        }
+
         let mut older_nexus = specs.nexus(target_cfg.target().nexus()).await?;
         let mut move_nexus = true;
         let mut nexus_node = None;
@@ -613,7 +623,8 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
                 &Some(request.share),
                 &nodes,
             )
-            .await;
+            .await
+            .republish(frontend);
         let operation = VolumeOperation::Republish(RepublishOperation::new(target_cfg.clone()));
 
         let spec_clone = self.start_update(registry, &state, operation).await?;

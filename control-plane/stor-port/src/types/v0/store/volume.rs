@@ -98,6 +98,29 @@ impl FrontendConfig {
     pub fn needs_update(&self, hosts: &[InitiatorAC]) -> bool {
         hosts.iter().any(|h| !self.host_acl.contains(h))
     }
+    /// All nodes other than the given node will have to rerepublish.
+    pub fn republish(&mut self, node: &NodeId) {
+        for host in self.host_acl.iter_mut() {
+            if host.node_name.as_str() != node.as_str() {
+                host.needs_rerepublish = true;
+            }
+        }
+    }
+    /// Re-republishes the given node after a [`Self::republish`].
+    pub fn rerepublish(&mut self, node: &NodeId) {
+        for host in self.host_acl.iter_mut() {
+            if host.node_name.as_str() == node.as_str() {
+                host.needs_rerepublish = false;
+            }
+        }
+    }
+    /// Check if the given initiators are already allowed.
+    pub fn needs_rerepublish(&self, host: &NodeId) -> bool {
+        let Some(host) = self.host_acl.iter().find(|h| h.node_name == host.as_str()) else {
+            return false;
+        };
+        host.needs_rerepublish
+    }
 }
 
 /// Volume Frontend
@@ -107,6 +130,8 @@ pub struct InitiatorAC {
     node_name: String,
     /// The nvme nqn of the front-end node.
     node_nqn: HostNqn,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    needs_rerepublish: bool,
 }
 impl InitiatorAC {
     /// Get a new `Self` with the given parameters.
@@ -114,6 +139,7 @@ impl InitiatorAC {
         Self {
             node_name,
             node_nqn,
+            needs_rerepublish: false,
         }
     }
     /// Get the nodename of the front-end initiator.
@@ -343,6 +369,20 @@ impl TargetConfig {
             config,
             frontend,
         }
+    }
+
+    /// Republishing the volume for the given node.
+    /// This means all other initiators must reconnect to the republished target, before attempting
+    /// to republish the volume again.
+    pub fn republish(mut self, node: &NodeId) -> Self {
+        self.frontend.republish(node);
+        self
+    }
+
+    /// Re-republishes after a [`Self::republish`].
+    pub fn rerepublish(mut self, node: &NodeId) -> Self {
+        self.frontend.rerepublish(node);
+        self
     }
 
     /// Get the last target configuration.

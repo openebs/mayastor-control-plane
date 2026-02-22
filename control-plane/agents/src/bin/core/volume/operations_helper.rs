@@ -29,7 +29,9 @@ use stor_port::{
         store::{
             nexus::{NexusSpec, ReplicaUri},
             nexus_child::NexusChild,
+            nexus_persistence::VolumeHealthPrefix,
             replica::ReplicaSpec,
+            volume::RepublishOperation,
             volume::{FrontendConfig, TargetConfig, VolumeOperation, VolumeSpec, VolumeTarget},
         },
         transport::{
@@ -43,7 +45,6 @@ use stor_port::{
 };
 
 use http::Uri;
-use stor_port::types::v0::store::nexus_persistence::VolumeHealthPrefix;
 
 impl OperationGuardArc<VolumeSpec> {
     /// Prune volume health from older targets.
@@ -876,5 +877,32 @@ impl OperationGuardArc<VolumeSpec> {
         }
 
         self.remove_health(registry);
+    }
+
+    /// Re-republishes the volume for the given frontend node.
+    /// Whenever a new target is recreated, all frontends must first rerepublish by attempting the reuse the new target
+    /// before attempting to recreate another one.
+    /// This is necessary because, in a RWX scenario we don't want the target to move for every initiator node, which
+    /// would inevitably break all the other initiators, resulting in a deadlock.
+    /// # WARNING
+    /// Note that we still can't fully prevent a deadlock as it's possible that a network partition may prevent some of
+    /// the initiators to connect, whilst not allowing the others.
+    pub(super) async fn rerepublish(
+        &mut self,
+        registry: &Registry,
+        state: &VolumeState,
+        target: &TargetConfig,
+        frontend: &NodeId,
+    ) -> Result<bool, SvcError> {
+        if !target.frontend().needs_rerepublish(frontend) {
+            return Ok(false);
+        }
+
+        let target = target.clone().rerepublish(frontend);
+        let operation = VolumeOperation::Republish(RepublishOperation::new(target));
+        let spec_clone = self.start_update(registry, state, operation).await?;
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+
+        Ok(true)
     }
 }
