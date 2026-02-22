@@ -90,6 +90,7 @@ impl EtcdStore {
     ) -> Result<Vec<SwitchOverRequest>, anyhow::Error> {
         let mut store = self.store.lock().await;
         let key = key_prefix_obj(StorableObjectType::SwitchOver, API_VERSION);
+
         let store_entries = store.get_values_prefix(&key).await?;
 
         debug!(count = store_entries.len(), "fetched entries from etcd");

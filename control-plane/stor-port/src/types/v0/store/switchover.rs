@@ -67,6 +67,9 @@ pub struct SwitchOverSpec {
     pub reuse_existing: bool,
     /// Publish context of the volume.
     pub publish_context: Option<HashMap<String, String>>,
+    /// To support RWX we have to record switchover per frontend node.
+    #[serde(default)]
+    pub rwx: bool,
 }
 
 impl SwitchOverSpec {
@@ -107,24 +110,38 @@ impl SwitchOverSpec {
 }
 
 /// Persistent Store key for `SwitchOverSpec`.
-pub struct SwitchOverSpecKey(VolumeId);
+pub struct SwitchOverSpecKey(VolumeId, Option<NodeId>);
 
 impl StorableObject for SwitchOverSpec {
     type Key = SwitchOverSpecKey;
 
     fn key(&self) -> Self::Key {
-        SwitchOverSpecKey(self.volume.clone())
-    }
-}
-
-impl SwitchOverSpecKey {
-    pub fn new(id: VolumeId) -> Self {
-        SwitchOverSpecKey(id)
+        if self.rwx {
+            SwitchOverSpecKey(self.volume.clone(), Some(self.node_name.clone()))
+        } else {
+            SwitchOverSpecKey(self.volume.clone(), None)
+        }
     }
 }
 
 impl ObjectKey for SwitchOverSpecKey {
     type Kind = StorableObjectType;
+
+    fn key(&self) -> String {
+        let v = &self.0;
+        match &self.1 {
+            None => format!(
+                "{}/{}/{v}",
+                pstor::key_prefix(self.version()),
+                self.key_type()
+            ),
+            Some(node) => format!(
+                "{}/{}/{v}/node/{node}",
+                pstor::key_prefix(self.version()),
+                self.key_type()
+            ),
+        }
+    }
 
     fn version(&self) -> ApiVersion {
         ApiVersion::V0
@@ -135,7 +152,8 @@ impl ObjectKey for SwitchOverSpecKey {
     }
 
     fn key_uuid(&self) -> String {
-        self.0.to_string()
+        // The key is generated directly from the `key()` function above.
+        unreachable!()
     }
 }
 
