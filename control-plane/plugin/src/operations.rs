@@ -1,5 +1,5 @@
 use crate::resources::{
-    error::Error, utils, CordonResources, DeleteArgs, DrainResources, ExpandResources,
+    error::Error, utils, ClearErrors, CordonResources, DeleteArgs, DrainResources, ExpandResources,
     GetResources, LabelResources, ScaleResources, SetPropertyResources, UnCordonResources,
 };
 use async_trait::async_trait;
@@ -25,6 +25,9 @@ pub enum Operations {
     /// 'Set' resources.
     #[clap(subcommand)]
     Set(SetPropertyResources),
+    /// `ClearError` resources.
+    #[clap(subcommand)]
+    ClearErrors(ClearErrors),
     /// 'Cordon' resources.
     #[clap(subcommand)]
     Cordon(CordonResources),
@@ -230,6 +233,19 @@ pub trait Delete {
     async fn del(
         id: &Self::ID,
         ignore_not_found: bool,
+        output: &utils::OutputFormat,
+    ) -> PluginResult;
+}
+
+/// Errors trait.
+/// To be implemented by resources which support the 'delete' operation.
+#[async_trait(?Send)]
+pub trait Errors {
+    type ID;
+    type REQ;
+    async fn clear(
+        id: &Self::ID,
+        request: &Option<Self::REQ>,
         output: &utils::OutputFormat,
     ) -> PluginResult;
 }

@@ -1,7 +1,7 @@
 extern crate utils as external_utils;
 use super::VolumeId;
 use crate::{
-    operations::{Cordoning, Expand, GetWithArgs, Label, ListWithArgs, PluginResult},
+    operations::{Cordoning, Errors, Expand, GetWithArgs, Label, ListWithArgs, PluginResult},
     resources::{
         error::{Error, LabelAssignSnafu, OpError, TopologyError},
         utils::{
@@ -255,6 +255,57 @@ impl ListWithArgs for Pools {
 /// Pool resource.
 #[derive(clap::Args, Debug)]
 pub struct Pool {}
+
+/// Pool clear errors request.
+#[derive(Debug, Clone, Default, clap::Args)]
+pub struct ClearErrorsRequest {
+    /// If one or more disks is specified, only those errors associated with the
+    /// specified disk or disks are cleared.
+    #[clap(long)]
+    pub disks: Vec<String>,
+    /// Clear errors using the given method.
+    #[clap(long, default_value_t = ClearMethod::default())]
+    pub clear: ClearMethod,
+}
+
+/// Clear errors variants.
+#[derive(Debug, Clone, Copy, Default, EnumString, Display)]
+pub enum ClearMethod {
+    /// Clears all counted errors and related alerts.
+    /// Example, it clears the io stall transitions, but doesn't clear an io stall.
+    #[default]
+    All,
+}
+
+#[async_trait(?Send)]
+impl Errors for Pool {
+    type ID = PoolId;
+    type REQ = ClearErrorsRequest;
+
+    async fn clear(
+        id: &Self::ID,
+        request: &Option<Self::REQ>,
+        output: &OutputFormat,
+    ) -> PluginResult {
+        let request = request.as_ref().map(|r| models::PoolClearErrReq {
+            disks: r.disks.clone(),
+            clear: match r.clear {
+                ClearMethod::All => models::PoolClearErr::All,
+            },
+        });
+        let cli = RestClient::client().pools_api();
+        let pool = cli
+            .del_pool_errors(id, request)
+            .await
+            .map_err(|source| Error::PoolClearError {
+                id: id.to_owned(),
+                source,
+            })?
+            .into_body();
+        print_table(output, pool);
+        Ok(())
+    }
+}
 
 #[async_trait(?Send)]
 impl GetWithArgs for Pool {

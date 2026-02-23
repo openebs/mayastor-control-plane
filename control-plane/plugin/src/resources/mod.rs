@@ -115,6 +115,18 @@ pub enum SetVolumeProperties {
     },
 }
 
+/// The types of resources that support the 'Clear' operation.
+#[derive(clap::Subcommand, Debug)]
+pub enum ClearErrors {
+    /// Clear errors from a pool.
+    Pool {
+        /// ID of the pool.
+        id: PoolId,
+        #[clap(flatten)]
+        options: Option<pool::ClearErrorsRequest>,
+    },
+}
+
 /// The types of resources that support cordoning.
 #[derive(clap::Subcommand, Debug)]
 pub enum CordonResources {
