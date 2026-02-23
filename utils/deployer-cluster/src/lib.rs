@@ -12,7 +12,6 @@ use opentelemetry_sdk::{propagation::TraceContextPropagator, trace as sdktrace};
 
 use stor_port::{transport_api::TimeoutOptions, types::v0::transport};
 
-use clap::Parser;
 pub use composer::ImagePullPolicy;
 pub use csi_driver::node::internal::*;
 use deployer_lib::infra::CsiNode;
@@ -75,9 +74,7 @@ async fn smoke_test() {
 
 /// Default options to create a cluster
 pub fn default_options() -> StartOptions {
-    // using from_iter as Default::default would not set the default_value from structopt
-    let options: StartOptions = StartOptions::parse_from([""]);
-    options
+    StartOptions::default()
         .with_agents(default_agents().split(',').collect())
         .with_jaeger(true)
         .with_io_engines(1)

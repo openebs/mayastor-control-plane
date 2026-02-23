@@ -361,7 +361,7 @@ async fn get_replica_topology() {
             replica_ids[0],
             replica.node.as_ref().unwrap(),
             replica.pool.as_ref().unwrap(),
-            replica.state.to_string()
+            replica.state
         ),
         VolumeReplicaTopologies::from(replica_topo),
     );
@@ -432,7 +432,7 @@ fn pool_output(pool_state: PoolState, managed: bool) -> String {
         " {id}  {disks}  {managed}    {node}  {status}  {capacity}     {allocated}        {available}      {committed} \n",
         id = pool_state.id,
         node = pool_state.node,
-        status = pool_state.status.to_string(),
+        status = pool_state.status
     )
 }
 
@@ -447,7 +447,7 @@ fn volume_output(volume_spec: VolumeSpec, volume_state: VolumeState) -> String {
         volume_spec.num_replicas,
         "<none>",
         "<none>",
-        volume_state.status.to_string(),
+        volume_state.status,
         volume_state.size
     )
 }
@@ -461,8 +461,6 @@ fn node_output(node_state: NodeState) -> String {
         width_grpc = node_state.grpc_endpoint.len() + 2
     ) + &*format!(
         " {}  {}  {} \n",
-        node_state.id,
-        node_state.grpc_endpoint,
-        node_state.status.to_string()
+        node_state.id, node_state.grpc_endpoint, node_state.status
     )
 }

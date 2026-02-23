@@ -54,7 +54,7 @@ pub fn default_agents() -> &'static str {
     "Core"
 }
 
-#[derive(Debug, Default, Clone, Parser)]
+#[derive(Debug, Clone, Parser)]
 #[clap(about = "Create and start all components")]
 pub struct StartOptions {
     /// Use the following Control Plane Agents
@@ -354,6 +354,29 @@ pub struct StartOptions {
     pool_cluster_size: Option<u32>,
     #[clap(long, hide = true)]
     no_deprecated_access_mode: bool,
+
+    /// [`PoolCliArgs`].
+    #[clap(flatten)]
+    pub pool: PoolCliArgs,
+}
+impl Default for StartOptions {
+    fn default() -> Self {
+        Self::parse_from(Vec::<String>::new())
+    }
+}
+
+/// DiskPool related arguments.
+#[derive(Debug, clap::Parser, Clone)]
+pub struct PoolCliArgs {
+    /// I/O error count threshold.
+    /// After this many errors a pool alert is raised as Warning.
+    #[clap(long, env, default_value_t = 8)]
+    pub io_error_threshold: u64,
+}
+impl Default for PoolCliArgs {
+    fn default() -> Self {
+        Self::parse_from(Vec::<String>::new())
+    }
 }
 
 /// List of KeyValues

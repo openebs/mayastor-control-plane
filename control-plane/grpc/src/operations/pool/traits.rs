@@ -158,20 +158,12 @@ impl TryFrom<pool::PoolState> for PoolState {
     type Error = ReplyError;
 
     fn try_from(pool_state: pool::PoolState) -> Result<Self, Self::Error> {
+        let status = pool_state.status();
         Ok(PoolState {
             node: pool_state.node_id.into(),
             id: pool_state.pool_id.into(),
             disks: pool_state.disks_uri.iter().map(|i| i.into()).collect(),
-            status: match pool::PoolStatus::try_from(pool_state.status) {
-                Ok(status) => status.into(),
-                Err(error) => {
-                    return Err(ReplyError::invalid_argument(
-                        ResourceKind::Pool,
-                        "pool.state.status",
-                        error,
-                    ))
-                }
-            },
+            status: status.into(),
             capacity: pool_state.capacity,
             used: pool_state.used,
             committed: pool_state.committed,
@@ -420,6 +412,11 @@ impl From<PoolErrorCode> for pool::ProbeErrorCode {
             PoolErrorCode::ForeignPoolUid => Self::ForeignPoolUid,
             PoolErrorCode::SuperBlock => Self::SuperBlock,
             PoolErrorCode::InvalidSuperBlock => Self::InvalidSuperBlock,
+            PoolErrorCode::DiskIsADirectory => Self::DiskIsADirectory,
+            PoolErrorCode::NodeIsUnknown => Self::NodeIsUnknown,
+            PoolErrorCode::NodeIsOffline => Self::NodeIsOffline,
+            PoolErrorCode::ImportDisabled => Self::ImportDisabled,
+            PoolErrorCode::TimeOut => Self::TimeOut,
         }
     }
 }
@@ -434,6 +431,8 @@ impl From<PoolDiag> for pool::PoolDiag {
         };
         Self {
             import_errors: diag.import_errors.into_iter().map(import_error).collect(),
+            status: pool::PoolStatus::from(diag.status) as i32,
+            error: diag.error.into_opt(),
         }
     }
 }
@@ -447,25 +446,41 @@ impl From<pool::ProbeErrorCode> for PoolErrorCode {
             pool::ProbeErrorCode::ForeignPoolUid => Self::ForeignPoolUid,
             pool::ProbeErrorCode::SuperBlock => Self::SuperBlock,
             pool::ProbeErrorCode::InvalidSuperBlock => Self::InvalidSuperBlock,
+            pool::ProbeErrorCode::DiskIsADirectory => Self::DiskIsADirectory,
+            pool::ProbeErrorCode::NodeIsUnknown => Self::NodeIsUnknown,
+            pool::ProbeErrorCode::NodeIsOffline => Self::NodeIsOffline,
+            pool::ProbeErrorCode::ImportDisabled => Self::ImportDisabled,
+            pool::ProbeErrorCode::TimeOut => Self::TimeOut,
         }
     }
 }
 impl From<pool::PoolDiag> for PoolDiag {
     fn from(diag: pool::PoolDiag) -> Self {
         let import_error = |value: pool::DiskError| PoolDiskError {
-            error: {
-                let error = value.error.unwrap();
-                PoolError {
-                    code: PoolErrorCode::from(
-                        pool::ProbeErrorCode::try_from(error.code).unwrap_or_default(),
-                    ),
-                    msg: error.msg,
-                }
-            },
+            error: value.error.unwrap_or_default().into(),
             disk: value.disk,
         };
         Self {
+            status: diag.status().into(),
+            error: diag.error.into_opt(),
             import_errors: diag.import_errors.into_iter().map(import_error).collect(),
+        }
+    }
+}
+
+impl From<pool::ProbeError> for PoolError {
+    fn from(value: pool::ProbeError) -> Self {
+        PoolError {
+            code: PoolErrorCode::from(value.code()),
+            msg: value.msg,
+        }
+    }
+}
+impl From<PoolError> for pool::ProbeError {
+    fn from(value: PoolError) -> Self {
+        Self {
+            code: pool::ProbeErrorCode::from(value.code) as i32,
+            msg: value.msg,
         }
     }
 }
@@ -748,6 +763,7 @@ impl From<pool::PoolStatus> for PoolStatus {
             pool::PoolStatus::Suspected => Self::Suspected,
             pool::PoolStatus::Faulted => Self::Faulted,
             pool::PoolStatus::Unknown => Self::Unknown,
+            pool::PoolStatus::Offline => Self::Offline,
         }
     }
 }
@@ -756,6 +772,7 @@ impl From<PoolStatus> for pool::PoolStatus {
     fn from(pool_status: PoolStatus) -> Self {
         match pool_status {
             PoolStatus::Unknown => Self::Unknown,
+            PoolStatus::Offline => Self::Offline,
             PoolStatus::Online => Self::Online,
             PoolStatus::Degraded => Self::Degraded,
             PoolStatus::Suspected => Self::Suspected,

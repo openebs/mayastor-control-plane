@@ -47,6 +47,10 @@ impl ComponentAction for IoEngine {
                 "--api-versions".to_string(),
                 IoEngineApiVersion::vec_to_str(options.io_engine_api_versions.clone()),
             ])
+            .with_env(
+                "IO_ERROR_THRESHOLD",
+                &options.pool.io_error_threshold.to_string(),
+            )
             .with_args(vec!["-r", format!("/host/tmp/{reg_name}.sock").as_str()])
             .with_args(vec!["--ptpl-dir", &ptpl_dir])
             .with_env("MAYASTOR_NVMF_HOSTID", Uuid::new_v4().to_string().as_str())

@@ -20,9 +20,9 @@ use stor_port::{
             replica::{PoolRef, ReplicaSpec},
         },
         transport::{
-            CreatePool, CtrlPoolState, DestroyReplica, GetBlockDevices, ImportPool, NodeId, Pool,
-            PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolState,
-            ReplicaOwners,
+            CreatePool, CtrlPoolState, DestroyReplica, GetBlockDevices, ImportPool, NodeId,
+            NodeStatus, Pool, PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode,
+            PoolState, PoolStatus, ReplicaOwners,
         },
     },
 };
@@ -48,6 +48,7 @@ impl OperationGuardArc<PoolSpec> {
             }
             CreatePool::from(spec.deref())
         };
+
         let node = registry.node_wrapper(&request.node).await?;
         if node.pool(&request.id).await.is_none() {
             return Ok(());
@@ -55,11 +56,69 @@ impl OperationGuardArc<PoolSpec> {
 
         let _ = self.start_create(registry, &request).await?;
         let result = node.create_pool(&request).await;
+
         let _state = self
             .complete_create(result, registry, OnCreateFail::LeaveAsIs)
             .await?;
 
         Ok(())
+    }
+
+    /// Get the [`NodeWrapper`] for this pool.
+    /// # NOTE
+    /// If the node is not online, its status is returned.
+    pub(crate) async fn node_wrapper(
+        &mut self,
+        registry: &Registry,
+        node: &NodeId,
+    ) -> Result<Result<Arc<RwLock<NodeWrapper>>, NodeStatus>, SvcError> {
+        let error = match registry.node_wrapper(node).await {
+            Ok(node) => {
+                let node_guard = node.read().await;
+                if !node_guard.is_online() {
+                    self.mark_as_offline(PoolError {
+                        code: PoolErrorCode::NodeIsOffline,
+                        msg: "".to_string(),
+                    });
+                    return Ok(Err(node_guard.status()));
+                }
+                drop(node_guard);
+                return Ok(Ok(node));
+            }
+            Err(error) => error,
+        };
+
+        self.mark_as_offline(PoolError {
+            code: PoolErrorCode::NodeIsUnknown,
+            msg: "".to_string(),
+        });
+        Err(error)
+    }
+
+    fn mark_as_diag(&mut self, status: PoolStatus, error: PoolError) {
+        let mut pool = self.lock();
+        let Some(ref mut diag) = &mut pool.metadata.runtime.diag else {
+            pool.metadata.runtime.diag = Some(PoolDiag {
+                import_errors: vec![],
+                error: Some(error),
+                status,
+            });
+            return;
+        };
+        diag.error = Some(error);
+        diag.status = status;
+    }
+    fn mark_as_offline(&mut self, error: PoolError) {
+        self.mark_as_diag(PoolStatus::Offline, error);
+    }
+    /// Mark the pool in [`PoolErrorCode::ImportDisabled`] since it cannot be
+    /// imported due to being cordoned for imports.
+    pub fn mark_as_import_cordoned(&mut self) {
+        let error = PoolError {
+            code: PoolErrorCode::ImportDisabled,
+            msg: "".to_string(),
+        };
+        self.mark_as_diag(PoolStatus::Offline, error);
     }
 
     /// Attempt to import a pool.
@@ -86,27 +145,16 @@ impl OperationGuardArc<PoolSpec> {
         );
         let result = node.import_pool(&request).await;
         if let Err(error) = &result {
-            let code_map = |code: tonic::Code| -> PoolError {
-                let code = match code {
-                    tonic::Code::InvalidArgument => PoolErrorCode::InvalidSuperBlock,
-                    tonic::Code::NotFound => PoolErrorCode::DiskNotFound,
-                    _ => PoolErrorCode::Unknown,
-                };
-                // todo: this is rather long as it includes details and metadata... trim it?
-                let msg = error.to_string();
-                PoolError { code, msg }
-            };
-            match error.tonic_code() {
-                tonic::Code::NotFound | tonic::Code::InvalidArgument => {
-                    let disks = pool_spec.disks.first().map(|d| d.to_string());
-                    *reporter.lock().expect("not poisoned") = Some(PoolDiag {
-                        import_errors: vec![PoolDiskError {
-                            error: code_map(error.tonic_code()),
-                            disk: disks.unwrap_or_default(),
-                        }],
-                    });
-                }
-                _ => {}
+            if let Some(error) = Self::pool_import_error(error) {
+                let disks = pool_spec.disks.first().map(|d| d.to_string());
+                *reporter.lock().expect("not poisoned") = Some(PoolDiag {
+                    import_errors: vec![PoolDiskError {
+                        error: error.clone(),
+                        disk: disks.unwrap_or_default(),
+                    }],
+                    status: PoolStatus::Offline,
+                    error: Some(error),
+                });
             }
         }
         self.complete_update(registry, result, pool_spec).await
@@ -117,6 +165,29 @@ impl OperationGuardArc<PoolSpec> {
     pub(crate) fn on_create_fail(&self, registry: &Registry) -> OnCreateFail {
         let spec = self.lock();
         on_create_fail(&spec, registry).unwrap_or(OnCreateFail::LeaveAsIs)
+    }
+
+    /// Maps a [`SvcError`] obtained after a failed creation or import to a [`PoolError`].
+    pub(super) fn pool_import_error(error: &SvcError) -> Option<PoolError> {
+        let code = match error.tonic_code() {
+            tonic::Code::InvalidArgument
+                if error.to_string().contains("EISDIR: Is a directory") =>
+            {
+                PoolErrorCode::DiskIsADirectory
+            }
+            tonic::Code::InvalidArgument => PoolErrorCode::InvalidSuperBlock,
+            tonic::Code::NotFound => PoolErrorCode::DiskNotFound,
+            tonic::Code::Cancelled => PoolErrorCode::TimeOut,
+            tonic::Code::Aborted => PoolErrorCode::TimeOut,
+            _ => return None,
+        };
+        let msg = match &error {
+            SvcError::GrpcRequestError { source, .. } => {
+                format!("{:?}: {}", source.code(), source.message())
+            }
+            _error => _error.to_string(),
+        };
+        Some(PoolError { code, msg })
     }
 
     // todo: fit in a trait

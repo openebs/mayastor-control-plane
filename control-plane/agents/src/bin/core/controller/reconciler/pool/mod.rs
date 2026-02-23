@@ -118,6 +118,8 @@ async fn missing_pool_state_reconciler(
 
         if pool_spec.cordoned().map(|s| s.import).unwrap_or_default() {
             tracing::trace!("Not allowed to import because the pool is cordoned for imports");
+
+            pool.mark_as_import_cordoned();
             return PollResult::Ok(PollerState::Idle);
         }
 
@@ -131,9 +133,8 @@ async fn missing_pool_state_reconciler(
                 )
             });
         };
-        let node = match context.registry().node_wrapper(&pool_spec.node).await {
-            Ok(node) if !node.read().await.is_online() => {
-                let node_status = node.read().await.status();
+        let node = match pool.node_wrapper(context.registry(), &pool_spec.node).await {
+            Ok(Err(node_status)) => {
                 warn_missing(&pool_spec, node_status);
                 return PollResult::Ok(PollerState::Idle);
             }
@@ -141,7 +142,7 @@ async fn missing_pool_state_reconciler(
                 warn_missing(&pool_spec, NodeStatus::Unknown);
                 return PollResult::Ok(PollerState::Idle);
             }
-            Ok(node) => node,
+            Ok(Ok(node)) => node,
         };
 
         async {

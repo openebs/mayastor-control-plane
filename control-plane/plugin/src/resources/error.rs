@@ -141,6 +141,12 @@ pub enum Error {
     /// User has decided to abort the operation following a dialogue.
     #[snafu(display("Operation was aborted by the user"))]
     DialogueAbort {},
+    /// Error when pool clear-errors request fails.
+    #[snafu(display("Failed to clear errors for pool {id}. Error {source}"))]
+    PoolClearError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
 }
 
 /// Errors related to label topology formats.

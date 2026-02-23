@@ -29,6 +29,8 @@ pub enum PoolStatus {
     Faulted,
     /// Pool has at least an alert level of warning.
     Suspected,
+    /// The pool is offline.
+    Offline,
 }
 
 impl Default for PoolStatus {
@@ -45,6 +47,7 @@ impl From<i32> for PoolStatus {
             2 => Self::Degraded,
             3 => Self::Faulted,
             4 => Self::Suspected,
+            5 => Self::Offline,
             _ => Self::Unknown,
         }
     }
@@ -53,6 +56,7 @@ impl From<PoolStatus> for models::PoolStatus {
     fn from(src: PoolStatus) -> Self {
         match src {
             PoolStatus::Unknown => Self::Unknown,
+            PoolStatus::Offline => Self::Offline,
             PoolStatus::Online => Self::Online,
             PoolStatus::Degraded => Self::Degraded,
             PoolStatus::Faulted => Self::Faulted,
@@ -89,21 +93,31 @@ impl Deref for CtrlPoolState {
 /// Different pool errors
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 pub enum PoolErrorCode {
-    /// Unknown error
+    /// Unknown error.
     #[default]
     Unknown,
-    /// Disk not found in the system
+    /// Disk not found in the system.
     DiskNotFound,
-    /// Disk read IO errors
+    /// Disk read IO errors.
     DiskReadIoError,
-    /// Pool on-disk name doesn't match the expected
+    /// Pool on-disk name doesn't match the expected.
     ForeignPoolName,
-    /// Pool on-disk uuid doesn't match the expected
+    /// Pool on-disk uuid doesn't match the expected.
     ForeignPoolUid,
-    /// Failed to check super block error
+    /// Failed to check super block error.
     SuperBlock,
-    /// Invalid super block (eg: CRC error)
+    /// Invalid super block (eg: CRC error).
     InvalidSuperBlock,
+    /// Disk is a directory (can happen when setting up incorrect volume mounts).
+    DiskIsADirectory,
+    /// Node is in unknown state.
+    NodeIsUnknown,
+    /// Node is offline.
+    NodeIsOffline,
+    /// Import is disable due to cordoning.
+    ImportDisabled,
+    /// gRPC to the pool timed out.
+    TimeOut,
 }
 
 /// Pool error code and human-readable message.
@@ -130,6 +144,21 @@ pub struct PoolDiskError {
 pub struct PoolDiag {
     /// Errors encountered when trying to import the pool.
     pub import_errors: Vec<PoolDiskError>,
+    /// Inferred error of the pool, if any.
+    #[serde(skip)]
+    pub error: Option<PoolError>,
+    /// Inferred status of the pool.
+    #[serde(skip)]
+    pub status: PoolStatus,
+}
+impl PoolDiag {
+    /// Add the status to the diagnostic information.
+    pub fn with_state(self, state: &PoolState) -> PoolDiag {
+        Self {
+            status: state.status.clone(),
+            ..self
+        }
+    }
 }
 
 /// Pool state information - as reported by the io-engine.
@@ -314,7 +343,7 @@ impl From<PoolAlertStatus> for models::PoolAlertStatus {
 
 impl From<PoolDiag> for models::PoolDiag {
     fn from(src: PoolDiag) -> Self {
-        Self::new_all(src.import_errors)
+        Self::new_all(src.import_errors, src.status, src.error.into_opt())
     }
 }
 
@@ -338,6 +367,11 @@ impl From<PoolErrorCode> for models::PoolProbeErrorCode {
             PoolErrorCode::ForeignPoolUid => Self::ForeignPoolUid,
             PoolErrorCode::SuperBlock => Self::SuperBlock,
             PoolErrorCode::InvalidSuperBlock => Self::InvalidSuperBlock,
+            PoolErrorCode::DiskIsADirectory => Self::DiskIsADirectory,
+            PoolErrorCode::NodeIsUnknown => Self::NodeIsUnknown,
+            PoolErrorCode::NodeIsOffline => Self::NodeIsOffline,
+            PoolErrorCode::ImportDisabled => Self::ImportDisabled,
+            PoolErrorCode::TimeOut => Self::TimeOut,
         }
     }
 }
@@ -351,6 +385,7 @@ impl PartialOrd for PoolStatus {
         match self {
             PoolStatus::Unknown => match other {
                 PoolStatus::Unknown => None,
+                PoolStatus::Offline => None,
                 PoolStatus::Online => Some(Ordering::Less),
                 PoolStatus::Degraded => Some(Ordering::Less),
                 PoolStatus::Suspected => Some(Ordering::Less),
@@ -358,6 +393,7 @@ impl PartialOrd for PoolStatus {
             },
             PoolStatus::Online => match other {
                 PoolStatus::Unknown => Some(Ordering::Greater),
+                PoolStatus::Offline => Some(Ordering::Greater),
                 PoolStatus::Online => Some(Ordering::Equal),
                 PoolStatus::Degraded => Some(Ordering::Greater),
                 PoolStatus::Suspected => Some(Ordering::Greater),
@@ -365,13 +401,23 @@ impl PartialOrd for PoolStatus {
             },
             PoolStatus::Degraded | PoolStatus::Suspected => match other {
                 PoolStatus::Unknown => Some(Ordering::Greater),
+                PoolStatus::Offline => Some(Ordering::Greater),
                 PoolStatus::Online => Some(Ordering::Less),
                 PoolStatus::Suspected => Some(Ordering::Equal),
                 PoolStatus::Degraded => Some(Ordering::Equal),
                 PoolStatus::Faulted => Some(Ordering::Greater),
             },
+            PoolStatus::Offline => match other {
+                PoolStatus::Unknown => None,
+                PoolStatus::Offline => Some(Ordering::Equal),
+                PoolStatus::Online => Some(Ordering::Less),
+                PoolStatus::Suspected => Some(Ordering::Less),
+                PoolStatus::Degraded => Some(Ordering::Less),
+                PoolStatus::Faulted => None,
+            },
             PoolStatus::Faulted => match other {
                 PoolStatus::Unknown => None,
+                PoolStatus::Offline => None,
                 PoolStatus::Online => Some(Ordering::Less),
                 PoolStatus::Degraded => Some(Ordering::Less),
                 PoolStatus::Suspected => Some(Ordering::Less),
@@ -422,7 +468,8 @@ impl Pool {
             id: state.id.clone(),
             diag: spec
                 .as_ref()
-                .and_then(|spec| spec.metadata.runtime.diag.clone()),
+                .and_then(|spec| spec.metadata.runtime.diag.clone())
+                .map(|d| d.with_state(&state.state)),
             spec: spec.map(|s| s.spec),
             state: Some(state),
         }

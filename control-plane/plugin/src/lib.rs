@@ -10,13 +10,13 @@ use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
 use crate::{
     operations::{
-        Cordoning, Delete, Drain, Expand, Get, GetBlockDevices, GetSnapshotTopology, GetSnapshots,
-        GetWithArgs, List, ListExt, ListWithArgs, Operations, PluginResult, RebuildHistory,
-        ReplicaTopology, Scale,
+        Cordoning, Delete, Drain, Errors, Expand, Get, GetBlockDevices, GetSnapshotTopology,
+        GetSnapshots, GetWithArgs, List, ListExt, ListWithArgs, Operations, PluginResult,
+        RebuildHistory, ReplicaTopology, Scale,
     },
     resources::{
         blockdevice, cordon, drain, node, pool, snapshot, volume, volume::VolumeTopologiesArgs,
-        CordonResources, DeleteArgs, DeleteResources, DrainResources, ExpandResources,
+        ClearErrors, CordonResources, DeleteArgs, DeleteResources, DrainResources, ExpandResources,
         GetCordonArgs, GetDrainArgs, GetResources, ScaleResources, SetPropertyResources,
         SetVolumeProperties, UnCordonResources,
     },
@@ -114,6 +114,7 @@ impl ExecuteOperation for Operations {
             Operations::Scale(resource) => resource.execute(cli_args).await,
             Operations::Expand(resource) => resource.execute(cli_args).await,
             Operations::Set(resource) => resource.execute(cli_args).await,
+            Operations::ClearErrors(resource) => resource.execute(cli_args).await,
             Operations::Cordon(resource) => resource.execute(cli_args).await,
             Operations::Uncordon(resource) => resource.execute(cli_args).await,
             Operations::Label(resource) => resource.execute(cli_args).await,
@@ -245,6 +246,19 @@ impl ExecuteOperation for SetPropertyResources {
         match self {
             SetPropertyResources::Volume { id, properties } => {
                 volume::Volume::set_property(id, properties, &cli_args.output).await
+            }
+        }
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl ExecuteOperation for ClearErrors {
+    type Args = CliArgs;
+    type Error = crate::resources::Error;
+    async fn execute(&self, cli_args: &CliArgs) -> PluginResult {
+        match self {
+            ClearErrors::Pool { id, options } => {
+                pool::Pool::clear(id, options, &cli_args.output).await
             }
         }
     }
