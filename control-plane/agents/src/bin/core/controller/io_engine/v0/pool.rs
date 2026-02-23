@@ -6,6 +6,7 @@ use stor_port::{
     types::v0::transport::{CreatePool, DestroyPool, ExpandPool, ImportPool, PoolState},
 };
 
+use grpc::operations::pool::traits::ClearErrorsRequest;
 use snafu::ResultExt;
 
 #[async_trait::async_trait]
@@ -85,6 +86,14 @@ impl crate::controller::io_engine::PoolApi for super::RpcClient {
             resource: ResourceKind::Pool,
             request: "expand_pool".to_string(),
             source: tonic::Status::unimplemented(""),
+        })
+    }
+
+    async fn clear_errors(&self, _request: &ClearErrorsRequest) -> Result<PoolState, SvcError> {
+        Err(SvcError::GrpcRequestError {
+            resource: ResourceKind::Pool,
+            request: "clear_errors".to_string(),
+            source: tonic::Status::unimplemented("not supported on v0"),
         })
     }
 }

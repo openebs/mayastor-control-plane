@@ -20,13 +20,15 @@ pub struct GetPools {
 #[derive(Serialize, Deserialize, Debug, Clone, EnumString, Display, Eq, PartialEq)]
 pub enum PoolStatus {
     /// Unknown state.
-    Unknown = 0,
+    Unknown,
     /// The pool is in normal working order.
-    Online = 1,
+    Online,
     /// The pool has experienced a failure but can still function.
-    Degraded = 2,
+    Degraded,
     /// The pool is completely inaccessible.
-    Faulted = 3,
+    Faulted,
+    /// Pool has at least an alert level of warning.
+    Suspected,
 }
 
 impl Default for PoolStatus {
@@ -34,12 +36,15 @@ impl Default for PoolStatus {
         Self::Unknown
     }
 }
+// todo: this conversion is bypassing the io-engine proto-api translation.
+//  this may cause issues if the numbers here get desynced with the io-engine api.
 impl From<i32> for PoolStatus {
     fn from(src: i32) -> Self {
         match src {
             1 => Self::Online,
             2 => Self::Degraded,
             3 => Self::Faulted,
+            4 => Self::Suspected,
             _ => Self::Unknown,
         }
     }
@@ -51,6 +56,7 @@ impl From<PoolStatus> for models::PoolStatus {
             PoolStatus::Online => Self::Online,
             PoolStatus::Degraded => Self::Degraded,
             PoolStatus::Faulted => Self::Faulted,
+            PoolStatus::Suspected => Self::Suspected,
         }
     }
 }
@@ -154,6 +160,85 @@ pub struct PoolState {
     pub disk_capacity: Option<u64>,
     /// Maximum disk_capacity this pool can be expanded to, in bytes.
     pub max_expandable_size: Option<u64>,
+    /// Information for each pool disk.
+    pub disk_info: Vec<DiskInfo>,
+    /// Error information at the pool top-level.
+    pub errors: Option<PoolErrorInfo>,
+}
+
+/// Pool information related to a specific disk.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+pub struct DiskInfo {
+    /// The disk uri used to open the disk
+    pub uri: String,
+    /// Errors seen for this disk
+    pub errors: PoolErrorInfo,
+}
+
+/// Alerts and error information for a pool.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+pub struct PoolErrorInfo {
+    /// These are generated from the below metrics
+    pub alerts: PoolAlerts,
+    /// Count of all disk errors since the pool has been opened.
+    pub io_error_count: u64,
+    /// After this many errors a pool alert is raised as Warning.
+    pub io_error_threshold: u64,
+    /// The I/O is stalled.
+    pub io_stalled: bool,
+    /// Number of stall transitions.
+    pub io_stall_transition_count: u64,
+    /// After this many transitions within the window, a pool alert is raised as Warning.
+    pub io_stall_transition_threshold: u64,
+}
+
+/// Pool alerts and inferred status.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+pub struct PoolAlerts {
+    /// The [`PoolAlertStatus`] of the pool.
+    pub status: PoolAlertStatus,
+    /// No status alerts are raised.
+    pub notice: Vec<PoolAlert>,
+    /// Raises an Attention level, but pool state is left as is.
+    pub attention: Vec<PoolAlert>,
+    /// Warnings downgrades the pool state to Suspected.
+    pub warning: Vec<PoolAlert>,
+    /// Pools with critical alerts should not be used.
+    pub critical: Vec<PoolAlert>,
+}
+
+/// Alert-based status for the DiskPool.
+#[derive(Serialize, Deserialize, Debug, Default, Clone, EnumString, Display, Eq, PartialEq)]
+pub enum PoolAlertStatus {
+    /// No issues detected; pool is operating normally.
+    Healthy,
+    /// Non‑critical issues present; user attention is recommended.
+    Attention,
+    /// Conditions have exceeded warning thresholds (fixed or based on trends over a defined time window).
+    Warning,
+    /// Severe issues detected; pool usage should be avoided.
+    Critical,
+    /// Unknown Alert Status
+    #[default]
+    Unknown,
+}
+
+/// The various alerts that can be raised by the pool.
+#[derive(Serialize, Deserialize, Debug, Default, Clone, EnumString, Display, Eq, PartialEq)]
+pub enum PoolAlert {
+    /// Unrecognized or unsupported alert type.
+    #[default]
+    Unknown,
+    /// Pool I/O is currently stalled.
+    IoStalled,
+    /// I/O is not stalled as of now, but stalls have occurred over a defined time window.
+    IoStallIntermittent,
+    /// I/O is not stalled as of now, but stalls have occurred too frequently over a defined time window.
+    IoStallIntermittentExc,
+    /// I/O errors have been detected for the pool.
+    IoError,
+    /// I/O errors exceed defined thresholds.
+    IoErrorExc,
 }
 
 impl From<CtrlPoolState> for models::PoolState {
@@ -171,7 +256,89 @@ impl From<CtrlPoolState> for models::PoolState {
             Some(src.cluster_size as u64),
             src.disk_capacity,
             src.max_expandable_size,
+            src.errors.into_opt(),
         )
+    }
+}
+
+impl From<PoolErrorInfo> for models::PoolErrorInfo {
+    fn from(value: PoolErrorInfo) -> Self {
+        Self {
+            alerts: value.alerts.into(),
+            io_error_count: value.io_error_count,
+            io_error_threshold: value.io_error_threshold,
+            io_stalled: value.io_stalled,
+            io_stall_transition_count: value.io_stall_transition_count,
+            io_stall_transition_threshold: value.io_stall_transition_threshold,
+        }
+    }
+}
+
+impl From<PoolAlerts> for models::PoolAlerts {
+    fn from(value: PoolAlerts) -> Self {
+        use crate::IntoVec;
+        Self {
+            status: value.status.into(),
+            notice: value.notice.into_vec(),
+            attention: value.attention.into_vec(),
+            warning: value.warning.into_vec(),
+            critical: value.critical.into_vec(),
+        }
+    }
+}
+
+impl From<PoolAlert> for models::PoolAlert {
+    fn from(value: PoolAlert) -> Self {
+        match value {
+            PoolAlert::Unknown => Self::Unknown,
+            PoolAlert::IoStalled => Self::IoStalled,
+            PoolAlert::IoStallIntermittent => Self::IoStallIntermittent,
+            PoolAlert::IoStallIntermittentExc => Self::IoStallIntermittentExc,
+            PoolAlert::IoError => Self::IoError,
+            PoolAlert::IoErrorExc => Self::IoErrorExc,
+        }
+    }
+}
+
+impl From<PoolAlertStatus> for models::PoolAlertStatus {
+    fn from(value: PoolAlertStatus) -> Self {
+        match value {
+            PoolAlertStatus::Healthy => Self::Healthy,
+            PoolAlertStatus::Attention => Self::Attention,
+            PoolAlertStatus::Warning => Self::Warning,
+            PoolAlertStatus::Critical => Self::Critical,
+            PoolAlertStatus::Unknown => Self::Unknown,
+        }
+    }
+}
+
+impl From<PoolDiag> for models::PoolDiag {
+    fn from(src: PoolDiag) -> Self {
+        Self::new_all(src.import_errors)
+    }
+}
+
+impl From<PoolDiskError> for models::PoolDiskError {
+    fn from(value: PoolDiskError) -> Self {
+        Self::new_all(value.disk, value.error)
+    }
+}
+impl From<PoolError> for models::PoolProbeError {
+    fn from(value: PoolError) -> Self {
+        Self::new_all(value.msg, value.code)
+    }
+}
+impl From<PoolErrorCode> for models::PoolProbeErrorCode {
+    fn from(value: PoolErrorCode) -> Self {
+        match value {
+            PoolErrorCode::Unknown => Self::Unknown,
+            PoolErrorCode::DiskNotFound => Self::DiskNotFound,
+            PoolErrorCode::DiskReadIoError => Self::DiskReadIoError,
+            PoolErrorCode::ForeignPoolName => Self::ForeignPoolName,
+            PoolErrorCode::ForeignPoolUid => Self::ForeignPoolUid,
+            PoolErrorCode::SuperBlock => Self::SuperBlock,
+            PoolErrorCode::InvalidSuperBlock => Self::InvalidSuperBlock,
+        }
     }
 }
 
@@ -186,17 +353,20 @@ impl PartialOrd for PoolStatus {
                 PoolStatus::Unknown => None,
                 PoolStatus::Online => Some(Ordering::Less),
                 PoolStatus::Degraded => Some(Ordering::Less),
+                PoolStatus::Suspected => Some(Ordering::Less),
                 PoolStatus::Faulted => None,
             },
             PoolStatus::Online => match other {
                 PoolStatus::Unknown => Some(Ordering::Greater),
                 PoolStatus::Online => Some(Ordering::Equal),
                 PoolStatus::Degraded => Some(Ordering::Greater),
+                PoolStatus::Suspected => Some(Ordering::Greater),
                 PoolStatus::Faulted => Some(Ordering::Greater),
             },
-            PoolStatus::Degraded => match other {
+            PoolStatus::Degraded | PoolStatus::Suspected => match other {
                 PoolStatus::Unknown => Some(Ordering::Greater),
                 PoolStatus::Online => Some(Ordering::Less),
+                PoolStatus::Suspected => Some(Ordering::Equal),
                 PoolStatus::Degraded => Some(Ordering::Equal),
                 PoolStatus::Faulted => Some(Ordering::Greater),
             },
@@ -204,6 +374,7 @@ impl PartialOrd for PoolStatus {
                 PoolStatus::Unknown => None,
                 PoolStatus::Online => Some(Ordering::Less),
                 PoolStatus::Degraded => Some(Ordering::Less),
+                PoolStatus::Suspected => Some(Ordering::Less),
                 PoolStatus::Faulted => Some(Ordering::Equal),
             },
         }
@@ -223,7 +394,6 @@ pub struct Pool {
     /// Runtime state of the pool.
     pub state: Option<CtrlPoolState>,
     /// Health of the pool.
-    /// todo: is this needed since we have it on the "spec" misnomer.
     pub diag: Option<PoolDiag>,
 }
 
@@ -295,7 +465,12 @@ impl Pool {
 
 impl From<Pool> for models::Pool {
     fn from(src: Pool) -> Self {
-        models::Pool::new_all(src.id, src.spec.into_opt(), src.state.into_opt())
+        models::Pool::new_all(
+            src.id,
+            src.spec.into_opt(),
+            src.state.into_opt(),
+            src.diag.into_opt(),
+        )
     }
 }
 

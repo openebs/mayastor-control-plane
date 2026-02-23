@@ -1462,6 +1462,36 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  '/pools/{pool_id}/clear-errors':
+    put:
+      tags:
+        - Pools
+      operationId: put_pool_clearerrors
+      parameters:
+        - in: path
+          name: pool_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoolClearErrReq'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pool'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/pools/{pool_id}/expand':
     put:
       tags:
@@ -3184,6 +3214,7 @@ components:
       enum:
         - Unknown
         - Online
+        - Suspected
         - Degraded
         - Faulted
     Pool:
@@ -3196,9 +3227,150 @@ components:
           $ref: '#/components/schemas/PoolSpec'
         state:
           $ref: '#/components/schemas/PoolState'
+        diag:
+          $ref: '#/components/schemas/PoolDiag'
       required:
         - id
       minProperties: 2
+    PoolDiag:
+      description: Pool diagnostic information
+      type: object
+      properties:
+        import_errors:
+          description: Errors encountered when importing the pool
+          type: array
+          items:
+            $ref: '#/components/schemas/PoolDiskError'
+      required:
+        - import_errors
+    PoolDiskError:
+      description: Errors seen on the given pool disk
+      type: object
+      properties:
+        disk:
+          description: Disk Uri
+          example: aio:///dev/disk/by-id/ata-xxxx
+          type: string
+        error:
+          $ref: '#/components/schemas/PoolProbeError'
+      required:
+        - disk
+        - error
+    PoolProbeError:
+      description: Errors seen on a pool or a pool disk
+      type: object
+      properties:
+        message:
+          description: Human-Readable message error
+          type: string
+        error:
+          $ref: '#/components/schemas/PoolProbeErrorCode'
+      required:
+        - message
+        - error
+    PoolProbeErrorCode:
+      description: Pool Disk Probe Errors
+      type: string
+      enum:
+        - Unknown
+        - DiskNotFound
+        - DiskReadIoError
+        - ForeignPoolName
+        - ForeignPoolUid
+        - SuperBlock
+        - InvalidSuperBlock
+    PoolErrorInfo:
+      type: object
+      description: Pool alerts and error information
+      properties:
+        alerts:
+          $ref: '#/components/schemas/PoolAlerts'
+        ioErrorCount:
+          description: A tally of all errors seen for this specific disk
+          type: integer
+          format: uint64
+        ioErrorThreshold:
+          description: A tally of all errors seen for this specific disk
+          type: integer
+          format: uint64
+        ioStalled:
+          description: Is the Disk Queue containing stalled IOs
+          type: boolean
+        ioStallTransitionCount:
+          description: A tally of all stall flaps seen for this specific disk in a given time window.
+          type: integer
+          format: uint64
+        ioStallTransitionThreshold:
+          description: The stall flap threshold seen for this specific pool/disk info in a given time window.
+          type: integer
+          format: uint64
+      required:
+        - alerts
+        - ioErrorCount
+        - ioErrorThreshold
+        - ioStalled
+        - ioStallTransitionCount
+        - ioStallTransitionThreshold
+    PoolDiskInfo:
+      type: object
+      description: Error information specific for this disk.
+      properties:
+        disk:
+          description: Disk Uri
+          example: aio:///dev/disk/by-id/ata-xxxx
+          type: string
+        errorInfo:
+          $ref: '#/components/schemas/PoolErrorInfo'
+      required:
+        - disk
+        - errorInfo
+    PoolAlerts:
+      type: object
+      description: Pool status and alerts
+      properties:
+        status:
+          $ref: '#/components/schemas/PoolAlertStatus'
+        notice:
+          type: array
+          items:
+            $ref: '#/components/schemas/PoolAlert'
+        attention:
+          type: array
+          items:
+            $ref: '#/components/schemas/PoolAlert'
+        warning:
+          type: array
+          items:
+            $ref: '#/components/schemas/PoolAlert'
+        critical:
+          type: array
+          items:
+            $ref: '#/components/schemas/PoolAlert'
+      required:
+        - status
+        - notice
+        - attention
+        - warning
+        - critical
+    PoolAlertStatus:
+      type: string
+      description: Pool alert status
+      enum:
+        - Unknown
+        - Healthy
+        - Attention
+        - Warning
+        - Critical
+    PoolAlert:
+      type: string
+      description: Pool alerts
+      enum:
+        - Unknown
+        - IoStalled
+        - IoError
+        - IoErrorExc
+        - IoStallIntermittent
+        - IoStallIntermittentExc
     PoolState:
       description: State of a pool, as reported by io-engine
       type: object
@@ -3252,6 +3424,8 @@ components:
           description: Maximum size underlying disk can be grown to, in bytes
           type: integer
           format: uint64
+        errorInfo:
+          $ref: '#/components/schemas/PoolErrorInfo'
       required:
         - capacity
         - disks
@@ -4449,6 +4623,27 @@ components:
         - snapshots
         - restores
         - import
+    PoolClearErrReq:
+      description: The cordon and drain state
+      type: object
+      properties:
+        disks:
+          description: |-
+            If one or more disks is specified, only those errors associated with the 
+            specified disk or disks are cleared.
+          type: array
+          items:
+            type: string
+        clear:
+          $ref: '#/components/schemas/PoolClearErr'
+      required:
+        - disks
+        - clear
+    PoolClearErr:
+      description: Clear errors variants
+      type: string
+      enum:
+        - All
     CordonDrainState:
       description: The cordon and drain state
       type: object

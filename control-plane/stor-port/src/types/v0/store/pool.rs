@@ -590,6 +590,8 @@ impl From<&PoolSpec> for transport::PoolState {
             cluster_size: pool.cluster_size,
             disk_capacity: None,
             max_expandable_size: None,
+            disk_info: vec![],
+            errors: None,
         }
     }
 }

@@ -6,6 +6,7 @@ use stor_port::{
     types::v0::transport::{CreatePool, DestroyPool, ExpandPool, ImportPool, PoolState},
 };
 
+use grpc::operations::pool::traits::ClearErrorsRequest;
 use snafu::ResultExt;
 
 #[async_trait::async_trait]
@@ -118,5 +119,18 @@ impl crate::controller::io_engine::PoolApi for super::RpcClient {
                 request: "expand_pool",
             }),
         }
+    }
+
+    async fn clear_errors(&self, request: &ClearErrorsRequest) -> Result<PoolState, SvcError> {
+        let rpc_pool =
+            self.pool()
+                .clear_errors(request.to_rpc())
+                .await
+                .context(GrpcRequestError {
+                    resource: ResourceKind::Pool,
+                    request: "clear_errors",
+                })?;
+        let pool = rpc_pool_to_agent(&rpc_pool.into_inner(), self.context.node());
+        Ok(pool)
     }
 }

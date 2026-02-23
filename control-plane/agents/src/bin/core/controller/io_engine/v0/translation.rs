@@ -83,7 +83,7 @@ impl IoEngineToAgent for v0::BlockDevice {
 impl IoEngineToAgent for v0::Pool {
     type AgentMessage = transport::PoolState;
     fn to_agent(&self) -> Self::AgentMessage {
-        Self::AgentMessage {
+        transport::PoolState {
             node: Default::default(),
             id: self.name.clone().into(),
             disks: self.disks.clone().into_vec(),
@@ -95,6 +95,8 @@ impl IoEngineToAgent for v0::Pool {
             cluster_size: POOL_BS_CLUSTER_SIZE_DEFAULT,
             disk_capacity: None,
             max_expandable_size: None,
+            disk_info: vec![],
+            errors: None,
         }
     }
 }

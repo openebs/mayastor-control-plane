@@ -27,6 +27,7 @@ use stor_port::{
 };
 
 use async_trait::async_trait;
+use grpc::operations::pool::traits::ClearErrorsRequest;
 
 #[async_trait]
 #[dyn_clonable::clonable]
@@ -68,6 +69,8 @@ pub(crate) trait PoolApi {
     async fn import_pool(&self, request: &ImportPool) -> Result<PoolState, SvcError>;
     /// Expands a pool on the node via gRPC.
     async fn expand_pool(&self, request: &ExpandPool) -> Result<PoolState, SvcError>;
+    /// Clear the pool errors.
+    async fn clear_errors(&self, request: &ClearErrorsRequest) -> Result<PoolState, SvcError>;
 }
 
 #[async_trait]

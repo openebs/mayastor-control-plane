@@ -50,6 +50,7 @@ impl CreateRow for openapi::models::Pool {
             cluster_size: Some(0),
             disk_capacity: None,
             max_expandable_size: None,
+            error_info: None,
         });
         let free = state.capacity.saturating_sub(state.used);
         let disks = state.disks.join(", ");

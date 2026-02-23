@@ -14,14 +14,15 @@ use stor_port::{
         store::pool::{Encryption, EncryptionSecret},
         transport::{
             self, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
-            NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolState, PoolUuid, Protocol,
-            Replica, ReplicaId, ReplicaKind, ReplicaName, ReplicaStatus, SetReplicaEntityId,
-            SnapshotId, VolumeId,
+            NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolAlertStatus, PoolAlerts,
+            PoolState, PoolUuid, Protocol, Replica, ReplicaId, ReplicaKind, ReplicaName,
+            ReplicaStatus, SetReplicaEntityId, SnapshotId, VolumeId,
         },
     },
     IntoOption,
 };
 
+use grpc::operations::pool::traits::ClearErrorsRequest;
 use itertools::Itertools;
 use std::{convert::TryFrom, time::UNIX_EPOCH};
 
@@ -383,6 +384,23 @@ impl TryIoEngineToAgent for v1::nexus::Nexus {
 /// New-type wrapper for external types.
 /// Allows us to convert from external types which would otherwise not be allowed.
 struct ExternalType<T>(T);
+/// Type alias for easy enum conversions.
+type ProstER<T> = ExternalType<Result<T, v1::UnknownEnumValue>>;
+
+impl<T: TryFrom<i32, Error = v1::UnknownEnumValue>> ExternalType<T> {
+    /// Convert a vector of enums (as i32) into a vector of `R`.
+    fn from_i32vec<R: From<ProstER<T>>>(vec: Vec<i32>) -> Vec<R> {
+        vec.into_iter()
+            .map(|i| ExternalType::<Result<T, v1::UnknownEnumValue>>(T::try_from(i)))
+            .map(Into::into)
+            .collect::<Vec<R>>()
+    }
+    /// Convert the `T` enum as i32 into `R`.
+    fn from_i32<R: From<ProstER<T>>>(value: i32) -> R {
+        ExternalType::<Result<T, v1::UnknownEnumValue>>(T::try_from(value)).into()
+    }
+}
+
 impl From<ExternalType<v1::nexus::NexusState>> for NexusStatus {
     fn from(src: ExternalType<v1::nexus::NexusState>) -> Self {
         match src.0 {
@@ -648,7 +666,7 @@ impl IoEngineToAgent for v1::pool::Pool {
     type AgentMessage = transport::PoolState;
     /// This converts gRPC pool object into Control plane Pool state.
     fn to_agent(&self) -> Self::AgentMessage {
-        Self::AgentMessage {
+        transport::PoolState {
             node: Default::default(),
             id: self.name.clone().into(),
             disks: self.disks.clone().into_vec(),
@@ -664,6 +682,74 @@ impl IoEngineToAgent for v1::pool::Pool {
             cluster_size: self.cluster_size,
             disk_capacity: Some(self.disk_capacity),
             max_expandable_size: self.max_expandable_size,
+            disk_info: {
+                let info = self.disk_info.clone().into_iter();
+                info.map(ExternalType).map(Into::into).collect::<Vec<_>>()
+            },
+            errors: self.errors.clone().map(ExternalType).into_opt(),
+        }
+    }
+}
+
+impl From<ExternalType<v1::pool::DiskInfo>> for transport::DiskInfo {
+    fn from(value: ExternalType<v1::pool::DiskInfo>) -> Self {
+        Self {
+            uri: value.0.uri,
+            errors: ExternalType(value.0.errors.unwrap_or_default()).into(),
+        }
+    }
+}
+impl From<ExternalType<v1::pool::PoolErrors>> for transport::PoolErrorInfo {
+    fn from(value: ExternalType<v1::pool::PoolErrors>) -> Self {
+        let value = value.0;
+        let alerts = value.alerts.map(ExternalType);
+        Self {
+            alerts: alerts.map(Into::into).unwrap_or_else(|| PoolAlerts {
+                status: PoolAlertStatus::Healthy,
+                ..Default::default()
+            }),
+            io_error_count: value.io_error_count,
+            io_error_threshold: value.io_error_threshold,
+            io_stalled: value.io_stalled,
+            io_stall_transition_count: value.io_stall_transition_count,
+            io_stall_transition_threshold: value.io_stall_transition_threshold,
+        }
+    }
+}
+impl From<ExternalType<v1::pool::PoolAlerts>> for transport::PoolAlerts {
+    fn from(value: ExternalType<v1::pool::PoolAlerts>) -> Self {
+        let value = value.0;
+        Self {
+            status: ExternalType::from_i32(value.status),
+            notice: ExternalType::<v1::pool::PoolAlert>::from_i32vec(value.notice),
+            attention: ExternalType::<v1::pool::PoolAlert>::from_i32vec(value.attention),
+            warning: ExternalType::<v1::pool::PoolAlert>::from_i32vec(value.warning),
+            critical: ExternalType::<v1::pool::PoolAlert>::from_i32vec(value.critical),
+        }
+    }
+}
+
+impl From<ProstER<v1::pool::PoolAlertStatus>> for transport::PoolAlertStatus {
+    fn from(value: ProstER<v1::pool::PoolAlertStatus>) -> Self {
+        match value.0 {
+            Ok(v1::pool::PoolAlertStatus::Healthy) => Self::Healthy,
+            Ok(v1::pool::PoolAlertStatus::Attention) => Self::Attention,
+            Ok(v1::pool::PoolAlertStatus::Warning) => Self::Warning,
+            Ok(v1::pool::PoolAlertStatus::Critical) => Self::Critical,
+            Err(_) => Self::Unknown,
+        }
+    }
+}
+
+impl From<ProstER<v1::pool::PoolAlert>> for transport::PoolAlert {
+    fn from(value: ProstER<v1::pool::PoolAlert>) -> Self {
+        match value.0 {
+            Ok(v1::pool::PoolAlert::Unknown) | Err(_) => Self::Unknown,
+            Ok(v1::pool::PoolAlert::IoStalled) => Self::IoStalled,
+            Ok(v1::pool::PoolAlert::IoStallIntermittent) => Self::IoStallIntermittent,
+            Ok(v1::pool::PoolAlert::IoStallIntermittentExc) => Self::IoStallIntermittentExc,
+            Ok(v1::pool::PoolAlert::IoError) => Self::IoError,
+            Ok(v1::pool::PoolAlert::IoErrorExc) => Self::IoErrorExc,
         }
     }
 }
@@ -920,6 +1006,18 @@ impl From<ExternalType<EncryptionSecret>> for v1::pb::EncryptionSecret {
     fn from(value: ExternalType<EncryptionSecret>) -> Self {
         Self {
             secret: value.0.name,
+        }
+    }
+}
+
+impl AgentToIoEngine for ClearErrorsRequest {
+    type IoEngineMessage = v1::pool::ClearErrorRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        v1::pool::ClearErrorRequest {
+            name: self.pool_id.to_string(),
+            uuid: None,
+            disks: vec![],
+            clear: 0,
         }
     }
 }

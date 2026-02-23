@@ -5,12 +5,13 @@ use crate::{
         resources::{
             operations::ResourceLifecycle,
             operations_helper::{GuardedOperationsHelper, OnCreateFail, SpecOperationsHelper},
-            OperationGuardArc,
+            OperationGuardArc, ResourceUid,
         },
     },
     node::wrapper::{GetterOps, NodeWrapper},
 };
 use agents::{errors, errors::SvcError};
+use grpc::operations::pool::traits::ClearErrorsRequest;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
@@ -19,8 +20,9 @@ use stor_port::{
             replica::{PoolRef, ReplicaSpec},
         },
         transport::{
-            CreatePool, DestroyReplica, GetBlockDevices, ImportPool, NodeId, PoolDeviceUri,
-            PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolState, ReplicaOwners,
+            CreatePool, CtrlPoolState, DestroyReplica, GetBlockDevices, ImportPool, NodeId, Pool,
+            PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolState,
+            ReplicaOwners,
         },
     },
 };
@@ -115,6 +117,23 @@ impl OperationGuardArc<PoolSpec> {
     pub(crate) fn on_create_fail(&self, registry: &Registry) -> OnCreateFail {
         let spec = self.lock();
         on_create_fail(&spec, registry).unwrap_or(OnCreateFail::LeaveAsIs)
+    }
+
+    // todo: fit in a trait
+    pub(crate) async fn clear_errors(
+        &mut self,
+        registry: &Registry,
+        request: &ClearErrorsRequest,
+    ) -> Result<Pool, SvcError> {
+        let pool = registry.ctrl_pool(self.uid()).await?;
+        let node = registry.node_wrapper(&pool.node()).await?;
+        if !node.read().await.is_online() {
+            return Err(SvcError::NodeNotOnline { node: pool.node() });
+        }
+        let pool_state = node.clear_errors(request).await?;
+        let pool_spec = registry.specs().pool(self.uid())?;
+
+        Ok(Pool::new(pool_spec, Some(CtrlPoolState::new(pool_state))))
     }
 }
 

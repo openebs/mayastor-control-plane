@@ -7,6 +7,7 @@ use crate::{
         ExpandPoolRequest, LabelPoolRequest, UnlabelPoolRequest,
     },
 };
+use prost::UnknownEnumValue;
 use std::{collections::HashMap, convert::TryFrom};
 use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind},
@@ -16,13 +17,31 @@ use stor_port::{
             PoolRuntimeMetadata, PoolSpec, PoolSpecStatus, PoolUSpec, POOL_BS_CLUSTER_SIZE_DEFAULT,
         },
         transport::{
-            CreatePool, CtrlPoolState, DestroyPool, ExpandPool, Filter, LabelPool, NodeId, Pool,
-            PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolId, PoolState,
-            PoolStatus, UnlabelPool, VolumeId,
+            CreatePool, CtrlPoolState, DestroyPool, DiskInfo, ExpandPool, Filter, LabelPool,
+            NodeId, Pool, PoolAlert, PoolAlertStatus, PoolAlerts, PoolDeviceUri, PoolDiag,
+            PoolDiskError, PoolError, PoolErrorCode, PoolErrorInfo, PoolId, PoolState, PoolStatus,
+            UnlabelPool, VolumeId,
         },
     },
-    IntoOption,
+    IntoOption, IntoVec,
 };
+
+struct ExternalType<T>(T);
+type ProstER<T> = ExternalType<Result<T, UnknownEnumValue>>;
+
+impl<T: TryFrom<i32, Error = UnknownEnumValue>> ExternalType<T> {
+    /// Convert a vector of enums (as i32) into a vector of `R`.
+    fn from_i32vec<R: From<ProstER<T>>>(vec: Vec<i32>) -> Vec<R> {
+        vec.into_iter()
+            .map(|i| ExternalType::<Result<T, UnknownEnumValue>>(T::try_from(i)))
+            .map(Into::into)
+            .collect::<Vec<R>>()
+    }
+    /// Convert the `T` enum as i32 into `R`.
+    fn from_i32<R: From<ProstER<T>>>(value: i32) -> R {
+        ExternalType::<Result<T, UnknownEnumValue>>(T::try_from(value)).into()
+    }
+}
 
 /// Trait implemented by services which support pool operations.
 #[tonic::async_trait]
@@ -60,6 +79,8 @@ pub trait PoolOperations: Send + Sync {
     async fn uncordon(&self, info: PoolCordonRequest) -> Result<Pool, ReplyError>;
     /// Expands the pool to span the entire capacity of backing disk.
     async fn expand(&self, info: &dyn ExpandPoolInfo) -> Result<Pool, ReplyError>;
+    /// Clears runtime errors from the specified pool.
+    async fn clear_errors(&self, request: &ClearErrorsRequest) -> Result<Pool, ReplyError>;
 }
 
 impl TryFrom<pool::PoolDefinition> for PoolSpec {
@@ -160,7 +181,128 @@ impl TryFrom<pool::PoolState> for PoolState {
                 .unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
             disk_capacity: pool_state.disk_capacity,
             max_expandable_size: pool_state.max_expandable_size,
+            disk_info: pool_state.disk_info.into_vec(),
+            errors: pool_state.errors.into_opt(),
         })
+    }
+}
+
+impl From<pool::DiskInfo> for DiskInfo {
+    fn from(value: pool::DiskInfo) -> Self {
+        Self {
+            uri: value.uri,
+            errors: value.errors.map(Into::into).unwrap_or_default(),
+        }
+    }
+}
+impl From<DiskInfo> for pool::DiskInfo {
+    fn from(value: DiskInfo) -> Self {
+        Self {
+            uri: value.uri,
+            errors: Some(value.errors.into()),
+        }
+    }
+}
+
+impl From<pool::PoolErrors> for PoolErrorInfo {
+    fn from(value: pool::PoolErrors) -> Self {
+        Self {
+            alerts: value.alerts.map(Into::into).unwrap_or_default(),
+            io_error_count: value.io_error_count,
+            io_error_threshold: value.io_error_threshold,
+            io_stalled: value.io_stalled,
+            io_stall_transition_count: value.io_stall_transition_count,
+            io_stall_transition_threshold: value.io_stall_transition_threshold,
+        }
+    }
+}
+impl From<PoolErrorInfo> for pool::PoolErrors {
+    fn from(value: PoolErrorInfo) -> Self {
+        Self {
+            alerts: Some(value.alerts.into()),
+            io_error_count: value.io_error_count,
+            io_error_threshold: value.io_error_threshold,
+            io_stalled: value.io_stalled,
+            io_stall_transition_count: value.io_stall_transition_count,
+            io_stall_transition_threshold: value.io_stall_transition_threshold,
+        }
+    }
+}
+
+impl From<pool::PoolAlerts> for PoolAlerts {
+    fn from(value: pool::PoolAlerts) -> Self {
+        Self {
+            status: ExternalType::from_i32(value.status),
+            notice: ExternalType::from_i32vec(value.notice),
+            attention: ExternalType::from_i32vec(value.attention),
+            warning: ExternalType::from_i32vec(value.warning),
+            critical: ExternalType::from_i32vec(value.critical),
+        }
+    }
+}
+impl From<PoolAlerts> for pool::PoolAlerts {
+    fn from(value: PoolAlerts) -> Self {
+        let mm = |a: Vec<PoolAlert>| -> Vec<i32> {
+            a.into_iter()
+                .map(pool::PoolAlert::from)
+                .map(Into::into)
+                .collect::<Vec<i32>>()
+        };
+        Self {
+            status: pool::PoolAlertStatus::from(value.status) as i32,
+            notice: mm(value.notice),
+            attention: mm(value.attention),
+            warning: mm(value.warning),
+            critical: mm(value.critical),
+        }
+    }
+}
+
+impl From<ProstER<pool::PoolAlert>> for PoolAlert {
+    fn from(value: ProstER<pool::PoolAlert>) -> Self {
+        match value.0 {
+            Ok(pool::PoolAlert::AlertUnknown) | Err(_) => Self::Unknown,
+            Ok(pool::PoolAlert::IoStalled) => Self::IoStalled,
+            Ok(pool::PoolAlert::IoStallIntermittent) => Self::IoStallIntermittent,
+            Ok(pool::PoolAlert::IoStallIntermittentExc) => Self::IoStallIntermittentExc,
+            Ok(pool::PoolAlert::IoError) => Self::IoError,
+            Ok(pool::PoolAlert::IoErrorExc) => Self::IoErrorExc,
+        }
+    }
+}
+impl From<PoolAlert> for pool::PoolAlert {
+    fn from(value: PoolAlert) -> Self {
+        match value {
+            PoolAlert::Unknown => Self::AlertUnknown,
+            PoolAlert::IoStalled => Self::IoStalled,
+            PoolAlert::IoStallIntermittent => Self::IoStallIntermittent,
+            PoolAlert::IoStallIntermittentExc => Self::IoStallIntermittentExc,
+            PoolAlert::IoError => Self::IoError,
+            PoolAlert::IoErrorExc => Self::IoErrorExc,
+        }
+    }
+}
+
+impl From<ProstER<pool::PoolAlertStatus>> for PoolAlertStatus {
+    fn from(value: ProstER<pool::PoolAlertStatus>) -> Self {
+        match value.0 {
+            Ok(pool::PoolAlertStatus::Healthy) => Self::Healthy,
+            Ok(pool::PoolAlertStatus::Attention) => Self::Attention,
+            Ok(pool::PoolAlertStatus::Warning) => Self::Warning,
+            Ok(pool::PoolAlertStatus::Critical) => Self::Critical,
+            Ok(pool::PoolAlertStatus::StatusUnknown) | Err(_) => Self::Unknown,
+        }
+    }
+}
+impl From<PoolAlertStatus> for pool::PoolAlertStatus {
+    fn from(value: PoolAlertStatus) -> Self {
+        match value {
+            PoolAlertStatus::Healthy => Self::Healthy,
+            PoolAlertStatus::Attention => Self::Attention,
+            PoolAlertStatus::Warning => Self::Warning,
+            PoolAlertStatus::Critical => Self::Critical,
+            PoolAlertStatus::Unknown => Self::StatusUnknown,
+        }
     }
 }
 
@@ -262,6 +404,8 @@ impl From<PoolState> for pool::PoolState {
             cluster_size: Some(pool_state.cluster_size),
             disk_capacity: pool_state.disk_capacity,
             max_expandable_size: pool_state.max_expandable_size,
+            disk_info: pool_state.disk_info.into_vec(),
+            errors: pool_state.errors.into_opt(),
         }
     }
 }
@@ -601,6 +745,7 @@ impl From<pool::PoolStatus> for PoolStatus {
         match src {
             pool::PoolStatus::Online => Self::Online,
             pool::PoolStatus::Degraded => Self::Degraded,
+            pool::PoolStatus::Suspected => Self::Suspected,
             pool::PoolStatus::Faulted => Self::Faulted,
             pool::PoolStatus::Unknown => Self::Unknown,
         }
@@ -613,6 +758,7 @@ impl From<PoolStatus> for pool::PoolStatus {
             PoolStatus::Unknown => Self::Unknown,
             PoolStatus::Online => Self::Online,
             PoolStatus::Degraded => Self::Degraded,
+            PoolStatus::Suspected => Self::Suspected,
             PoolStatus::Faulted => Self::Faulted,
         }
     }
@@ -805,6 +951,85 @@ impl From<PoolCordonRequest> for CordonPoolRequest {
             snapshots: value.snapshots,
             restores: value.restores,
             import: value.import,
+        }
+    }
+}
+
+/// Pool clear errors request.
+#[derive(Debug, Clone, Default)]
+pub struct ClearErrorsRequest {
+    /// Node ID of where the pool resides on.
+    /// This is optional and may be used for stricter checks.
+    pub node_id: Option<NodeId>,
+    /// The ID of the pool to clear errors from.
+    pub pool_id: PoolId,
+    /// If one or more disks is specified, only those errors associated with the
+    /// specified disk or disks are cleared.
+    pub disks: Vec<String>,
+    /// Error clearing request
+    pub clear: ClearErrors,
+}
+
+impl ClearErrorsRequest {
+    /// Create a new `Self`.
+    pub fn new(pool_id: PoolId) -> Self {
+        Self {
+            pool_id,
+            ..Default::default()
+        }
+    }
+    /// Create a new `Self`.
+    pub fn new_ext(pool_id: PoolId, disks: Vec<String>, clear: ClearErrors) -> Self {
+        Self {
+            pool_id,
+            disks,
+            clear,
+            ..Default::default()
+        }
+    }
+}
+
+/// Clear errors variants.
+#[derive(Debug, Clone, Copy, Default)]
+pub enum ClearErrors {
+    /// Clears all counted errors and related alerts.
+    /// Example, it clears the io stall transitions, but doesn't clear an io stall.
+    #[default]
+    All,
+}
+
+impl From<pool::ClearErrorsRequest> for ClearErrorsRequest {
+    fn from(value: pool::ClearErrorsRequest) -> Self {
+        Self {
+            clear: value.clear().into(),
+            node_id: value.node_id.into_opt(),
+            pool_id: value.pool_id.into(),
+            disks: value.disks,
+        }
+    }
+}
+impl From<&ClearErrorsRequest> for pool::ClearErrorsRequest {
+    fn from(value: &ClearErrorsRequest) -> Self {
+        Self {
+            node_id: value.node_id.as_ref().map(|n| n.to_string()),
+            pool_id: value.pool_id.to_string(),
+            clear: pool::ClearErrors::from(value.clear) as i32,
+            disks: value.disks.clone(),
+        }
+    }
+}
+
+impl From<pool::ClearErrors> for ClearErrors {
+    fn from(value: pool::ClearErrors) -> Self {
+        match value {
+            pool::ClearErrors::ClearAll => Self::All,
+        }
+    }
+}
+impl From<ClearErrors> for pool::ClearErrors {
+    fn from(value: ClearErrors) -> Self {
+        match value {
+            ClearErrors::All => Self::ClearAll,
         }
     }
 }
