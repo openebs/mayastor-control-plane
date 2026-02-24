@@ -156,7 +156,7 @@ bindgen = "0.69.5"
 flate2 = "1.0"
 tar = "0.4"
 
-k8s-openapi = { version = "0.22.0", default-features = false, features = ["v1_24"] }
+k8s-openapi = { version = "0.22.0", default-features = false, features = ["v1_24", "schemars"] }
 kube = { version = "0.94.2", features = ["runtime", "derive"] }
 schemars = { version = "0.8.21" }
 async-nats = { version = "0.37.0", default-features = false }

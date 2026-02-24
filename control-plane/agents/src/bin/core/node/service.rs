@@ -386,7 +386,11 @@ impl Service {
         request: &GetBlockDevices,
     ) -> Result<BlockDevices, SvcError> {
         let node = self.registry.node_wrapper(&request.node).await?;
-
+        if !node.read().await.is_online() {
+            return Err(SvcError::NodeNotOnline {
+                node: request.node.clone(),
+            });
+        }
         node.list_blockdevices(request).await
     }
 

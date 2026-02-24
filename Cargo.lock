@@ -2526,6 +2526,7 @@ checksum = "19501afb943ae5806548bc3ebd7f3374153ca057a38f480ef30adfde5ef09755"
 dependencies = [
  "base64 0.22.1",
  "chrono",
+ "schemars",
  "serde",
  "serde-value",
  "serde_json",
