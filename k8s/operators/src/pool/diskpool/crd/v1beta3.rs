@@ -99,6 +99,8 @@ pub enum PoolErrorCode {
     PoolDeleted,
     /// Control-Plane service is unreachable.
     Unreachable,
+    /// The encryption secret was not found.
+    EncryptionSecretError,
 }
 
 /// Pool error code and human-readable message.

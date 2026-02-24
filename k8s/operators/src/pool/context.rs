@@ -824,6 +824,11 @@ impl ResourceContext {
                 "Critical",
             )
             .await;
+            self.mark_pool_error(Some(PoolError {
+                code: PoolErrorCode::EncryptionSecretError,
+                message: Some(format!("Failed to get encryption secret: {name}")),
+            }))
+            .await?;
             return Err(Error::Kube { source: error });
         }
 
