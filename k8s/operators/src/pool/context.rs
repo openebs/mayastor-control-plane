@@ -233,7 +233,7 @@ impl ResourceContext {
 
     /// Mark Pool state as None as couldn't find already provisioned pool in control plane.
     async fn mark_pool_error(&self, error: Option<PoolError>) -> Result<Action, Error> {
-        self.patch_status(DiskPoolStatus::not_found(&self.inner.status, error))
+        self.patch_status(DiskPoolStatus::not_found(&self.inner, error))
             .await?;
         Ok(Action::requeue(Duration::from_secs(30)))
     }
@@ -241,7 +241,7 @@ impl ResourceContext {
     /// Mark Pool state as None and error as DiskNotFound as we couldn't find the
     /// pool disk during the creation/import attempt.
     async fn mark_disk_not_found(&self) -> Result<(), Error> {
-        self.patch_status(DiskPoolStatus::disk_not_found(&self.inner.status))
+        self.patch_status(DiskPoolStatus::disk_not_found(&self.inner))
             .await?;
         Ok(())
     }
@@ -251,7 +251,7 @@ impl ResourceContext {
         let msg = "Timed out whilst trying to create the diskpool";
         self.k8s_notify("Create/Import", "Timeout", msg, "Warning")
             .await;
-        let mut pool = DiskPoolStatus::from(pool);
+        let mut pool = DiskPoolStatus::from(pool).with_conditions(self);
         pool.cr_state = CrPoolState::Creating;
         error!(?pool, msg);
         self.patch_status(pool).await?;
@@ -284,7 +284,7 @@ impl ResourceContext {
 
     /// Patch the resource state to terminating.
     async fn mark_terminating_when_unknown(&self) -> Result<Action, Error> {
-        self.patch_status(DiskPoolStatus::terminating_when_unknown())
+        self.patch_status(DiskPoolStatus::terminating_when_unknown().with_conditions(self))
             .await?;
         Ok(Action::requeue(Duration::from_secs(self.ctx.interval)))
     }
@@ -292,7 +292,8 @@ impl ResourceContext {
     /// Used to patch the DiskPool when the data plane state is Unknown.
     /// The diagnostics may or may not be set.
     async fn mark_unknown_state(&self, pool: Pool) -> Result<Action, Error> {
-        self.patch_status(DiskPoolStatus::from(pool)).await?;
+        self.patch_status(DiskPoolStatus::from(pool).with_conditions(self))
+            .await?;
         Ok(Action::requeue(Duration::from_secs(self.ctx.interval)))
     }
 
@@ -553,7 +554,9 @@ impl ResourceContext {
             .into_body();
 
         if pool.state.is_some() {
-            let _ = self.patch_status(DiskPoolStatus::from(pool)).await?;
+            let _ = self
+                .patch_status(DiskPoolStatus::from(pool).with_conditions(&self))
+                .await?;
 
             self.k8s_notify(
                 "Create/Import",
@@ -784,8 +787,11 @@ impl ResourceContext {
                         .await
                     {
                         Ok(pool) => {
-                            if dsp.status.as_ref().unwrap().cr_state != CrPoolState::Terminating {
-                                let new_status = DiskPoolStatus::terminating(pool.into_body());
+                            if dsp.status.as_ref().map(|d| d.cr_state)
+                                != Some(CrPoolState::Terminating)
+                            {
+                                let new_status =
+                                    DiskPoolStatus::terminating(&dsp, pool.into_body());
                                 let _ = self.patch_status(new_status).await?;
                             }
                             Self::delete_finalizer(self.clone(), true).await

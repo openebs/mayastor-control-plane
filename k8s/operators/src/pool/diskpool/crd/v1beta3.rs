@@ -1,3 +1,4 @@
+use k8s_openapi::apimachinery::pkg::apis::meta::v1 as meta_v1;
 use kube::CustomResource;
 #[cfg(feature = "openapi")]
 use openapi::models::{pool_status::PoolStatus as RestPoolStatus, Pool};
@@ -8,9 +9,7 @@ use strum_macros::AsRefStr;
 
 use super::quantity::Quantity;
 
-#[derive(
-    CustomResource, Serialize, Deserialize, Default, Debug, Eq, PartialEq, Clone, JsonSchema,
-)]
+#[derive(CustomResource, Serialize, Deserialize, Default, Debug, Clone, JsonSchema)]
 #[kube(
     group = "openebs.io",
     version = "v1beta3",
@@ -19,7 +18,6 @@ use super::quantity::Quantity;
     // The name of the struct that gets created that represents a resource
     namespaced,
     status = "DiskPoolStatus",
-    derive = "PartialEq",
     derive = "Default",
     shortname = "dsp",
     printcolumn = r#"{ "name":"node", "type":"string", "description":"node the pool is on", "jsonPath":".spec.node"}"#,
@@ -275,7 +273,7 @@ pub enum CrPoolState {
     Terminating,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, JsonSchema)]
 /// PoolStatus is Control plane status of a given DSP CR.
 pub enum PoolStatus {
     /// State is Unknown.
@@ -293,7 +291,7 @@ pub enum PoolStatus {
     Suspected,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 /// Status of the pool which is driven and changed by the controller loop.
 pub struct DiskPoolStatus {
     #[serde(default)]
@@ -339,6 +337,17 @@ pub struct DiskPoolStatus {
     /// Combined alert and errors for the pretty columns.
     #[serde(rename = "alertError")]
     pub alert_error: Option<String>,
+    /// Information about the state of a DiskPool using standard K8s conditions.
+    /// PoolReady: Indicates whether this dsp is ready and usable for volumes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) conditions: Vec<meta_v1::Condition>,
+}
+
+/// The various DiskPool conditions.
+#[derive(AsRefStr, strum_macros::Display)]
+pub(crate) enum DspCondition {
+    /// Indicates whether this dsp is online and ready to be used.
+    PoolReady,
 }
 
 impl DiskPoolStatus {
@@ -374,19 +383,22 @@ impl DiskPoolStatus {
     }
 
     /// Set when Pool is not found for some reason.
-    pub fn not_found(status: &Option<Self>, error: Option<PoolError>) -> Self {
+    pub fn not_found(dsp: &DiskPool, error: Option<PoolError>) -> Self {
+        let status = dsp.status.as_ref();
         Self {
-            cr_state: status.as_ref().map(|s| s.cr_state).unwrap_or_default(),
+            cr_state: status.map(|s| s.cr_state).unwrap_or_default(),
             status: Some(PoolStatus::Unknown),
             error,
             ..Default::default()
         }
+        .with_conditions(dsp)
     }
 
     /// Set when Pool is not found for some reason.
-    pub fn disk_not_found(status: &Option<Self>) -> Self {
+    pub fn disk_not_found(dsp: &DiskPool) -> Self {
+        let status = dsp.status.as_ref();
         Self {
-            cr_state: status.as_ref().map(|s| s.cr_state).unwrap_or_default(),
+            cr_state: status.map(|s| s.cr_state).unwrap_or_default(),
             status: Some(PoolStatus::Offline),
             error: Some(PoolError {
                 code: PoolErrorCode::DiskNotFound,
@@ -394,11 +406,12 @@ impl DiskPoolStatus {
             }),
             ..Default::default()
         }
+        .with_conditions(dsp)
     }
 
     /// Set when operator is attempting to delete on pool.
     #[cfg(feature = "openapi")]
-    pub fn terminating(p: Pool) -> Self {
+    pub fn terminating(dsp: &DiskPool, p: Pool) -> Self {
         let status = Self::inferred_status(&p);
         let state = p.state.unwrap_or_default();
         let free = state.capacity.saturating_sub(state.used);
@@ -420,6 +433,7 @@ impl DiskPoolStatus {
             ..Default::default()
         }
         .combine_alert_error()
+        .with_conditions(dsp)
     }
 
     /// Set when deleting a Pool which is not accessible.
@@ -434,6 +448,51 @@ impl DiskPoolStatus {
             }),
             ..Default::default()
         }
+    }
+
+    fn ready_condition(&self, dsp: &DiskPool) -> meta_v1::Condition {
+        // todo: what about I/O stall?
+        let ready = matches!(
+            self.status.unwrap_or_default(),
+            PoolStatus::Online | PoolStatus::Degraded
+        );
+        let error_code = self.error.as_ref().map(|e| e.code).unwrap_or_default();
+        let reason = if ready {
+            "".to_string()
+        } else {
+            format!("{error_code:?}")
+        };
+        meta_v1::Condition {
+            last_transition_time: meta_v1::Time(chrono::Utc::now()),
+            // todo: build nice messages
+            message: String::new(),
+            observed_generation: dsp.metadata.generation,
+            reason,
+            status: if ready { "True" } else { "False" }.to_string(),
+            type_: DspCondition::PoolReady.to_string(),
+        }
+    }
+
+    /// Fill the DiskPool conditions.
+    pub(crate) fn with_conditions(mut self, dsp: &DiskPool) -> Self {
+        // todo: we should always have a state, we should change the upper-level api to
+        //  ensure this is always the case from the signatures.
+        let Some(status) = dsp.status.as_ref() else {
+            return self;
+        };
+
+        let ready_cond = self.ready_condition(dsp);
+        let mut conditions = status.conditions.iter();
+        let Some(existing) = conditions.find(|c| c.type_ == DspCondition::PoolReady.as_ref())
+        else {
+            self.conditions = vec![ready_cond];
+            return self;
+        };
+
+        if existing.status != ready_cond.status || existing.reason != ready_cond.reason {
+            self.conditions = vec![ready_cond];
+        }
+        self
     }
 }
 

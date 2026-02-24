@@ -64,7 +64,7 @@ async fn reconcile(dsp: Arc<DiskPool>, ctx: Arc<OperatorContext>) -> Result<Acti
 
     if !ctx.inventory_contains(dsp.name_any()).await {
         return Ok(Action::await_change());
-    };
+    }
 
     match dsp.status {
         Some(DiskPoolStatus {
@@ -79,7 +79,7 @@ async fn reconcile(dsp: Arc<DiskPool>, ctx: Arc<OperatorContext>) -> Result<Acti
             cr_state: CrPoolState::Terminating,
             ..
         }) => dsp.pool_check().await,
-        // We use this state to indicate its a new CRD however, we could (and
+        // We use this state to indicate it's a new CRD however, we could (and
         // perhaps should) use the finalizer callback.
         None => dsp.init_cr().await,
     }
