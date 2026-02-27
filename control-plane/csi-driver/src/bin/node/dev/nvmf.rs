@@ -1,6 +1,6 @@
 use nvmeadm::{
     error::NvmeError,
-    nvmf_discovery::{disconnect, ConnectArgsBuilder, TrType},
+    nvmf_discovery::{ConnectArgsBuilder, TrType},
 };
 use std::{
     collections::HashMap,
@@ -9,6 +9,14 @@ use std::{
     str::FromStr,
 };
 
+use super::{Attach, AttachParameters, Detach, DeviceError, DeviceName};
+use crate::{
+    config::{config, NvmeConfig, NvmeParseParams},
+    dev::util::extract_uuid,
+    match_dev::match_nvmf_device,
+    node::RDMA_CONNECT_CHECK,
+    runtime,
+};
 use csi_driver::PublishParams;
 use glob::glob;
 use nvmeadm::nvmf_subsystem::Subsystem;
@@ -17,16 +25,6 @@ use tracing::warn;
 use udev::{Device, Enumerator};
 use url::Url;
 use uuid::Uuid;
-
-use crate::{
-    config::{config, NvmeConfig, NvmeParseParams},
-    dev::util::extract_uuid,
-    match_dev::match_nvmf_device,
-    node::RDMA_CONNECT_CHECK,
-    runtime,
-};
-
-use super::{Attach, AttachParameters, Detach, DeviceError, DeviceName};
 
 lazy_static::lazy_static! {
     static ref DEVICE_REGEX: Regex = Regex::new(r"nvme(\d{1,5})n(\d{1,5})").unwrap();
@@ -151,7 +149,7 @@ impl Attach for NvmfAttach {
         context: &HashMap<String, String>,
     ) -> Result<(), DeviceError> {
         let publish_context = PublishParams::try_from(context)
-            .map_err(|error| DeviceError::new(&error.to_string()))?;
+            .map_err(|error| DeviceError::new(error.to_string()))?;
 
         if let Some(val) = publish_context.ctrl_loss_tmo() {
             self.ctrl_loss_tmo = Some(*val);
@@ -273,7 +271,7 @@ impl Attach for NvmfAttach {
             })
             .collect::<Result<Vec<()>, DeviceError>>();
         match result {
-            Ok(r) if r.is_empty() => Err(DeviceError::new(&format!(
+            Ok(r) if r.is_empty() => Err(DeviceError::new(format!(
                 "look up of sysfs device directory \"{pattern}\" found 0 entries",
             ))),
             Ok(_) => Ok(()),
@@ -291,13 +289,84 @@ impl Attach for NvmfAttach {
 }
 
 pub(super) struct NvmfDetach {
+    /// Device name, ex: /dev/nvme4n1
     name: DeviceName,
+    /// Subsystem Nqn, ex: nqn.2019-05.io.openebs:a0000000-0000-0000-0000-0000000003ff
     nqn: String,
+    /// the sysfs DEVPATH, example: /sys/devices/virtual/nvme-subsystem/nvme-subsys4/nvme4n1/device
+    subsys_dev: std::path::PathBuf,
 }
 
+const SYSFS: &str = "/sys";
+
 impl NvmfDetach {
-    pub(super) fn new(name: DeviceName, nqn: String) -> NvmfDetach {
-        NvmfDetach { name, nqn }
+    pub(super) fn new(name: DeviceName, uuid: &Uuid, device: &Device) -> NvmfDetach {
+        // todo: we can query this from $subsys/subsysnqn
+        let nqn = if std::env::var("MOAC").is_ok() {
+            format!("{}:nexus-{uuid}", utils::nvme_target_nqn_prefix())
+        } else {
+            format!("{}:{uuid}", utils::nvme_target_nqn_prefix())
+        };
+
+        let sys = Path::new(SYSFS);
+        let devpath = Path::new(device.devpath());
+        let subsys_dev = if !devpath.has_root() {
+            sys.join(devpath)
+        } else {
+            sys.join(devpath.components().skip(1).collect::<std::path::PathBuf>())
+        }
+        .join("device");
+
+        NvmfDetach {
+            name,
+            nqn,
+            subsys_dev,
+        }
+    }
+
+    /// Returns a list of nvme controllers.
+    /// Unfortunately it's a rather complex type because I/O may fail at multiple levels.
+    /// > NOTE: `Subsystem` is a misnomer from the dependency library.
+    fn controllers_maybe(&self) -> Vec<Result<Result<Subsystem, NvmeError>, glob::GlobError>> {
+        let pattern = format!("{}/nvme*/", self.subsys_dev.display());
+        let glob = glob(&pattern).expect("valid pattern");
+        glob.into_iter()
+            .filter_map(|g| match g {
+                Ok(p) if p.is_symlink() => {
+                    // todo: change subsystem to allow this path
+                    let p = p.file_name().expect("we have the path");
+                    let rp = Path::new(nvmeadm::nvmf_subsystem::SYSFS_NVME_CTRLR_PREFIX);
+                    Some(Ok(Subsystem::new(&rp.join(p))))
+                }
+                Ok(_) => None,
+                Err(error) => Some(Err(error)),
+            })
+            .collect()
+    }
+    /// Get a list of subsystems and the concatenation of any seen errors.
+    fn controllers(&self) -> (Vec<Subsystem>, Option<DeviceError>) {
+        let mut controllers = vec![];
+        let mut error = String::new();
+
+        for controller in self.controllers_maybe() {
+            match controller {
+                Ok(Ok(controller)) => {
+                    controllers.push(controller);
+                }
+                Ok(Err(nvme)) => {
+                    error = format!("{error}, {nvme}");
+                }
+                Err(glob) => {
+                    error = format!("{error}, {glob}");
+                }
+            }
+        }
+        let error = if error.is_empty() {
+            None
+        } else {
+            Some(DeviceError::new(error))
+        };
+        (controllers, error)
     }
 }
 
@@ -305,16 +374,58 @@ impl NvmfDetach {
 impl Detach for NvmfDetach {
     async fn detach(&self) -> Result<(), DeviceError> {
         let nqn = self.nqn.clone();
-        runtime::spawn_blocking(move || match disconnect(&nqn) {
-            Ok(0) => Err(DeviceError::from(format!(
-                "nvmf disconnect {} failed: no device found",
-                nqn
-            ))),
-            Err(error) => Err(error.into()),
-            Ok(_) => Ok(()),
+        let name = &self.name;
+
+        tracing::info!(name, nqn, "Disconnecting NVMe subsystem...");
+
+        // Note that we may find multiple controllers in case of ANA
+        // We may encounter errors, but we can still clean the ones which we found correctly.
+        let (controllers, error) = self.controllers();
+        let device = name.clone();
+        let controllers = runtime::spawn_blocking(move || {
+            controllers.iter().for_each(|c| {
+                let traddr = c.address.as_str();
+                let name = c.name.as_str();
+                let _ = c
+                    .disconnect()
+                    .inspect(|_| {
+                        tracing::info!(name, device, traddr, "Disconnecting NVMe controller...")
+                    })
+                    .inspect_err(
+                        |error| tracing::error!(%error, "Failed to disconnect NVMe controller"),
+                    );
+            });
+            controllers
         })
         .await
-        .map_err(|error| DeviceError::from(error.to_string()))?
+        .map_err(|error| DeviceError::from(error.to_string()))?;
+
+        // Now we wait for the controllers to at least start deleting
+        let deadline = std::time::Duration::from_secs(15);
+        let start: std::time::Instant = std::time::Instant::now();
+        for mut controller in controllers.into_iter() {
+            let traddr = controller.address.clone().to_raw();
+            let name = controller.name.to_owned();
+            loop {
+                if controller.sync().is_err() {
+                    tracing::info!(name, traddr, "Controller has been removed");
+                    break;
+                } else if controller.state.starts_with("delet") {
+                    tracing::info!(name, traddr, state = %controller.state, "Controller deleted/deleting");
+                    break;
+                }
+                tracing::debug!(name, traddr, state = %controller.state, "Controller state sync");
+
+                if start.elapsed() >= deadline {
+                    return Err(DeviceError::new(format!(
+                        "Timeout waiting for {name}/{nqn}/{traddr} to get removed"
+                    )));
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        }
+
+        error.map_or(Ok(()), Err)
     }
 
     fn devname(&self) -> DeviceName {
@@ -330,9 +441,9 @@ impl Detach for NvmfDetach {
 fn block_dev_q(device: &Device, multipath: Option<bool>) -> Result<String, DeviceError> {
     let dev_name = device.sysname().to_str().unwrap();
     let captures = DEVICE_REGEX.captures(dev_name).ok_or_else(|| {
-        DeviceError::new(&format!(
-            "NVMe device \"{}\" does not match \"{}\"",
-            dev_name, *DEVICE_REGEX,
+        DeviceError::new(format!(
+            "NVMe device \"{dev_name}\" does not match \"{}\"",
+            *DEVICE_REGEX
         ))
     })?;
     let major = captures.get(1).unwrap().as_str();

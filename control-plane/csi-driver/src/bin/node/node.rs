@@ -34,7 +34,7 @@ use uuid::Uuid;
 
 macro_rules! failure {
     (Code::$code:ident, $msg:literal) => {{ error!($msg); Status::new(Code::$code, $msg) }};
-    (Code::$code:ident, $fmt:literal $(,$args:expr)+) => {{ let message = format!($fmt $(,$args)+); error!("{}", message); Status::new(Code::$code, message) }};
+    (Code::$code:ident, $fmt:literal $(,$args:expr)+) => {{ let message = format!($fmt $(,$args)+); error!("{message}"); Status::new(Code::$code, message) }};
 }
 
 /// The Csi Node implementation.
@@ -173,25 +173,18 @@ fn get_access_type(volume_capability: &Option<VolumeCapability>) -> Result<&Acce
 /// Detach the nexus device from the system, either at volume unstage,
 /// or after failed filesystem mount at volume stage.
 pub(crate) async fn detach(uuid: &Uuid, errheader: String) -> Result<(), Status> {
-    if let Some(device) = Device::lookup(uuid).await.map_err(|error| {
-        failure!(
-            Code::Internal,
-            "{} error locating device: {}",
-            &errheader,
-            error
-        )
-    })? {
+    if let Some(device) = Device::lookup(uuid)
+        .await
+        .map_err(|error| failure!(Code::Internal, "{errheader} error locating device: {error}"))?
+    {
         let device_path = device.devname();
-        debug!("Detaching device {}", device_path);
+        debug!("Detaching device {device_path}");
 
         let mounts = crate::mount::find_src_mounts(&device_path, None);
         if !mounts.is_empty() {
             return Err(failure!(
                 Code::FailedPrecondition,
-                "{} device is still mounted {}: {:?}",
-                errheader,
-                device_path,
-                mounts
+                "{errheader} device is still mounted {device_path}: {mounts:?}"
             ));
         }
 
@@ -200,12 +193,11 @@ pub(crate) async fn detach(uuid: &Uuid, errheader: String) -> Result<(), Status>
         if let Err(error) = device.detach().await {
             return Err(failure!(
                 Code::Internal,
-                "{} failed to detach device {}: {}",
-                errheader,
-                device_path,
-                error
+                "{errheader} failed to detach device {device_path}: {error}"
             ));
         }
+    } else {
+        tracing::warn!(%uuid, "Volume device not found");
     }
     Ok(())
 }
@@ -870,9 +862,8 @@ impl node_server::Node for Node {
         let uuid = Uuid::parse_str(&msg.volume_id).map_err(|error| {
             failure!(
                 Code::Internal,
-                "Failed to unstage volume {}: not a valid UUID: {}",
-                &msg.volume_id,
-                error
+                "Failed to unstage volume {}: not a valid UUID: {error}",
+                &msg.volume_id
             )
         })?;
         let _guard = VolumeOpGuard::new(uuid)?;
