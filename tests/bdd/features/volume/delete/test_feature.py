@@ -102,7 +102,7 @@ def a_volume_that_is_sharedpublished():
             publish_context={},
             protocol=VolumeShareProtocol("nvmf"),
             node=NODE1_NAME,
-            frontend_node="",
+            frontend_node=None,
         ),
     )
     assert volume.spec.target.protocol == "nvmf"

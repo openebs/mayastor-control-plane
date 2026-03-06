@@ -57,7 +57,7 @@ def a_published_volume():
             publish_context={},
             protocol=VolumeShareProtocol("nvmf"),
             node=NODE_NAME,
-            frontend_node="",
+            frontend_node=None,
         ),
     )
     assert volume.spec.target
@@ -86,7 +86,7 @@ def publishing_the_volume_should_return_an_already_published_error():
                 publish_context={},
                 protocol=VolumeShareProtocol("nvmf"),
                 node=NODE_NAME,
-                frontend_node="",
+                frontend_node=None,
             ),
         )
     except Exception as e:
@@ -106,7 +106,7 @@ def publishing_the_volume_should_succeed_with_a_returned_volume_object_containin
             publish_context={},
             protocol=VolumeShareProtocol("nvmf"),
             node=NODE_NAME,
-            frontend_node="",
+            frontend_node=None,
         ),
     )
     assert volume.spec.target

@@ -93,7 +93,7 @@ def staging_a_volume(staging_target_path, csi_instance, block_volume_capability)
             publish_context={},
             protocol=VolumeShareProtocol("nvmf"),
             node=NODE1,
-            frontend_node="",
+            frontend_node=None,
         ),
     )
     device_uri = volume.state.target.device_uri

@@ -27,6 +27,9 @@ impl NvmeOperations for NvmeOperationsSvc {
         info!(request=?req, "Nvme connection request to replace path");
 
         let uri = csi_driver::parse_host_uri(&self.node_name, &req.uri)?;
+        if uri != req.uri {
+            tracing::warn!(uri=%uri, %req.uri, "Overriding request URI");
+        }
 
         let uuid = volume_uuid_from_url_str(&uri)?;
 

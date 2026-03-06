@@ -54,17 +54,40 @@ pub fn node_name_topology_key() -> String {
 }
 
 /// The volume's share uri contains the hostnqns for all allowed hosts.
-/// This function parses the and retains the hostnqn only for `node_id`.
+/// This function parses the uri and retains the hostnqn only for `node_id`.
+/// # Warning
+/// In case hostnqn are present in the uri but this node's nodenqn is not, then
+/// we error out with invalid_argument.
 pub fn parse_host_uri(node_id: &str, uri: &str) -> Result<String, tonic::Status> {
     let mut url =
         url::Url::parse(uri).map_err(|error| tonic::Status::internal(format!("{uri}: {error}")))?;
     let node_nqn: String =
         stor_port::types::v0::transport::NvmeNqn::from_nodename(node_id).to_string();
+
+    let mut matched_ours = false;
+    let mut host_nqns = false;
     let queries = url
         .query_pairs()
-        .filter(|(name, value)| name != "hostnqn" || value == &node_nqn)
+        .filter(|(name, value)| {
+            if name != "hostnqn" {
+                return true;
+            }
+            host_nqns = true;
+            if value == &node_nqn {
+                matched_ours = true;
+                true
+            } else {
+                false
+            }
+        })
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect::<Vec<(_, _)>>();
+
+    if host_nqns && !matched_ours {
+        let msg = format!("{uri} has hostnqn's but not mine ({node_nqn})");
+        return Err(tonic::Status::invalid_argument(msg));
+    }
+
     url.query_pairs_mut().clear().extend_pairs(queries);
 
     // we have to decode because otherwise the nqn would be encoded, ex:
@@ -76,20 +99,17 @@ pub fn parse_host_uri(node_id: &str, uri: &str) -> Result<String, tonic::Status>
 
 #[test]
 fn test_parse_host_uri() {
-    let uri = parse_host_uri("node-1", "nvmf://10.0.0.213:8420/nqn.2019-05.io.openebs:0a9bbaff-7b08-4160-b5d3-1c0a3a4539ae?hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-1&hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-2").unwrap();
-    assert_eq!(
-        uri,
-        "nvmf://10.0.0.213:8420/nqn.2019-05.io.openebs:0a9bbaff-7b08-4160-b5d3-1c0a3a4539ae?"
-    );
-    let uri = parse_host_uri("node-1", "nvmf://10.0.0.213:8420/nqn.2019-05.io.openebs:0a9bbaff-7b08-4160-b5d3-1c0a3a4539ae?hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-1&hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-2&a=1").unwrap();
-    assert_eq!(
-        uri,
-        "nvmf://10.0.0.213:8420/nqn.2019-05.io.openebs:0a9bbaff-7b08-4160-b5d3-1c0a3a4539ae?a=1"
-    );
+    let error = parse_host_uri("node-1", "nvmf://10.0.0.213:8420/nqn.2019-05.io.openebs:0a9bbaff-7b08-4160-b5d3-1c0a3a4539ae?hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-1&hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-2").unwrap_err();
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
     let uri = parse_host_uri("ksworker-1", "nvmf://10.0.0.213:8420/nqn.2019-05.io.openebs:0a9bbaff-7b08-4160-b5d3-1c0a3a4539ae?hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-1&hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-2").unwrap();
     assert_eq!(uri, "nvmf://10.0.0.213:8420/nqn.2019-05.io.openebs:0a9bbaff-7b08-4160-b5d3-1c0a3a4539ae?hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-1");
-    let uri = parse_host_uri("ksworker-1", "nvmf://10.0.0.213:8420/nqn.2019-05.io.openebs:0a9bbaff-7b08-4160-b5d3-1c0a3a4539ae?a=1,hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-1&hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-2").unwrap();
-    assert_eq!(uri, "nvmf://10.0.0.213:8420/nqn.2019-05.io.openebs:0a9bbaff-7b08-4160-b5d3-1c0a3a4539ae?a=1,hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-1");
+    let uri = parse_host_uri("ksworker-1", "nvmf://10.0.0.213:8420/nqn.2019-05.io.openebs:0a9bbaff-7b08-4160-b5d3-1c0a3a4539ae?hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-1&hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-2&a=1").unwrap();
+    assert_eq!(
+        uri,
+        "nvmf://10.0.0.213:8420/nqn.2019-05.io.openebs:0a9bbaff-7b08-4160-b5d3-1c0a3a4539ae?hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-1&a=1"
+    );
+    let uri = parse_host_uri("ksworker-1", "nvmf://10.0.0.213:8420/nqn.2019-05.io.openebs:0a9bbaff-7b08-4160-b5d3-1c0a3a4539ae?a=1&hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-1&hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-2").unwrap();
+    assert_eq!(uri, "nvmf://10.0.0.213:8420/nqn.2019-05.io.openebs:0a9bbaff-7b08-4160-b5d3-1c0a3a4539ae?a=1&hostnqn=nqn.2019-05.io.openebs:node-name:ksworker-1");
 }
 
 /// Volume Parameters parsed from context.

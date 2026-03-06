@@ -163,7 +163,7 @@ def published_nexus(volumes, share_type, volume_id):
             publish_context={},
             protocol=VolumeShareProtocol("nvmf"),
             node=NODE1,
-            frontend_node="",
+            frontend_node=None,
         ),
     )
     yield volume.state.target

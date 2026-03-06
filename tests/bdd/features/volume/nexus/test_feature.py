@@ -52,7 +52,7 @@ def a_published_selfhealing_volume():
             publish_context={},
             protocol=VolumeShareProtocol("nvmf"),
             node=IO_ENGINE_1,
-            frontend_node="",
+            frontend_node=None,
         ),
     )
 
