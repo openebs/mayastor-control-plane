@@ -56,9 +56,12 @@ impl PoolGrpc for PoolServer {
     ) -> Result<tonic::Response<DestroyPoolReply>, tonic::Status> {
         let req = request.into_inner();
         match self.service.destroy(&req, None).await {
-            Ok(()) => Ok(Response::new(DestroyPoolReply { error: None })),
+            Ok(Some(result)) => Ok(Response::new(DestroyPoolReply {
+                reply: Some(pool::destroy_pool_reply::Reply::Result(result.into())),
+            })),
+            Ok(None) => Ok(Response::new(DestroyPoolReply { reply: None })),
             Err(e) => Ok(Response::new(DestroyPoolReply {
-                error: Some(e.into()),
+                reply: Some(pool::destroy_pool_reply::Reply::Error(e.into())),
             })),
         }
     }

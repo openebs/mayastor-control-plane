@@ -8,18 +8,25 @@ use crate::{
             OperationGuardArc,
         },
     },
-    pool::operations_helper::devlink_preflight_checks,
+    pool::{
+        operations_helper::devlink_preflight_checks, replica_operations::destroy_replica_request,
+    },
 };
 use agents::errors::{SvcError, SvcError::CordonedNode};
 use grpc::operations::pool::traits::PoolCordonRequest;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
-        store::pool::{PoolCordonOp, PoolOperation, PoolSpec},
+        store::{
+            pool::{CordonDrainState, PoolCordonOp, PoolOperation, PoolSpec},
+            replica::ReplicaSpec,
+            snapshots::replica::ReplicaSnapshot,
+        },
         transport::{
-            CreatePool, CtrlPoolState, DestroyPool, ExpandPool, Pool, PoolDiag, PoolDiskError,
-            PoolStatus,
+            CreatePool, CtrlPoolState, DataLossInfo, DestroyPool, ExpandPool, Pool,
+            PoolDeleteResult, PoolDiag, PoolDiskError, PoolId, PoolStatus, ReplicaOwners,
+            ReplicaTopology, SnapshotId, SnapshotLossDetail, SnapshotLossInfo, VolumeLossDetail,
         },
     },
 };
@@ -30,6 +37,7 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
     type Create = CreatePool;
     type CreateOutput = Pool;
     type Destroy = DestroyPool;
+    type DestroyOutput = Option<PoolDeleteResult>;
 
     async fn create(
         registry: &Registry,
@@ -104,43 +112,12 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
         &mut self,
         registry: &Registry,
         request: &Self::Destroy,
-    ) -> Result<(), SvcError> {
-        // what if the node is never coming back?
-        // do we need a way to forcefully "delete" things?
-        let node = registry.node_wrapper(&request.node).await?;
-
-        self.start_destroy(registry).await?;
-
-        // We may want to prevent this in some situations, example: if a disk URI has changed, we
-        // may want to ensure it really is deleted.
-        // For now, if there's nothing provisioned on the pool anyway, just allow it..
-        // TODO: pass this via REST
-        let allow_not_found = self.validate_destroy(registry).is_ok();
-        let result = match node.destroy_pool(request).await {
-            Ok(_) => Ok(()),
-            Err(SvcError::PoolNotFound { .. }) => {
-                match node.import_pool(&self.as_ref().into()).await {
-                    Ok(_) => node.destroy_pool(request).await,
-                    Err(error) => match error.tonic_code() {
-                        tonic::Code::NotFound if allow_not_found => Ok(()),
-                        tonic::Code::InvalidArgument => Ok(()),
-                        tonic::Code::Cancelled | tonic::Code::Aborted => {
-                            if let Some(error) = Self::pool_import_error(&error) {
-                                self.lock().metadata.runtime.diag = Some(PoolDiag {
-                                    import_errors: vec![],
-                                    status: PoolStatus::Unknown,
-                                    error: Some(error),
-                                });
-                            }
-                            Err(error)
-                        }
-                        _other => Err(error),
-                    },
-                }
-            }
-            Err(error) => Err(error),
-        };
-        self.complete_destroy(result, registry).await
+    ) -> Result<Self::DestroyOutput, SvcError> {
+        if request.purge {
+            self.purge_pool(registry, request).await
+        } else {
+            self.normal_destroy(registry, request).await
+        }
     }
 }
 
@@ -149,6 +126,7 @@ impl ResourceLifecycle for Option<OperationGuardArc<PoolSpec>> {
     type Create = CreatePool;
     type CreateOutput = Pool;
     type Destroy = DestroyPool;
+    type DestroyOutput = Option<PoolDeleteResult>;
 
     async fn create(
         _registry: &Registry,
@@ -161,7 +139,7 @@ impl ResourceLifecycle for Option<OperationGuardArc<PoolSpec>> {
         &mut self,
         registry: &Registry,
         request: &Self::Destroy,
-    ) -> Result<(), SvcError> {
+    ) -> Result<Self::DestroyOutput, SvcError> {
         if let Some(pool) = self {
             pool.destroy(registry, request).await
         } else {
@@ -312,5 +290,367 @@ impl ResourceCordon for OperationGuardArc<PoolSpec> {
 
         self.complete_update(registry, Ok(()), spec_clone).await?;
         Ok(self.as_ref().clone())
+    }
+}
+
+impl OperationGuardArc<PoolSpec> {
+    /// Normal pool destruction via io-engine.
+    async fn normal_destroy(
+        &mut self,
+        registry: &Registry,
+        request: &DestroyPool,
+    ) -> Result<Option<PoolDeleteResult>, SvcError> {
+        let node = registry.node_wrapper(&request.node).await?;
+
+        self.start_destroy(registry).await?;
+
+        // We may want to prevent this in some situations, example: if a disk URI has changed, we
+        // may want to ensure it really is deleted.
+        // For now, if there's nothing provisioned on the pool anyway, just allow it..
+        // TODO: pass this via REST
+        let allow_not_found = self.validate_destroy(registry).is_ok();
+        let result = match node.destroy_pool(request).await {
+            Ok(_) => Ok(()),
+            Err(SvcError::PoolNotFound { .. }) => {
+                match node.import_pool(&self.as_ref().into()).await {
+                    Ok(_) => node.destroy_pool(request).await,
+                    Err(error) => match error.tonic_code() {
+                        tonic::Code::NotFound if allow_not_found => Ok(()),
+                        tonic::Code::InvalidArgument => Ok(()),
+                        tonic::Code::Cancelled | tonic::Code::Aborted => {
+                            if let Some(error) = Self::pool_import_error(&error) {
+                                self.lock().metadata.runtime.diag = Some(PoolDiag {
+                                    import_errors: vec![],
+                                    status: PoolStatus::Unknown,
+                                    error: Some(error),
+                                });
+                            }
+                            Err(error)
+                        }
+                        _other => Err(error),
+                    },
+                }
+            }
+            Err(error) => Err(error),
+        };
+        self.complete_destroy(result, registry).await?;
+        Ok(None)
+    }
+
+    /// Purge pool without contacting io-engine for pool destruction.
+    ///
+    /// Use cases:
+    /// - Node is permanently offline/decommissioned
+    /// - Disk has failed and pool can't be imported (state Unknown)
+    ///
+    /// This deletes control-plane specs only. Reconcilers handle:
+    /// - Volume faulting (when replicas disappear)
+    /// - Nexus child cleanup (when children become unreachable)
+    /// - Replica snapshot cleanup within VolumeSnapshots
+    pub async fn purge_pool(
+        &mut self,
+        registry: &Registry,
+        request: &DestroyPool,
+    ) -> Result<Option<PoolDeleteResult>, SvcError> {
+        let pool_id = &request.id;
+        let pool_spec = self.as_ref().clone();
+
+        // 1. Validate pool state is Unknown (or node offline)
+        self.validate_purge_state(registry, pool_id, &pool_spec)
+            .await?;
+
+        // 2. Validate pool is cordoned with replicas AND snapshots blocked
+        self.validate_purge_cordon(pool_id, &pool_spec)?;
+
+        // 3. Collect replicas on this pool
+        let replicas = self.collect_pool_replicas(registry, pool_id);
+
+        // 4. Collect replica snapshots on this pool (for reporting only)
+        let replica_snapshots = self.collect_pool_replica_snapshots(registry, pool_id);
+
+        // 5. Check accept requirement (if pool has any replicas)
+        if !replicas.is_empty() && !request.accept {
+            return Err(SvcError::PoolPurgeAcceptRequired {
+                pool_id: pool_id.clone(),
+                replica_count: replicas.len(),
+            });
+        }
+
+        // 6. Analyze and check data loss using Volume replica topology
+        let data_loss_info = Self::analyze_data_loss(registry, pool_id, &replicas).await?;
+        if let Some(ref info) = data_loss_info {
+            if !request.accept_volume_loss {
+                return Err(SvcError::PoolPurgeVolumeLossAcceptRequired {
+                    pool_id: pool_id.clone(),
+                    volume_count: info.volumes.len(),
+                    data_loss: info.clone(),
+                });
+            }
+        }
+
+        // 7. Analyze and check snapshot loss
+        let snapshot_loss_info = Self::analyze_snapshot_loss(registry, pool_id)?;
+        if let Some(ref info) = snapshot_loss_info {
+            if !request.accept_snapshot_loss {
+                return Err(SvcError::PoolPurgeSnapshotLossAcceptRequired {
+                    pool_id: pool_id.clone(),
+                    snapshot_count: info.snapshots.len(),
+                    snapshot_loss: info.clone(),
+                });
+            }
+        }
+
+        // 8. Mark pool as Deleting before touching replicas, so observers know
+        //    the pool is being torn down if something fails mid-way.
+        self.start_destroy_for_purge(registry).await?;
+
+        // 9. Delete replicas: try io-engine RPC first, fall back to spec-only deletion
+        for replica_spec in &replicas {
+            let mut replica = registry.specs().replica(&replica_spec.uuid).await?;
+            let destroy_request = destroy_replica_request(
+                replica_spec,
+                &pool_spec.node,
+                ReplicaOwners::new_disown_all(),
+            );
+            if let Err(error) = replica.destroy(registry, &destroy_request).await {
+                tracing::warn!(
+                    replica.uuid = %replica_spec.uuid,
+                    %error,
+                    "Failed to destroy replica via io-engine, removing spec only"
+                );
+                replica.start_destroy_for_purge(registry).await?;
+                replica.complete_destroy(Ok(()), registry).await?;
+            }
+        }
+
+        // 10. Note: Replica snapshots are stored within VolumeSnapshot metadata.
+        // The VolumeSnapshot reconciler will detect missing replica snapshots
+        // and handle cleanup. We just log for visibility.
+        if !replica_snapshots.is_empty() {
+            tracing::info!(
+                pool.id = %pool_id,
+                replica_snapshots = replica_snapshots.len(),
+                "Replica snapshots on purged pool will be cleaned up by snapshot reconciler"
+            );
+        }
+
+        // 11. Complete pool deletion
+        self.complete_destroy(Ok(()), registry).await?;
+
+        // 12. Build and return result
+        let mut result = PoolDeleteResult::new(pool_id.clone());
+        if let Some(data_loss) = data_loss_info {
+            result.data_loss = data_loss;
+        }
+        if let Some(snapshot_loss) = snapshot_loss_info {
+            result.snapshot_loss = snapshot_loss;
+        }
+
+        tracing::info!(
+            pool.id = %pool_id,
+            replicas_deleted = replicas.len(),
+            snapshots_affected = replica_snapshots.len(),
+            data_loss = result.has_data_loss(),
+            snapshot_loss = result.has_snapshot_loss(),
+            "Pool purged successfully. Affected volumes will be marked faulted by reconciler."
+        );
+
+        Ok(Some(result))
+    }
+
+    /// Validate that the pool state allows purge (must be Unknown, Offline, or node offline).
+    async fn validate_purge_state(
+        &self,
+        registry: &Registry,
+        pool_id: &PoolId,
+        pool_spec: &PoolSpec,
+    ) -> Result<(), SvcError> {
+        let node_online = match registry.node_wrapper(&pool_spec.node).await {
+            Ok(node) => node.read().await.is_online(),
+            Err(_) => false,
+        };
+
+        if node_online {
+            // Node is online - check pool state via ctrl_pool_state
+            if let Ok(ctrl_state) = registry.ctrl_pool_state(pool_id).await {
+                if !matches!(ctrl_state.status, PoolStatus::Unknown | PoolStatus::Offline) {
+                    return Err(SvcError::PoolStateNotUnknown {
+                        pool_id: pool_id.clone(),
+                        state: ctrl_state.status.clone(),
+                    });
+                }
+            }
+            // If ctrl_pool_state fails, pool state is unknown - allow purge
+        }
+        // Node is offline - purge is allowed
+        Ok(())
+    }
+
+    /// Validate that the pool is cordoned with both replicas and snapshots blocked.
+    fn validate_purge_cordon(
+        &self,
+        pool_id: &PoolId,
+        pool_spec: &PoolSpec,
+    ) -> Result<(), SvcError> {
+        match &pool_spec.cordon_drain {
+            None => Err(SvcError::PoolNotCordonedForPurge {
+                pool_id: pool_id.clone(),
+            }),
+            Some(CordonDrainState::Cordoned(state)) => {
+                if !state.replicas || !state.snapshots {
+                    Err(SvcError::PoolCordonInsufficientForPurge {
+                        pool_id: pool_id.clone(),
+                    })
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+
+    /// Collect all replicas on the given pool.
+    fn collect_pool_replicas(&self, registry: &Registry, pool_id: &PoolId) -> Vec<ReplicaSpec> {
+        registry
+            .specs()
+            .replicas_cloned()
+            .into_iter()
+            .filter(|r| r.pool_name() == pool_id)
+            .collect()
+    }
+
+    /// Collect all replica snapshots on the given pool.
+    fn collect_pool_replica_snapshots(
+        &self,
+        registry: &Registry,
+        pool_id: &PoolId,
+    ) -> Vec<ReplicaSnapshot> {
+        let mut result = Vec::new();
+        for vol_snapshot in registry.specs().volume_snapshots_rsc() {
+            let vol_snap = vol_snapshot.lock();
+            for txn_replicas in vol_snap.metadata().transactions().values() {
+                for replica_snap in txn_replicas {
+                    if replica_snap.spec().source_id().pool_id() == pool_id {
+                        result.push(replica_snap.clone());
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    /// Analyze data loss impact by examining each affected volume's replica topology.
+    ///
+    /// For each volume that has replicas on the pool being purged, we fetch the
+    /// `Volume` object and use its `replica_topology` to determine how many
+    /// healthy replicas exist before and after the deletion. A replica is
+    /// considered healthy if it is online and marked as fully synced.
+    async fn analyze_data_loss(
+        registry: &Registry,
+        pool_id: &PoolId,
+        replicas: &[ReplicaSpec],
+    ) -> Result<Option<DataLossInfo>, SvcError> {
+        let volume_ids: HashSet<_> = replicas
+            .iter()
+            .filter_map(|r| r.owners.volume().cloned())
+            .collect();
+
+        let mut volumes_with_data_loss = Vec::new();
+
+        for volume_id in &volume_ids {
+            let volume = match registry.volume(volume_id).await {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let topology = &volume.state().replica_topology;
+
+            let total_replicas = topology.len() as u32;
+            let healthy_before = topology
+                .values()
+                .filter(|rt| rt.status().online() && rt.healthy() == Some(true))
+                .count() as u32;
+
+            let on_pool = |rt: &&ReplicaTopology| rt.pool().as_ref() == Some(pool_id);
+
+            let replicas_on_pool = topology.values().filter(on_pool).count() as u32;
+            let healthy_lost = topology
+                .values()
+                .filter(on_pool)
+                .filter(|rt| rt.status().online() && rt.healthy() == Some(true))
+                .count() as u32;
+
+            let healthy_after = healthy_before.saturating_sub(healthy_lost);
+
+            if healthy_after == 0 && replicas_on_pool > 0 {
+                volumes_with_data_loss.push(VolumeLossDetail {
+                    volume_id: volume_id.clone(),
+                    replicas_before: total_replicas,
+                    healthy_before,
+                    lost_on_pool: replicas_on_pool,
+                    healthy_after,
+                });
+            }
+        }
+
+        if volumes_with_data_loss.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(DataLossInfo {
+                volumes: volumes_with_data_loss,
+            }))
+        }
+    }
+
+    /// Analyze snapshot loss impact for replica snapshots being deleted.
+    ///
+    /// Replica snapshots on the pool being purged are permanently lost. Any
+    /// replica snapshot on a different pool is a surviving copy. If a volume
+    /// snapshot has no surviving copies after the purge, it is reported as lost.
+    fn analyze_snapshot_loss(
+        registry: &Registry,
+        pool_id: &PoolId,
+    ) -> Result<Option<SnapshotLossInfo>, SvcError> {
+        let mut snapshots_with_loss: HashMap<SnapshotId, SnapshotLossDetail> = HashMap::new();
+
+        for vol_snapshot in registry.specs().volume_snapshots_rsc() {
+            let vol_snap = vol_snapshot.lock();
+            let vol_snap_id = vol_snap.spec().uuid().clone();
+
+            let mut total_replica_snaps = 0u32;
+            let mut on_this_pool = 0u32;
+
+            for txn_replicas in vol_snap.metadata().transactions().values() {
+                for rs in txn_replicas {
+                    total_replica_snaps += 1;
+                    if rs.spec().source_id().pool_id() == pool_id {
+                        on_this_pool += 1;
+                    }
+                }
+            }
+
+            if on_this_pool > 0 {
+                let surviving = total_replica_snaps - on_this_pool;
+
+                if surviving == 0 && !snapshots_with_loss.contains_key(&vol_snap_id) {
+                    snapshots_with_loss.insert(
+                        vol_snap_id.clone(),
+                        SnapshotLossDetail {
+                            snapshot_id: vol_snap_id,
+                            replica_snapshots_before: total_replica_snaps,
+                            healthy_before: total_replica_snaps - on_this_pool,
+                            lost_on_pool: on_this_pool,
+                            healthy_after: 0,
+                        },
+                    );
+                }
+            }
+        }
+
+        if snapshots_with_loss.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(SnapshotLossInfo {
+                snapshots: snapshots_with_loss.into_values().collect(),
+            }))
+        }
     }
 }

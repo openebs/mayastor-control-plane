@@ -2,8 +2,10 @@ use super::*;
 use grpc::operations::pool::traits::{
     ClearErrors, ClearErrorsRequest, PoolCordonRequest, PoolOperations,
 };
+use openapi::apis::pools_api::actix::server::{delNodePoolResponse, delPoolResponse};
 use rest_client::versions::v0::{apis::Uuid, models::PoolClearErr};
 use std::collections::HashMap;
+use stor_port::types::v0::openapi;
 use stor_port::{
     transport_api::{ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::transport::{DestroyPool, ExpandPool, Filter, UnlabelPool},
@@ -13,21 +15,29 @@ fn client() -> impl PoolOperations {
     core_grpc().pool()
 }
 
-async fn destroy_pool(filter: Filter) -> Result<(), RestError<RestJsonError>> {
+/// Shared pool deletion logic. Returns `Some(result)` for purge, `None` for normal delete.
+async fn destroy_pool(
+    filter: Filter,
+    body: Option<models::DeletePoolBody>,
+) -> Result<Option<models::PoolDeleteResult>, RestError<RestJsonError>> {
+    let body = body.unwrap_or_default();
+
     let destroy = match filter.clone() {
-        Filter::NodePool(node_id, pool_id) => DestroyPool {
-            node: node_id,
-            id: pool_id,
-        },
+        Filter::NodePool(node_id, pool_id) => DestroyPool::new(node_id, pool_id)
+            .with_purge(body.purge.unwrap_or(false))
+            .with_accept(body.accept.unwrap_or(false))
+            .with_accept_volume_loss(body.accept_volume_loss.unwrap_or(false))
+            .with_accept_snapshot_loss(body.accept_snapshot_loss.unwrap_or(false)),
         Filter::Pool(pool_id) => {
             let node_id = match client().get(filter, None).await {
                 Ok(pools) => pool(pool_id.to_string(), pools.into_inner().first())?.node(),
                 Err(error) => return Err(RestError::from(error)),
             };
-            DestroyPool {
-                node: node_id,
-                id: pool_id,
-            }
+            DestroyPool::new(node_id, pool_id)
+                .with_purge(body.purge.unwrap_or(false))
+                .with_accept(body.accept.unwrap_or(false))
+                .with_accept_volume_loss(body.accept_volume_loss.unwrap_or(false))
+                .with_accept_snapshot_loss(body.accept_snapshot_loss.unwrap_or(false))
         }
         _ => {
             return Err(RestError::from(ReplyError {
@@ -38,20 +48,31 @@ async fn destroy_pool(filter: Filter) -> Result<(), RestError<RestJsonError>> {
             }))
         }
     };
-    client().destroy(&destroy, None).await?;
-    Ok(())
+    let result = client().destroy(&destroy, None).await?;
+
+    Ok(result.map(Into::into))
 }
 
 #[async_trait::async_trait]
 impl apis::actix_server::Pools for RestApi {
     async fn del_node_pool(
         Path((node_id, pool_id)): Path<(String, String)>,
-    ) -> Result<(), RestError<RestJsonError>> {
-        destroy_pool(Filter::NodePool(node_id.into(), pool_id.into())).await
+        Body(body): Body<Option<models::DeletePoolBody>>,
+    ) -> Result<delNodePoolResponse, RestError<RestJsonError>> {
+        match destroy_pool(Filter::NodePool(node_id.into(), pool_id.into()), body).await? {
+            Some(result) => Ok(delNodePoolResponse::Ok(result)),
+            None => Ok(delNodePoolResponse::NoContent),
+        }
     }
 
-    async fn del_pool(Path(pool_id): Path<String>) -> Result<(), RestError<RestJsonError>> {
-        destroy_pool(Filter::Pool(pool_id.into())).await
+    async fn del_pool(
+        Path(pool_id): Path<String>,
+        Body(body): Body<Option<models::DeletePoolBody>>,
+    ) -> Result<delPoolResponse, RestError<RestJsonError>> {
+        match destroy_pool(Filter::Pool(pool_id.into()), body).await? {
+            Some(result) => Ok(delPoolResponse::Ok(result)),
+            None => Ok(delPoolResponse::NoContent),
+        }
     }
 
     async fn get_node_pool(

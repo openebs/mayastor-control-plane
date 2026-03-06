@@ -1,7 +1,9 @@
 extern crate utils as external_utils;
 use super::VolumeId;
 use crate::{
-    operations::{Cordoning, Errors, Expand, GetWithArgs, Label, ListWithArgs, PluginResult},
+    operations::{
+        Cordoning, Delete, Errors, Expand, GetWithArgs, Label, ListWithArgs, PluginResult,
+    },
     resources::{
         error::{Error, LabelAssignSnafu, OpError, TopologyError},
         utils::{
@@ -331,6 +333,266 @@ impl GetWithArgs for Pool {
                 });
             }
         }
+        Ok(())
+    }
+}
+
+/// Arguments for deleting a pool.
+#[derive(Debug, Clone, clap::Args)]
+pub struct DeletePoolArgs {
+    /// Id of the pool to delete.
+    pool_id: PoolId,
+
+    /// Purge pool without contacting io-engine.{n}
+    /// Use this when the pool's node is offline or the pool state is Unknown.
+    /// Requires the pool to be cordoned with --replicas --snapshots first.
+    #[arg(long)]
+    purge: bool,
+
+    /// Show what would happen if this pool is purged, without actually deleting.
+    /// Displays pool state, cordon status, replica count, and affected volumes.
+    #[arg(long)]
+    pub show_impact: bool,
+
+    /// Accept both volume loss and snapshot loss.
+    /// Shorthand for --accept-volume-loss --accept-snapshot-loss.
+    #[arg(long)]
+    accept_data_loss: bool,
+
+    /// Accept volume loss for volumes losing their last healthy replica.
+    /// Required when --purge would cause volume data loss.
+    #[arg(long)]
+    accept_volume_loss: bool,
+
+    /// Accept snapshot loss for snapshots losing their last replica snapshot.
+    /// Required when --purge would cause snapshot loss.
+    #[arg(long)]
+    accept_snapshot_loss: bool,
+}
+
+#[async_trait(?Send)]
+impl Delete for Pool {
+    type ID = DeletePoolArgs;
+
+    async fn del(id: &Self::ID, ignore_not_found: bool, output: &OutputFormat) -> PluginResult {
+        // If --show-impact is set, show purge impact analysis and return without deleting.
+        if id.show_impact {
+            return Self::show_impact_analysis(&id.pool_id, output).await;
+        }
+
+        // Build request body.
+        // accept is always true here — the user has already confirmed via prompt or --yes.
+        // --accept-data-loss is shorthand for both volume and snapshot loss.
+        let accept_volume_loss = id.accept_volume_loss || id.accept_data_loss;
+        let accept_snapshot_loss = id.accept_snapshot_loss || id.accept_data_loss;
+        let body = openapi::models::DeletePoolBody {
+            purge: Some(id.purge),
+            accept: Some(true),
+            accept_volume_loss: Some(accept_volume_loss),
+            accept_snapshot_loss: Some(accept_snapshot_loss),
+        };
+
+        match RestClient::client()
+            .pools_api()
+            .del_pool(&id.pool_id, Some(body))
+            .await
+        {
+            Ok(response) => {
+                // Purge returns Some(PoolDeleteResult), normal delete returns None (204).
+                match response.into_body() {
+                    Some(result) => utils::print_table(output, result),
+                    None => println!("Pool {} deleted", id.pool_id),
+                }
+                Ok(())
+            }
+            Err(source) => {
+                // Handle not found with ignore flag
+                if ignore_not_found && source.status() == Some(StatusCode::NOT_FOUND) {
+                    return Ok(());
+                }
+
+                Err(Error::DeletePoolError {
+                    id: id.pool_id.to_string(),
+                    source,
+                })
+            }
+        }
+    }
+}
+
+impl GetHeaderRow for models::PoolDeleteResult {
+    fn get_header_row(&self) -> Row {
+        row!["POOL", "DATA_LOSS", "SNAPSHOT_LOSS",]
+    }
+}
+
+impl CreateRow for models::PoolDeleteResult {
+    fn row(&self) -> Row {
+        let data_loss = optional_cell(
+            (!self.data_loss.volumes.is_empty())
+                .then(|| format!("{} volume(s)", self.data_loss.volumes.len())),
+        );
+        let snapshot_loss = optional_cell(
+            (!self.snapshot_loss.snapshots.is_empty())
+                .then(|| format!("{} snapshot(s)", self.snapshot_loss.snapshots.len())),
+        );
+
+        row![self.pool_id, data_loss, snapshot_loss,]
+    }
+}
+
+/// Result of pool purge impact analysis.
+/// Cordon state for purge eligibility.
+#[derive(Serialize, Debug, Clone)]
+pub enum CordonState {
+    /// Pool has no cordon in place.
+    NotCordoned,
+    /// Pool is cordoned but does not block both replicas and snapshots.
+    Insufficient,
+    /// Pool is cordoned and blocks both replica and snapshot scheduling.
+    Ready,
+}
+
+impl Default for CordonState {
+    fn default() -> Self {
+        Self::NotCordoned
+    }
+}
+
+impl std::fmt::Display for CordonState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotCordoned => write!(f, "Not cordoned"),
+            Self::Insufficient => write!(f, "Insufficient"),
+            Self::Ready => write!(f, "Ready"),
+        }
+    }
+}
+
+/// Impact analysis for a pool purge operation.
+///
+/// Shown when using `--show-impact` to preview what would happen before
+/// actually purging the pool.
+#[derive(Serialize, Default, Debug, Clone)]
+pub struct PoolPurgeImpact {
+    /// The pool being analyzed.
+    pub pool_id: PoolId,
+    /// Current runtime status of the pool (e.g. Unknown, Online, Faulted).
+    /// Purge is only allowed when status is Unknown.
+    pub status: models::PoolStatus,
+    /// Whether the pool is cordoned and blocks both replica and snapshot
+    /// scheduling, as required for purge.
+    pub cordon: CordonState,
+    /// Number of replicas residing on this pool across all volumes.
+    pub replica_count: usize,
+    /// Volumes that have at least one replica on this pool and would be
+    /// affected by the purge.
+    pub affected_volumes: Vec<VolumeId>,
+    /// Whether the pool meets all preconditions for purge:
+    /// status is Unknown and cordon blocks both replicas and snapshots.
+    pub ready_for_purge: bool,
+}
+
+impl GetHeaderRow for PoolPurgeImpact {
+    fn get_header_row(&self) -> Row {
+        row![
+            "POOL",
+            "STATUS",
+            "CORDON",
+            "REPLICAS",
+            "AFFECTED_VOLUMES",
+            "READY",
+        ]
+    }
+}
+
+impl CreateRow for PoolPurgeImpact {
+    fn row(&self) -> Row {
+        row![
+            self.pool_id,
+            self.status,
+            self.cordon,
+            self.replica_count,
+            optional_cell((!self.affected_volumes.is_empty()).then(|| {
+                self.affected_volumes
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })),
+            self.ready_for_purge.to_string(),
+        ]
+    }
+}
+
+impl Pool {
+    /// Show what would happen if this pool is purged.
+    async fn show_impact_analysis(pool_id: &PoolId, output: &OutputFormat) -> PluginResult {
+        // Get pool info.
+        let pool = match RestClient::client().pools_api().get_pool(pool_id).await {
+            Ok(p) => p.into_body(),
+            Err(e) => {
+                return Err(Error::GetPoolError {
+                    id: pool_id.to_string(),
+                    source: e,
+                });
+            }
+        };
+
+        // Get pool status from runtime state.
+        let status = pool
+            .state
+            .as_ref()
+            .map(|s| s.status)
+            .unwrap_or(models::PoolStatus::Unknown);
+
+        // Check cordon status.
+        let cordon = match pool.spec.as_ref().and_then(|s| s.cordon_drain.as_ref()) {
+            None => CordonState::NotCordoned,
+            Some(PoolCordonDrain::cordoned(state)) => {
+                if state.replicas && state.snapshots {
+                    CordonState::Ready
+                } else {
+                    CordonState::Insufficient
+                }
+            }
+        };
+
+        // Get replica count from volume replica topology.
+        let volumes = RestClient::client()
+            .volumes_api()
+            .get_volumes(0, None, None)
+            .await
+            .map(|r| r.into_body().entries)
+            .unwrap_or_default();
+
+        // Find replicas on this pool and affected volumes from volume topology.
+        let mut replica_count = 0usize;
+        let mut affected_volumes: std::collections::HashSet<VolumeId> =
+            std::collections::HashSet::new();
+        for volume in &volumes {
+            for topo in volume.state.replica_topology.values() {
+                if topo.pool.as_deref() == Some(pool_id.as_str()) {
+                    replica_count += 1;
+                    affected_volumes.insert(volume.spec.uuid);
+                }
+            }
+        }
+
+        let ready_for_purge =
+            status == models::PoolStatus::Unknown && matches!(cordon, CordonState::Ready);
+
+        let impact = PoolPurgeImpact {
+            pool_id: pool_id.clone(),
+            status,
+            cordon,
+            replica_count,
+            affected_volumes: affected_volumes.into_iter().collect(),
+            ready_for_purge,
+        };
+
+        print_table(output, impact);
+
         Ok(())
     }
 }

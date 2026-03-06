@@ -56,6 +56,7 @@ impl ResourceLifecycle for OperationGuardArc<VolumeSpec> {
     type Create = CreateVolume;
     type CreateOutput = Self;
     type Destroy = DestroyVolume;
+    type DestroyOutput = ();
 
     async fn create(
         registry: &Registry,

@@ -649,17 +649,211 @@ pub struct DestroyPool {
     pub node: NodeId,
     /// Id of the pool.
     pub id: PoolId,
+    /// Purge pool without contacting io-engine (for offline/unknown pools).
+    #[serde(default)]
+    pub purge: bool,
+    /// Accept deletion when pool has replicas.
+    #[serde(default)]
+    pub accept: bool,
+    /// Accept volume loss (last healthy replica for volumes).
+    #[serde(default)]
+    pub accept_volume_loss: bool,
+    /// Accept snapshot loss (last replica snapshot for snapshots).
+    #[serde(default)]
+    pub accept_snapshot_loss: bool,
 }
 impl DestroyPool {
-    /// Create a new `Self` from the given parameters.
+    /// Create a new DestroyPool request (normal delete, not purge).
     pub fn new(node: NodeId, id: PoolId) -> Self {
-        Self { node, id }
+        Self {
+            node,
+            id,
+            purge: false,
+            accept: false,
+            accept_volume_loss: false,
+            accept_snapshot_loss: false,
+        }
+    }
+
+    /// Create a purge request.
+    pub fn purge(node: NodeId, id: PoolId) -> Self {
+        Self {
+            node,
+            id,
+            purge: true,
+            accept: false,
+            accept_volume_loss: false,
+            accept_snapshot_loss: false,
+        }
+    }
+
+    /// Set purge option.
+    pub fn with_purge(mut self, purge: bool) -> Self {
+        self.purge = purge;
+        self
+    }
+
+    /// Set accept option.
+    pub fn with_accept(mut self, accept: bool) -> Self {
+        self.accept = accept;
+        self
+    }
+
+    /// Set accept_volume_loss option.
+    pub fn with_accept_volume_loss(mut self, accept_volume_loss: bool) -> Self {
+        self.accept_volume_loss = accept_volume_loss;
+        self
+    }
+
+    /// Set accept_snapshot_loss option.
+    pub fn with_accept_snapshot_loss(mut self, accept_snapshot_loss: bool) -> Self {
+        self.accept_snapshot_loss = accept_snapshot_loss;
+        self
     }
 }
 impl From<CreatePool> for DestroyPool {
     fn from(value: CreatePool) -> Self {
         Self::new(value.node, value.id)
     }
+}
+
+/// Result of a pool purge operation.
+///
+/// Only returned by purge operations (not normal deletes). The `data_loss` and `snapshot_loss`
+/// fields are always present — empty lists indicate no loss occurred.
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
+pub struct PoolDeleteResult {
+    /// The deleted pool ID.
+    pub pool_id: PoolId,
+    /// Information about volumes that lost healthy replicas.
+    /// An empty `volumes` list means no data loss occurred.
+    pub data_loss: DataLossInfo,
+    /// Information about snapshots that lost replica snapshots.
+    /// An empty `snapshots` list means no snapshot loss occurred.
+    pub snapshot_loss: SnapshotLossInfo,
+}
+
+impl PoolDeleteResult {
+    /// Create a new result for a purge with no data or snapshot loss.
+    pub fn new(pool_id: PoolId) -> Self {
+        Self {
+            pool_id,
+            data_loss: DataLossInfo::default(),
+            snapshot_loss: SnapshotLossInfo::default(),
+        }
+    }
+
+    /// Check if any data loss occurred.
+    pub fn has_data_loss(&self) -> bool {
+        !self.data_loss.volumes.is_empty()
+    }
+
+    /// Check if any snapshot loss occurred.
+    pub fn has_snapshot_loss(&self) -> bool {
+        !self.snapshot_loss.snapshots.is_empty()
+    }
+}
+
+impl From<PoolDeleteResult> for models::PoolDeleteResult {
+    fn from(src: PoolDeleteResult) -> Self {
+        models::PoolDeleteResult {
+            pool_id: src.pool_id.to_string(),
+            data_loss: models::DataLossInfo {
+                volumes: src
+                    .data_loss
+                    .volumes
+                    .into_iter()
+                    .map(|v| models::VolumeLossDetail {
+                        volume_id: v.volume_id.to_string(),
+                        replicas_before: v.replicas_before,
+                        healthy_before: v.healthy_before,
+                        lost_on_pool: v.lost_on_pool,
+                        healthy_after: v.healthy_after,
+                    })
+                    .collect(),
+            },
+            snapshot_loss: models::SnapshotLossInfo {
+                snapshots: src
+                    .snapshot_loss
+                    .snapshots
+                    .into_iter()
+                    .map(|s| models::SnapshotLossDetail {
+                        snapshot_id: s.snapshot_id.to_string(),
+                        replica_snapshots_before: s.replica_snapshots_before,
+                        healthy_before: s.healthy_before,
+                        lost_on_pool: s.lost_on_pool,
+                        healthy_after: s.healthy_after,
+                    })
+                    .collect(),
+            },
+        }
+    }
+}
+
+/// Information about volume data loss caused by a pool deletion.
+///
+/// Contains a list of volumes that lost their last healthy replica as a result of
+/// the pool being purged. An empty `volumes` list means no data loss occurred.
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
+pub struct DataLossInfo {
+    /// List of volumes that lost their last healthy replica.
+    pub volumes: Vec<VolumeLossDetail>,
+}
+
+/// Details about a volume affected by pool deletion.
+///
+/// When a pool is purged, replicas on that pool are destroyed. This struct records the
+/// impact on a specific volume: how many replicas it had, how many were healthy, how many
+/// were lost, and how many healthy ones remain. If `healthy_after` is zero, the volume
+/// has suffered data loss — no healthy replicas remain to serve I/O.
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
+pub struct VolumeLossDetail {
+    /// The affected volume's unique identifier.
+    pub volume_id: VolumeId,
+    /// Total number of replicas this volume had across all pools before the deletion.
+    pub replicas_before: u32,
+    /// Number of those replicas that were in a healthy state before the deletion.
+    /// A healthy replica is one that was fully synced and serving I/O.
+    pub healthy_before: u32,
+    /// Number of this volume's replicas that resided on the pool being deleted.
+    /// These replicas are destroyed as part of the purge.
+    pub lost_on_pool: u32,
+    /// Number of healthy replicas remaining after the pool deletion.
+    /// Zero means no healthy replicas survive — the volume has suffered data loss.
+    pub healthy_after: u32,
+}
+
+/// Information about snapshot loss caused by a pool deletion.
+///
+/// Contains a list of snapshots that lost their last healthy replica snapshot as a result
+/// of the pool being purged. An empty `snapshots` list means no snapshot loss occurred.
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
+pub struct SnapshotLossInfo {
+    /// List of snapshots that lost their last replica snapshot.
+    pub snapshots: Vec<SnapshotLossDetail>,
+}
+
+/// Details about a snapshot affected by pool deletion.
+///
+/// When a pool is purged, replica snapshots on that pool are destroyed. This struct records
+/// the impact on a specific volume snapshot: how many replica snapshots it had, how many
+/// were healthy, how many were lost, and how many healthy ones remain. If `healthy_after`
+/// is zero, the snapshot has been lost — it can no longer be used for restores.
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
+pub struct SnapshotLossDetail {
+    /// The affected volume snapshot's unique identifier.
+    pub snapshot_id: SnapshotId,
+    /// Total number of replica snapshots this snapshot had across all pools before the deletion.
+    pub replica_snapshots_before: u32,
+    /// Number of those replica snapshots that were in a healthy state before the deletion.
+    /// A healthy replica snapshot is one that is available for restore operations.
+    pub healthy_before: u32,
+    /// Number of this snapshot's replica snapshots that resided on the pool being deleted.
+    /// These replica snapshots are destroyed as part of the purge.
+    pub lost_on_pool: u32,
+    /// Number of healthy replica snapshots remaining after the pool deletion.
+    /// Zero means no healthy replica snapshots survive — the snapshot is lost.
+    pub healthy_after: u32,
 }
 
 /// Expand Pool Request.

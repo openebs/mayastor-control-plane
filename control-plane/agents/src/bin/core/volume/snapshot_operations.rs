@@ -154,6 +154,7 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
     type Create<'a> = CreateVolumeSnapshotRequest<'a>;
     type CreateOutput = Self;
     type Destroy = DestroyVolumeSnapshotRequest;
+    type DestroyOutput = ();
 
     async fn create(
         registry: &Registry,

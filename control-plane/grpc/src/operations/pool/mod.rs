@@ -109,7 +109,7 @@ mod test {
         use std::time::Duration;
         use stor_port::{
             transport_api::{v0::Pools, ReplyError},
-            types::v0::transport::{Filter, Pool},
+            types::v0::transport::{Filter, Pool, PoolDeleteResult},
         };
 
         pub(super) struct Server {}
@@ -126,7 +126,7 @@ mod test {
                 &self,
                 _pool: &dyn DestroyPoolInfo,
                 _ctx: Option<Context>,
-            ) -> Result<(), ReplyError> {
+            ) -> Result<Option<PoolDeleteResult>, ReplyError> {
                 todo!()
             }
             async fn get(

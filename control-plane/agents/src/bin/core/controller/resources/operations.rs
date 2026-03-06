@@ -65,17 +65,20 @@ pub(crate) trait ResourceLifecycle {
     type Create: Sync + Send;
     type CreateOutput: Sync + Send + Sized;
     type Destroy: Sync + Send;
+    type DestroyOutput: Sync + Send + Sized;
+
     /// Create the `Self` Resource itself.
     async fn create(
         registry: &Registry,
         request: &Self::Create,
     ) -> Result<Self::CreateOutput, SvcError>;
+
     /// Destroy the resource itself.
     async fn destroy(
         &mut self,
         registry: &Registry,
         request: &Self::Destroy,
-    ) -> Result<(), SvcError>;
+    ) -> Result<Self::DestroyOutput, SvcError>;
 }
 
 /// Resource Lifecycle Operations.
@@ -98,17 +101,20 @@ pub(crate) trait ResourceLifecycleWithLifetime {
     type Create<'a>: Sync + Send;
     type CreateOutput: Sync + Send + Sized;
     type Destroy: Sync + Send;
+    type DestroyOutput: Sync + Send + Sized;
+
     /// Create the `Self` Resource itself.
     async fn create(
         registry: &Registry,
         request: &Self::Create<'_>,
     ) -> Result<Self::CreateOutput, SvcError>;
+
     /// Destroy the resource itself.
     async fn destroy(
         &mut self,
         registry: &Registry,
         request: &Self::Destroy,
-    ) -> Result<(), SvcError>;
+    ) -> Result<Self::DestroyOutput, SvcError>;
 }
 
 /// Resource Sharing Operations.

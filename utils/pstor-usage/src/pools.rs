@@ -119,7 +119,7 @@ impl FormatSamples for PoolMgr {
 impl ResourceDelete for Vec<models::Pool> {
     async fn delete(&self, client: &ApiClient) -> anyhow::Result<()> {
         for pool in self {
-            client.pools_api().del_pool(&pool.id).await?;
+            client.pools_api().del_pool(&pool.id, None).await?;
         }
         Ok(())
     }

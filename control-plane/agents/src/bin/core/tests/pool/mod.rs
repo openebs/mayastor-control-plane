@@ -1,3 +1,5 @@
+mod purge;
+
 use anyhow::{anyhow, Result};
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::{
@@ -161,6 +163,7 @@ async fn pool() {
             &DestroyPool {
                 node: io_engine.clone(),
                 id: "pooloop".into(),
+                ..Default::default()
             },
             None,
         )
@@ -235,6 +238,7 @@ async fn pool() {
             &DestroyPool {
                 node: io_engine.clone(),
                 id: "pooloop".into(),
+                ..Default::default()
             },
             None,
         )
@@ -245,6 +249,7 @@ async fn pool() {
             &DestroyPool {
                 node: io_engine.clone(),
                 id: "pooloop2".into(),
+                ..Default::default()
             },
             None,
         )
@@ -1030,7 +1035,7 @@ async fn reconciler_deleting_pool_on_node_down() {
     let _ = cluster
         .rest_v00()
         .pools_api()
-        .del_node_pool(node_1_id.as_str(), pool_1_id.as_str())
+        .del_node_pool(node_1_id.as_str(), pool_1_id.as_str(), None)
         .await;
 
     let pool_1_status_after_delete = pools_api
@@ -1129,6 +1134,7 @@ async fn reconciler_deleting_dirty_pool() {
             &DestroyPool {
                 node: node.clone(),
                 id: pool.clone(),
+                ..Default::default()
             },
             None,
         )
@@ -1359,6 +1365,7 @@ async fn destroy_after_restart() {
     let destroy = DestroyPool {
         node: cluster.node(0),
         id: cluster.pool(0, 0),
+        ..Default::default()
     };
     let create = CreatePool {
         node: cluster.node(0),

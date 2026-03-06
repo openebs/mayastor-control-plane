@@ -321,17 +321,33 @@ impl ExecuteOperation for DeleteArgs {
     type Args = CliArgs;
     type Error = resources::Error;
     async fn execute(&self, cli_args: &CliArgs) -> PluginResult {
-        resources::confirm(
-            "Are you sure you want to delete the resource?",
-            "this operation cannot be undone!",
-            self.yes,
-        )?;
         match &self.resource {
-            DeleteResources::Volume { id } => {
-                volume::Volume::del(id, self.ignore_not_found, &cli_args.output).await
+            DeleteResources::Pool(args) if args.show_impact => {
+                // --show-impact is read-only, skip confirmation prompt.
+                pool::Pool::del(args, self.ignore_not_found, &cli_args.output).await
             }
-            DeleteResources::VolumeSnapshot(args) => {
-                snapshot::VolumeSnapshots::del(args, self.ignore_not_found, &cli_args.output).await
+            _ => {
+                resources::confirm(
+                    "Are you sure you want to delete the resource?",
+                    "This operation cannot be undone!",
+                    self.yes,
+                )?;
+                match &self.resource {
+                    DeleteResources::Pool(args) => {
+                        pool::Pool::del(args, self.ignore_not_found, &cli_args.output).await
+                    }
+                    DeleteResources::Volume { id } => {
+                        volume::Volume::del(id, self.ignore_not_found, &cli_args.output).await
+                    }
+                    DeleteResources::VolumeSnapshot(args) => {
+                        snapshot::VolumeSnapshots::del(
+                            args,
+                            self.ignore_not_found,
+                            &cli_args.output,
+                        )
+                        .await
+                    }
+                }
             }
         }
     }

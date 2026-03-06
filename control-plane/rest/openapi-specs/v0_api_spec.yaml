@@ -843,9 +843,22 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/PoolId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeletePoolBody'
+      x-return-enum: true
       responses:
+        '200':
+          description: Pool purged successfully (purge mode)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoolDeleteResult'
         '204':
-          description: OK
+          description: Pool deleted successfully (normal mode)
         '4XX':
           $ref: '#/components/responses/ClientError'
         '5XX':
@@ -1188,9 +1201,22 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/PoolId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeletePoolBody'
+      x-return-enum: true
       responses:
+        '200':
+          description: Pool purged successfully (purge mode)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoolDeleteResult'
         '204':
-          description: OK
+          description: Pool deleted successfully (normal mode)
         '4XX':
           $ref: '#/components/responses/ClientError'
         '5XX':
@@ -2633,6 +2659,142 @@ components:
         NVMe Qualified Names (NQNs) are used to uniquely describe a host or NVM subsystem for the purposes
         of identification and authentication
       type: string
+    DeletePoolBody:
+      description: Request body for pool deletion
+      type: object
+      properties:
+        purge:
+          description: |
+            Purge pool without contacting io-engine.
+            Use when pool's node is offline or pool state is Unknown.
+            Requires pool to be cordoned with replicas and snapshots blocked.
+          type: boolean
+          default: false
+        accept:
+          description: Accept deletion when pool has replicas
+          type: boolean
+          default: false
+        acceptVolumeLoss:
+          description: |
+            Accept volume loss. Required when purge would cause volumes
+            to lose their last healthy replica.
+          type: boolean
+          default: false
+        acceptSnapshotLoss:
+          description: |
+            Accept snapshot loss. Required when purge would cause
+            snapshots to lose their last replica snapshot.
+          type: boolean
+          default: false
+    PoolDeleteResult:
+      description: Result of a pool delete operation
+      type: object
+      properties:
+        poolId:
+          description: The deleted pool identifier
+          $ref: '#/components/schemas/PoolId'
+        dataLoss:
+          description: Information about volumes that lost healthy replicas
+          $ref: '#/components/schemas/DataLossInfo'
+        snapshotLoss:
+          description: Information about snapshots that lost replica snapshots
+          $ref: '#/components/schemas/SnapshotLossInfo'
+      required:
+        - poolId
+        - dataLoss
+        - snapshotLoss
+
+    DataLossInfo:
+      description: Information about volume data loss from pool deletion
+      type: object
+      properties:
+        volumes:
+          description: List of volumes that lost their last healthy replica
+          type: array
+          items:
+            $ref: '#/components/schemas/VolumeLossDetail'
+      required:
+        - volumes
+
+    VolumeLossDetail:
+      description: Details about a volume affected by pool deletion
+      type: object
+      properties:
+        volumeId:
+          description: The affected volume ID
+          type: string
+        replicasBefore:
+          description: Total number of replicas this volume had across all pools before the deletion
+          type: integer
+          format: int32
+          minimum: 0
+        healthyBefore:
+          description: Number of those replicas that were in a healthy state before the deletion
+          type: integer
+          format: int32
+          minimum: 0
+        lostOnPool:
+          description: Number of this volume's replicas that resided on the pool being deleted
+          type: integer
+          format: int32
+          minimum: 0
+        healthyAfter:
+          description: Number of healthy replicas remaining after the pool deletion. Zero indicates data loss
+          type: integer
+          format: int32
+          minimum: 0
+      required:
+        - volumeId
+        - replicasBefore
+        - healthyBefore
+        - lostOnPool
+        - healthyAfter
+
+    SnapshotLossInfo:
+      description: Information about snapshot loss from pool deletion
+      type: object
+      properties:
+        snapshots:
+          description: List of snapshots that lost their last replica snapshot
+          type: array
+          items:
+            $ref: '#/components/schemas/SnapshotLossDetail'
+      required:
+        - snapshots
+
+    SnapshotLossDetail:
+      description: Details about a snapshot affected by pool deletion
+      type: object
+      properties:
+        snapshotId:
+          description: The affected volume snapshot ID
+          type: string
+        replicaSnapshotsBefore:
+          description: Total number of replica snapshots this snapshot had across all pools before the deletion
+          type: integer
+          format: int32
+          minimum: 0
+        healthyBefore:
+          description: Number of those replica snapshots that were in a healthy state before the deletion
+          type: integer
+          format: int32
+          minimum: 0
+        lostOnPool:
+          description: Number of this snapshot's replica snapshots that resided on the pool being deleted
+          type: integer
+          format: int32
+          minimum: 0
+        healthyAfter:
+          description: Number of healthy replica snapshots remaining after the pool deletion. Zero indicates snapshot loss
+          type: integer
+          format: int32
+          minimum: 0
+      required:
+        - snapshotId
+        - replicaSnapshotsBefore
+        - healthyBefore
+        - lostOnPool
+        - healthyAfter
     CreateReplicaBody:
       example:
         size: 80241024
@@ -3623,6 +3785,12 @@ components:
             - DiskRescanFailed
             - PublishedCtxDiffer
             - FrontendLimitExceeded
+            - PoolNotPurgeable
+            - PoolNotCordoned
+            - PoolCordonInsufficient
+            - PoolPurgeAcceptRequired
+            - PoolPurgeVolumeLossAcceptRequired
+            - PoolPurgeSnapshotLossAcceptRequired
       required:
         - details
         - kind
@@ -4640,7 +4808,7 @@ components:
       properties:
         disks:
           description: |-
-            If one or more disks is specified, only those errors associated with the 
+            If one or more disks is specified, only those errors associated with the
             specified disk or disks are cleared.
           type: array
           items:

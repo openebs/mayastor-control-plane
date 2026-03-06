@@ -162,6 +162,32 @@ impl From<ReplyError> for RestError<RestJsonError> {
                 let error = RestJsonError::new(details, message, Kind::DiskRescanFailed);
                 (StatusCode::PRECONDITION_FAILED, error)
             }
+            ReplyErrorKind::PoolNotPurgeable => {
+                let error = RestJsonError::new(details, message, Kind::PoolNotPurgeable);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
+            ReplyErrorKind::PoolNotCordoned => {
+                let error = RestJsonError::new(details, message, Kind::PoolNotCordoned);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
+            ReplyErrorKind::PoolCordonInsufficient => {
+                let error = RestJsonError::new(details, message, Kind::PoolCordonInsufficient);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
+            ReplyErrorKind::PoolPurgeAcceptRequired => {
+                let error = RestJsonError::new(details, message, Kind::PoolPurgeAcceptRequired);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
+            ReplyErrorKind::PoolPurgeVolumeLossAcceptRequired => {
+                let error =
+                    RestJsonError::new(details, message, Kind::PoolPurgeVolumeLossAcceptRequired);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
+            ReplyErrorKind::PoolPurgeSnapshotLossAcceptRequired => {
+                let error =
+                    RestJsonError::new(details, message, Kind::PoolPurgeSnapshotLossAcceptRequired);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
         };
 
         RestError::new(status, error)

@@ -406,7 +406,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
 
     client
         .pools_api()
-        .del_node_pool(&pool.spec.as_ref().unwrap().node, &pool.id)
+        .del_node_pool(&pool.spec.as_ref().unwrap().node, &pool.id, None)
         .await
         .unwrap();
     let pools = client

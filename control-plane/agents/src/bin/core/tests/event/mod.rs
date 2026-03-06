@@ -161,6 +161,7 @@ async fn events() {
             &DestroyPool {
                 node: "io-engine-1".into(),
                 id: "io-engine-1-pool-1".into(),
+                ..Default::default()
             },
             None,
         )

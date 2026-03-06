@@ -63,7 +63,7 @@ async fn create_pool_with_existing_disk() {
     cluster
         .rest_v00()
         .pools_api()
-        .del_pool(cluster.pool(0, 0).as_str())
+        .del_pool(cluster.pool(0, 0).as_str(), None)
         .await
         .unwrap();
 

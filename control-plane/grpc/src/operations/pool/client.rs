@@ -6,15 +6,16 @@ use crate::{
         CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo, PoolOperations,
     },
     pool::{
-        self, clear_errors_reply, cordon_pool_reply, create_pool_reply, expand_pool_reply,
-        get_pools_reply, get_pools_request, label_pool_reply, pool_grpc_client::PoolGrpcClient,
-        unlabel_pool_reply, CordonPoolRequest, ExpandPoolRequest, GetPoolsRequest,
+        self, clear_errors_reply, cordon_pool_reply, create_pool_reply, destroy_pool_reply,
+        expand_pool_reply, get_pools_reply, get_pools_request, label_pool_reply,
+        pool_grpc_client::PoolGrpcClient, unlabel_pool_reply, CordonPoolRequest, ExpandPoolRequest,
+        GetPoolsRequest,
     },
 };
 use std::{convert::TryFrom, ops::Deref};
 use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind, TimeoutOptions},
-    types::v0::transport::{Filter, MessageIdVs, Pool},
+    types::v0::transport::{Filter, MessageIdVs, Pool, PoolDeleteResult},
 };
 use tonic::transport::Uri;
 
@@ -64,12 +65,17 @@ impl PoolOperations for PoolClient {
         &self,
         request: &dyn DestroyPoolInfo,
         ctx: Option<Context>,
-    ) -> Result<(), ReplyError> {
+    ) -> Result<Option<PoolDeleteResult>, ReplyError> {
         let req = self.request(request, ctx, MessageIdVs::DestroyPool);
         let response = self.client().destroy_pool(req).await?.into_inner();
-        match response.error {
-            None => Ok(()),
-            Some(err) => Err(err.into()),
+        match response.reply {
+            Some(destroy_pool_reply) => match destroy_pool_reply {
+                destroy_pool_reply::Reply::Result(result) => {
+                    Ok(Some(PoolDeleteResult::try_from(result)?))
+                }
+                destroy_pool_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Ok(None),
         }
     }
 

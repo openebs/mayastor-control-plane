@@ -30,8 +30,8 @@ use stor_port::{
         store::{pool::PoolSpec, replica::ReplicaSpec},
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, ExpandPool, Filter, GetPools,
-            GetReplicas, LabelPool, NodeId, Pool, PoolId, Replica, ResizeReplica, ShareReplica,
-            UnlabelPool, UnshareReplica, VolumeId,
+            GetReplicas, LabelPool, NodeId, Pool, PoolDeleteResult, PoolId, Replica, ResizeReplica,
+            ShareReplica, UnlabelPool, UnshareReplica, VolumeId,
         },
     },
 };
@@ -66,11 +66,11 @@ impl PoolOperations for Service {
         &self,
         pool: &dyn DestroyPoolInfo,
         _ctx: Option<Context>,
-    ) -> Result<(), ReplyError> {
+    ) -> Result<Option<PoolDeleteResult>, ReplyError> {
         let req = pool.into();
         let service = self.clone();
-        Context::spawn(async move { service.destroy_pool(&req).await }).await??;
-        Ok(())
+        let result = Context::spawn(async move { service.destroy_pool(&req).await }).await??;
+        Ok(result)
     }
 
     async fn get(&self, filter: Filter, _ctx: Option<Context>) -> Result<Pools, ReplyError> {
@@ -355,7 +355,10 @@ impl Service {
 
     /// Destroy a pool using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %request.id))]
-    pub(super) async fn destroy_pool(&self, request: &DestroyPool) -> Result<(), SvcError> {
+    pub(super) async fn destroy_pool(
+        &self,
+        request: &DestroyPool,
+    ) -> Result<Option<PoolDeleteResult>, SvcError> {
         let mut pool = self.pool_opt(&request.id).await?;
         pool.destroy(&self.registry, request).await
     }
