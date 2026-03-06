@@ -846,6 +846,7 @@ async fn republished_nexus_io_engine_txn_fail() {
         .unwrap();
 
     let node_idx0 = cluster.node(0);
+    let app_node_idx0 = cluster.csi_node(0);
     let node_idx1 = cluster.node(1);
     let app_id = cluster.csi_node(0);
     let vol_cli = cluster.grpc_client().volume();
@@ -869,7 +870,7 @@ async fn republished_nexus_io_engine_txn_fail() {
                 share: Some(VolumeShareProtocol::Nvmf),
                 target_node: Some(node_idx0.clone()),
                 publish_context: HashMap::new(),
-                frontend_nodes: vec![node_idx0.to_string()],
+                frontend_nodes: vec![app_node_idx0.to_string()],
                 access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
@@ -904,7 +905,7 @@ async fn republished_nexus_io_engine_txn_fail() {
                 target_node: Some(node_idx1),
                 share: VolumeShareProtocol::Nvmf,
                 reuse_existing: true,
-                frontend_node: node_idx0.clone(),
+                frontend_node: app_node_idx0.clone(),
                 reuse_existing_fallback: false,
             },
             None,
@@ -1061,6 +1062,7 @@ async fn republished_nexus_core_agent_txn_fail() {
         .unwrap();
 
     let node_idx0 = cluster.node(0);
+    let app_node_idx0 = cluster.csi_node(0);
     let node_idx1 = cluster.node(1);
     let csi_id = cluster.csi_container(0);
     let app_id = cluster.csi_node(0);
@@ -1085,7 +1087,7 @@ async fn republished_nexus_core_agent_txn_fail() {
                 share: Some(VolumeShareProtocol::Nvmf),
                 target_node: Some(node_idx0.clone()),
                 publish_context: HashMap::new(),
-                frontend_nodes: vec![node_idx0.to_string()],
+                frontend_nodes: vec![app_node_idx0.to_string()],
                 access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
@@ -1115,7 +1117,7 @@ async fn republished_nexus_core_agent_txn_fail() {
 
     let csi_node_ip = cluster.composer().container_ip(&csi_id);
     let vol_clone = volume.clone();
-    let node_idx0_spawn = node_idx0.clone();
+    let node_idx0_spawn = app_node_idx0.clone();
     let node_idx1_spawn = node_idx1.clone();
     let repub_task = tokio::spawn(async move {
         let mut vol_republished = vol_cli

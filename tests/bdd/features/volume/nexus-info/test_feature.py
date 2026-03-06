@@ -166,7 +166,7 @@ def publish_volume():
             publish_context={},
             protocol=VolumeShareProtocol("nvmf"),
             node=NODE_NAME,
-            frontend_node="",
+            frontend_node=None,
         ),
     )
     assert volume.state.target

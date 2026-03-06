@@ -97,6 +97,7 @@ pub(crate) struct SwitchOverRequest {
     publish_context: Option<HashMap<String, String>>,
     /// The first time we handle exhaustion, retry right away.
     fast_exhaustion_retry: bool,
+    rwx: bool,
 }
 
 impl Ord for SwitchOverRequest {
@@ -134,6 +135,7 @@ impl SwitchOverRequest {
             reuse_existing: true,
             publish_context: None,
             fast_exhaustion_retry: true,
+            rwx: true,
         }
     }
 
@@ -154,6 +156,10 @@ impl SwitchOverRequest {
     /// Get the nqn of this path.
     pub(crate) fn nqn(&self) -> &str {
         &self.existing_nqn
+    }
+    /// Get the node name where this path is connected.
+    pub(crate) fn node(&self) -> &NodeId {
+        &self.node_name
     }
 
     /// Update stage with next stage.
@@ -313,8 +319,8 @@ impl SwitchOverRequest {
             _ => None,
         };
         if self.new_path.is_none() {
-            error!(volume.uuid=%self.volume_id, "Could not find device uri for the volume");
-            return Err(anyhow!("Couldnt find device uri for the volume"));
+            error!(volume.uuid=%self.volume_id, "Couldn't find device uri for the volume");
+            return Err(anyhow!("Couldn't find device uri for the volume"));
         }
         self.complete_op(true, "".to_string(), etcd).await?;
         self.update_next_stage();
@@ -388,7 +394,9 @@ impl SwitchOverRequest {
 
         match self.delete_request(etcd).await {
             Ok(_) => {
-                nodes.remove_failed_path(&self.existing_nqn).await;
+                nodes
+                    .remove_failed_path(&self.node_name, &self.existing_nqn)
+                    .await;
                 Ok(())
             }
             Err(_) => Err(anyhow!(
@@ -455,7 +463,9 @@ impl SwitchOverRequest {
             Err(error) => Err(anyhow!("Nvme path replacement failed: {error}")),
         }?;
 
-        nodes.remove_failed_path(&self.existing_nqn).await;
+        nodes
+            .remove_failed_path(&self.node_name, &self.existing_nqn)
+            .await;
         self.complete_op(true, "".to_string(), etcd).await?;
         self.update_next_stage();
         Ok(())
@@ -619,6 +629,7 @@ impl From<&SwitchOverRequest> for SwitchOverSpec {
             retry_count: req.retry_count,
             reuse_existing: req.reuse_existing,
             publish_context: req.publish_context.clone(),
+            rwx: req.rwx,
         }
     }
 }
@@ -642,6 +653,7 @@ impl From<&SwitchOverSpec> for SwitchOverRequest {
             reuse_existing: req.reuse_existing,
             publish_context: req.publish_context.clone(),
             fast_exhaustion_retry: true,
+            rwx: req.rwx,
         }
     }
 }

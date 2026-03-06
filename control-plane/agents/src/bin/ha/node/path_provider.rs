@@ -172,9 +172,7 @@ impl CachedNvmePathProvider {
                     "Received UDEV hotplug event: {}: {} = {}",
                     event.event_type(),
                     event.device().syspath().display(),
-                    event
-                        .subsystem()
-                        .map_or("", |s| { s.to_str().unwrap_or("") })
+                    event.subsystem().map_or("", |s| s.to_str().unwrap_or(""))
                 );
 
                 // Make sure we have a valid UNICODE path.

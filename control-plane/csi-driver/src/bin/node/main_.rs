@@ -430,11 +430,12 @@ impl CsiServer {
             probe_filesystems(),
             vol_client,
         );
+        let node_name = node_name.to_string();
         Ok(async move {
             Server::builder()
                 .add_service(NodeServer::new(node))
                 .add_service(IdentityServer::new(Identity {}))
-                .add_service(NvmeOperationsServer::new(NvmeOperationsSvc {}))
+                .add_service(NvmeOperationsServer::new(NvmeOperationsSvc::new(node_name)))
                 .serve_with_incoming_shutdown(incoming, Shutdown::wait())
                 .await
                 .map_err(|error| {

@@ -107,7 +107,7 @@ def publish_volume(uuid, publish_on):
             publish_context={},
             protocol=VolumeShareProtocol("nvmf"),
             node=publish_on,
-            frontend_node="",
+            frontend_node=None,
         ),
     )
     assert volume.state.target
@@ -127,7 +127,7 @@ def create_and_publish_volume(uuid, size, rcount, publish_on):
             publish_context={},
             protocol=VolumeShareProtocol("nvmf"),
             node=publish_on,
-            frontend_node="",
+            frontend_node=None,
         ),
     )
     assert volume.state.target

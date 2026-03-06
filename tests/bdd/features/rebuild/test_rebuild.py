@@ -110,7 +110,7 @@ def an_existing_published_volume(disks):
             publish_context={},
             protocol=VolumeShareProtocol("nvmf"),
             node=NODE_1_NAME,
-            frontend_node="",
+            frontend_node=None,
         ),
     )
 

@@ -70,7 +70,7 @@ def init(create_pool_disk_images):
             publish_context={},
             protocol=VolumeShareProtocol("nvmf"),
             node=IO_ENGINE_1,
-            frontend_node="",
+            frontend_node=None,
         ),
     )
 

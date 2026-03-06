@@ -94,12 +94,12 @@ impl Node {
             )
         })?;
 
-        let Some(client) = &self.vol_client else {
-            return Ok(ctx_uri.to_string());
+        let uri = match &self.vol_client {
+            Some(client) => &client.volume_uri(volume_id).await?,
+            None => ctx_uri,
         };
 
-        let uri = client.volume_uri(volume_id).await?;
-        let uri = csi_driver::parse_host_uri(&self.node_name, &uri)?;
+        let uri = csi_driver::parse_host_uri(&self.node_name, uri)?;
         if &uri != ctx_uri {
             tracing::warn!(volume.uri=%uri, ctx.uri=%ctx_uri, "Overriding URI volume context with URI from REST");
         }

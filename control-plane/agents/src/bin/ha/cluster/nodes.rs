@@ -27,7 +27,7 @@ impl PathRecord {
 #[derive(Debug, Default, Clone)]
 pub(crate) struct NodeList {
     list: Arc<Mutex<HashMap<NodeId, SocketAddr>>>,
-    failed_path: Arc<Mutex<HashMap<String, PathRecord>>>,
+    failed_path: Arc<Mutex<HashMap<String, HashMap<NodeId, PathRecord>>>>,
 }
 
 impl NodeList {
@@ -44,9 +44,18 @@ impl NodeList {
     }
 
     /// Remove path from failed_path list.
-    pub(crate) async fn remove_failed_path(&self, path: &str) {
+    pub(crate) async fn remove_failed_path(&self, node: &NodeId, path: &str) {
         let mut failed_path = self.failed_path.lock().await;
-        failed_path.remove(path);
+        let empty = {
+            let Some(failed_path) = failed_path.get_mut(path) else {
+                return;
+            };
+            failed_path.remove(node);
+            failed_path.is_empty()
+        };
+        if empty {
+            failed_path.remove(path);
+        }
     }
     /// Add a failed switchover request to the failed paths.
     /// Useful when reloading from the pstor after a crash/restart.
@@ -55,10 +64,17 @@ impl NodeList {
             _socket: request.socket(),
             stage: request.stage_arc(),
         };
-        self.failed_path
-            .lock()
-            .await
-            .insert(request.nqn().into(), record);
+        let mut failed_path = self.failed_path.lock().await;
+        let path = request.nqn().into();
+        let node = request.node().into();
+        match failed_path.get_mut(&path) {
+            None => {
+                failed_path.insert(path, HashMap::from([(node, record)]));
+            }
+            Some(nodes) => {
+                nodes.insert(node, record);
+            }
+        }
     }
 
     /// Send request to the switchover engine for the reported node and path.
@@ -79,30 +95,43 @@ impl NodeList {
         let mut failed_path = self.failed_path.lock().await;
 
         if let Some(record) = failed_path.get(&path) {
-            return match record.stage() {
-                Stage::ReplacePath | Stage::DeleteTarget | Stage::Successful | Stage::Errored => {
-                    Err(ReplyError::failed_precondition(
+            if let Some(record) = record.get(&node) {
+                return match record.stage() {
+                    Stage::ReplacePath
+                    | Stage::DeleteTarget
+                    | Stage::Successful
+                    | Stage::Errored => Err(ReplyError::failed_precondition(
                         ResourceKind::NvmePath,
                         path,
                         "Path is already reported for switchover".to_owned(),
-                    ))
-                }
-                Stage::Init | Stage::RepublishVolume => Err(ReplyError::already_exist(
-                    ResourceKind::NvmePath,
-                    path,
-                    "Path is already reported for switchover".to_owned(),
-                )),
-            };
+                    )),
+                    Stage::Init | Stage::RepublishVolume => Err(ReplyError::already_exist(
+                        ResourceKind::NvmePath,
+                        path,
+                        "Path is already reported for switchover".to_owned(),
+                    )),
+                };
+            }
+            tracing::info!(node.id=%node, %path, "A failed volume path is reported from another node");
         }
 
         info!(node.id=%node, %path, "Sending switchover");
 
-        let stage = mover.switchover(node, endpoint, path.clone()).await?;
+        let stage = mover
+            .switchover(node.clone(), endpoint, path.clone())
+            .await?;
         let record = PathRecord {
             _socket: endpoint,
             stage,
         };
-        failed_path.insert(path, record);
+        match failed_path.get_mut(&path) {
+            None => {
+                failed_path.insert(path, HashMap::from([(node, record)]));
+            }
+            Some(nodes) => {
+                nodes.insert(node, record);
+            }
+        }
         Ok(())
     }
 }
