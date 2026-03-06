@@ -48,7 +48,7 @@ impl ComponentAction for IoEngine {
                 IoEngineApiVersion::vec_to_str(options.io_engine_api_versions.clone()),
             ])
             .with_env(
-                "IO_ERROR_THRESHOLD",
+                "POOL_IO_ERROR_THRESHOLD",
                 &options.pool.io_error_threshold.to_string(),
             )
             .with_args(vec!["-r", format!("/host/tmp/{reg_name}.sock").as_str()])
