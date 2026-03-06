@@ -169,11 +169,16 @@ impl OperationGuardArc<PoolSpec> {
 
     /// Maps a [`SvcError`] obtained after a failed creation or import to a [`PoolError`].
     pub(super) fn pool_import_error(error: &SvcError) -> Option<PoolError> {
-        let code = match error.tonic_code() {
+        let (code, errno) = error.tonic_errno();
+        let code = match code {
             tonic::Code::InvalidArgument
                 if error.to_string().contains("EISDIR: Is a directory") =>
             {
                 PoolErrorCode::DiskIsADirectory
+            }
+            tonic::Code::DataLoss if errno == nix::Error::EIO => PoolErrorCode::SuperBlock,
+            tonic::Code::DataLoss if errno == nix::Error::EILSEQ => {
+                PoolErrorCode::InvalidSuperBlock
             }
             tonic::Code::InvalidArgument => PoolErrorCode::InvalidSuperBlock,
             tonic::Code::NotFound => PoolErrorCode::DiskNotFound,

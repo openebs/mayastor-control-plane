@@ -492,7 +492,7 @@ pub enum SvcError {
 }
 
 impl SvcError {
-    /// Get comparable `tonic::Code`.
+    /// Get comparable [`tonic::Code`].
     /// todo: use existing conversion Self->ReplyError->tonic instead.
     pub fn tonic_code(&self) -> tonic::Code {
         match self {
@@ -514,6 +514,22 @@ impl SvcError {
             Self::ReplicaSetPropertyFailed { .. } => tonic::Code::DataLoss,
             Self::ReplaceNqnNotFound { .. } => tonic::Code::FailedPrecondition,
             _ => tonic::Code::Internal,
+        }
+    }
+    /// Get comparable [`tonic::Code`] and [`nix::Error`].
+    /// # NOTE
+    /// The `nix::Error` is retrievable only if the io-engine set the errno metadata field.
+    pub fn tonic_errno(&self) -> (tonic::Code, nix::Error) {
+        match self {
+            Self::GrpcRequestError { source, .. } => {
+                let errno = match source.metadata().get("errno") {
+                    None => "",
+                    Some(x) => x.to_str().unwrap_or(""),
+                };
+                let errno = nix::Error::from_raw(errno.parse().unwrap_or(1));
+                (source.code(), errno)
+            }
+            _ => (self.tonic_code(), nix::Error::EPERM),
         }
     }
 }

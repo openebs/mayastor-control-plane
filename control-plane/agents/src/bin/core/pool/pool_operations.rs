@@ -317,6 +317,7 @@ impl OperationGuardArc<PoolSpec> {
                     Err(error) => match error.tonic_code() {
                         tonic::Code::NotFound if allow_not_found => Ok(()),
                         tonic::Code::InvalidArgument => Ok(()),
+                        tonic::Code::DataLoss => Ok(()),
                         tonic::Code::Cancelled | tonic::Code::Aborted => {
                             if let Some(error) = Self::pool_import_error(&error) {
                                 self.lock().metadata.runtime.diag = Some(PoolDiag {
