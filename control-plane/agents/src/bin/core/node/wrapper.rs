@@ -645,6 +645,10 @@ impl NodeWrapper {
     pub(crate) fn is_online(&self) -> bool {
         self.status() == NodeStatus::Online
     }
+    /// Is the node offline.
+    pub(crate) fn is_offline(&self) -> bool {
+        self.status() == NodeStatus::Offline
+    }
 
     /// Load the node by fetching information from io-engine.
     pub(crate) async fn load(&mut self, startup: bool) -> Result<(), SvcError> {
