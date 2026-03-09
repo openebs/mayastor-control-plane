@@ -83,6 +83,8 @@ impl OnCreateFail {
             tonic::Code::InvalidArgument => Self::Delete,
             // 1. the pool disk is not available (ie not found or broken somehow)
             tonic::Code::NotFound => Self::Delete,
+            // 1. the pool failed to be created due to I/O errors
+            tonic::Code::DataLoss => Self::Delete,
             // In this case, it's the pool operator's job to attempt re-creation of the pool.
             // 1. pre-2.6 dataplane, contention on the pool service
             // 2. pool disk is very slow or extremely large
