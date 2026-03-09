@@ -44,8 +44,6 @@ mod nbd;
 pub(crate) mod nvmf;
 mod util;
 
-use utils::constants::nvme_target_nqn_prefix;
-
 pub(crate) use crate::error::DeviceError;
 use crate::match_dev;
 
@@ -134,15 +132,8 @@ impl Device {
             if let Some(devname) =
                 match_dev::match_nvmf_device_valid(&device, &nvmf_key, Some(multipath))?
             {
-                let nqn = if std::env::var("MOAC").is_ok() {
-                    format!("{}:nexus-{uuid}", nvme_target_nqn_prefix())
-                } else {
-                    format!("{}:{uuid}", nvme_target_nqn_prefix())
-                };
-                return Ok(Some(Box::new(nvmf::NvmfDetach::new(
-                    devname.to_string(),
-                    nqn,
-                ))));
+                let detach = nvmf::NvmfDetach::new(devname.to_string(), uuid, &device);
+                return Ok(Some(Box::new(detach)));
             }
         }
 
