@@ -194,10 +194,7 @@ async fn deleting_pool_spec_reconciler(
 
     let pool_id = &pool.immutable_arc().id;
     async {
-        let request = DestroyPool {
-            node: pool.as_ref().node.clone(),
-            id: pool.as_ref().id.clone(),
-        };
+        let request = DestroyPool::new(pool.as_ref().node.clone(), pool.as_ref().id.clone());
         match pool.destroy(context.registry(), &request).await {
             Ok(_) => {
                 pool.as_ref()

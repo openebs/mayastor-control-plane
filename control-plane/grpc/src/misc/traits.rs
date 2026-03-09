@@ -107,6 +107,16 @@ impl From<ReplyErrorKind> for common::ReplyErrorKind {
             ReplyErrorKind::DiskRescanFailed => Self::DiskRescanFailed,
             ReplyErrorKind::PublishedCtxDiffer => Self::PublishedCtxDiffer,
             ReplyErrorKind::FrontendLimitExceeded => Self::FrontendLimitExceeded,
+            ReplyErrorKind::PoolNotPurgeable => Self::PoolNotPurgeable,
+            ReplyErrorKind::PoolNotCordoned => Self::PoolNotCordoned,
+            ReplyErrorKind::PoolCordonInsufficient => Self::PoolCordonInsufficient,
+            ReplyErrorKind::PoolPurgeAcceptRequired => Self::PoolPurgeAcceptRequired,
+            ReplyErrorKind::PoolPurgeVolumeLossAcceptRequired => {
+                Self::PoolPurgeVolumeLossAcceptRequired
+            }
+            ReplyErrorKind::PoolPurgeSnapshotLossAcceptRequired => {
+                Self::PoolPurgeSnapshotLossAcceptRequired
+            }
         }
     }
 }
@@ -151,6 +161,16 @@ impl From<common::ReplyErrorKind> for ReplyErrorKind {
             common::ReplyErrorKind::DiskRescanFailed => Self::DiskRescanFailed,
             common::ReplyErrorKind::PublishedCtxDiffer => Self::PublishedCtxDiffer,
             common::ReplyErrorKind::FrontendLimitExceeded => Self::FrontendLimitExceeded,
+            common::ReplyErrorKind::PoolNotPurgeable => Self::PoolNotPurgeable,
+            common::ReplyErrorKind::PoolNotCordoned => Self::PoolNotCordoned,
+            common::ReplyErrorKind::PoolCordonInsufficient => Self::PoolCordonInsufficient,
+            common::ReplyErrorKind::PoolPurgeAcceptRequired => Self::PoolPurgeAcceptRequired,
+            common::ReplyErrorKind::PoolPurgeVolumeLossAcceptRequired => {
+                Self::PoolPurgeVolumeLossAcceptRequired
+            }
+            common::ReplyErrorKind::PoolPurgeSnapshotLossAcceptRequired => {
+                Self::PoolPurgeSnapshotLossAcceptRequired
+            }
         }
     }
 }

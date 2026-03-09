@@ -213,9 +213,18 @@ impl {{{classname}}} for {{{classname}}}Client {
         {{/isMultipart}}
         {{#hasBodyParam}}
         {{#bodyParam}}
+        {{#required}}
         let body = Body::from(
             serde_json::to_vec(&{{{paramName}}}).map_err(RequestError::Serde)?,
         );
+        {{/required}}
+        {{^required}}
+        let body = if let Some(ref body_value) = {{{paramName}}} {
+            Body::from(serde_json::to_vec(body_value).map_err(RequestError::Serde)?)
+        } else {
+            Body::empty()
+        };
+        {{/required}}
         {{/bodyParam}}
         {{/hasBodyParam}}
         {{^hasBodyParam}}

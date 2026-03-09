@@ -185,6 +185,14 @@ message DestroyPoolRequest {
   string pool_id = 1;
   // node id of the pool
   string node_id = 2;
+  // Purge mode - delete control plane state without contacting io-engine
+  optional bool purge = 3;
+  // Accept deletion of pool with replicas
+  optional bool accept = 4;
+  // Accept volume loss (deleting last healthy replica)
+  optional bool accept_volume_loss = 5;
+  // Accept snapshot loss (deleting last healthy replica snapshot)
+  optional bool accept_snapshot_loss = 6;
 }
 
 // Reply type for a CreatePool request
@@ -209,9 +217,60 @@ message ExpandPoolReply {
   }
 }
 
+// Result of pool deletion
+message PoolDeleteResult {
+  // id of the deleted pool
+  string pool_id = 1;
+  // data loss information if any volumes lost all healthy replicas
+  DataLossInfo data_loss = 2;
+  // snapshot loss information if any snapshots lost all healthy replica snapshots
+  SnapshotLossInfo snapshot_loss = 3;
+}
+
+// Information about volumes that will lose all healthy replicas
+message DataLossInfo {
+  repeated VolumeLossDetail volumes = 1;
+}
+
+// Details about data loss for a specific volume
+message VolumeLossDetail {
+  // The affected volume's unique identifier
+  string volume_id = 1;
+  // Total number of replicas this volume had across all pools before the deletion
+  uint32 replicas_before = 2;
+  // Number of those replicas that were healthy (online and fully synced) before deletion
+  uint32 healthy_before = 3;
+  // Number of this volume's replicas that resided on the pool being purged
+  uint32 lost_on_pool = 4;
+  // Number of healthy replicas remaining after the purge (0 means total data loss)
+  uint32 healthy_after = 5;
+}
+
+// Information about snapshots that will lose all healthy replica snapshots
+message SnapshotLossInfo {
+  repeated SnapshotLossDetail snapshots = 1;
+}
+
+// Details about snapshot loss for a specific snapshot
+message SnapshotLossDetail {
+  // The affected volume snapshot's unique identifier
+  string snapshot_id = 1;
+  // Total number of replica snapshots across all pools before the deletion
+  uint32 replica_snapshots_before = 2;
+  // Number of those replica snapshots that were on healthy pools before deletion
+  uint32 healthy_before = 3;
+  // Number of replica snapshots that resided on the pool being purged
+  uint32 lost_on_pool = 4;
+  // Number of surviving replica snapshots after the purge (0 means total snapshot loss)
+  uint32 healthy_after = 5;
+}
+
 // Reply type for a DestroyPool request
 message DestroyPoolReply {
-  optional common.ReplyError error = 2;
+  oneof reply {
+    PoolDeleteResult result = 1;
+    common.ReplyError error = 2;
+  }
 }
 
 // Reply type for a GetPools request

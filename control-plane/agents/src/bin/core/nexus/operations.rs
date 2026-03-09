@@ -36,6 +36,7 @@ impl ResourceLifecycle for OperationGuardArc<NexusSpec> {
     type Create = CreateNexus;
     type CreateOutput = (Self, Nexus);
     type Destroy = DestroyNexus;
+    type DestroyOutput = ();
 
     async fn create(
         registry: &Registry,
@@ -83,6 +84,7 @@ impl ResourceLifecycle for Option<&mut OperationGuardArc<NexusSpec>> {
     type Create = CreateNexus;
     type CreateOutput = Nexus;
     type Destroy = DestroyNexus;
+    type DestroyOutput = ();
 
     async fn create(
         _registry: &Registry,

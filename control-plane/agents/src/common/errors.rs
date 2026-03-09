@@ -5,7 +5,8 @@ use stor_port::{
     types::v0::{
         store::definitions::StoreError,
         transport::{
-            pool::PoolDeviceUri, ApiVersion, Filter, NodeId, NvmeNqnParseError, PoolId, ReplicaId,
+            pool::PoolDeviceUri, ApiVersion, DataLossInfo, Filter, NodeId, NvmeNqnParseError,
+            PoolId, PoolStatus, ReplicaId, SnapshotLossInfo,
         },
     },
 };
@@ -448,6 +449,46 @@ pub enum SvcError {
     DiskNotExtended { name: PoolId },
     #[snafu(display("Pool {name} underlying disk rescan failed"))]
     DiskRescanFailed { name: PoolId },
+    #[snafu(display(
+        "Cannot purge pool {pool_id}: pool state is {state}, purge only allowed when state is Unknown or Offline",
+    ))]
+    PoolStateNotUnknown { pool_id: PoolId, state: PoolStatus },
+
+    #[snafu(display(
+        "Cannot purge pool {pool_id}: pool must be cordoned with --replicas --snapshots flags first",
+    ))]
+    PoolNotCordonedForPurge { pool_id: PoolId },
+
+    #[snafu(display(
+        "Cannot purge pool {pool_id}: pool cordon must block both replicas and snapshots scheduling",
+    ))]
+    PoolCordonInsufficientForPurge { pool_id: PoolId },
+
+    #[snafu(display(
+        "Cannot purge pool {pool_id}: pool has {replica_count} replica(s), use --yes to proceed",
+    ))]
+    PoolPurgeAcceptRequired {
+        pool_id: PoolId,
+        replica_count: usize,
+    },
+
+    #[snafu(display(
+        "Cannot purge pool {pool_id}: {volume_count} volume(s) would lose their last healthy replica, use --accept-volume-loss to proceed",
+    ))]
+    PoolPurgeVolumeLossAcceptRequired {
+        pool_id: PoolId,
+        volume_count: usize,
+        data_loss: DataLossInfo,
+    },
+
+    #[snafu(display(
+        "Cannot purge pool {pool_id}: {snapshot_count} snapshot(s) would lose their last replica snapshot, use --accept-snapshot-loss to proceed",
+    ))]
+    PoolPurgeSnapshotLossAcceptRequired {
+        pool_id: PoolId,
+        snapshot_count: usize,
+        snapshot_loss: SnapshotLossInfo,
+    },
 }
 
 impl SvcError {
@@ -1192,6 +1233,42 @@ impl From<SvcError> for ReplyError {
             SvcError::InvalidDevlink { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::Block,
+                source,
+                extra,
+            },
+            SvcError::PoolStateNotUnknown { .. } => ReplyError {
+                kind: ReplyErrorKind::PoolNotPurgeable,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::PoolNotCordonedForPurge { .. } => ReplyError {
+                kind: ReplyErrorKind::PoolNotCordoned,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::PoolCordonInsufficientForPurge { .. } => ReplyError {
+                kind: ReplyErrorKind::PoolCordonInsufficient,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::PoolPurgeAcceptRequired { .. } => ReplyError {
+                kind: ReplyErrorKind::PoolPurgeAcceptRequired,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::PoolPurgeVolumeLossAcceptRequired { .. } => ReplyError {
+                kind: ReplyErrorKind::PoolPurgeVolumeLossAcceptRequired,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::PoolPurgeSnapshotLossAcceptRequired { .. } => ReplyError {
+                kind: ReplyErrorKind::PoolPurgeSnapshotLossAcceptRequired,
+                resource: ResourceKind::Pool,
                 source,
                 extra,
             },

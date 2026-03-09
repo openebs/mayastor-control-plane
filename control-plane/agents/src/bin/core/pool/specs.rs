@@ -441,7 +441,7 @@ impl ResourceSpecsLocked {
         specs.pool_has_snapshots(id)
     }
     /// Remove the replica `id` from the spec list.
-    fn remove_replica(&self, id: &ReplicaId) {
+    pub(crate) fn remove_replica(&self, id: &ReplicaId) {
         let mut specs = self.write();
         specs.replicas.remove(id);
     }

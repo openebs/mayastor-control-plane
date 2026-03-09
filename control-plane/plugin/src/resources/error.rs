@@ -66,6 +66,11 @@ pub enum Error {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
+    #[snafu(display("Failed to delete pool {id}. Error {source}"))]
+    DeletePoolError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
     /// Error when get pool request fails.
     #[snafu(display("No state for pool {id}. Please verify if node is online"))]
     PoolStateError { id: String },

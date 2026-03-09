@@ -74,6 +74,12 @@ enum ReplyErrorKind {
   DiskRescanFailed = 34;
   PublishedCtxDiffer = 35;
   FrontendLimitExceeded = 36;
+  PoolNotPurgeable = 37;
+  PoolNotCordoned = 38;
+  PoolCordonInsufficient = 39;
+  PoolPurgeAcceptRequired = 40;
+  PoolPurgeVolumeLossAcceptRequired = 41;
+  PoolPurgeSnapshotLossAcceptRequired = 42;
 }
 
 // ResourceKind for the resource which has undergone this error

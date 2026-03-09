@@ -249,6 +249,8 @@ pub struct DeleteArgs {
 /// The type of resources which support the delete operation.
 #[derive(clap::Subcommand, Debug)]
 pub enum DeleteResources {
+    /// Deletes the specified pool resource.
+    Pool(pool::DeletePoolArgs),
     /// Deletes the specified volume resource.
     Volume {
         /// The id of the volume to delete.

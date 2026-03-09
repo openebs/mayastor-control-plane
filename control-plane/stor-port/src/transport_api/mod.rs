@@ -195,7 +195,13 @@ impl From<ReplyError> for tonic::Status {
             ReplyErrorKind::DeadlineExceeded => {
                 tonic::Status::deadline_exceeded(error.full_string())
             }
-            ReplyErrorKind::FailedPrecondition => {
+            ReplyErrorKind::FailedPrecondition
+            | ReplyErrorKind::PoolNotPurgeable
+            | ReplyErrorKind::PoolNotCordoned
+            | ReplyErrorKind::PoolCordonInsufficient
+            | ReplyErrorKind::PoolPurgeAcceptRequired
+            | ReplyErrorKind::PoolPurgeVolumeLossAcceptRequired
+            | ReplyErrorKind::PoolPurgeSnapshotLossAcceptRequired => {
                 tonic::Status::failed_precondition(error.full_string())
             }
             ReplyErrorKind::FailedPersist => {
@@ -449,6 +455,12 @@ pub enum ReplyErrorKind {
     DiskRescanFailed,
     PublishedCtxDiffer,
     FrontendLimitExceeded,
+    PoolNotPurgeable,
+    PoolNotCordoned,
+    PoolCordonInsufficient,
+    PoolPurgeAcceptRequired,
+    PoolPurgeVolumeLossAcceptRequired,
+    PoolPurgeSnapshotLossAcceptRequired,
 }
 
 impl From<tonic::Code> for ReplyErrorKind {

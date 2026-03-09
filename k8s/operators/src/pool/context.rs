@@ -514,7 +514,7 @@ impl ResourceContext {
     async fn delete_pool(&self) -> Result<Action, Error> {
         let res = self
             .pools_api()
-            .del_node_pool(&self.spec.node(), &self.name_any())
+            .del_node_pool(&self.spec.node(), &self.name_any(), None)
             .await;
 
         match res {

@@ -17,10 +17,11 @@ use stor_port::{
             PoolRuntimeMetadata, PoolSpec, PoolSpecStatus, PoolUSpec, POOL_BS_CLUSTER_SIZE_DEFAULT,
         },
         transport::{
-            CreatePool, CtrlPoolState, DestroyPool, DiskInfo, ExpandPool, Filter, LabelPool,
-            NodeId, Pool, PoolAlert, PoolAlertStatus, PoolAlerts, PoolDeviceUri, PoolDiag,
-            PoolDiskError, PoolError, PoolErrorCode, PoolErrorInfo, PoolId, PoolState, PoolStatus,
-            UnlabelPool, VolumeId,
+            CreatePool, CtrlPoolState, DataLossInfo, DestroyPool, DiskInfo, ExpandPool, Filter,
+            LabelPool, NodeId, Pool, PoolAlert, PoolAlertStatus, PoolAlerts, PoolDeleteResult,
+            PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolErrorInfo,
+            PoolId, PoolState, PoolStatus, SnapshotLossDetail, SnapshotLossInfo, UnlabelPool,
+            VolumeId, VolumeLossDetail,
         },
     },
     IntoOption, IntoVec,
@@ -52,12 +53,14 @@ pub trait PoolOperations: Send + Sync {
         pool: &dyn CreatePoolInfo,
         ctx: Option<Context>,
     ) -> Result<Pool, ReplyError>;
-    /// Destroy a pool
+    /// Destroy a pool.
+    /// Returns `Some(PoolDeleteResult)` for purge operations,
+    /// `None` for normal deletes.
     async fn destroy(
         &self,
         pool: &dyn DestroyPoolInfo,
         ctx: Option<Context>,
-    ) -> Result<(), ReplyError>;
+    ) -> Result<Option<PoolDeleteResult>, ReplyError>;
     /// Get pools based on the filters
     async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Pools, ReplyError>;
     /// Associate the labels with the given pool.
@@ -565,6 +568,14 @@ pub trait DestroyPoolInfo: Sync + Send + std::fmt::Debug {
     fn pool_id(&self) -> PoolId;
     /// Id of the IoEngine instance
     fn node_id(&self) -> NodeId;
+    /// Whether to purge (delete specs without contacting io-engine).
+    fn purge(&self) -> bool;
+    /// Accept deletion when pool has replicas.
+    fn accept(&self) -> bool;
+    /// Accept data loss (volumes losing last healthy replica).
+    fn accept_volume_loss(&self) -> bool;
+    /// Accept snapshot loss (snapshots losing last replica snapshot).
+    fn accept_snapshot_loss(&self) -> bool;
 }
 
 impl CreatePoolInfo for CreatePool {
@@ -688,9 +699,20 @@ impl DestroyPoolInfo for DestroyPool {
     fn pool_id(&self) -> PoolId {
         self.id.clone()
     }
-
     fn node_id(&self) -> NodeId {
         self.node.clone()
+    }
+    fn purge(&self) -> bool {
+        self.purge
+    }
+    fn accept(&self) -> bool {
+        self.accept
+    }
+    fn accept_volume_loss(&self) -> bool {
+        self.accept_volume_loss
+    }
+    fn accept_snapshot_loss(&self) -> bool {
+        self.accept_snapshot_loss
     }
 }
 
@@ -698,9 +720,20 @@ impl DestroyPoolInfo for DestroyPoolRequest {
     fn pool_id(&self) -> PoolId {
         self.pool_id.clone().into()
     }
-
     fn node_id(&self) -> NodeId {
         self.node_id.clone().into()
+    }
+    fn purge(&self) -> bool {
+        self.purge.unwrap_or(false)
+    }
+    fn accept(&self) -> bool {
+        self.accept.unwrap_or(false)
+    }
+    fn accept_volume_loss(&self) -> bool {
+        self.accept_volume_loss.unwrap_or(false)
+    }
+    fn accept_snapshot_loss(&self) -> bool {
+        self.accept_snapshot_loss.unwrap_or(false)
     }
 }
 
@@ -709,6 +742,10 @@ impl From<&dyn DestroyPoolInfo> for DestroyPoolRequest {
         Self {
             pool_id: data.pool_id().to_string(),
             node_id: data.node_id().to_string(),
+            purge: Some(data.purge()),
+            accept: Some(data.accept()),
+            accept_volume_loss: Some(data.accept_volume_loss()),
+            accept_snapshot_loss: Some(data.accept_snapshot_loss()),
         }
     }
 }
@@ -718,6 +755,10 @@ impl From<&dyn DestroyPoolInfo> for DestroyPool {
         Self {
             node: data.node_id(),
             id: data.pool_id(),
+            purge: data.purge(),
+            accept: data.accept(),
+            accept_volume_loss: data.accept_volume_loss(),
+            accept_snapshot_loss: data.accept_snapshot_loss(),
         }
     }
 }
@@ -1036,6 +1077,14 @@ impl From<&ClearErrorsRequest> for pool::ClearErrorsRequest {
     }
 }
 
+impl From<DataLossInfo> for pool::DataLossInfo {
+    fn from(info: DataLossInfo) -> Self {
+        Self {
+            volumes: info.volumes.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
 impl From<pool::ClearErrors> for ClearErrors {
     fn from(value: pool::ClearErrors) -> Self {
         match value {
@@ -1048,5 +1097,106 @@ impl From<ClearErrors> for pool::ClearErrors {
         match value {
             ClearErrors::All => Self::ClearAll,
         }
+    }
+}
+
+impl From<PoolDeleteResult> for pool::PoolDeleteResult {
+    fn from(result: PoolDeleteResult) -> Self {
+        Self {
+            pool_id: result.pool_id.to_string(),
+            data_loss: Some(result.data_loss.into()),
+            snapshot_loss: Some(result.snapshot_loss.into()),
+        }
+    }
+}
+impl From<VolumeLossDetail> for pool::VolumeLossDetail {
+    fn from(detail: VolumeLossDetail) -> Self {
+        Self {
+            volume_id: detail.volume_id.to_string(),
+            replicas_before: detail.replicas_before,
+            healthy_before: detail.healthy_before,
+            lost_on_pool: detail.lost_on_pool,
+            healthy_after: detail.healthy_after,
+        }
+    }
+}
+
+impl From<SnapshotLossInfo> for pool::SnapshotLossInfo {
+    fn from(info: SnapshotLossInfo) -> Self {
+        Self {
+            snapshots: info.snapshots.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<SnapshotLossDetail> for pool::SnapshotLossDetail {
+    fn from(detail: SnapshotLossDetail) -> Self {
+        Self {
+            snapshot_id: detail.snapshot_id.to_string(),
+            replica_snapshots_before: detail.replica_snapshots_before,
+            healthy_before: detail.healthy_before,
+            lost_on_pool: detail.lost_on_pool,
+            healthy_after: detail.healthy_after,
+        }
+    }
+}
+
+impl TryFrom<pool::PoolDeleteResult> for PoolDeleteResult {
+    type Error = ReplyError;
+
+    fn try_from(result: pool::PoolDeleteResult) -> Result<Self, Self::Error> {
+        let data_loss = match result.data_loss {
+            Some(data_loss) => {
+                let mut volumes = Vec::new();
+                for v in data_loss.volumes {
+                    let volume_id = uuid::Uuid::parse_str(&v.volume_id).map_err(|_| {
+                        ReplyError::invalid_argument(
+                            ResourceKind::Volume,
+                            "volume_id",
+                            v.volume_id.clone(),
+                        )
+                    })?;
+                    volumes.push(VolumeLossDetail {
+                        volume_id: volume_id.into(),
+                        replicas_before: v.replicas_before,
+                        healthy_before: v.healthy_before,
+                        lost_on_pool: v.lost_on_pool,
+                        healthy_after: v.healthy_after,
+                    });
+                }
+                DataLossInfo { volumes }
+            }
+            None => DataLossInfo::default(),
+        };
+
+        let snapshot_loss = match result.snapshot_loss {
+            Some(snapshot_loss) => {
+                let mut snapshots = Vec::new();
+                for s in snapshot_loss.snapshots {
+                    let snapshot_id = uuid::Uuid::parse_str(&s.snapshot_id).map_err(|_| {
+                        ReplyError::invalid_argument(
+                            ResourceKind::VolumeSnapshot,
+                            "snapshot_id",
+                            s.snapshot_id.clone(),
+                        )
+                    })?;
+                    snapshots.push(SnapshotLossDetail {
+                        snapshot_id: snapshot_id.into(),
+                        replica_snapshots_before: s.replica_snapshots_before,
+                        healthy_before: s.healthy_before,
+                        lost_on_pool: s.lost_on_pool,
+                        healthy_after: s.healthy_after,
+                    });
+                }
+                SnapshotLossInfo { snapshots }
+            }
+            None => SnapshotLossInfo::default(),
+        };
+
+        Ok(PoolDeleteResult {
+            pool_id: result.pool_id.into(),
+            data_loss,
+            snapshot_loss,
+        })
     }
 }

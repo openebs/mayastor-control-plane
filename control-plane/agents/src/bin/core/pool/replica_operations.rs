@@ -27,6 +27,7 @@ impl ResourceLifecycle for OperationGuardArc<ReplicaSpec> {
     type Create = CreateReplica;
     type CreateOutput = Replica;
     type Destroy = DestroyReplica;
+    type DestroyOutput = ();
 
     async fn create(
         registry: &Registry,
@@ -68,6 +69,7 @@ impl ResourceLifecycle for Option<&mut OperationGuardArc<ReplicaSpec>> {
     type Create = CreateReplica;
     type CreateOutput = Replica;
     type Destroy = DestroyReplica;
+    type DestroyOutput = ();
 
     async fn create(
         _registry: &Registry,
@@ -270,7 +272,7 @@ impl OperationGuardArc<ReplicaSpec> {
     }
 }
 
-fn destroy_replica_request(
+pub(super) fn destroy_replica_request(
     spec: &ReplicaSpec,
     node: &NodeId,
     disowners: ReplicaOwners,
