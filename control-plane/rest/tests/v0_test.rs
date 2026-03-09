@@ -112,6 +112,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             cordondrainstate: None,
             node_nqn: Some(HostNqn::from_nodename(&io_engine1.to_string()).to_string()),
             version: version.clone(),
+            shutdown: Some(false),
         }),
         state: Some(models::NodeState {
             id: io_engine1.to_string(),

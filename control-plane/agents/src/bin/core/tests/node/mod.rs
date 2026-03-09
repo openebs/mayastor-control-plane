@@ -27,6 +27,7 @@ fn new_node(
             None,
             None,
             version.clone(),
+            false,
         )),
         Some(NodeState::new(
             id,

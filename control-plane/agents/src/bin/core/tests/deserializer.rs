@@ -213,7 +213,8 @@ fn test_deserialization_v1_to_v2() {
                 None,
                 None,
                 None,
-                None
+                None,
+                false
             )),
         },
         TestEntry {

@@ -30,6 +30,8 @@ message NodeSpec {
   optional string node_nqn = 5;
   // the io-engine version
   optional string version = 6;
+  // If the node has signaled shutdown by sending deregistration message
+  optional bool shutdown = 7;
 }
 
 message NodeState {
@@ -72,7 +74,7 @@ message GetNodesRequest {
   bool ignore_notfound = 2;
 }
 
-// Reponse to the GetNodes request
+// Response to the GetNodes request
 message GetNodesReply {
   oneof reply {
     Nodes nodes = 1;

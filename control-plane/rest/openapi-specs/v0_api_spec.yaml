@@ -3330,6 +3330,9 @@ components:
         version:
           description: Version of the io-engine instance
           type: string
+        shutdown:
+          description: Set when the node has deregistered.
+          type: boolean
       additionalProperties: false
       required:
         - grpcEndpoint

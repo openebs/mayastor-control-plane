@@ -62,6 +62,7 @@ impl ResourceSpecsLocked {
                         node.features.clone(),
                         node.bugfixes.clone(),
                         node.version.clone(),
+                        false,
                     );
                     specs.nodes.insert(node.clone());
                     (true, node)

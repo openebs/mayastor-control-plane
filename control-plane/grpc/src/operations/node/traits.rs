@@ -97,6 +97,7 @@ impl TryFrom<node::Node> for Node {
                 None,
                 None,
                 spec.version,
+                spec.shutdown.unwrap_or_default(),
             )),
             None => None,
         };
@@ -182,6 +183,7 @@ impl From<Node> for node::Node {
             },
             node_nqn: types_v0_spec.node_nqn().as_ref().map(|nqn| nqn.to_string()),
             version: types_v0_spec.version().clone(),
+            shutdown: Some(types_v0_spec.is_shutdown()),
         });
         let grpc_node_state = match types_v0_node.state() {
             None => None,

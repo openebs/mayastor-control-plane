@@ -212,6 +212,7 @@ impl NodeSpec {
         features: Option<NodeFeatures>,
         bugfixes: Option<NodeBugFixes>,
         version: Option<String>,
+        shutdown: bool,
     ) -> Self {
         Self {
             id,
@@ -226,7 +227,7 @@ impl NodeSpec {
             features,
             bugfixes,
             version,
-            shutdown: false,
+            shutdown,
         }
     }
 
@@ -537,6 +538,7 @@ impl From<NodeSpec> for models::NodeSpec {
             src.cordon_drain_state.into_opt(),
             src.node_nqn.into_opt(),
             src.version,
+            src.shutdown,
         )
     }
 }

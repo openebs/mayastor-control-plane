@@ -76,7 +76,11 @@ impl CreateRow for openapi::models::Node {
         let state = self.state.clone().unwrap_or(openapi::models::NodeState {
             id: spec.id,
             grpc_endpoint: spec.grpc_endpoint,
-            status: openapi::models::NodeStatus::Unknown,
+            status: if spec.shutdown == Some(true) {
+                openapi::models::NodeStatus::Offline
+            } else {
+                openapi::models::NodeStatus::Unknown
+            },
             node_nqn: spec.node_nqn,
             version: spec.version,
         });
