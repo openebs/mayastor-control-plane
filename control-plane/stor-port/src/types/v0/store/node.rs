@@ -195,6 +195,9 @@ pub struct NodeSpec {
     /// Version of the io-engine.
     #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<String>,
+    /// If the node has signaled shutdown by sending deregistration message.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    shutdown: bool,
 }
 
 impl NodeSpec {
@@ -223,6 +226,7 @@ impl NodeSpec {
             features,
             bugfixes,
             version,
+            shutdown: false,
         }
     }
 
@@ -278,6 +282,10 @@ impl NodeSpec {
     /// Set Node version.
     pub fn set_version(&mut self, version: Option<String>) {
         self.version = version;
+    }
+    /// Set as true when the node has deregistered itself.
+    pub fn set_shutdown(&mut self, shutdown: bool) {
+        self.shutdown = shutdown;
     }
 
     /// Ensure the state is consistent with the labels.
@@ -507,6 +515,11 @@ impl NodeSpec {
             None => false,
             Some(bugfixes) => bugfixes.contains(fix),
         }
+    }
+
+    /// Returns whether the node is shutdown.
+    pub fn is_shutdown(&self) -> bool {
+        self.shutdown
     }
 }
 

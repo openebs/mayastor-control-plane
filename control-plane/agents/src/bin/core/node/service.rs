@@ -316,16 +316,17 @@ impl Service {
     /// Deregister a node through the deregister information.
     #[tracing::instrument(level = "debug", skip(self), fields(node.id = %node.id))]
     pub(super) async fn deregister(&self, node: &Deregister) {
-        let nodes = self.registry.nodes().read().await;
-        match nodes.get(&node.id) {
-            None => {}
+        if let Err(error) = self.specs().deregister_node(&self.registry, node).await {
+            tracing::error!(node=%node.id, %error, "Failed to deregister node with pstor");
+        }
+
+        let nodes = self.registry.nodes().read().await.get(&node.id).cloned();
+        if let Some(node) = nodes {
             // ideally we want this node to disappear completely when it's not
             // part of the daemonset, but we just don't have that kind of
             // information at this level :(
             // maybe nodes should also be registered/deregistered via REST?
-            Some(node) => {
-                node.write().await.set_status(NodeStatus::Unknown);
-            }
+            node.write().await.set_status(NodeStatus::Offline);
         }
     }
 
