@@ -1,7 +1,10 @@
 use crate::controller::{
     registry::Registry,
     resources::{
-        operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
+        operations_helper::{
+            GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked,
+            SpecOperationsHelper,
+        },
         OperationGuardArc, ResourceMutex,
     },
 };
@@ -14,12 +17,8 @@ use stor_port::{
             node::{NodeLabelOp, NodeLabels, NodeOperation, NodeSpec, NodeUnLabelOp},
             SpecStatus, SpecTransaction,
         },
-        transport::{NodeBugFix, NodeId, Register},
+        transport::{Deregister, NodeBugFix, NodeId, Register},
     },
-};
-
-use crate::controller::resources::operations_helper::{
-    GuardedOperationsHelper, ResourceSpecs, SpecOperationsHelper,
 };
 
 impl ResourceSpecsLocked {
@@ -39,7 +38,8 @@ impl ResourceSpecsLocked {
                         || node_spec.node_nqn() != &node.node_nqn
                         || node_spec.features() != &node.features
                         || node_spec.bugfixes() != &node.bugfixes
-                        || node_spec.version() != &node.version;
+                        || node_spec.version() != &node.version
+                        || node_spec.is_shutdown();
 
                     if changed {
                         node_spec.set_endpoint(node.grpc_endpoint);
@@ -47,7 +47,9 @@ impl ResourceSpecsLocked {
                         node_spec.set_features(node.features.clone());
                         node_spec.set_bugfixes(node.bugfixes.clone());
                         node_spec.set_version(node.version.clone());
+                        node_spec.set_shutdown(false);
                     }
+
                     (changed, node_spec.clone())
                 }
                 None => {
@@ -60,6 +62,7 @@ impl ResourceSpecsLocked {
                         node.features.clone(),
                         node.bugfixes.clone(),
                         node.version.clone(),
+                        false,
                     );
                     specs.nodes.insert(node.clone());
                     (true, node)
@@ -70,6 +73,30 @@ impl ResourceSpecsLocked {
             registry.store_obj(&node).await?;
         }
         Ok(node)
+    }
+
+    /// Deregister the node by marking it as shutdown.
+    pub(crate) async fn deregister_node(
+        &self,
+        registry: &Registry,
+        node: &Deregister,
+    ) -> Result<(), SvcError> {
+        let node = {
+            let specs = self.write();
+            let Some(node_spec) = specs.nodes.get(&node.id) else {
+                return Ok(());
+            };
+
+            let mut node_spec = node_spec.lock();
+
+            if node_spec.is_shutdown() {
+                return Ok(());
+            }
+            node_spec.set_shutdown(true);
+            node_spec.clone()
+        };
+
+        registry.store_obj(&node).await
     }
 
     /// Get node spec by its `NodeId`

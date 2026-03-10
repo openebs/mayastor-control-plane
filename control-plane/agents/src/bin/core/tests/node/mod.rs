@@ -27,6 +27,7 @@ fn new_node(
             None,
             None,
             version.clone(),
+            false,
         )),
         Some(NodeState::new(
             id,
@@ -119,7 +120,7 @@ async fn node() {
     assert_eq!(nodes.0.len(), 1);
     assert_eq!(
         nodes.0.first().unwrap(),
-        &Node::new(maya_name.clone(), node.spec().cloned(), None)
+        &Node::new(maya_name.clone(), node.spec().cloned(), None).with_shutdown(true)
     );
 }
 

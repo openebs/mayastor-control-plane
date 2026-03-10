@@ -195,6 +195,9 @@ pub struct NodeSpec {
     /// Version of the io-engine.
     #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<String>,
+    /// If the node has signaled shutdown by sending deregistration message.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    shutdown: bool,
 }
 
 impl NodeSpec {
@@ -209,6 +212,7 @@ impl NodeSpec {
         features: Option<NodeFeatures>,
         bugfixes: Option<NodeBugFixes>,
         version: Option<String>,
+        shutdown: bool,
     ) -> Self {
         Self {
             id,
@@ -223,6 +227,7 @@ impl NodeSpec {
             features,
             bugfixes,
             version,
+            shutdown,
         }
     }
 
@@ -278,6 +283,10 @@ impl NodeSpec {
     /// Set Node version.
     pub fn set_version(&mut self, version: Option<String>) {
         self.version = version;
+    }
+    /// Set as true when the node has deregistered itself.
+    pub fn set_shutdown(&mut self, shutdown: bool) {
+        self.shutdown = shutdown;
     }
 
     /// Ensure the state is consistent with the labels.
@@ -508,6 +517,11 @@ impl NodeSpec {
             Some(bugfixes) => bugfixes.contains(fix),
         }
     }
+
+    /// Returns whether the node is shutdown.
+    pub fn is_shutdown(&self) -> bool {
+        self.shutdown
+    }
 }
 
 impl From<NodeSpec> for models::NodeSpec {
@@ -524,6 +538,7 @@ impl From<NodeSpec> for models::NodeSpec {
             src.cordon_drain_state.into_opt(),
             src.node_nqn.into_opt(),
             src.version,
+            src.shutdown,
         )
     }
 }

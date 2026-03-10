@@ -429,16 +429,15 @@ async fn pool_larger_cluster_size() {
 
     cluster.composer().stop("io-engine-1").await.unwrap();
     cluster
-        .wait_node_status(NodeId::from("io-engine-1"), NodeStatus::Unknown)
+        .wait_node_status(NodeId::from("io-engine-1"), NodeStatus::Offline)
         .await
         .unwrap();
     cluster.composer().start("io-engine-1").await.unwrap();
     cluster.wait_pool_online(poolid.clone()).await.unwrap();
     let replicas = rep_client.get(Filter::None, None).await.unwrap();
-    replicas.into_inner().iter().all(|r| {
+    replicas.into_inner().iter().for_each(|r| {
         assert!(r.online());
         assert_eq!(r.space.as_ref().unwrap().cluster_size, POOL_BS_CLUSTER_SIZE);
-        true
     });
 }
 

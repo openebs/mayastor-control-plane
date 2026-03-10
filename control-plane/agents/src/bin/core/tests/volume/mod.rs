@@ -1343,7 +1343,7 @@ async fn offline_node(cluster: &Cluster) {
         .await
         .unwrap_or_else(|_| panic!("The {kill_node} container should stop"));
     cluster
-        .wait_node_status(&NodeId::from(&kill_node), transport::NodeStatus::Unknown)
+        .wait_node_status(&NodeId::from(&kill_node), transport::NodeStatus::Offline)
         .await
         .unwrap();
 
@@ -1597,7 +1597,7 @@ async fn health() {
     // a stop is a clean shutdown and should be so marked in the health info!
     cluster.composer().stop(&cluster.node(1)).await.unwrap();
     cluster
-        .wait_node_status(cluster.node(1), transport::NodeStatus::Unknown)
+        .wait_node_status(cluster.node(1), transport::NodeStatus::Offline)
         .await
         .unwrap();
 

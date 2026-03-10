@@ -112,6 +112,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             cordondrainstate: None,
             node_nqn: Some(HostNqn::from_nodename(&io_engine1.to_string()).to_string()),
             version: version.clone(),
+            shutdown: Some(false),
         }),
         state: Some(models::NodeState {
             id: io_engine1.to_string(),
@@ -123,6 +124,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             node_nqn: Some(HostNqn::from_nodename(&io_engine1.to_string()).to_string()),
             version,
         }),
+        status: Some(models::NodeStatus::Online),
     };
     assert_eq!(listed_node, node);
 
@@ -434,7 +436,11 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
 
     test.stop("io-engine-1").await.unwrap();
     wait_until_node_not_online(&client, &io_engine1, Duration::from_secs(1)).await;
-    node.state.as_mut().unwrap().status = models::NodeStatus::Unknown;
+    node.state.as_mut().unwrap().status = models::NodeStatus::Offline;
+    node.status = Some(models::NodeStatus::Offline);
+    if let Some(ref mut spec) = node.spec {
+        spec.shutdown = Some(true);
+    }
     assert_eq!(
         client
             .nodes_api()

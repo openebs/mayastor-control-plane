@@ -511,7 +511,7 @@ impl NodeWrapper {
     }
     /// Get the node `NodeStatus`.
     pub(crate) fn status(&self) -> NodeStatus {
-        self.node_state().status().clone()
+        *self.node_state().status()
     }
 
     /// Get the node grpc endpoint as string.
@@ -644,6 +644,10 @@ impl NodeWrapper {
     /// Is the node online.
     pub(crate) fn is_online(&self) -> bool {
         self.status() == NodeStatus::Online
+    }
+    /// Is the node offline.
+    pub(crate) fn is_offline(&self) -> bool {
+        self.status() == NodeStatus::Offline
     }
 
     /// Load the node by fetching information from io-engine.

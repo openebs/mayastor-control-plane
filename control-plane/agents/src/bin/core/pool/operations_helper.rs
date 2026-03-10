@@ -75,7 +75,7 @@ impl OperationGuardArc<PoolSpec> {
         let error = match registry.node_wrapper(node).await {
             Ok(node) => {
                 let node_guard = node.read().await;
-                if !node_guard.is_online() {
+                if node_guard.is_offline() {
                     self.mark_as_offline(PoolError {
                         code: PoolErrorCode::NodeIsOffline,
                         msg: "".to_string(),
@@ -88,7 +88,17 @@ impl OperationGuardArc<PoolSpec> {
             Err(error) => error,
         };
 
-        self.mark_as_offline(PoolError {
+        if let Ok(node) = registry.specs().node(node) {
+            if node.is_shutdown() {
+                self.mark_as_offline(PoolError {
+                    code: PoolErrorCode::NodeIsOffline,
+                    msg: "".to_string(),
+                });
+                return Ok(Err(NodeStatus::Offline));
+            }
+        }
+
+        self.mark_as_unknown(PoolError {
             code: PoolErrorCode::NodeIsUnknown,
             msg: "".to_string(),
         });
@@ -110,6 +120,9 @@ impl OperationGuardArc<PoolSpec> {
     }
     fn mark_as_offline(&mut self, error: PoolError) {
         self.mark_as_diag(PoolStatus::Offline, error);
+    }
+    fn mark_as_unknown(&mut self, error: PoolError) {
+        self.mark_as_diag(PoolStatus::Unknown, error);
     }
     /// Mark the pool in [`PoolErrorCode::ImportDisabled`] since it cannot be
     /// imported due to being cordoned for imports.

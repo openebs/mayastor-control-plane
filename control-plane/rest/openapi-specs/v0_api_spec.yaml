@@ -3330,6 +3330,9 @@ components:
         version:
           description: Version of the io-engine instance
           type: string
+        shutdown:
+          description: Set when the node has deregistered.
+          type: boolean
       additionalProperties: false
       required:
         - grpcEndpoint
@@ -3368,6 +3371,8 @@ components:
           $ref: '#/components/schemas/NodeSpec'
         state:
           $ref: '#/components/schemas/NodeState'
+        status:
+          $ref: '#/components/schemas/NodeStatus'
       required:
         - id
     PoolStatus:

@@ -281,7 +281,7 @@ impl Cluster {
                 if node.state().map(|n| &n.status) == Some(&status) {
                     return Ok(());
                 }
-                seen_status = node.state().map(|n| n.status.clone());
+                seen_status = node.state().map(|n| n.status);
             }
             if std::time::Instant::now() > (start + timeout) {
                 break;
@@ -410,7 +410,7 @@ impl Cluster {
     /// Replace the given old node with a new one from the idles.
     pub async fn replace_node(&self, old: NodeId, new: NodeId) -> Result<(), ()> {
         self.composer().stop(&old).await.unwrap();
-        self.wait_node_status(old, NodeStatus::Unknown)
+        self.wait_node_status(old, NodeStatus::Offline)
             .await
             .unwrap();
         self.composer().start(&new).await.unwrap();
