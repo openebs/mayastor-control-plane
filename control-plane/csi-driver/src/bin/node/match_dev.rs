@@ -66,10 +66,34 @@ pub(super) fn match_iscsi_device(device: &Device) -> Option<(&str, &str)> {
 pub(super) fn match_nvmf_device<'a>(device: &'a Device, key: &str) -> Option<&'a str> {
     let model_id = utils::nvme_controller_model_id();
 
-    require!(model_id == device.property_value("ID_MODEL"));
-    require!(key == device.property_value("ID_WWN"));
-
     require!(let devname = device.property_value("DEVNAME"));
+
+    let id_wwn = device.property_value("ID_WWN");
+    let wwid = device.attribute_value("wwid");
+
+    if let Some(wwid) = &wwid {
+        // this is our device, matching only via the wwid attribute and not the ID_WWN property
+        if *wwid == key {
+            // attribute matches but the property doesn't, likely the udev db is bad!?
+            if Some(key) != id_wwn.and_then(|s| s.to_str()) {
+                tracing::error!(
+                    "{devname} has wwid of {key} != ID_WWN of {id_wwn:?}, is udev bad?",
+                );
+            }
+
+            // since we don't trust udev properties, we match the model using the attributes
+            if let Some(parent) = device.parent() {
+                if let Some(model) = parent.attribute_value("model") {
+                    if model.to_string_lossy().starts_with(model_id.as_str()) {
+                        return Some(devname);
+                    }
+                }
+            }
+        }
+    }
+
+    require!(key == id_wwn);
+    require!(model_id == device.property_value("ID_MODEL"));
 
     Some(devname)
 }

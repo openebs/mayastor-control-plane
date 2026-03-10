@@ -27,9 +27,9 @@ pub(crate) enum DeviceErrorSource {
 
 impl DeviceError {
     /// Return a new `Self` with the given message.
-    pub(crate) fn new(message: &str) -> DeviceError {
+    pub(crate) fn new(message: impl Into<String>) -> DeviceError {
         DeviceError {
-            message: String::from(message),
+            message: message.into(),
             source: DeviceErrorSource::None,
         }
     }
