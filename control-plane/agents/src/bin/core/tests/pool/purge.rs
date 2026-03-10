@@ -24,7 +24,7 @@ async fn pool_purge() {
         .with_pools(2) // pool-1 for purge tests, pool-2 for normal delete
         .with_cache_period("100ms")
         .with_node_deadline("100ms")
-        .with_reconcile_period(Duration::from_millis(200), Duration::from_millis(1))
+        .with_reconcile_period(Duration::from_millis(100), Duration::from_millis(100))
         .build()
         .await
         .unwrap();
@@ -77,7 +77,7 @@ async fn pool_purge() {
     // --- Phase 2: io-engine offline ---
     cluster.composer().stop("io-engine-1").await.unwrap();
     cluster
-        .wait_node_status_tmo(cluster.node(0), NodeStatus::Unknown, NODE_OFFLINE_TIMEOUT)
+        .wait_node_status_tmo(cluster.node(0), NodeStatus::Offline, NODE_OFFLINE_TIMEOUT)
         .await
         .expect("Node should go offline");
 

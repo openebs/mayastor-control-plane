@@ -101,6 +101,13 @@ impl Node {
     pub fn state(&self) -> Option<&NodeState> {
         self.state.as_ref()
     }
+    /// Set the shutdown flag.
+    pub fn with_shutdown(mut self, shutdown: bool) -> Self {
+        if let Some(ref mut spec) = self.spec {
+            spec.set_shutdown(shutdown);
+        }
+        self
+    }
 }
 
 impl From<Node> for models::Node {

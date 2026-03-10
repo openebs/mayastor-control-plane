@@ -410,7 +410,7 @@ impl Cluster {
     /// Replace the given old node with a new one from the idles.
     pub async fn replace_node(&self, old: NodeId, new: NodeId) -> Result<(), ()> {
         self.composer().stop(&old).await.unwrap();
-        self.wait_node_status(old, NodeStatus::Unknown)
+        self.wait_node_status(old, NodeStatus::Offline)
             .await
             .unwrap();
         self.composer().start(&new).await.unwrap();
