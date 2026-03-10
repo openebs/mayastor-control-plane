@@ -3371,6 +3371,8 @@ components:
           $ref: '#/components/schemas/NodeSpec'
         state:
           $ref: '#/components/schemas/NodeState'
+        status:
+          $ref: '#/components/schemas/NodeStatus'
       required:
         - id
     PoolStatus:

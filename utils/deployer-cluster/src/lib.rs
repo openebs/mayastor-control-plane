@@ -281,7 +281,7 @@ impl Cluster {
                 if node.state().map(|n| &n.status) == Some(&status) {
                     return Ok(());
                 }
-                seen_status = node.state().map(|n| n.status.clone());
+                seen_status = node.state().map(|n| n.status);
             }
             if std::time::Instant::now() > (start + timeout) {
                 break;

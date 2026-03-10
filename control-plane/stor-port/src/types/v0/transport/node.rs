@@ -93,6 +93,18 @@ impl Node {
     pub fn id(&self) -> &NodeId {
         &self.id
     }
+    /// Get perceived status of the node.
+    /// Either the status as determined from the state or the perceived status via
+    /// the node spec shutdown flag.
+    pub fn status(&self) -> NodeStatus {
+        match &self.state {
+            Some(state) => state.status,
+            None => match &self.spec {
+                Some(spec) if spec.is_shutdown() => NodeStatus::Offline,
+                _ => NodeStatus::Unknown,
+            },
+        }
+    }
     /// Get the node specification
     pub fn spec(&self) -> Option<&NodeSpec> {
         self.spec.as_ref()
@@ -112,12 +124,18 @@ impl Node {
 
 impl From<Node> for models::Node {
     fn from(src: Node) -> Self {
-        Self::new_all(src.id, src.spec.map(Into::into), src.state.map(Into::into))
+        let status = src.status();
+        Self::new_all(
+            src.id,
+            src.spec.map(Into::into),
+            src.state.map(Into::into),
+            Some(status.into()),
+        )
     }
 }
 
 /// Status of the Node
-#[derive(Serialize, Deserialize, Debug, Clone, EnumString, Display, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, EnumString, Display, Eq, PartialEq)]
 pub enum NodeStatus {
     /// Node has unexpectedly disappeared
     Unknown,

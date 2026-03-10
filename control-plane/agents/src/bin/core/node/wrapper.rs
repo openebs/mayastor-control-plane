@@ -511,7 +511,7 @@ impl NodeWrapper {
     }
     /// Get the node `NodeStatus`.
     pub(crate) fn status(&self) -> NodeStatus {
-        self.node_state().status().clone()
+        *self.node_state().status()
     }
 
     /// Get the node grpc endpoint as string.
