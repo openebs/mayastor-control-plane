@@ -678,7 +678,9 @@ pub mod v1 {
         pub use super::pb::{
             pool_rpc_client, ClearErrorRequest, CreatePoolRequest, DestroyPoolRequest, DiskInfo,
             GrowPoolRequest, ImportPoolRequest, ListPoolOptions, ListPoolsResponse, Pool,
-            PoolAlert, PoolAlertStatus, PoolAlerts, PoolErrors, PoolMetadataArgs, PoolType,
+            PoolAlert, PoolAlertStatus, PoolAlerts, PoolErrors, PoolMetadataArgs, PoolProbeMeta,
+            PoolProbes, PoolType, ProbeDiskInfo, ProbeError, ProbeErrorCode, ProbePoolRequest,
+            ProbePoolResponse,
         };
     }
 

@@ -1,4 +1,5 @@
 use super::translation::{rpc_pool_to_agent, AgentToIoEngine};
+use crate::controller::io_engine::types::{ProbePoolRequest, ProbePoolResponse};
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::pool::ListPoolOptions;
 use stor_port::{
@@ -132,5 +133,17 @@ impl crate::controller::io_engine::PoolApi for super::RpcClient {
                 })?;
         let pool = rpc_pool_to_agent(&rpc_pool.into_inner(), self.context.node());
         Ok(pool)
+    }
+
+    async fn probe_pool(&self, request: &ProbePoolRequest) -> Result<ProbePoolResponse, SvcError> {
+        let probed = self
+            .pool()
+            .probe_pool(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Pool,
+                request: "probe_pool",
+            })?;
+        Ok(probed.into_inner().into())
     }
 }

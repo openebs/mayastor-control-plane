@@ -2,7 +2,7 @@ use crate::controller::io_engine::{
     translation::{IoEngineToAgent, TryIoEngineToAgent},
     types::{
         CreateNexusSnapReplDescr, CreateNexusSnapshot, CreateNexusSnapshotReplicaStatus,
-        CreateNexusSnapshotResp,
+        CreateNexusSnapshotResp, ProbeDiskInfo, ProbePoolRequest, ProbePoolResponse,
     },
 };
 use agents::errors::SvcError;
@@ -15,8 +15,9 @@ use stor_port::{
         transport::{
             self, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
             NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolAlertStatus, PoolAlerts,
-            PoolState, PoolUuid, Protocol, Replica, ReplicaId, ReplicaKind, ReplicaName,
-            ReplicaStatus, SetReplicaEntityId, SnapshotId, VolumeId,
+            PoolDiskError, PoolError, PoolErrorCode, PoolState, PoolUuid, Protocol, Replica,
+            ReplicaId, ReplicaKind, ReplicaName, ReplicaStatus, SetReplicaEntityId, SnapshotId,
+            VolumeId,
         },
     },
     IntoOption,
@@ -1018,6 +1019,55 @@ impl AgentToIoEngine for ClearErrorsRequest {
             uuid: None,
             disks: vec![],
             clear: 0,
+        }
+    }
+}
+
+impl AgentToIoEngine for ProbePoolRequest {
+    type IoEngineMessage = v1::pool::ProbePoolRequest;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        v1::pool::ProbePoolRequest {
+            request: Some(self.import.to_rpc()),
+            probes: None,
+        }
+    }
+}
+
+impl From<v1::pool::ProbePoolResponse> for ProbePoolResponse {
+    fn from(value: v1::pool::ProbePoolResponse) -> Self {
+        Self {
+            success: value.success,
+            errors: value
+                .errors
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+        }
+    }
+}
+
+impl From<rpc::v1::pool::ProbeDiskInfo> for ProbeDiskInfo {
+    fn from(value: rpc::v1::pool::ProbeDiskInfo) -> Self {
+        use rpc::v1::pool::ProbeErrorCode as RpcErrorCode;
+        let errors = value.error.into_iter();
+        let errors = errors.map(|error| PoolDiskError {
+            disk: value.disk.clone(),
+            error: PoolError {
+                code: match error.code() {
+                    RpcErrorCode::ProbeUnknown => PoolErrorCode::Unknown,
+                    RpcErrorCode::DiskNotFound => PoolErrorCode::DiskNotFound,
+                    RpcErrorCode::DiskReadIoError => PoolErrorCode::DiskReadIoError,
+                    RpcErrorCode::ForeignPoolName => PoolErrorCode::ForeignPoolName,
+                    RpcErrorCode::ForeignPoolUid => PoolErrorCode::ForeignPoolUid,
+                    RpcErrorCode::SuperBlockIoError => PoolErrorCode::SuperBlock,
+                    RpcErrorCode::InvalidSuperBlock => PoolErrorCode::InvalidSuperBlock,
+                    _ => PoolErrorCode::Unknown,
+                },
+                msg: error.msg.unwrap_or_default(),
+            },
+        });
+        Self {
+            error: errors.collect(),
         }
     }
 }

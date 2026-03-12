@@ -9,7 +9,8 @@ pub(crate) use client::*;
 
 use crate::controller::io_engine::types::{
     CreateNexusSnapshot, CreateNexusSnapshotResp, CreateSnapRebuild, DestroySnapRebuild,
-    ListSnapRebuild, ListSnapRebuildRsp, RebuildHistoryResp, SnapshotRebuild,
+    ListSnapRebuild, ListSnapRebuildRsp, ProbePoolRequest, ProbePoolResponse, RebuildHistoryResp,
+    SnapshotRebuild,
 };
 use agents::errors::SvcError;
 use stor_port::{
@@ -71,6 +72,9 @@ pub(crate) trait PoolApi {
     async fn expand_pool(&self, request: &ExpandPool) -> Result<PoolState, SvcError>;
     /// Clear the pool errors.
     async fn clear_errors(&self, request: &ClearErrorsRequest) -> Result<PoolState, SvcError>;
+    /// Probe pool's disks for errors.
+    #[allow(unused)]
+    async fn probe_pool(&self, request: &ProbePoolRequest) -> Result<ProbePoolResponse, SvcError>;
 }
 
 #[async_trait]
