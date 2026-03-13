@@ -5,8 +5,8 @@ use stor_port::{
     types::v0::{
         store::definitions::StoreError,
         transport::{
-            pool::PoolDeviceUri, ApiVersion, DataLossInfo, Filter, NodeId, NvmeNqnParseError,
-            PoolId, PoolStatus, ReplicaId, SnapshotLossInfo,
+            pool::PoolDeviceUri, ApiVersion, Filter, NodeId, NvmeNqnParseError, PoolId, PoolStatus,
+            ReplicaId, SnapshotLossInfo, VolumeLossInfo,
         },
     },
 };
@@ -450,7 +450,7 @@ pub enum SvcError {
     #[snafu(display("Pool {name} underlying disk rescan failed"))]
     DiskRescanFailed { name: PoolId },
     #[snafu(display(
-        "Cannot purge pool {pool_id}: pool state is {state}, purge only allowed when state is Unknown or Offline",
+        "Cannot purge pool {pool_id}: pool state is {state}, purge only allowed when state is Unknown",
     ))]
     PoolStateNotUnknown { pool_id: PoolId, state: PoolStatus },
 
@@ -478,7 +478,7 @@ pub enum SvcError {
     PoolPurgeVolumeLossAcceptRequired {
         pool_id: PoolId,
         volume_count: usize,
-        data_loss: DataLossInfo,
+        volume_loss: VolumeLossInfo,
     },
 
     #[snafu(display(

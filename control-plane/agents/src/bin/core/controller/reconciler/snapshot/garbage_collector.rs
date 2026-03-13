@@ -164,8 +164,8 @@ async fn prune_volume_snapshot_reconciler(
     snapshot: &mut OperationGuardArc<VolumeSnapshot>,
     context: &PollContext,
 ) -> PollResult {
-    // If the spec is already in deleting state, no need to do any cleanup.
-    if snapshot.as_ref().status().deleted() || snapshot.as_ref().status().deleting() {
+    // If the spec is already being removed, no need to do any cleanup.
+    if snapshot.as_ref().status().deleted() || snapshot.as_ref().status().destroying() {
         return Ok(PollerState::Idle);
     }
 

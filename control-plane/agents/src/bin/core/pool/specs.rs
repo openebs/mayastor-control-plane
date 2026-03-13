@@ -272,6 +272,14 @@ impl ResourceSpecs {
         }
         false
     }
+    /// Get all replicas on the given pool.
+    fn pool_replicas(&self, id: &PoolId) -> Vec<ResourceMutex<ReplicaSpec>> {
+        self.replicas
+            .values()
+            .filter(|r| r.immutable_ref().pool_name() == id)
+            .cloned()
+            .collect()
+    }
     /// Check if the given pool `id` has any snapshots.
     fn pool_has_snapshots(&self, id: &PoolId) -> bool {
         for snapshot in self.volume_snapshots.values() {
@@ -434,6 +442,11 @@ impl ResourceSpecsLocked {
     fn pool_has_replicas(&self, id: &PoolId) -> bool {
         let specs = self.read();
         specs.pool_has_replicas(id)
+    }
+    /// Get all replicas on the given pool.
+    pub(crate) fn pool_replicas(&self, id: &PoolId) -> Vec<ResourceMutex<ReplicaSpec>> {
+        let specs = self.read();
+        specs.pool_replicas(id)
     }
     /// Check if the given pool `id` has any snapshots.
     fn pool_has_snapshots(&self, id: &PoolId) -> bool {

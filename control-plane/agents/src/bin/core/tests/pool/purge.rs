@@ -99,7 +99,7 @@ async fn pool_purge() {
 
     purge_rejected_without_accept(&pool_client, &purge_pool).await;
     purge_rejected_volume_loss_without_accept(&pool_client, &purge_pool).await;
-    purge_succeeds_with_data_loss(&pool_client, &purge_pool, &vol_id).await;
+    purge_succeeds_with_volume_loss(&pool_client, &purge_pool, &vol_id).await;
 }
 
 /// Purge must be rejected when the pool's node is online (state is not Unknown).
@@ -214,7 +214,7 @@ async fn purge_rejected_volume_loss_without_accept(pool_client: &dyn PoolOperati
 }
 
 /// Purge succeeds when all confirmations are provided, reports data loss.
-async fn purge_succeeds_with_data_loss(
+async fn purge_succeeds_with_volume_loss(
     pool_client: &dyn PoolOperations,
     pool: &Pool,
     volume_id: &VolumeId,
@@ -233,12 +233,12 @@ async fn purge_succeeds_with_data_loss(
 
     assert_eq!(result.pool_id, pool_id);
     assert!(
-        !result.data_loss.volumes.is_empty(),
+        !result.volume_loss.volumes.is_empty(),
         "Should report data loss"
     );
-    assert_eq!(result.data_loss.volumes.len(), 1);
-    assert_eq!(result.data_loss.volumes[0].volume_id, *volume_id);
-    assert_eq!(result.data_loss.volumes[0].healthy_after, 0);
+    assert_eq!(result.volume_loss.volumes.len(), 1);
+    assert_eq!(result.volume_loss.volumes[0].volume_id, *volume_id);
+    assert_eq!(result.volume_loss.volumes[0].healthy_after, 0);
 
     // Verify pool is gone.
     let pools = pool_client.get(Filter::Pool(pool_id), None).await;

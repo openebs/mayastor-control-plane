@@ -230,6 +230,22 @@ impl ResourceOwnerUpdate for OperationGuardArc<ReplicaSpec> {
 }
 
 impl OperationGuardArc<ReplicaSpec> {
+    /// Destroy a replica, trying io-engine RPC first and falling back to spec-only
+    /// deletion if that fails. Used during pool purge and purge reconciliation.
+    pub(crate) async fn destroy_or_purge(
+        &mut self,
+        registry: &Registry,
+        request: &DestroyReplica,
+    ) -> Result<(), SvcError> {
+        match self.destroy(registry, request).await {
+            Ok(()) => Ok(()),
+            Err(_) => {
+                self.start_destroy_for_purge(registry).await?;
+                self.complete_destroy(Ok(()), registry).await
+            }
+        }
+    }
+
     /// Faults this replica.
     /// The replica is first removed from the nexus, which will let us know if it's safe to destroy
     /// it.
@@ -272,7 +288,7 @@ impl OperationGuardArc<ReplicaSpec> {
     }
 }
 
-pub(super) fn destroy_replica_request(
+fn destroy_replica_request(
     spec: &ReplicaSpec,
     node: &NodeId,
     disowners: ReplicaOwners,

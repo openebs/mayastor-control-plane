@@ -719,7 +719,7 @@ impl From<CreatePool> for DestroyPool {
 
 /// Result of a pool purge operation.
 ///
-/// Only returned by purge operations (not normal deletes). The `data_loss` and `snapshot_loss`
+/// Only returned by purge operations (not normal deletes). The `volume_loss` and `snapshot_loss`
 /// fields are always present — empty lists indicate no loss occurred.
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct PoolDeleteResult {
@@ -727,7 +727,7 @@ pub struct PoolDeleteResult {
     pub pool_id: PoolId,
     /// Information about volumes that lost healthy replicas.
     /// An empty `volumes` list means no data loss occurred.
-    pub data_loss: DataLossInfo,
+    pub volume_loss: VolumeLossInfo,
     /// Information about snapshots that lost replica snapshots.
     /// An empty `snapshots` list means no snapshot loss occurred.
     pub snapshot_loss: SnapshotLossInfo,
@@ -738,14 +738,14 @@ impl PoolDeleteResult {
     pub fn new(pool_id: PoolId) -> Self {
         Self {
             pool_id,
-            data_loss: DataLossInfo::default(),
+            volume_loss: VolumeLossInfo::default(),
             snapshot_loss: SnapshotLossInfo::default(),
         }
     }
 
     /// Check if any data loss occurred.
-    pub fn has_data_loss(&self) -> bool {
-        !self.data_loss.volumes.is_empty()
+    pub fn has_volume_loss(&self) -> bool {
+        !self.volume_loss.volumes.is_empty()
     }
 
     /// Check if any snapshot loss occurred.
@@ -758,9 +758,9 @@ impl From<PoolDeleteResult> for models::PoolDeleteResult {
     fn from(src: PoolDeleteResult) -> Self {
         models::PoolDeleteResult {
             pool_id: src.pool_id.to_string(),
-            data_loss: models::DataLossInfo {
+            volume_loss: models::VolumeLossInfo {
                 volumes: src
-                    .data_loss
+                    .volume_loss
                     .volumes
                     .into_iter()
                     .map(|v| models::VolumeLossDetail {
@@ -795,7 +795,7 @@ impl From<PoolDeleteResult> for models::PoolDeleteResult {
 /// Contains a list of volumes that lost their last healthy replica as a result of
 /// the pool being purged. An empty `volumes` list means no data loss occurred.
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
-pub struct DataLossInfo {
+pub struct VolumeLossInfo {
     /// List of volumes that lost their last healthy replica.
     pub volumes: Vec<VolumeLossDetail>,
 }

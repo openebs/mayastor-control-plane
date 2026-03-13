@@ -17,11 +17,11 @@ use stor_port::{
             PoolRuntimeMetadata, PoolSpec, PoolSpecStatus, PoolUSpec, POOL_BS_CLUSTER_SIZE_DEFAULT,
         },
         transport::{
-            CreatePool, CtrlPoolState, DataLossInfo, DestroyPool, DiskInfo, ExpandPool, Filter,
-            LabelPool, NodeId, Pool, PoolAlert, PoolAlertStatus, PoolAlerts, PoolDeleteResult,
-            PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolErrorInfo,
-            PoolId, PoolState, PoolStatus, SnapshotLossDetail, SnapshotLossInfo, UnlabelPool,
-            VolumeId, VolumeLossDetail,
+            CreatePool, CtrlPoolState, DestroyPool, DiskInfo, ExpandPool, Filter, LabelPool,
+            NodeId, Pool, PoolAlert, PoolAlertStatus, PoolAlerts, PoolDeleteResult, PoolDeviceUri,
+            PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolErrorInfo, PoolId, PoolState,
+            PoolStatus, SnapshotLossDetail, SnapshotLossInfo, UnlabelPool, VolumeId,
+            VolumeLossDetail, VolumeLossInfo,
         },
     },
     IntoOption, IntoVec,
@@ -572,7 +572,7 @@ pub trait DestroyPoolInfo: Sync + Send + std::fmt::Debug {
     fn purge(&self) -> bool;
     /// Accept deletion when pool has replicas.
     fn accept(&self) -> bool;
-    /// Accept data loss (volumes losing last healthy replica).
+    /// Accept volume loss (volumes losing last healthy replica).
     fn accept_volume_loss(&self) -> bool;
     /// Accept snapshot loss (snapshots losing last replica snapshot).
     fn accept_snapshot_loss(&self) -> bool;
@@ -829,6 +829,7 @@ impl From<common::SpecStatus> for PoolSpecStatus {
             common::SpecStatus::Creating => Self::Creating,
             common::SpecStatus::Deleted => Self::Deleted,
             common::SpecStatus::Deleting => Self::Deleting,
+            common::SpecStatus::Purging => Self::Purging,
         }
     }
 }
@@ -839,6 +840,7 @@ impl From<PoolSpecStatus> for common::SpecStatus {
             PoolSpecStatus::Creating => Self::Creating,
             PoolSpecStatus::Created(_) => Self::Created,
             PoolSpecStatus::Deleting => Self::Deleting,
+            PoolSpecStatus::Purging => Self::Purging,
             PoolSpecStatus::Deleted => Self::Deleted,
         }
     }
@@ -1077,8 +1079,8 @@ impl From<&ClearErrorsRequest> for pool::ClearErrorsRequest {
     }
 }
 
-impl From<DataLossInfo> for pool::DataLossInfo {
-    fn from(info: DataLossInfo) -> Self {
+impl From<VolumeLossInfo> for pool::VolumeLossInfo {
+    fn from(info: VolumeLossInfo) -> Self {
         Self {
             volumes: info.volumes.into_iter().map(Into::into).collect(),
         }
@@ -1104,7 +1106,7 @@ impl From<PoolDeleteResult> for pool::PoolDeleteResult {
     fn from(result: PoolDeleteResult) -> Self {
         Self {
             pool_id: result.pool_id.to_string(),
-            data_loss: Some(result.data_loss.into()),
+            volume_loss: Some(result.volume_loss.into()),
             snapshot_loss: Some(result.snapshot_loss.into()),
         }
     }
@@ -1145,10 +1147,10 @@ impl TryFrom<pool::PoolDeleteResult> for PoolDeleteResult {
     type Error = ReplyError;
 
     fn try_from(result: pool::PoolDeleteResult) -> Result<Self, Self::Error> {
-        let data_loss = match result.data_loss {
-            Some(data_loss) => {
+        let volume_loss = match result.volume_loss {
+            Some(volume_loss) => {
                 let mut volumes = Vec::new();
-                for v in data_loss.volumes {
+                for v in volume_loss.volumes {
                     let volume_id = uuid::Uuid::parse_str(&v.volume_id).map_err(|_| {
                         ReplyError::invalid_argument(
                             ResourceKind::Volume,
@@ -1164,9 +1166,9 @@ impl TryFrom<pool::PoolDeleteResult> for PoolDeleteResult {
                         healthy_after: v.healthy_after,
                     });
                 }
-                DataLossInfo { volumes }
+                VolumeLossInfo { volumes }
             }
-            None => DataLossInfo::default(),
+            None => VolumeLossInfo::default(),
         };
 
         let snapshot_loss = match result.snapshot_loss {
@@ -1195,7 +1197,7 @@ impl TryFrom<pool::PoolDeleteResult> for PoolDeleteResult {
 
         Ok(PoolDeleteResult {
             pool_id: result.pool_id.into(),
-            data_loss,
+            volume_loss,
             snapshot_loss,
         })
     }

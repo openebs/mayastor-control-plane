@@ -472,6 +472,7 @@ impl From<common::SpecStatus> for NexusSpecStatus {
             common::SpecStatus::Creating => Self::Creating,
             common::SpecStatus::Deleted => Self::Deleted,
             common::SpecStatus::Deleting => Self::Deleting,
+            common::SpecStatus::Purging => Self::Purging,
         }
     }
 }
@@ -483,6 +484,7 @@ impl From<NexusSpecStatus> for common::SpecStatus {
             NexusSpecStatus::Creating => Self::Creating,
             NexusSpecStatus::Deleted => Self::Deleted,
             NexusSpecStatus::Deleting => Self::Deleting,
+            NexusSpecStatus::Purging => Self::Purging,
         }
     }
 }

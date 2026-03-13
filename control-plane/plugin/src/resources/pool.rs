@@ -422,22 +422,22 @@ impl Delete for Pool {
 
 impl GetHeaderRow for models::PoolDeleteResult {
     fn get_header_row(&self) -> Row {
-        row!["POOL", "DATA_LOSS", "SNAPSHOT_LOSS",]
+        row!["POOL", "VOLUME_LOSS", "SNAPSHOT_LOSS",]
     }
 }
 
 impl CreateRow for models::PoolDeleteResult {
     fn row(&self) -> Row {
-        let data_loss = optional_cell(
-            (!self.data_loss.volumes.is_empty())
-                .then(|| format!("{} volume(s)", self.data_loss.volumes.len())),
+        let volume_loss = optional_cell(
+            (!self.volume_loss.volumes.is_empty())
+                .then(|| format!("{} volume(s)", self.volume_loss.volumes.len())),
         );
         let snapshot_loss = optional_cell(
             (!self.snapshot_loss.snapshots.is_empty())
                 .then(|| format!("{} snapshot(s)", self.snapshot_loss.snapshots.len())),
         );
 
-        row![self.pool_id, data_loss, snapshot_loss,]
+        row![self.pool_id, volume_loss, snapshot_loss,]
     }
 }
 

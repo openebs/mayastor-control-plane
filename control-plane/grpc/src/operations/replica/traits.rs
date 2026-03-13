@@ -1130,6 +1130,7 @@ impl From<common::SpecStatus> for ReplicaSpecStatus {
             common::SpecStatus::Creating => Self::Creating,
             common::SpecStatus::Deleted => Self::Deleted,
             common::SpecStatus::Deleting => Self::Deleting,
+            common::SpecStatus::Purging => Self::Purging,
         }
     }
 }
@@ -1140,6 +1141,7 @@ impl From<ReplicaSpecStatus> for common::SpecStatus {
             ReplicaSpecStatus::Creating => Self::Creating,
             ReplicaSpecStatus::Created(_) => Self::Created,
             ReplicaSpecStatus::Deleting => Self::Deleting,
+            ReplicaSpecStatus::Purging => Self::Purging,
             ReplicaSpecStatus::Deleted => Self::Deleted,
         }
     }

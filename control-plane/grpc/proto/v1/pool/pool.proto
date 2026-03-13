@@ -221,14 +221,14 @@ message ExpandPoolReply {
 message PoolDeleteResult {
   // id of the deleted pool
   string pool_id = 1;
-  // data loss information if any volumes lost all healthy replicas
-  DataLossInfo data_loss = 2;
+  // volume loss information if any volumes lost all healthy replicas
+  VolumeLossInfo volume_loss = 2;
   // snapshot loss information if any snapshots lost all healthy replica snapshots
   SnapshotLossInfo snapshot_loss = 3;
 }
 
 // Information about volumes that will lose all healthy replicas
-message DataLossInfo {
+message VolumeLossInfo {
   repeated VolumeLossDetail volumes = 1;
 }
 
