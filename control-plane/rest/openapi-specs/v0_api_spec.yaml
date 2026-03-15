@@ -3457,6 +3457,11 @@ components:
         - NodeIsOffline
         - ImportDisabled
         - TimeOut
+        - DiskClaimed
+        - PCIDriverUnsupported
+        - PCIKernelBound
+        - PCINotNvme
+        - InvalidDiskUri
     PoolErrorInfo:
       type: object
       description: Pool alerts and error information

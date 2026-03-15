@@ -91,7 +91,7 @@ impl Deref for CtrlPoolState {
 }
 
 /// Different pool errors
-#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Copy, PartialEq)]
 pub enum PoolErrorCode {
     /// Unknown error.
     #[default]
@@ -118,6 +118,17 @@ pub enum PoolErrorCode {
     ImportDisabled,
     /// gRPC to the pool timed out.
     TimeOut,
+    // If the Disk is already claimed by something.
+    // This may happen if the disk is used by another pool for example.
+    DiskClaimed,
+    // PCI driver not supported.
+    PCIDriverUnsupported,
+    // PCI still bound to kernel nvme driver.
+    PCIKernelBound,
+    // PCI BDF exists but it's not an NVMe device.
+    PCINotNvme,
+    // The disk URI is invalid or not supported.
+    InvalidDiskUri,
 }
 
 /// Pool error code and human-readable message.
@@ -372,6 +383,11 @@ impl From<PoolErrorCode> for models::PoolProbeErrorCode {
             PoolErrorCode::NodeIsOffline => Self::NodeIsOffline,
             PoolErrorCode::ImportDisabled => Self::ImportDisabled,
             PoolErrorCode::TimeOut => Self::TimeOut,
+            PoolErrorCode::DiskClaimed => Self::DiskClaimed,
+            PoolErrorCode::PCIDriverUnsupported => Self::PciDriverUnsupported,
+            PoolErrorCode::PCIKernelBound => Self::PciKernelBound,
+            PoolErrorCode::PCINotNvme => Self::PciNotNvme,
+            PoolErrorCode::InvalidDiskUri => Self::InvalidDiskUri,
         }
     }
 }
