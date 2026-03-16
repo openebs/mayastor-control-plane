@@ -76,7 +76,7 @@ impl OperationGuardArc<PoolSpec> {
             Ok(node) => {
                 let node_guard = node.read().await;
                 if node_guard.is_offline() {
-                    self.mark_as_offline(PoolError {
+                    self.mark_diag_error(PoolError {
                         code: PoolErrorCode::NodeIsOffline,
                         msg: "".to_string(),
                     });
@@ -90,7 +90,7 @@ impl OperationGuardArc<PoolSpec> {
 
         if let Ok(node) = registry.specs().node(node) {
             if node.is_shutdown() {
-                self.mark_as_offline(PoolError {
+                self.mark_diag_error(PoolError {
                     code: PoolErrorCode::NodeIsOffline,
                     msg: "".to_string(),
                 });
@@ -98,14 +98,19 @@ impl OperationGuardArc<PoolSpec> {
             }
         }
 
-        self.mark_as_unknown(PoolError {
+        self.mark_diag_error(PoolError {
             code: PoolErrorCode::NodeIsUnknown,
             msg: "".to_string(),
         });
         Err(error)
     }
 
-    fn mark_as_diag(&mut self, status: PoolStatus, error: PoolError) {
+    fn mark_diag_error(&mut self, error: PoolError) {
+        let status = self.pool_error_to_status(error.code);
+        self.mark_diag(status, error);
+    }
+
+    fn mark_diag(&mut self, status: PoolStatus, error: PoolError) {
         let mut pool = self.lock();
         let Some(ref mut diag) = &mut pool.metadata.runtime.diag else {
             pool.metadata.runtime.diag = Some(PoolDiag {
@@ -118,12 +123,7 @@ impl OperationGuardArc<PoolSpec> {
         diag.error = Some(error);
         diag.status = status;
     }
-    fn mark_as_offline(&mut self, error: PoolError) {
-        self.mark_as_diag(PoolStatus::Offline, error);
-    }
-    fn mark_as_unknown(&mut self, error: PoolError) {
-        self.mark_as_diag(PoolStatus::Unknown, error);
-    }
+
     /// Maps a [`PoolErrorCode`] to a [`PoolStatus`].
     /// We try to create a consistent mapping between the error code and the status.
     /// If the pool device is having issues and we can not import/create the pool then
@@ -159,7 +159,7 @@ impl OperationGuardArc<PoolSpec> {
             code: PoolErrorCode::ImportDisabled,
             msg: "".to_string(),
         };
-        self.mark_as_diag(PoolStatus::Offline, error);
+        self.mark_diag(PoolStatus::Offline, error);
     }
 
     /// Probes a pool for any errors with its backing devices.
