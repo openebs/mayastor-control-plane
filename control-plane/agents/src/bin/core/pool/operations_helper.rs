@@ -124,14 +124,74 @@ impl OperationGuardArc<PoolSpec> {
     fn mark_as_unknown(&mut self, error: PoolError) {
         self.mark_as_diag(PoolStatus::Unknown, error);
     }
+    /// Maps a [`PoolErrorCode`] to a [`PoolStatus`].
+    /// We try to create a consistent mapping between the error code and the status.
+    /// If the pool device is having issues and we can not import/create the pool then
+    /// we map it as offline.
+    /// If we're not sure what the error was, or if we timed out then we're unsure, so
+    /// we map it as unknown.
+    /// If the pool has invalid metadata then we map it as faulted.
+    fn pool_error_to_status(&self, error: PoolErrorCode) -> PoolStatus {
+        match error {
+            PoolErrorCode::Unknown => PoolStatus::Unknown,
+            PoolErrorCode::DiskNotFound => PoolStatus::Offline,
+            PoolErrorCode::DiskReadIoError => PoolStatus::Offline,
+            PoolErrorCode::ForeignPoolName => PoolStatus::Faulted,
+            PoolErrorCode::ForeignPoolUid => PoolStatus::Faulted,
+            PoolErrorCode::SuperBlock => PoolStatus::Offline,
+            PoolErrorCode::InvalidSuperBlock => PoolStatus::Faulted,
+            PoolErrorCode::DiskIsADirectory => PoolStatus::Offline,
+            PoolErrorCode::NodeIsUnknown => PoolStatus::Unknown,
+            PoolErrorCode::NodeIsOffline => PoolStatus::Offline,
+            PoolErrorCode::ImportDisabled => PoolStatus::Offline,
+            PoolErrorCode::TimeOut => PoolStatus::Unknown,
+            PoolErrorCode::DiskClaimed => PoolStatus::Offline,
+            PoolErrorCode::PCIDriverUnsupported => PoolStatus::Offline,
+            PoolErrorCode::PCIKernelBound => PoolStatus::Offline,
+            PoolErrorCode::PCINotNvme => PoolStatus::Offline,
+            PoolErrorCode::InvalidDiskUri => PoolStatus::Offline,
+        }
+    }
     /// Mark the pool in [`PoolErrorCode::ImportDisabled`] since it cannot be
     /// imported due to being cordoned for imports.
-    pub fn mark_as_import_cordoned(&mut self) {
+    pub(crate) fn mark_as_import_cordoned(&mut self) {
         let error = PoolError {
             code: PoolErrorCode::ImportDisabled,
             msg: "".to_string(),
         };
         self.mark_as_diag(PoolStatus::Offline, error);
+    }
+
+    /// Probes a pool for any errors with its backing devices.
+    /// # NOTE
+    /// In case probe fails we should not log any information to stdout, as we're trying to avoid
+    /// thrashing the logs when a pool is in a bad state for a long time.
+    pub(crate) async fn probe(
+        &self,
+        spec: &PoolSpec,
+        node: &Arc<RwLock<NodeWrapper>>,
+    ) -> Result<bool, SvcError> {
+        let request = ImportPool::new(&spec.node, &spec.id, &spec.disks, &spec.encryption);
+        let probed = node.probe_pool(&request.into()).await?;
+
+        if probed.success || probed.unimpl {
+            return Ok(true);
+        }
+
+        let mut diag = PoolDiag::default();
+
+        for (_, error) in probed.errors {
+            for probe in error.error {
+                diag.import_errors.push(probe);
+            }
+        }
+        diag.error = diag.import_errors.first().map(|e| e.error.clone());
+        diag.status =
+            self.pool_error_to_status(diag.error.as_ref().map(|e| e.code).unwrap_or_default());
+        let mut pool = self.lock();
+        pool.metadata.runtime.diag = Some(diag);
+
+        Ok(false)
     }
 
     /// Attempt to import a pool.

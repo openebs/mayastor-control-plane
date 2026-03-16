@@ -73,7 +73,6 @@ pub(crate) trait PoolApi {
     /// Clear the pool errors.
     async fn clear_errors(&self, request: &ClearErrorsRequest) -> Result<PoolState, SvcError>;
     /// Probe pool's disks for errors.
-    #[allow(unused)]
     async fn probe_pool(&self, request: &ProbePoolRequest) -> Result<ProbePoolResponse, SvcError>;
 }
 

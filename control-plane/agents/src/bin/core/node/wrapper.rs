@@ -1335,7 +1335,16 @@ impl PoolApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
         let dataplane = self
             .grpc_client_locked(MessageIdVs::ProbePool.into())
             .await?;
-        dataplane.probe_pool(request).await
+        match dataplane.probe_pool(request).await {
+            Ok(resp) => Ok(resp),
+            Err(SvcError::GrpcRequestError { source, .. })
+                if source.code() == tonic::Code::Unimplemented =>
+            {
+                tracing::warn!(node=%request.import.node, pool=%request.import.id, "Node does not implement probing...");
+                Ok(ProbePoolResponse::new_unimpl())
+            }
+            Err(error) => Err(error),
+        }
     }
 }
 

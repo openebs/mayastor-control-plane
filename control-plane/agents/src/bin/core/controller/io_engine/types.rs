@@ -109,11 +109,19 @@ impl From<ImportPool> for ProbePoolRequest {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ProbePoolResponse {
     /// Specified probes found no issues.
-    #[allow(unused)]
     pub(crate) success: bool,
+    pub(crate) unimpl: bool,
     /// All the probe errors (per disk).
-    #[allow(unused)]
     pub(crate) errors: HashMap<String, ProbeDiskInfo>,
+}
+impl ProbePoolResponse {
+    /// The target io-engine does not implement this api.
+    pub(crate) fn new_unimpl() -> Self {
+        Self {
+            unimpl: true,
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -1037,6 +1037,7 @@ impl From<v1::pool::ProbePoolResponse> for ProbePoolResponse {
     fn from(value: v1::pool::ProbePoolResponse) -> Self {
         Self {
             success: value.success,
+            unimpl: false,
             errors: value
                 .errors
                 .into_iter()
