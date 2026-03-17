@@ -748,6 +748,7 @@ impl From<&SpecStatus<()>> for common::SpecStatus {
             SpecStatus::Creating => common::SpecStatus::Creating,
             SpecStatus::Created(_) => common::SpecStatus::Created,
             SpecStatus::Deleting => common::SpecStatus::Deleting,
+            SpecStatus::Purging => common::SpecStatus::Purging,
             SpecStatus::Deleted => common::SpecStatus::Deleted,
         }
     }

@@ -375,7 +375,7 @@ impl ResourceContext {
                     return Ok(());
                 }
                 // unexpected, let's handle it generically below
-                SpecStatus::Deleting | SpecStatus::Deleted => {}
+                SpecStatus::Deleting | SpecStatus::Deleted | SpecStatus::Purging => {}
             }
         }
 

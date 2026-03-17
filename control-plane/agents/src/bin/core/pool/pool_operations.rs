@@ -8,9 +8,7 @@ use crate::{
             OperationGuardArc,
         },
     },
-    pool::{
-        operations_helper::devlink_preflight_checks, replica_operations::destroy_replica_request,
-    },
+    pool::operations_helper::devlink_preflight_checks,
 };
 use agents::errors::{SvcError, SvcError::CordonedNode};
 use grpc::operations::pool::traits::PoolCordonRequest;
@@ -20,13 +18,12 @@ use stor_port::{
     types::v0::{
         store::{
             pool::{CordonDrainState, PoolCordonOp, PoolOperation, PoolSpec},
-            replica::ReplicaSpec,
             snapshots::replica::ReplicaSnapshot,
         },
         transport::{
-            CreatePool, CtrlPoolState, DataLossInfo, DestroyPool, ExpandPool, Pool,
-            PoolDeleteResult, PoolDiag, PoolDiskError, PoolId, PoolStatus, ReplicaOwners,
-            ReplicaTopology, SnapshotId, SnapshotLossDetail, SnapshotLossInfo, VolumeLossDetail,
+            CreatePool, CtrlPoolState, DestroyPool, ExpandPool, Pool, PoolDeleteResult, PoolDiag,
+            PoolDiskError, PoolId, PoolStatus, ReplicaOwners, ReplicaTopology, SnapshotId,
+            SnapshotLossDetail, SnapshotLossInfo, VolumeId, VolumeLossDetail, VolumeLossInfo,
         },
     },
 };
@@ -355,73 +352,78 @@ impl OperationGuardArc<PoolSpec> {
     ) -> Result<Option<PoolDeleteResult>, SvcError> {
         let pool_id = &request.id;
         let pool_spec = self.as_ref().clone();
+        let node_id = &pool_spec.node;
+        let resuming = pool_spec.status.purging();
 
-        // 1. Validate pool state is Unknown (or node offline)
-        self.validate_purge_state(registry, pool_id, &pool_spec)
-            .await?;
+        let mut volume_loss_info = None;
+        let mut snapshot_loss_info = None;
+        let mut replica_snapshots = Vec::new();
 
-        // 2. Validate pool is cordoned with replicas AND snapshots blocked
-        self.validate_purge_cordon(pool_id, &pool_spec)?;
+        if !resuming {
+            // 1. Validate pool state is Unknown (or node offline)
+            self.validate_purge_state(registry, pool_id, &pool_spec)
+                .await?;
 
-        // 3. Collect replicas on this pool
-        let replicas = self.collect_pool_replicas(registry, pool_id);
+            // 2. Validate pool is cordoned with replicas AND snapshots blocked
+            self.validate_purge_cordon(pool_id, &pool_spec)?;
 
-        // 4. Collect replica snapshots on this pool (for reporting only)
-        let replica_snapshots = self.collect_pool_replica_snapshots(registry, pool_id);
+            // 3. Collect replicas on this pool (for pre-flight checks only)
+            let replicas = registry.specs().pool_replicas(pool_id);
 
-        // 5. Check accept requirement (if pool has any replicas)
-        if !replicas.is_empty() && !request.accept {
-            return Err(SvcError::PoolPurgeAcceptRequired {
-                pool_id: pool_id.clone(),
-                replica_count: replicas.len(),
-            });
-        }
+            // 4. Collect replica snapshots on this pool (for reporting only)
+            replica_snapshots = self.collect_pool_replica_snapshots(registry, pool_id);
 
-        // 6. Analyze and check data loss using Volume replica topology
-        let data_loss_info = Self::analyze_data_loss(registry, pool_id, &replicas).await?;
-        if let Some(ref info) = data_loss_info {
-            if !request.accept_volume_loss {
-                return Err(SvcError::PoolPurgeVolumeLossAcceptRequired {
+            // 5. Check accept requirement (if pool has any replicas)
+            if !replicas.is_empty() && !request.accept {
+                return Err(SvcError::PoolPurgeAcceptRequired {
                     pool_id: pool_id.clone(),
-                    volume_count: info.volumes.len(),
-                    data_loss: info.clone(),
+                    replica_count: replicas.len(),
                 });
+            }
+
+            // 6. Analyze and check volume loss using Volume replica topology
+            let volume_ids: HashSet<_> = replicas
+                .iter()
+                .filter_map(|r| r.lock().owners.volume().cloned())
+                .collect();
+            volume_loss_info = Self::analyze_volume_loss(registry, pool_id, &volume_ids).await?;
+            if let Some(ref info) = volume_loss_info {
+                if !request.accept_volume_loss {
+                    return Err(SvcError::PoolPurgeVolumeLossAcceptRequired {
+                        pool_id: pool_id.clone(),
+                        volume_count: info.volumes.len(),
+                        volume_loss: info.clone(),
+                    });
+                }
+            }
+
+            // 7. Analyze and check snapshot loss
+            snapshot_loss_info = Self::analyze_snapshot_loss(registry, pool_id)?;
+            if let Some(ref info) = snapshot_loss_info {
+                if !request.accept_snapshot_loss {
+                    return Err(SvcError::PoolPurgeSnapshotLossAcceptRequired {
+                        pool_id: pool_id.clone(),
+                        snapshot_count: info.snapshots.len(),
+                        snapshot_loss: info.clone(),
+                    });
+                }
             }
         }
 
-        // 7. Analyze and check snapshot loss
-        let snapshot_loss_info = Self::analyze_snapshot_loss(registry, pool_id)?;
-        if let Some(ref info) = snapshot_loss_info {
-            if !request.accept_snapshot_loss {
-                return Err(SvcError::PoolPurgeSnapshotLossAcceptRequired {
-                    pool_id: pool_id.clone(),
-                    snapshot_count: info.snapshots.len(),
-                    snapshot_loss: info.clone(),
-                });
-            }
-        }
-
-        // 8. Mark pool as Deleting before touching replicas, so observers know
-        //    the pool is being torn down if something fails mid-way.
+        // 8. Mark pool as Purging and log the destroy operation.
+        //    In the resume case the pool is already Purging but the pending op
+        //    may have been cleared on restart — this re-logs it so
+        //    complete_destroy can commit the transition to Deleted.
         self.start_destroy_for_purge(registry).await?;
 
-        // 9. Delete replicas: try io-engine RPC first, fall back to spec-only deletion
-        for replica_spec in &replicas {
-            let mut replica = registry.specs().replica(&replica_spec.uuid).await?;
-            let destroy_request = destroy_replica_request(
-                replica_spec,
-                &pool_spec.node,
-                ReplicaOwners::new_disown_all(),
-            );
-            if let Err(error) = replica.destroy(registry, &destroy_request).await {
-                tracing::warn!(
-                    replica.uuid = %replica_spec.uuid,
-                    %error,
-                    "Failed to destroy replica via io-engine, removing spec only"
-                );
-                replica.start_destroy_for_purge(registry).await?;
-                replica.complete_destroy(Ok(()), registry).await?;
-            }
+        // 9. Delete replicas: try io-engine RPC first, fall back to spec-only deletion.
+        //    Re-collect replicas here — in the resume case the pre-flight collection
+        //    was skipped, and even in the normal case some state may have changed.
+        let replicas = registry.specs().pool_replicas(pool_id);
+        for replica_rsc in &replicas {
+            let mut replica = replica_rsc.operation_guard_wait().await?;
+            let destroy_request = replica.destroy_request(ReplicaOwners::new_disown_all(), node_id);
+            replica.destroy_or_purge(registry, &destroy_request).await?;
         }
 
         // 10. Note: Replica snapshots are stored within VolumeSnapshot metadata.
@@ -440,8 +442,8 @@ impl OperationGuardArc<PoolSpec> {
 
         // 12. Build and return result
         let mut result = PoolDeleteResult::new(pool_id.clone());
-        if let Some(data_loss) = data_loss_info {
-            result.data_loss = data_loss;
+        if let Some(volume_loss) = volume_loss_info {
+            result.volume_loss = volume_loss;
         }
         if let Some(snapshot_loss) = snapshot_loss_info {
             result.snapshot_loss = snapshot_loss;
@@ -451,7 +453,7 @@ impl OperationGuardArc<PoolSpec> {
             pool.id = %pool_id,
             replicas_deleted = replicas.len(),
             snapshots_affected = replica_snapshots.len(),
-            data_loss = result.has_data_loss(),
+            volume_loss = result.has_volume_loss(),
             snapshot_loss = result.has_snapshot_loss(),
             "Pool purged successfully. Affected volumes will be marked faulted by reconciler."
         );
@@ -509,16 +511,6 @@ impl OperationGuardArc<PoolSpec> {
         }
     }
 
-    /// Collect all replicas on the given pool.
-    fn collect_pool_replicas(&self, registry: &Registry, pool_id: &PoolId) -> Vec<ReplicaSpec> {
-        registry
-            .specs()
-            .replicas_cloned()
-            .into_iter()
-            .filter(|r| r.pool_name() == pool_id)
-            .collect()
-    }
-
     /// Collect all replica snapshots on the given pool.
     fn collect_pool_replica_snapshots(
         &self,
@@ -539,25 +531,20 @@ impl OperationGuardArc<PoolSpec> {
         result
     }
 
-    /// Analyze data loss impact by examining each affected volume's replica topology.
+    /// Analyze volume loss impact by examining each affected volume's replica topology.
     ///
     /// For each volume that has replicas on the pool being purged, we fetch the
     /// `Volume` object and use its `replica_topology` to determine how many
     /// healthy replicas exist before and after the deletion. A replica is
     /// considered healthy if it is online and marked as fully synced.
-    async fn analyze_data_loss(
+    async fn analyze_volume_loss(
         registry: &Registry,
         pool_id: &PoolId,
-        replicas: &[ReplicaSpec],
-    ) -> Result<Option<DataLossInfo>, SvcError> {
-        let volume_ids: HashSet<_> = replicas
-            .iter()
-            .filter_map(|r| r.owners.volume().cloned())
-            .collect();
+        volume_ids: &HashSet<VolumeId>,
+    ) -> Result<Option<VolumeLossInfo>, SvcError> {
+        let mut volumes_with_volume_loss = Vec::new();
 
-        let mut volumes_with_data_loss = Vec::new();
-
-        for volume_id in &volume_ids {
+        for volume_id in volume_ids {
             let volume = match registry.volume(volume_id).await {
                 Ok(v) => v,
                 Err(_) => continue,
@@ -582,7 +569,7 @@ impl OperationGuardArc<PoolSpec> {
             let healthy_after = healthy_before.saturating_sub(healthy_lost);
 
             if healthy_after == 0 && replicas_on_pool > 0 {
-                volumes_with_data_loss.push(VolumeLossDetail {
+                volumes_with_volume_loss.push(VolumeLossDetail {
                     volume_id: volume_id.clone(),
                     replicas_before: total_replicas,
                     healthy_before,
@@ -592,11 +579,11 @@ impl OperationGuardArc<PoolSpec> {
             }
         }
 
-        if volumes_with_data_loss.is_empty() {
+        if volumes_with_volume_loss.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(DataLossInfo {
-                volumes: volumes_with_data_loss,
+            Ok(Some(VolumeLossInfo {
+                volumes: volumes_with_volume_loss,
             }))
         }
     }

@@ -594,7 +594,7 @@ pub(crate) trait GuardedOperationsHelper:
                 self.delete_spec(registry).await.ok();
                 true
             }
-            SpecStatus::Created(_) | SpecStatus::Deleting => {
+            SpecStatus::Created(_) | SpecStatus::Deleting | SpecStatus::Purging => {
                 // A spec that was being updated is in the `Created` state.
                 // Deleting is also a "temporary" update to the spec.
                 self.handle_incomplete_updates(registry).await
@@ -660,12 +660,11 @@ pub(crate) trait GuardedOperationsHelper:
         }
     }
 
-    /// Start a destroy operation for a purge — bypasses `busy()` and `validate_destroy` checks.
+    /// Start a destroy operation for a purge — bypasses `validate_destroy` checks.
     ///
-    /// During purge, specs may have stale pending operations from a node that went
-    /// offline, and resources like pools may still have replicas/snapshots that the
+    /// During purge, resources like pools may still have replicas/snapshots that the
     /// purge itself will clean up. This method follows the same lifecycle as
-    /// `start_destroy_by` but skips those precondition checks.
+    /// `start_destroy_by` but skips the validation check.
     async fn start_destroy_for_purge<O>(&self, registry: &Registry) -> Result<(), SvcError>
     where
         Self::Inner: SpecTransaction<O>,
@@ -673,10 +672,11 @@ pub(crate) trait GuardedOperationsHelper:
     {
         let spec_clone = {
             let mut spec = self.lock();
+            let _ = spec.busy()?;
             if spec.status().deleted() {
                 return Ok(());
             }
-            spec.set_status(SpecStatus::Deleting);
+            spec.set_status(SpecStatus::Purging);
             spec.disown_all();
             spec.start_destroy_op();
             spec.clone()
@@ -769,13 +769,17 @@ pub(crate) trait SpecOperationsHelper:
                 id: self.uuid_str(),
                 kind: self.kind(),
             }),
-            SpecStatus::Deleted | SpecStatus::Deleting if self.allow_op_deleting(&operation) => {
+            SpecStatus::Deleted | SpecStatus::Deleting | SpecStatus::Purging
+                if self.allow_op_deleting(&operation) =>
+            {
                 Ok(())
             }
-            SpecStatus::Deleted | SpecStatus::Deleting => Err(SvcError::PendingDeletion {
-                id: self.uuid_str(),
-                kind: self.kind(),
-            }),
+            SpecStatus::Deleted | SpecStatus::Deleting | SpecStatus::Purging => {
+                Err(SvcError::PendingDeletion {
+                    id: self.uuid_str(),
+                    kind: self.kind(),
+                })
+            }
             SpecStatus::Created(_) => Ok(()),
         }?;
         // start the requested operation (which also checks if it's a valid transition)

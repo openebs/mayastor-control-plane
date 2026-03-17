@@ -1,12 +1,21 @@
-use deployer_cluster::ClusterBuilder;
+use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::{
     pool::traits::PoolOperations, replica::traits::ReplicaOperations,
     volume::traits::VolumeOperations,
 };
 use std::time::Duration;
 use stor_port::{
+    pstor::{etcd::Etcd, StoreObj},
     transport_api::{ReplyErrorKind, ResourceKind},
-    types::v0::transport::{CreateVolume, DestroyPool, Filter, NodeStatus, Pool, VolumeId},
+    types::v0::{
+        store::{
+            pool::{PoolOperation, PoolOperationState, PoolSpec, PoolSpecKey},
+            SpecStatus,
+        },
+        transport::{
+            CreatePool, CreateVolume, DestroyPool, Filter, NodeStatus, Pool, PoolId, VolumeId,
+        },
+    },
 };
 
 use grpc::operations::pool::traits::PoolCordonRequest;
@@ -99,7 +108,10 @@ async fn pool_purge() {
 
     purge_rejected_without_accept(&pool_client, &purge_pool).await;
     purge_rejected_volume_loss_without_accept(&pool_client, &purge_pool).await;
-    purge_succeeds_with_data_loss(&pool_client, &purge_pool, &vol_id).await;
+    purge_succeeds_with_volume_loss(&pool_client, &purge_pool, &vol_id).await;
+
+    // --- Phase 3: reconciler resume after simulated crash ---
+    purge_reconciler_resumes_interrupted(&cluster).await;
 }
 
 /// Purge must be rejected when the pool's node is online (state is not Unknown).
@@ -214,7 +226,7 @@ async fn purge_rejected_volume_loss_without_accept(pool_client: &dyn PoolOperati
 }
 
 /// Purge succeeds when all confirmations are provided, reports data loss.
-async fn purge_succeeds_with_data_loss(
+async fn purge_succeeds_with_volume_loss(
     pool_client: &dyn PoolOperations,
     pool: &Pool,
     volume_id: &VolumeId,
@@ -233,12 +245,12 @@ async fn purge_succeeds_with_data_loss(
 
     assert_eq!(result.pool_id, pool_id);
     assert!(
-        !result.data_loss.volumes.is_empty(),
+        !result.volume_loss.volumes.is_empty(),
         "Should report data loss"
     );
-    assert_eq!(result.data_loss.volumes.len(), 1);
-    assert_eq!(result.data_loss.volumes[0].volume_id, *volume_id);
-    assert_eq!(result.data_loss.volumes[0].healthy_after, 0);
+    assert_eq!(result.volume_loss.volumes.len(), 1);
+    assert_eq!(result.volume_loss.volumes[0].volume_id, *volume_id);
+    assert_eq!(result.volume_loss.volumes[0].healthy_after, 0);
 
     // Verify pool is gone.
     let pools = pool_client.get(Filter::Pool(pool_id), None).await;
@@ -246,4 +258,137 @@ async fn purge_succeeds_with_data_loss(
         pools.is_err() || pools.unwrap().into_inner().is_empty(),
         "Pool should be gone after purge"
     );
+}
+
+/// Simulate a crash after the pool is marked Purging (step 8) but before replicas
+/// are deleted. Write the Purging state directly to etcd, restart core, and verify
+/// the reconciler resumes and completes the purge.
+async fn purge_reconciler_resumes_interrupted(cluster: &Cluster) {
+    let pool_client = cluster.grpc_client().pool();
+    let volume_client = cluster.grpc_client().volume();
+    let replica_client = cluster.grpc_client().replica();
+
+    // 1. Bring io-engine back online and create a fresh pool + volume.
+    cluster.composer().start("io-engine-1").await.unwrap();
+    cluster
+        .wait_node_status_tmo(cluster.node(0), NodeStatus::Online, NODE_OFFLINE_TIMEOUT)
+        .await
+        .expect("Node should come online");
+
+    let pool_id: PoolId = "resume-purge-pool".into();
+    pool_client
+        .create(
+            &CreatePool {
+                node: cluster.node(0),
+                id: pool_id.clone(),
+                disks: vec!["malloc:///resume_disk?size_mb=100".into()],
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .expect("Pool creation should succeed");
+
+    let vol_id = VolumeId::new();
+    volume_client
+        .create(
+            &CreateVolume {
+                uuid: vol_id.clone(),
+                size: VOLUME_SIZE,
+                replicas: 1,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .expect("Volume creation should succeed");
+
+    // Verify replica landed on our pool.
+    let replicas = replica_client
+        .get(Filter::Volume(vol_id.clone()), None)
+        .await
+        .unwrap()
+        .into_inner();
+    assert!(!replicas.is_empty(), "Volume should have a replica");
+    assert_eq!(
+        replicas[0].pool_id, pool_id,
+        "Replica should be on the new pool"
+    );
+
+    // 2. Stop node and cordon the pool.
+    cluster.composer().stop("io-engine-1").await.unwrap();
+    cluster
+        .wait_node_status_tmo(cluster.node(0), NodeStatus::Offline, NODE_OFFLINE_TIMEOUT)
+        .await
+        .expect("Node should go offline");
+
+    pool_client
+        .cordon(PoolCordonRequest {
+            node_id: None,
+            pool_id: pool_id.clone(),
+            replicas: true,
+            snapshots: true,
+            restores: false,
+            import: false,
+        })
+        .await
+        .expect("Cordon should succeed");
+
+    // 3. Simulate crash after step 8: write Purging state + Destroy op to etcd.
+    let mut etcd = Etcd::new("0.0.0.0:2379")
+        .await
+        .expect("Failed to connect to etcd");
+    let (mut pool_spec, _): (PoolSpec, i64) = etcd
+        .get_obj(&PoolSpecKey::from(&pool_id))
+        .await
+        .expect("Pool spec should exist in etcd");
+
+    pool_spec.status = SpecStatus::Purging;
+    pool_spec.operation = Some(PoolOperationState {
+        operation: PoolOperation::Destroy,
+        result: None,
+    });
+    etcd.put_obj(&pool_spec)
+        .await
+        .expect("Failed to write Purging pool spec to etcd");
+
+    // 4. Restart core agent — reconciler should detect Purging and resume the purge.
+    cluster
+        .restart_core_with_liveness(None)
+        .await
+        .expect("Core agent should restart and become live");
+
+    // Wait for the reconciler to complete the purge.
+    // Filter::Pool returns Err(NotFound) when the pool is gone, not Ok(empty vec).
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    loop {
+        match pool_client.get(Filter::Pool(pool_id.clone()), None).await {
+            Err(e) if e.kind == ReplyErrorKind::NotFound => break,
+            Ok(pools) if pools.clone().into_inner().is_empty() => break,
+            _ => {}
+        }
+        if std::time::Instant::now() > (start + timeout) {
+            panic!("Timed out waiting for reconciler to complete pool purge");
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    // 5. Verify replicas are gone (retry briefly in case reconciler is still finishing).
+    let timeout = Duration::from_secs(5);
+    let start = std::time::Instant::now();
+    loop {
+        match replica_client
+            .get(Filter::Volume(vol_id.clone()), None)
+            .await
+        {
+            Err(e) if e.kind == ReplyErrorKind::NotFound => break,
+            Ok(replicas) if replicas.clone().into_inner().is_empty() => break,
+            _ => {}
+        }
+        if std::time::Instant::now() > (start + timeout) {
+            panic!("Timed out waiting for replicas to be cleaned up after pool purge");
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 }

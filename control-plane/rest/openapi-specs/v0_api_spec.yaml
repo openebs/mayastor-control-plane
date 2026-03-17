@@ -2693,19 +2693,19 @@ components:
         poolId:
           description: The deleted pool identifier
           $ref: '#/components/schemas/PoolId'
-        dataLoss:
+        volumeLoss:
           description: Information about volumes that lost healthy replicas
-          $ref: '#/components/schemas/DataLossInfo'
+          $ref: '#/components/schemas/VolumeLossInfo'
         snapshotLoss:
           description: Information about snapshots that lost replica snapshots
           $ref: '#/components/schemas/SnapshotLossInfo'
       required:
         - poolId
-        - dataLoss
+        - volumeLoss
         - snapshotLoss
 
-    DataLossInfo:
-      description: Information about volume data loss from pool deletion
+    VolumeLossInfo:
+      description: Information about volume loss from pool deletion
       type: object
       properties:
         volumes:
@@ -2739,7 +2739,7 @@ components:
           format: int32
           minimum: 0
         healthyAfter:
-          description: Number of healthy replicas remaining after the pool deletion. Zero indicates data loss
+          description: Number of healthy replicas remaining after the pool deletion. Zero indicates volume loss
           type: integer
           format: int32
           minimum: 0
@@ -4210,6 +4210,7 @@ components:
         - Creating
         - Created
         - Deleting
+        - Purging
         - Deleted
     VolumeStatus:
       description: current volume status

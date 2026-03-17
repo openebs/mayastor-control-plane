@@ -8,6 +8,8 @@ enum SpecStatus {
   Created = 1;
   Deleting = 2;
   Deleted = 3;
+  // Spec-only deletion without contacting the data plane (pool/node purge)
+  Purging = 4;
 }
 
 // StringMapValue is the type having a hashmap

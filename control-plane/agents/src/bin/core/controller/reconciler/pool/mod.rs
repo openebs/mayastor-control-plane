@@ -173,14 +173,38 @@ async fn missing_pool_state_reconciler(
 /// the pool deletion gets struck in Deleting state, this creates a problem as when
 /// the node comes up we cannot create a pool with same specs, the deleting_pool_spec_reconciler
 /// cleans up any such pool when node comes up.
+/// If the pool is in Purging state (from a pool purge operation that failed mid-way),
+/// resume the purge via the resource interface.
 #[tracing::instrument(skip(pool, context), level = "trace", fields(pool.id = %pool.id(), request.reconcile = true))]
 async fn deleting_pool_spec_reconciler(
     pool: &mut OperationGuardArc<PoolSpec>,
     context: &PollContext,
 ) -> PollResult {
-    if !pool.as_ref().status().deleting() {
+    let status = pool.as_ref().status();
+    if !status.deleting() && !status.purging() {
         // nothing to do here
         return PollResult::Ok(PollerState::Idle);
+    }
+
+    if status.purging() {
+        // Resume interrupted purge via the resource interface.
+        // purge_pool detects the Purging state and skips validation/accepts.
+        let request = DestroyPool::purge(pool.as_ref().node.clone(), pool.as_ref().id.clone())
+            .with_accept(true)
+            .with_accept_volume_loss(true)
+            .with_accept_snapshot_loss(true);
+        return match pool.destroy(context.registry(), &request).await {
+            Ok(_) => {
+                pool.as_ref()
+                    .info_span(|| tracing::info!("Purged pool reconciled successfully"));
+                PollResult::Ok(PollerState::Idle)
+            }
+            Err(error) => {
+                pool.as_ref()
+                    .error_span(|| tracing::error!(%error, "Failed to reconcile pool purge"));
+                Err(error)
+            }
+        };
     }
 
     match context.registry().node_wrapper(&pool.as_ref().node).await {

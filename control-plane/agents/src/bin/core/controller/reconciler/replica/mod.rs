@@ -2,7 +2,10 @@ use crate::controller::{
     reconciler::{GarbageCollect, ReCreate},
     resources::{
         operations::{ResourceLifecycle, ResourceOwnerUpdate},
-        operations_helper::{OperationSequenceGuard, ResourceSpecsLocked, SpecOperationsHelper},
+        operations_helper::{
+            GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecsLocked,
+            SpecOperationsHelper,
+        },
         OperationGuardArc,
     },
     task_poller::{
@@ -146,7 +149,7 @@ async fn destroy_orphaned_replica(
 ) -> PollResult {
     let destroy_owned = {
         let replica = replica.as_ref();
-        replica.managed && !replica.owned() && !replica.status().deleted()
+        replica.managed && !replica.owned() && !replica.status().destroying_or_deleted()
     };
 
     if destroy_owned {
@@ -163,12 +166,38 @@ async fn destroy_deleting_replica(
     replica: &mut OperationGuardArc<ReplicaSpec>,
     context: &PollContext,
 ) -> PollResult {
-    let deleting = replica.as_ref().status().deleting();
-    if deleting {
+    let status = replica.as_ref().status();
+    if status.deleting() {
         destroy_replica(replica, context).await
+    } else if status.purging() {
+        purge_replica(replica, context).await
     } else {
         PollResult::Ok(PollerState::Idle)
     }
+}
+
+/// Complete a replica purge: try io-engine destroy first, fall back to spec-only deletion.
+#[tracing::instrument(level = "debug", skip(replica, context), fields(replica.uuid = %replica.uuid(), request.reconcile = true))]
+async fn purge_replica(
+    replica: &mut OperationGuardArc<ReplicaSpec>,
+    context: &PollContext,
+) -> PollResult {
+    let pool_ref = replica.as_ref().pool.pool_name();
+    // Use the pool spec to find the node — runtime state may not be available
+    // during purge since the node is likely offline.
+    if let Some(node_id) = context.specs().spec_pool_node(pool_ref) {
+        let request = replica.destroy_request(ReplicaOwners::new_disown_all(), &node_id);
+        replica
+            .destroy_or_purge(context.registry(), &request)
+            .await?;
+    } else {
+        // Pool spec not found — go straight to spec-only deletion.
+        replica.start_destroy_for_purge(context.registry()).await?;
+        replica.complete_destroy(Ok(()), context.registry()).await?;
+    }
+
+    tracing::info!(replica.uuid=%replica.uuid(), "Successfully purged replica spec");
+    PollResult::Ok(PollerState::Idle)
 }
 
 #[tracing::instrument(level = "debug", skip(replica, context), fields(replica.uuid = %replica.uuid(), request.reconcile = true))]

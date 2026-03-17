@@ -26,6 +26,9 @@ pub enum SpecStatus<T> {
     Creating,
     Created(T),
     Deleting,
+    /// Spec-only deletion without contacting the data plane.
+    /// Used during pool/node purge when the backing storage is permanently lost.
+    Purging,
     Deleted,
 }
 
@@ -36,6 +39,7 @@ impl<T> From<SpecStatus<T>> for models::SpecStatus {
             SpecStatus::Creating => Self::Creating,
             SpecStatus::Created(_) => Self::Created,
             SpecStatus::Deleting => Self::Deleting,
+            SpecStatus::Purging => Self::Purging,
             SpecStatus::Deleted => Self::Deleted,
         }
     }
@@ -50,17 +54,25 @@ impl<T: std::cmp::PartialEq> SpecStatus<T> {
     pub fn created(&self) -> bool {
         matches!(self, &Self::Created(_))
     }
-    /// Check if resource is being deleted.
+    /// Check if resource is being deleted (normal path via io-engine).
     pub fn deleting(&self) -> bool {
         self == &Self::Deleting
+    }
+    /// Check if resource is being purged (spec-only deletion).
+    pub fn purging(&self) -> bool {
+        self == &Self::Purging
     }
     /// Check if resource is deleted.
     pub fn deleted(&self) -> bool {
         self == &Self::Deleted
     }
-    /// Check if resource is being deleted or is deleted.
-    pub fn deleting_or_deleted(&self) -> bool {
-        self.deleting() || self.deleted()
+    /// Check if resource is being destroyed (either deleting or purging).
+    pub fn destroying(&self) -> bool {
+        self.deleting() || self.purging()
+    }
+    /// Check if resource is being destroyed or is already deleted.
+    pub fn destroying_or_deleted(&self) -> bool {
+        self.destroying() || self.deleted()
     }
 }
 
