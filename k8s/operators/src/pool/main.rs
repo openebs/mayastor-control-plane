@@ -60,7 +60,20 @@ fn error_policy(_object: Arc<DiskPool>, error: &Error, _ctx: Arc<OperatorContext
 #[tracing::instrument(fields(name = %dsp.spec.node(), status = ?dsp.status) skip(dsp, ctx))]
 async fn reconcile(dsp: Arc<DiskPool>, ctx: Arc<OperatorContext>) -> Result<Action, Error> {
     let dsp = ctx.upsert(ctx.clone(), dsp).await;
-    let _ = dsp.finalizer().await;
+
+    let is_deleted = matches!(
+        dsp.status,
+        Some(DiskPoolStatus {
+            cr_state: CrPoolState::Deleted,
+            ..
+        })
+    );
+
+    // Skip the finalizer hook when the CR is in Deleted state — the pool spec
+    // is already gone and we want to strip the finalizer, not re-add it.
+    if !is_deleted {
+        let _ = dsp.finalizer().await;
+    }
 
     if !ctx.inventory_contains(dsp.name_any()).await {
         return Ok(Action::await_change());
@@ -79,6 +92,15 @@ async fn reconcile(dsp: Arc<DiskPool>, ctx: Arc<OperatorContext>) -> Result<Acti
             cr_state: CrPoolState::Terminating,
             ..
         }) => dsp.pool_check().await,
+        Some(DiskPoolStatus {
+            cr_state: CrPoolState::Deleted,
+            ..
+        }) => {
+            // Pool spec was removed from the control plane. The CR is orphaned.
+            // Strip the finalizer so the user can delete the CR without the
+            // operator needing to intervene.
+            dsp.strip_finalizer().await
+        }
         // We use this state to indicate it's a new CRD however, we could (and
         // perhaps should) use the finalizer callback.
         None => dsp.init_cr().await,

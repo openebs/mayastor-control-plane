@@ -284,6 +284,10 @@ pub enum CrPoolState {
     Created,
     /// This state is set when we receive delete event on the dsp cr.
     Terminating,
+    /// The pool spec has been removed from the control plane (via normal
+    /// deletion or purge). The CR is orphaned and can be safely deleted
+    /// by the user.
+    Deleted,
 }
 
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, JsonSchema)]
@@ -423,7 +427,7 @@ impl DiskPoolStatus {
         .with_conditions(dsp)
     }
 
-    /// Set when operator is attempting to delete on pool.
+    /// Set when operator is attempting to delete a pool whose state is available.
     #[cfg(feature = "openapi")]
     pub fn terminating(dsp: &DiskPool, p: Pool) -> Self {
         let status = Self::inferred_status(&p);
@@ -459,6 +463,21 @@ impl DiskPoolStatus {
             error: Some(PoolError {
                 code: PoolErrorCode::Unknown,
                 message: Some("pool is terminating".to_string()),
+            }),
+            ..Default::default()
+        }
+    }
+
+    /// Set when the pool spec has been removed from the control plane.
+    /// The CR is orphaned and can be safely deleted by the user.
+    pub fn deleted() -> Self {
+        Self {
+            cr_state: CrPoolState::Deleted,
+            pool_status: None,
+            status: Some(PoolStatus::Offline),
+            error: Some(PoolError {
+                code: PoolErrorCode::PoolDeleted,
+                message: Some("pool spec was removed from the control plane".to_string()),
             }),
             ..Default::default()
         }
