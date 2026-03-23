@@ -336,6 +336,9 @@ impl ExecuteOperation for DeleteArgs {
                     DeleteResources::Pool(args) => {
                         pool::Pool::del(args, self.ignore_not_found, &cli_args.output).await
                     }
+                    DeleteResources::Node(args) => {
+                        node::Node::del(args, self.ignore_not_found, &cli_args.output).await
+                    }
                     DeleteResources::Volume { id } => {
                         volume::Volume::del(id, self.ignore_not_found, &cli_args.output).await
                     }

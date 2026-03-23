@@ -1,6 +1,6 @@
 use crate::{
     blockdevice, blockdevice::GetBlockDevicesRequest, context::Context, node,
-    node::get_nodes_request,
+    node::get_nodes_request, pool,
 };
 use std::{collections::HashMap, convert::TryFrom, str::FromStr};
 use stor_port::{
@@ -11,8 +11,9 @@ use stor_port::{
     types::v0::{
         store::node::{CordonDrainState, CordonedState, DrainState, NodeSpec},
         transport::{
-            BlockDevice, Filesystem, Filter, GetBlockDevices, Node, NodeId, NodeState, NodeStatus,
-            Partition,
+            BlockDevice, DestroyNode, Filesystem, Filter, GetBlockDevices, Node, NodeDeleteResult,
+            NodeId, NodeState, NodeStatus, Partition, SnapshotLossDetail, SnapshotLossInfo,
+            VolumeLossDetail, VolumeLossInfo,
         },
     },
     TryIntoOption,
@@ -51,6 +52,8 @@ pub trait NodeOperations: Send + Sync {
     ) -> Result<Node, ReplyError>;
     /// Remove label from the a given node.
     async fn unlabel(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
+    /// Delete a node and all its resources (purge). Always returns `NodeDeleteResult`.
+    async fn delete(&self, request: &DestroyNode) -> Result<NodeDeleteResult, ReplyError>;
 }
 
 impl TryFrom<node::Node> for Node {
@@ -425,6 +428,106 @@ impl From<BlockDevices> for blockdevice::BlockDevices {
                 .into_iter()
                 .map(|bd| bd.into())
                 .collect(),
+        }
+    }
+}
+
+impl From<NodeDeleteResult> for node::NodeDeleteResult {
+    fn from(result: NodeDeleteResult) -> Self {
+        Self {
+            node_id: result.node_id.to_string(),
+            volume_loss: result
+                .volume_loss
+                .volumes
+                .into_iter()
+                .map(|v| pool::VolumeLossDetail {
+                    volume_id: v.volume_id.to_string(),
+                    replicas_before: v.replicas_before,
+                    healthy_before: v.healthy_before,
+                    lost_on_pool: v.lost_on_pool,
+                    healthy_after: v.healthy_after,
+                })
+                .collect(),
+            snapshot_loss: result
+                .snapshot_loss
+                .snapshots
+                .into_iter()
+                .map(|s| pool::SnapshotLossDetail {
+                    snapshot_id: s.snapshot_id.to_string(),
+                    replica_snapshots_before: s.replica_snapshots_before,
+                    healthy_before: s.healthy_before,
+                    lost_on_pool: s.lost_on_pool,
+                    healthy_after: s.healthy_after,
+                })
+                .collect(),
+        }
+    }
+}
+
+impl TryFrom<node::NodeDeleteResult> for NodeDeleteResult {
+    type Error = ReplyError;
+
+    fn try_from(result: node::NodeDeleteResult) -> Result<Self, Self::Error> {
+        let mut volumes = Vec::new();
+        for v in result.volume_loss {
+            let volume_id = uuid::Uuid::parse_str(&v.volume_id).map_err(|_| {
+                ReplyError::invalid_argument(ResourceKind::Volume, "volume_id", v.volume_id.clone())
+            })?;
+            volumes.push(VolumeLossDetail {
+                volume_id: volume_id.into(),
+                replicas_before: v.replicas_before,
+                healthy_before: v.healthy_before,
+                lost_on_pool: v.lost_on_pool,
+                healthy_after: v.healthy_after,
+            });
+        }
+
+        let mut snapshots = Vec::new();
+        for s in result.snapshot_loss {
+            let snapshot_id = uuid::Uuid::parse_str(&s.snapshot_id).map_err(|_| {
+                ReplyError::invalid_argument(
+                    ResourceKind::VolumeSnapshot,
+                    "snapshot_id",
+                    s.snapshot_id.clone(),
+                )
+            })?;
+            snapshots.push(SnapshotLossDetail {
+                snapshot_id: snapshot_id.into(),
+                replica_snapshots_before: s.replica_snapshots_before,
+                healthy_before: s.healthy_before,
+                lost_on_pool: s.lost_on_pool,
+                healthy_after: s.healthy_after,
+            });
+        }
+
+        Ok(NodeDeleteResult {
+            node_id: result.node_id.into(),
+            volume_loss: VolumeLossInfo { volumes },
+            snapshot_loss: SnapshotLossInfo { snapshots },
+        })
+    }
+}
+
+impl From<DestroyNode> for node::DeleteNodeRequest {
+    fn from(request: DestroyNode) -> Self {
+        Self {
+            node_id: request.id.to_string(),
+            purge: request.purge,
+            accept: request.accept,
+            accept_volume_loss: request.accept_volume_loss,
+            accept_snapshot_loss: request.accept_snapshot_loss,
+        }
+    }
+}
+
+impl From<node::DeleteNodeRequest> for DestroyNode {
+    fn from(request: node::DeleteNodeRequest) -> Self {
+        Self {
+            id: request.node_id.into(),
+            purge: request.purge,
+            accept: request.accept,
+            accept_volume_loss: request.accept_volume_loss,
+            accept_snapshot_loss: request.accept_snapshot_loss,
         }
     }
 }

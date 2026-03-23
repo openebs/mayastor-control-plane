@@ -2,6 +2,7 @@ syntax = "proto3";
 
 import "v1/misc/common.proto";
 import "v1/blockdevice/blockdevice.proto";
+import "v1/pool/pool.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/wrappers.proto";
 
@@ -184,6 +185,35 @@ message UnlabelNodeReply {
   }
 }
 
+message DeleteNodeRequest {
+  // Node identification
+  string node_id = 1;
+  // Purge node and all its resources without contacting io-engine
+  bool purge = 2;
+  // Accept deletion of resources (pools, replicas, nexuses, snapshots)
+  bool accept = 3;
+  // Accept volume loss (last healthy replica)
+  bool accept_volume_loss = 4;
+  // Accept snapshot loss (last replica snapshot)
+  bool accept_snapshot_loss = 5;
+}
+
+message NodeDeleteResult {
+  // The deleted node ID
+  string node_id = 1;
+  // Volumes that lost their last healthy replica
+  repeated pool.VolumeLossDetail volume_loss = 2;
+  // Snapshots that lost their last replica snapshot
+  repeated pool.SnapshotLossDetail snapshot_loss = 3;
+}
+
+message DeleteNodeReply {
+  oneof reply {
+    NodeDeleteResult result = 1;
+    common.ReplyError error = 2;
+  }
+}
+
 service NodeGrpc {
   rpc GetNodes (GetNodesRequest) returns (GetNodesReply) {}
   rpc GetBlockDevices (blockdevice.GetBlockDevicesRequest) returns (blockdevice.GetBlockDevicesReply) {}
@@ -193,4 +223,5 @@ service NodeGrpc {
   rpc DrainNode (DrainNodeRequest) returns (DrainNodeReply) {}
   rpc LabelNode (LabelNodeRequest) returns (LabelNodeReply) {}
   rpc UnlabelNode (UnlabelNodeRequest) returns (UnlabelNodeReply) {}
+  rpc DeleteNode (DeleteNodeRequest) returns (DeleteNodeReply) {}
 }

@@ -251,6 +251,8 @@ pub struct DeleteArgs {
 pub enum DeleteResources {
     /// Deletes the specified pool resource.
     Pool(pool::DeletePoolArgs),
+    /// Deletes the specified node and all its resources (purge).
+    Node(node::DeleteNodeArgs),
     /// Deletes the specified volume resource.
     Volume {
         /// The id of the volume to delete.

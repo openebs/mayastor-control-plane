@@ -1,5 +1,5 @@
 use crate::{
-    operations::{Cordoning, Drain, GetWithArgs, Label, ListWithArgs, PluginResult},
+    operations::{Cordoning, Delete, Drain, GetWithArgs, Label, ListWithArgs, PluginResult},
     resources::{
         error::{Error, LabelAssignSnafu, OpError, TopologyError},
         utils::{
@@ -11,7 +11,7 @@ use crate::{
     rest_wrapper::RestClient,
 };
 use async_trait::async_trait;
-use openapi::{apis::StatusCode, models::CordonDrainState};
+use openapi::{apis::StatusCode, models, models::CordonDrainState};
 use prettytable::{Cell, Row};
 use serde::Serialize;
 use snafu::ResultExt;
@@ -762,5 +762,116 @@ impl Label for Node {
             }
         }
         Ok(())
+    }
+}
+
+/// Arguments for deleting a node.
+#[derive(Debug, Clone, clap::Args)]
+pub struct DeleteNodeArgs {
+    /// Id of the node to delete.
+    node_id: NodeId,
+
+    /// Purge node and all its resources without contacting io-engine.{n}
+    /// Use this when the node is permanently offline or decommissioned.
+    /// Requires the node to be offline and cordoned.
+    #[arg(long)]
+    purge: bool,
+
+    /// Accept both volume loss and snapshot loss.
+    /// Shorthand for --accept-volume-loss --accept-snapshot-loss.
+    #[arg(long)]
+    accept_data_loss: bool,
+
+    /// Accept volume loss for volumes losing their last healthy replica.
+    /// Required when --purge would cause volume data loss.
+    #[arg(long)]
+    accept_volume_loss: bool,
+
+    /// Accept snapshot loss for snapshots losing their last replica snapshot.
+    /// Required when --purge would cause snapshot loss.
+    #[arg(long)]
+    accept_snapshot_loss: bool,
+}
+
+#[async_trait(?Send)]
+impl Delete for Node {
+    type ID = DeleteNodeArgs;
+
+    async fn del(id: &Self::ID, _ignore_not_found: bool, output: &OutputFormat) -> PluginResult {
+        // --accept-data-loss is shorthand for both volume and snapshot loss.
+        let accept_volume_loss = id.accept_volume_loss || id.accept_data_loss;
+        let accept_snapshot_loss = id.accept_snapshot_loss || id.accept_data_loss;
+        let body = openapi::models::DeleteNodeBody {
+            purge: Some(id.purge),
+            accept: Some(true),
+            accept_volume_loss: Some(accept_volume_loss),
+            accept_snapshot_loss: Some(accept_snapshot_loss),
+        };
+
+        match RestClient::client()
+            .nodes_api()
+            .del_node(&id.node_id, Some(body))
+            .await
+        {
+            Ok(response) => {
+                utils::print_table(output, response.into_body());
+                Ok(())
+            }
+            Err(source) => {
+                // Translate core agent errors into user-friendly messages with CLI flags.
+                use openapi::models::rest_json_error::Kind;
+                if let Some(kind) = source.error_body().map(|b| b.kind) {
+                    let hint = match kind {
+                        Kind::NodeIsOnline => {
+                            Some("Node is online. Only offline nodes can be deleted.")
+                        }
+                        Kind::NodeNotCordoned => {
+                            Some("Node must be cordoned first. Use: kubectl mayastor cordon node <id> <label>")
+                        }
+                        Kind::NodeHasResources => {
+                            Some("Node has resources. Use --purge to force-remove the node and all its resources.")
+                        }
+                        Kind::NodePurgeAcceptRequired => {
+                            Some("Node has pools with data. Confirm with --yes to proceed.")
+                        }
+                        Kind::NodePurgeVolumeLossAcceptRequired => {
+                            Some("Volumes would lose their last healthy replica. Use --accept-volume-loss or --accept-data-loss to proceed.")
+                        }
+                        Kind::NodePurgeSnapshotLossAcceptRequired => {
+                            Some("Snapshots would lose their last replica snapshot. Use --accept-snapshot-loss or --accept-data-loss to proceed.")
+                        }
+                        _ => None,
+                    };
+                    if let Some(hint) = hint {
+                        eprintln!("{hint}");
+                    }
+                }
+                Err(Error::DeleteNodeError {
+                    id: id.node_id.clone(),
+                    source,
+                })
+            }
+        }
+    }
+}
+
+impl GetHeaderRow for models::NodeDeleteResult {
+    fn get_header_row(&self) -> Row {
+        row!["NODE", "VOLUME_LOSS", "SNAPSHOT_LOSS"]
+    }
+}
+
+impl CreateRow for models::NodeDeleteResult {
+    fn row(&self) -> Row {
+        let volume_loss = optional_cell(
+            (!self.volume_loss.volumes.is_empty())
+                .then(|| format!("{} volume(s)", self.volume_loss.volumes.len())),
+        );
+        let snapshot_loss = optional_cell(
+            (!self.snapshot_loss.snapshots.is_empty())
+                .then(|| format!("{} snapshot(s)", self.snapshot_loss.snapshots.len())),
+        );
+
+        row![self.node_id, volume_loss, snapshot_loss]
     }
 }

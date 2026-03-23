@@ -4,7 +4,7 @@ use crate::{
         openapi::models,
         store::{
             definitions::{ObjectKey, StorableObject, StorableObjectType},
-            AsOperationSequencer, OperationSequence, SpecTransaction,
+            AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{self, HostNqn, NodeBugFix, NodeBugFixes, NodeFeatures, NodeId, VolumeId},
     },
@@ -159,6 +159,11 @@ pub struct NodeState {
     pub node: transport::NodeState,
 }
 
+/// Default status for NodeSpec when deserializing old entries without a status field.
+fn default_node_spec_status() -> SpecStatus<()> {
+    SpecStatus::Created(())
+}
+
 /// Node spec data, including the cordon/drain state.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct NodeSpec {
@@ -186,6 +191,9 @@ pub struct NodeSpec {
     /// Record of the operation in progress.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operation: Option<NodeOperationState>,
+    /// Spec status (Created, Deleting, Purging, Deleted).
+    #[serde(default = "default_node_spec_status")]
+    pub status: SpecStatus<()>,
     /// Features exposed by the io-engine.
     #[serde(skip_serializing_if = "Option::is_none")]
     features: Option<NodeFeatures>,
@@ -224,6 +232,7 @@ impl NodeSpec {
             draining_timestamp: None,
             sequencer: OperationSequence::new(),
             operation: None,
+            status: SpecStatus::Created(()),
             features,
             bugfixes,
             version,
@@ -637,6 +646,7 @@ pub enum NodeOperation {
     SetDrained(),
     Label(NodeLabelOp),
     Unlabel(NodeUnLabelOp),
+    Destroy,
 }
 
 /// Parameter for adding node labels.
@@ -705,6 +715,9 @@ impl SpecTransaction<NodeOperation> for NodeSpec {
                 NodeOperation::Unlabel(NodeUnLabelOp { label_key }) => {
                     self.unlabel(&label_key);
                 }
+                NodeOperation::Destroy => {
+                    // Destroy is committed by remove_spec / complete_destroy.
+                }
             }
         }
         self.clear_op();
@@ -738,6 +751,7 @@ impl SpecTransaction<NodeOperation> for NodeSpec {
             NodeOperation::SetDrained() => (false, true),
             NodeOperation::Label(_) => (false, true),
             NodeOperation::Unlabel(_) => (false, true),
+            NodeOperation::Destroy => (true, true),
         }
     }
 

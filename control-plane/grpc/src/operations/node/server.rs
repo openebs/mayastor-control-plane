@@ -2,16 +2,17 @@ use crate::{
     blockdevice::{get_block_devices_reply, GetBlockDevicesReply, GetBlockDevicesRequest},
     node,
     node::{
-        cordon_node_reply, drain_node_reply, get_nodes_reply, label_node_reply,
+        cordon_node_reply, delete_node_reply, drain_node_reply, get_nodes_reply, label_node_reply,
         node_grpc_server::{NodeGrpc, NodeGrpcServer},
         uncordon_node_reply, unlabel_node_reply, CordonNodeReply, CordonNodeRequest,
-        DrainNodeReply, DrainNodeRequest, GetNodesReply, GetNodesRequest, LabelNodeReply,
-        LabelNodeRequest, ProbeRequest, ProbeResponse, UncordonNodeReply, UncordonNodeRequest,
-        UnlabelNodeReply, UnlabelNodeRequest,
+        DeleteNodeReply, DeleteNodeRequest, DrainNodeReply, DrainNodeRequest, GetNodesReply,
+        GetNodesRequest, LabelNodeReply, LabelNodeRequest, ProbeRequest, ProbeResponse,
+        UncordonNodeReply, UncordonNodeRequest, UnlabelNodeReply, UnlabelNodeRequest,
     },
     operations::node::traits::NodeOperations,
 };
 use std::sync::Arc;
+use stor_port::types::v0::transport::DestroyNode;
 use tonic::{Request, Response};
 
 /// gRPC Node Server
@@ -158,6 +159,22 @@ impl NodeGrpc for NodeServer {
             })),
             Err(err) => Ok(Response::new(UnlabelNodeReply {
                 reply: Some(unlabel_node_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn delete_node(
+        &self,
+        request: tonic::Request<DeleteNodeRequest>,
+    ) -> Result<tonic::Response<DeleteNodeReply>, tonic::Status> {
+        let req: DeleteNodeRequest = request.into_inner();
+        let destroy: DestroyNode = req.into();
+        match self.service.delete(&destroy).await {
+            Ok(result) => Ok(Response::new(DeleteNodeReply {
+                reply: Some(delete_node_reply::Reply::Result(result.into())),
+            })),
+            Err(err) => Ok(Response::new(DeleteNodeReply {
+                reply: Some(delete_node_reply::Reply::Error(err.into())),
             })),
         }
     }

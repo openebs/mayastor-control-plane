@@ -233,6 +233,35 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+    delete:
+      tags:
+        - Nodes
+      operationId: del_node
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteNodeBody'
+      responses:
+        '200':
+          description: Node purged successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeDeleteResult'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/nodes/{id}/cordon/{label}':
     put:
       tags:
@@ -2795,6 +2824,52 @@ components:
         - healthyBefore
         - lostOnPool
         - healthyAfter
+
+    DeleteNodeBody:
+      description: Request body for node deletion
+      type: object
+      properties:
+        purge:
+          description: |
+            Force removal of node and all its resources without contacting io-engine.
+            Requires node to be offline and cordoned.
+          type: boolean
+          default: false
+        accept:
+          description: Accept deletion when node has resources (pools, replicas, nexuses)
+          type: boolean
+          default: false
+        acceptVolumeLoss:
+          description: |
+            Accept volume loss. Required when purge would cause volumes
+            to lose their last healthy replica.
+          type: boolean
+          default: false
+        acceptSnapshotLoss:
+          description: |
+            Accept snapshot loss. Required when purge would cause
+            snapshots to lose their last replica snapshot.
+          type: boolean
+          default: false
+
+    NodeDeleteResult:
+      description: Result of a node delete operation
+      type: object
+      properties:
+        nodeId:
+          description: The deleted node identifier
+          type: string
+        volumeLoss:
+          description: Information about volumes that lost healthy replicas
+          $ref: '#/components/schemas/VolumeLossInfo'
+        snapshotLoss:
+          description: Information about snapshots that lost replica snapshots
+          $ref: '#/components/schemas/SnapshotLossInfo'
+      required:
+        - nodeId
+        - volumeLoss
+        - snapshotLoss
+
     CreateReplicaBody:
       example:
         size: 80241024
@@ -3801,6 +3876,12 @@ components:
             - PoolPurgeAcceptRequired
             - PoolPurgeVolumeLossAcceptRequired
             - PoolPurgeSnapshotLossAcceptRequired
+            - NodeIsOnline
+            - NodeNotCordoned
+            - NodeHasResources
+            - NodePurgeAcceptRequired
+            - NodePurgeVolumeLossAcceptRequired
+            - NodePurgeSnapshotLossAcceptRequired
       required:
         - details
         - kind

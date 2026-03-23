@@ -341,7 +341,7 @@ impl GetWithArgs for Pool {
 #[derive(Debug, Clone, clap::Args)]
 pub struct DeletePoolArgs {
     /// Id of the pool to delete.
-    pool_id: PoolId,
+    pub pool_id: PoolId,
 
     /// Purge pool without contacting io-engine.{n}
     /// Use this when the pool's node is offline or the pool state is Unknown.
@@ -409,6 +409,35 @@ impl Delete for Pool {
                 // Handle not found with ignore flag
                 if ignore_not_found && source.status() == Some(StatusCode::NOT_FOUND) {
                     return Ok(());
+                }
+
+                // Translate core agent errors into user-friendly messages with CLI flags.
+                use openapi::models::rest_json_error::Kind;
+                if let Some(kind) = source.error_body().map(|b| b.kind) {
+                    let hint = match kind {
+                        Kind::PoolNotPurgeable => {
+                            Some("Pool state is not Unknown. Only pools with Unknown state (offline node) can be purged.")
+                        }
+                        Kind::PoolNotCordoned => {
+                            Some("Pool must be cordoned first. Use: kubectl mayastor cordon pool <id> --replicas --snapshots")
+                        }
+                        Kind::PoolCordonInsufficient => {
+                            Some("Pool cordon must block both replicas and snapshots. Use: kubectl mayastor cordon pool <id> --replicas --snapshots")
+                        }
+                        Kind::PoolPurgeAcceptRequired => {
+                            Some("Pool has replicas. Confirm with --yes to proceed.")
+                        }
+                        Kind::PoolPurgeVolumeLossAcceptRequired => {
+                            Some("Volumes would lose their last healthy replica. Use --accept-volume-loss or --accept-data-loss to proceed.")
+                        }
+                        Kind::PoolPurgeSnapshotLossAcceptRequired => {
+                            Some("Snapshots would lose their last replica snapshot. Use --accept-snapshot-loss or --accept-data-loss to proceed.")
+                        }
+                        _ => None,
+                    };
+                    if let Some(hint) = hint {
+                        eprintln!("{hint}");
+                    }
                 }
 
                 Err(Error::DeletePoolError {

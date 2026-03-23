@@ -10,9 +10,11 @@ use crate::controller::{
 };
 use agents::errors::SvcError;
 use stor_port::types::v0::transport::{
-    Deregister, Filter, Node, NodeId, NodeState, NodeStatus, Register,
+    Deregister, DestroyNode, Filter, Node, NodeDeleteResult, NodeId, NodeState, NodeStatus,
+    Register,
 };
 
+use crate::controller::resources::operations::ResourceLifecycle;
 use crate::controller::{io_engine::HostApi, wrapper::InternalOps};
 use grpc::{
     context::Context,
@@ -152,6 +154,12 @@ impl NodeOperations for Service {
         }
         let node = self.unlabel(id, label_key).await?;
         Ok(node)
+    }
+
+    /// Delete a node and all its resources (purge).
+    async fn delete(&self, request: &DestroyNode) -> Result<NodeDeleteResult, ReplyError> {
+        let result = self.delete_node(request).await?;
+        Ok(result)
     }
 }
 
@@ -449,5 +457,20 @@ impl Service {
         let spec = guarded_node.unlabel(&self.registry, label).await?;
         let state = self.registry.node_state(&id).await.ok();
         Ok(Node::new(id, Some(spec), state))
+    }
+
+    /// Delete a node and all its resources (pools, replicas, nexuses, snapshots).
+    ///
+    /// Acquires the node operation guard and delegates to `purge_node` which
+    /// handles pre-flight validation, the destroy lifecycle, and resource cleanup.
+    /// After the spec is removed, the runtime wrapper is cleaned up.
+    pub(crate) async fn delete_node(
+        &self,
+        request: &DestroyNode,
+    ) -> Result<NodeDeleteResult, SvcError> {
+        let node_id = &request.id;
+
+        let mut node_guard = self.registry.specs().guarded_node(node_id).await?;
+        node_guard.destroy(&self.registry, request).await
     }
 }

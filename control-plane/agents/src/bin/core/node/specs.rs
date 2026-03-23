@@ -137,6 +137,28 @@ impl ResourceSpecsLocked {
             .collect()
     }
 
+    /// Worker that reconciles dirty NodeSpec's with the persistent store.
+    /// This is useful when node operations are performed but we fail to
+    /// update the spec with the persistent store.
+    pub(crate) async fn reconcile_dirty_nodes(&self, registry: &Registry) -> bool {
+        let mut pending_ops = false;
+
+        let nodes = self.nodes_rsc();
+        for node in nodes {
+            // Skip nodes with no pending operation to avoid unnecessary guard
+            // acquisition. This keeps the reconciler low-cost for healthy nodes.
+            if !node.lock().has_pending_op() {
+                continue;
+            }
+            if let Ok(mut guard) = node.operation_guard() {
+                if !guard.handle_incomplete_ops(registry).await {
+                    pending_ops = true;
+                }
+            }
+        }
+        pending_ops
+    }
+
     /// Get all cordoned nodes.
     pub(crate) fn cordoned_nodes(&self) -> Vec<NodeSpec> {
         self.read()
@@ -151,6 +173,12 @@ impl ResourceSpecsLocked {
                 }
             })
             .collect()
+    }
+
+    /// Remove the Node `id` from the spec list.
+    pub(crate) fn remove_node(&self, id: &NodeId) {
+        let mut specs = self.write();
+        specs.nodes.remove(id);
     }
 }
 
@@ -175,8 +203,9 @@ impl GuardedOperationsHelper for OperationGuardArc<NodeSpec> {
     type UpdateOp = NodeOperation;
     type Inner = NodeSpec;
 
-    fn remove_spec(&self, _registry: &Registry) {
-        unimplemented!();
+    fn remove_spec(&self, registry: &Registry) {
+        let id = self.lock().id().clone();
+        registry.specs().remove_node(&id);
     }
 }
 
@@ -256,7 +285,7 @@ impl SpecOperationsHelper for NodeSpec {
         unimplemented!();
     }
     fn start_destroy_op(&mut self) {
-        unimplemented!();
+        self.start_op(NodeOperation::Destroy);
     }
 
     fn dirty(&self) -> bool {
@@ -269,10 +298,10 @@ impl SpecOperationsHelper for NodeSpec {
         self.id().to_string()
     }
     fn status(&self) -> SpecStatus<Self::Status> {
-        SpecStatus::Created(())
+        self.status.clone()
     }
-    fn set_status(&mut self, _status: SpecStatus<Self::Status>) {
-        unimplemented!();
+    fn set_status(&mut self, status: SpecStatus<Self::Status>) {
+        self.status = status;
     }
     fn operation_result(&self) -> Option<Option<bool>> {
         self.operation.as_ref().map(|r| r.result)

@@ -28,8 +28,15 @@ impl TaskPoller for PersistentStoreReconciler {
             let dirty_snapshots = specs
                 .reconcile_dirty_volume_snapshots(context.registry())
                 .await;
+            let dirty_nodes = specs.reconcile_dirty_nodes(context.registry()).await;
 
-            if dirty_nexuses || dirty_replicas || dirty_volumes || dirty_pools || dirty_snapshots {
+            if dirty_nexuses
+                || dirty_replicas
+                || dirty_volumes
+                || dirty_pools
+                || dirty_snapshots
+                || dirty_nodes
+            {
                 return PollResult::Ok(PollerState::Busy);
             }
         }

@@ -188,6 +188,32 @@ impl From<ReplyError> for RestError<RestJsonError> {
                     RestJsonError::new(details, message, Kind::PoolPurgeSnapshotLossAcceptRequired);
                 (StatusCode::PRECONDITION_FAILED, error)
             }
+            ReplyErrorKind::NodeIsOnline => {
+                let error = RestJsonError::new(details, message, Kind::NodeIsOnline);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
+            ReplyErrorKind::NodeNotCordoned => {
+                let error = RestJsonError::new(details, message, Kind::NodeNotCordoned);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
+            ReplyErrorKind::NodeHasResources => {
+                let error = RestJsonError::new(details, message, Kind::NodeHasResources);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
+            ReplyErrorKind::NodePurgeAcceptRequired => {
+                let error = RestJsonError::new(details, message, Kind::NodePurgeAcceptRequired);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
+            ReplyErrorKind::NodePurgeVolumeLossAcceptRequired => {
+                let error =
+                    RestJsonError::new(details, message, Kind::NodePurgeVolumeLossAcceptRequired);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
+            ReplyErrorKind::NodePurgeSnapshotLossAcceptRequired => {
+                let error =
+                    RestJsonError::new(details, message, Kind::NodePurgeSnapshotLossAcceptRequired);
+                (StatusCode::PRECONDITION_FAILED, error)
+            }
         };
 
         RestError::new(status, error)
