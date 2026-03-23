@@ -1,9 +1,8 @@
 use std::{collections::HashMap, time::SystemTime};
 use stor_port::types::v0::{
     transport,
-    transport::{NexusId, RebuildHistory},
+    transport::{ImportPool, NexusId, PoolDiskError, RebuildHistory},
 };
-
 /// Re-export creation types.
 pub(crate) use transport::{CreateNexusSnapReplDescr, CreateNexusSnapshot};
 
@@ -92,4 +91,42 @@ pub(crate) struct DestroySnapRebuild {
     /// The uuid of the particular rebuild to destroy, which is also the uuid of the replica
     /// which is being rebuilt.
     pub(crate) uuid: transport::ReplicaId,
+}
+
+/// Probe pool disks for errors.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ProbePoolRequest {
+    /// A request like [`ImportPool`].
+    pub(crate) import: ImportPool,
+}
+impl From<ImportPool> for ProbePoolRequest {
+    fn from(import: ImportPool) -> Self {
+        Self { import }
+    }
+}
+
+/// Probe pool disks for errors.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ProbePoolResponse {
+    /// Specified probes found no issues.
+    pub(crate) success: bool,
+    pub(crate) unimpl: bool,
+    /// All the probe errors (per disk).
+    pub(crate) errors: HashMap<String, ProbeDiskInfo>,
+}
+impl ProbePoolResponse {
+    /// The target io-engine does not implement this api.
+    pub(crate) fn new_unimpl() -> Self {
+        Self {
+            unimpl: true,
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ProbeDiskInfo {
+    /// Any errors found by the probe.
+    #[allow(unused)]
+    pub(crate) error: Vec<PoolDiskError>,
 }

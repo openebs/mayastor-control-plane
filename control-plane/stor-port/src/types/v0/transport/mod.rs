@@ -199,6 +199,7 @@ pub enum MessageIdVs {
     /// List app nodes.
     ListAppNodes,
     ClearPoolErrors,
+    ProbePool,
 }
 
 impl From<MessageIdVs> for MessageId {

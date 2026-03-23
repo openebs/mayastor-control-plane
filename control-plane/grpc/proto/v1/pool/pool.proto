@@ -42,6 +42,17 @@ enum ProbeErrorCode {
   ImportDisabled = 10;
   // Import/Create has timed out.
   TimeOut = 11;
+  // If the Disk is already claimed by something.
+  // This may happen if the disk is used by another pool for example.
+  DiskClaimed = 12;
+  // PCI driver not supported.
+  PCIDriverUnsupported = 13;
+  // PCI still bound to kernel nvme driver.
+  PCIKernelBound = 14;
+  // PCI BDF exists but it's not an NVMe device.
+  PCINotNvme = 15;
+  // The disk URI is invalid or not supported.
+  InvalidDiskUri = 16;
 }
 message ProbeError {
   ProbeErrorCode code = 1;

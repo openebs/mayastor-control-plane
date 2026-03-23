@@ -95,6 +95,17 @@ pub enum PoolErrorCode {
     ImportDisabled,
     /// gRPC to the pool timed out.
     TimeOut,
+    // If the Disk is already claimed by something.
+    // This may happen if the disk is used by another pool for example.
+    DiskClaimed,
+    // PCI driver not supported.
+    PciDriverUnsupported,
+    // PCI still bound to kernel nvme driver.
+    PciKernelBound,
+    // PCI BDF exists but it's not an NVMe device.
+    PciNotNvme,
+    // The disk URI is invalid or not supported.
+    InvalidDiskUri,
     /// Pool deleted under the Custom Resource.
     PoolDeleted,
     /// Control-Plane service is unreachable.
@@ -621,6 +632,13 @@ impl From<openapi::models::PoolProbeErrorCode> for PoolErrorCode {
             openapi::models::PoolProbeErrorCode::NodeIsOffline => PoolErrorCode::NodeIsOffline,
             openapi::models::PoolProbeErrorCode::ImportDisabled => PoolErrorCode::ImportDisabled,
             openapi::models::PoolProbeErrorCode::TimeOut => PoolErrorCode::TimeOut,
+            openapi::models::PoolProbeErrorCode::DiskClaimed => PoolErrorCode::DiskClaimed,
+            openapi::models::PoolProbeErrorCode::PciDriverUnsupported => {
+                PoolErrorCode::PciDriverUnsupported
+            }
+            openapi::models::PoolProbeErrorCode::PciKernelBound => PoolErrorCode::PciKernelBound,
+            openapi::models::PoolProbeErrorCode::PciNotNvme => PoolErrorCode::PciNotNvme,
+            openapi::models::PoolProbeErrorCode::InvalidDiskUri => PoolErrorCode::InvalidDiskUri,
         }
     }
 }

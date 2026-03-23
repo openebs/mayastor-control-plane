@@ -420,6 +420,11 @@ impl From<PoolErrorCode> for pool::ProbeErrorCode {
             PoolErrorCode::NodeIsOffline => Self::NodeIsOffline,
             PoolErrorCode::ImportDisabled => Self::ImportDisabled,
             PoolErrorCode::TimeOut => Self::TimeOut,
+            PoolErrorCode::DiskClaimed => Self::DiskClaimed,
+            PoolErrorCode::PCIDriverUnsupported => Self::PciDriverUnsupported,
+            PoolErrorCode::PCIKernelBound => Self::PciKernelBound,
+            PoolErrorCode::PCINotNvme => Self::PciNotNvme,
+            PoolErrorCode::InvalidDiskUri => Self::InvalidDiskUri,
         }
     }
 }
@@ -454,6 +459,11 @@ impl From<pool::ProbeErrorCode> for PoolErrorCode {
             pool::ProbeErrorCode::NodeIsOffline => Self::NodeIsOffline,
             pool::ProbeErrorCode::ImportDisabled => Self::ImportDisabled,
             pool::ProbeErrorCode::TimeOut => Self::TimeOut,
+            pool::ProbeErrorCode::DiskClaimed => Self::DiskClaimed,
+            pool::ProbeErrorCode::PciDriverUnsupported => Self::PCIDriverUnsupported,
+            pool::ProbeErrorCode::PciKernelBound => Self::PCIKernelBound,
+            pool::ProbeErrorCode::PciNotNvme => Self::PCINotNvme,
+            pool::ProbeErrorCode::InvalidDiskUri => Self::InvalidDiskUri,
         }
     }
 }
