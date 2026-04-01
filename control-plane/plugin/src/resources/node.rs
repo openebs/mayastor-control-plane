@@ -777,6 +777,11 @@ pub struct DeleteNodeArgs {
     #[arg(long)]
     purge: bool,
 
+    /// Show what would happen if this node is purged, without actually deleting.
+    /// Displays node status, cordon state, per-pool replica counts, and affected volumes.
+    #[arg(long)]
+    pub show_impact: bool,
+
     /// Accept both volume loss and snapshot loss.
     /// Shorthand for --accept-volume-loss --accept-snapshot-loss.
     #[arg(long)]
@@ -798,6 +803,11 @@ impl Delete for Node {
     type ID = DeleteNodeArgs;
 
     async fn del(id: &Self::ID, _ignore_not_found: bool, output: &OutputFormat) -> PluginResult {
+        // If --show-impact is set, show purge impact analysis and return without deleting.
+        if id.show_impact {
+            return Node::show_impact_analysis(&id.node_id, output).await;
+        }
+
         // --accept-data-loss is shorthand for both volume and snapshot loss.
         let accept_volume_loss = id.accept_volume_loss || id.accept_data_loss;
         let accept_snapshot_loss = id.accept_snapshot_loss || id.accept_data_loss;
@@ -873,5 +883,194 @@ impl CreateRow for models::NodeDeleteResult {
         );
 
         row![self.node_id, volume_loss, snapshot_loss]
+    }
+}
+
+/// Per-pool impact detail within a node purge.
+#[derive(Serialize, Debug, Clone)]
+pub struct PoolImpact {
+    /// The pool being analyzed.
+    pub pool_id: String,
+    /// Current runtime status of the pool.
+    pub status: models::PoolStatus,
+    /// Number of replicas residing on this pool.
+    pub replica_count: usize,
+    /// Volumes affected by purging this pool.
+    pub affected_volumes: Vec<super::VolumeId>,
+}
+
+/// Impact analysis for a node purge operation.
+///
+/// Shown when using `--show-impact` to preview what would happen before
+/// actually purging the node and all its pools.
+#[derive(Serialize, Debug, Clone)]
+pub struct NodePurgeImpact {
+    /// The node being analyzed.
+    pub node_id: NodeId,
+    /// Deemed status of the node (Online, Offline, Unknown).
+    pub status: models::NodeStatus,
+    /// Whether the node is cordoned.
+    pub cordoned: bool,
+    /// Per-pool impact breakdown.
+    pub pools: Vec<PoolImpact>,
+    /// Total number of replicas across all pools on this node.
+    pub total_replicas: usize,
+    /// Total unique volumes affected across all pools.
+    pub total_affected_volumes: usize,
+    /// Whether the node meets all preconditions for purge:
+    /// node is offline and cordoned.
+    pub ready_for_purge: bool,
+}
+
+impl GetHeaderRow for NodePurgeImpact {
+    fn get_header_row(&self) -> Row {
+        row![
+            "NODE",
+            "STATUS",
+            "CORDONED",
+            "POOLS",
+            "TOTAL_REPLICAS",
+            "AFFECTED_VOLUMES",
+            "READY",
+        ]
+    }
+}
+
+impl CreateRow for NodePurgeImpact {
+    fn row(&self) -> Row {
+        row![
+            self.node_id,
+            self.status,
+            self.cordoned,
+            self.pools.len(),
+            self.total_replicas,
+            self.total_affected_volumes,
+            self.ready_for_purge,
+        ]
+    }
+}
+
+impl GetHeaderRow for PoolImpact {
+    fn get_header_row(&self) -> Row {
+        row!["POOL", "STATUS", "REPLICAS", "AFFECTED_VOLUMES"]
+    }
+}
+
+impl CreateRow for PoolImpact {
+    fn row(&self) -> Row {
+        row![
+            self.pool_id,
+            self.status,
+            self.replica_count,
+            optional_cell((!self.affected_volumes.is_empty()).then(|| {
+                self.affected_volumes
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })),
+        ]
+    }
+}
+
+impl Node {
+    /// Show what would happen if this node is purged.
+    async fn show_impact_analysis(node_id: &NodeId, output: &OutputFormat) -> PluginResult {
+        // Get node info.
+        let node = match RestClient::client().nodes_api().get_node(node_id).await {
+            Ok(n) => n.into_body(),
+            Err(e) => {
+                return Err(Error::GetNodeError {
+                    id: node_id.to_string(),
+                    source: e,
+                });
+            }
+        };
+
+        let status = node.status.unwrap_or(models::NodeStatus::Unknown);
+        let cordoned = node
+            .spec
+            .as_ref()
+            .and_then(|s| s.cordondrainstate.as_ref())
+            .is_some();
+
+        // Get pools on this node.
+        let node_pools = RestClient::client()
+            .pools_api()
+            .get_node_pools(node_id)
+            .await
+            .map(|r| r.into_body())
+            .unwrap_or_default();
+
+        // Get all volumes for cross-referencing replica topology.
+        let volumes = RestClient::client()
+            .volumes_api()
+            .get_volumes(0, None, None)
+            .await
+            .map(|r| r.into_body().entries)
+            .unwrap_or_default();
+
+        let mut pool_impacts = Vec::new();
+        let mut all_affected_volumes: std::collections::HashSet<super::VolumeId> =
+            std::collections::HashSet::new();
+        let mut total_replicas = 0usize;
+
+        for pool in &node_pools {
+            let pool_id = pool.spec.as_ref().map(|s| s.id.clone()).unwrap_or_default();
+
+            let pool_status = pool
+                .state
+                .as_ref()
+                .map(|s| s.status)
+                .unwrap_or(models::PoolStatus::Unknown);
+
+            let mut replica_count = 0usize;
+            let mut affected_volumes: Vec<super::VolumeId> = Vec::new();
+
+            for volume in &volumes {
+                for topo in volume.state.replica_topology.values() {
+                    if topo.pool.as_deref() == Some(pool_id.as_str()) {
+                        replica_count += 1;
+                        if !affected_volumes.contains(&volume.spec.uuid) {
+                            affected_volumes.push(volume.spec.uuid);
+                        }
+                        all_affected_volumes.insert(volume.spec.uuid);
+                    }
+                }
+            }
+
+            total_replicas += replica_count;
+
+            pool_impacts.push(PoolImpact {
+                pool_id,
+                status: pool_status,
+                replica_count,
+                affected_volumes,
+            });
+        }
+
+        let ready_for_purge = status == models::NodeStatus::Offline && cordoned;
+
+        let impact = NodePurgeImpact {
+            node_id: node_id.clone(),
+            status,
+            cordoned,
+            pools: pool_impacts.clone(),
+            total_replicas,
+            total_affected_volumes: all_affected_volumes.len(),
+            ready_for_purge,
+        };
+
+        // Print node-level summary.
+        print_table(output, impact);
+
+        // Print per-pool breakdown if there are pools.
+        if !pool_impacts.is_empty() {
+            println!();
+            println!("Per-pool breakdown:");
+            print_table(output, pool_impacts);
+        }
+
+        Ok(())
     }
 }
