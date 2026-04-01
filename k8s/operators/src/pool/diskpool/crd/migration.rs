@@ -1,8 +1,6 @@
 use super::{
-    v1alpha1::DiskPool as AlphaDiskPool,
-    v1beta1::DiskPool as Beta1DiskPool,
-    v1beta2::DiskPool as Beta2DiskPool,
-    v1beta3::{DiskPool, DiskPoolSpec},
+    v1alpha1::DiskPool as AlphaDiskPool, v1beta1::DiskPool as Beta1DiskPool,
+    v1beta2::DiskPool as Beta2DiskPool, v1beta3::DiskPool,
 };
 use crate::{
     diskpool::client::{discard_older_schema, dsp_api, list_existing_cr},
@@ -115,62 +113,44 @@ pub(crate) async fn migrate_to_latest(
     ns: &str,
     pagination_limit: u32,
 ) -> Result<(), Error> {
-    if let Ok(mut existing_pools) = list_existing_cr(&k8s, ns, pagination_limit).await {
-        for dsp in existing_pools.iter_mut() {
-            if let Some(res_ver) = dsp.resource_version() {
-                let name = dsp.name_any();
-                let node = dsp.spec.node();
-                let disk = dsp.spec.disks();
-                let topology = dsp.spec.topology();
-                replace_with_latest(
-                    &k8s,
-                    &name,
-                    ns,
-                    Some(res_ver.clone()),
-                    DiskPoolSpec::new(node, disk, topology, None, None, None),
-                )
-                .await?;
-                info!(dsp.name = ?dsp.name_any(), "DiskPool CR migration successful");
-            } else {
-                return Err(Error::CrdFieldMissing {
-                    name: dsp.name_any(),
-                    field: "resource_version".to_string(),
-                });
-            }
-        }
-    } else {
-        return Err(Error::Generic {
+    let pools = list_existing_cr(&k8s, ns, pagination_limit)
+        .await
+        .map_err(|_| Error::Generic {
             message: "Error in listing existing CR".to_string(),
-        });
-    };
+        })?;
+    for dsp in pools {
+        replace_with_latest(&k8s, ns, dsp).await?;
+    }
     Ok(())
 }
 
 /// Replaces a given disk pool CR with the latest schema CR.
 pub(crate) async fn replace_with_latest(
     client: &Client,
-    cr_name: &str,
     namespace: &str,
-    res_ver: Option<String>,
-    spec: DiskPoolSpec,
+    dsp: DiskPool,
 ) -> Result<(), Error> {
     let post_params = PostParams::default();
     let api = dsp_api(client, namespace);
     let latest_api = ApiVersion::Latest;
+    let name = dsp.name_any();
 
-    let mut new_disk_pool: DiskPool = DiskPool::new(cr_name, spec);
-    new_disk_pool.metadata.resource_version = res_ver;
+    let new_disk_pool: DiskPool = DiskPool {
+        metadata: dsp.metadata,
+        spec: dsp.spec,
+        status: dsp.status,
+    };
 
     info!(
-        pool.cr_name = cr_name,
+        pool.cr_name = name,
         "Patching existing pool with {latest_api} schema"
     );
-    match api.replace(cr_name, &post_params, &new_disk_pool).await {
+    match api.replace(&name, &post_params, &new_disk_pool).await {
         Ok(_) => Ok(()),
         Err(error) => {
             error!(
                 ?error,
-                pool.cr_name = cr_name,
+                pool.cr_name = name,
                 "Failed to patch pool with {latest_api} schema"
             );
             Err(error.into())

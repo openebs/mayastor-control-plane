@@ -1323,7 +1323,10 @@ fn grpc_to_reply_error(error: SvcError) -> ReplyError {
             ReplyError {
                 kind,
                 resource,
-                source: "SvcError::GrpcRequestError".to_string(),
+                source: format!(
+                    "SvcError :: GrpcRequestError: {request}: {}",
+                    source.message()
+                ),
                 extra,
             }
         }
