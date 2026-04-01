@@ -8,9 +8,7 @@ use snafu::Snafu;
 pub enum Error {
     #[snafu(display("Kubernetes client error: {}", source))]
     /// k8s client error
-    Kube {
-        source: kube::Error,
-    },
+    Kube { source: kube::Error },
     #[snafu(display("HTTP request error: {}", source))]
     Request {
         source: clients::tower::RequestError,
@@ -20,21 +18,13 @@ pub enum Error {
         source: clients::tower::ResponseError<RestJsonError>,
     },
     #[snafu(display("Invalid cr field : {}", field))]
-    InvalidCRField {
-        field: String,
-    },
-    Generic {
-        message: String,
-    },
+    InvalidCRField { field: String },
+    #[snafu(display("{}", message))]
+    Generic { message: String },
     #[snafu(display("CRD merge failed"))]
-    CrdMergeError {
-        source: MergeError,
-    },
+    CrdMergeError { source: MergeError },
     #[snafu(display("{} for CRD : {}", field, name))]
-    CrdFieldMissing {
-        name: String,
-        field: String,
-    },
+    CrdFieldMissing { name: String, field: String },
 }
 
 impl From<clients::tower::Error<RestJsonError>> for Error {
