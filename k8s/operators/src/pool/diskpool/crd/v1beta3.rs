@@ -353,6 +353,7 @@ pub(crate) enum DspCondition {
 }
 
 impl DiskPoolStatus {
+    #[cfg(feature = "openapi")]
     fn inferred_status(pool: &Pool) -> PoolStatus {
         if let Some(ref diag) = pool.diag {
             return diag.status.into();
