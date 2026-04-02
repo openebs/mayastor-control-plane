@@ -166,21 +166,25 @@ fn parse_delete_opts_value(input: &str) -> Result<Option<DeletePoolBody>, Error>
 
 /// Guidance for the user when a pool delete fails with a recoverable error.
 struct PurgeGuidance {
-    /// Short, bounded message for K8s events (cause + remediation command).
-    /// Must not include variable-length data like volume/snapshot lists.
+    /// Short, bounded message for K8s events: just the error cause,
+    /// no newlines, no remediation commands, no variable-length data.
     event: String,
-    /// Full message for operator logs, may include unbounded details such
-    /// as affected volume and snapshot lists from the REST error body.
+    /// Detailed message and remediation for operator logs.
     log: PurgeGuidanceLog,
 }
 
+/// Log-side content for purge error guidance.
 struct PurgeGuidanceLog {
+    /// Human-readable error cause, may include variable-length details
+    /// such as affected volume and snapshot lists from the REST error body.
     msg: String,
+    /// Suggested kubectl command to fix the issue, emitted as a
+    /// structured tracing field for visibility.
     example_command: Option<String>,
 }
 
 /// Return user-facing guidance when a pool delete fails with a recoverable
-/// error that the user can fix by cordoning or updating the annotation.
+/// error that the user can fix by updating the annotation.
 ///
 /// Returns `None` for errors that are not actionable (transient failures,
 /// internal errors, etc.) — those are logged by the normal error path.
@@ -190,24 +194,9 @@ fn purge_error_guidance(
     error: &clients::tower::Error<models::RestJsonError>,
 ) -> Option<PurgeGuidance> {
     // Compile-time validated event message formatter.
-    //
-    // Asserts at compile time that the format template, with pool_name and ns
-    // each at their maximum K8s name length (63 chars), fits within the K8s
-    // event message size limit. The literal length already includes placeholder
-    // syntax (e.g. `{pool_name}` = 11 chars, `{ns}` = 4 chars), so adding
-    // 2 × MAX_K8S_NAME_LEN is a safe overestimate. Any template that would
-    // overflow with max-length names will fail the build.
+    // Asserts that the literal fits within the K8s event message size limit.
+    // Event messages are static strings (no pool_name/ns interpolation).
     macro_rules! event_msg {
-        ($fmt:literal, pool_name = $pn:expr, ns = $ns:expr) => {{
-            // Maximum length of a Kubernetes resource name (RFC 1123 DNS label).
-            #[allow(dead_code)]
-            const MAX_K8S_NAME_LEN: usize = 63;
-            const _: () = assert!(
-                $fmt.len() + 2 * MAX_K8S_NAME_LEN <= MAX_EVENT_MESSAGE_BYTES,
-                "event message template may exceed K8s event size limit with max-length names"
-            );
-            format!($fmt, pool_name = $pn, ns = $ns)
-        }};
         ($fmt:literal) => {{
             const _: () = assert!(
                 $fmt.len() <= MAX_EVENT_MESSAGE_BYTES,
@@ -253,11 +242,11 @@ fn purge_error_guidance(
         Kind::PoolNotPurgeable => {
             let event = event_msg!(
                 "Cannot purge: pool state is known (Online/Degraded/Faulted/Suspected). \
-                 Purge is only allowed when pool state is Unknown or Offline. \
+                 Purge requires Unknown or Offline state. \
                  Remove the delete options annotation to use normal deletion."
             );
             let msg = "Cannot purge: pool state is known (Online/Degraded/Faulted/Suspected). \
-                 Purge is only allowed when pool state is Unknown or Offline. \
+                 Purge requires Unknown or Offline state. \
                  Remove the annotation to use normal deletion:\n"
                 .to_string();
             let example_command = Some(format!(
@@ -278,12 +267,11 @@ fn purge_error_guidance(
                  — this will be retried."
             );
             let msg = event.clone();
-            let example_command = None;
             Some(PurgeGuidance {
                 event,
                 log: PurgeGuidanceLog {
                     msg,
-                    example_command,
+                    example_command: None,
                 },
             })
         }
@@ -294,12 +282,11 @@ fn purge_error_guidance(
                  cordoned the pool automatically — this will be retried."
             );
             let msg = event.clone();
-            let example_command = None;
             Some(PurgeGuidance {
                 event,
                 log: PurgeGuidanceLog {
                     msg,
-                    example_command,
+                    example_command: None,
                 },
             })
         }
@@ -402,7 +389,9 @@ const MAX_EVENT_MESSAGE_BYTES: usize = 1024;
 /// If truncated, appends "..." to indicate the message was cut.
 ///
 /// Applied inside `k8s_notify` as a runtime safety net for dynamic messages.
-/// Handwritten guidance templates are validated at compile time via `event_msg!`.
+/// Handwritten guidance event templates are validated at compile time via
+/// `event_msg!`. This function catches dynamic messages (e.g. the fallback
+/// `"Pool deletion failed: {error}"`) that could exceed the limit.
 fn truncate_for_event(msg: &str) -> String {
     if msg.len() <= MAX_EVENT_MESSAGE_BYTES {
         return msg.to_string();
@@ -753,7 +742,7 @@ impl ResourceContext {
         let finalizer_name = utils::constants::dsp_finalizer();
         let current = self.metadata.finalizers.as_deref().unwrap_or_default();
         if !current.contains(&finalizer_name) {
-            return Ok(Action::await_change());
+            return Ok(Action::requeue(Duration::from_secs(300)));
         }
         let remaining: Vec<&String> = current.iter().filter(|f| **f != finalizer_name).collect();
         let patch = Patch::Merge(json!({
@@ -780,7 +769,7 @@ impl ResourceContext {
             }
             Err(source) => return Err(Error::Kube { source }),
         }
-        Ok(Action::await_change())
+        Ok(Action::requeue(Duration::from_secs(300)))
     }
 
     /// Patch the resource state to creating.
@@ -1025,10 +1014,11 @@ impl ResourceContext {
     ///   removes the pool spec from etcd without contacting the io-engine, for
     ///   offline/faulted pools. Returns 200 with impact details on success.
     ///
-    /// On 409/503 errors that the user can fix by updating the annotation or
-    /// cordoning the pool, a K8s event is emitted with instructions on how to
-    /// proceed. The error is still propagated so the operator retries on the
-    /// next reconcile.
+    /// On errors, a K8s event is emitted. For actionable purge errors the event
+    /// contains just the cause; remediation details (example annotation and
+    /// kubectl command) are emitted as structured tracing fields in the operator
+    /// logs. The error is still propagated so the operator retries on the next
+    /// reconcile.
     #[tracing::instrument(fields(name = self.name_any(), status = ?self.status), skip(self, delete_body))]
     async fn delete_pool(&self, delete_body: Option<DeletePoolBody>) -> Result<Action, Error> {
         let is_purge = delete_body.as_ref().and_then(|b| b.purge).unwrap_or(false);
@@ -1266,6 +1256,7 @@ impl ResourceContext {
     ///     reason for the transition into the object's current status.
     /// message:
     ///     A human-readable description of the status of this operation.
+    ///     Truncated to `MAX_EVENT_MESSAGE_BYTES` if too long.
     /// type_:
     ///     Type of this event (Normal, Warning), new types could be added in
     ///     the future
@@ -1311,7 +1302,7 @@ impl ResourceContext {
             .inspect_err(|error| error!(?error, "Failed to create event"));
     }
 
-    /// Callback hooks for the finalizers
+    /// Callback hooks for the finalizers.
     pub(crate) async fn finalizer(&self) -> Result<Action, Error> {
         let _ = finalizer(
             &self.api(),
@@ -1333,6 +1324,8 @@ impl ResourceContext {
                         // error: the user intended purge, and silently falling back to
                         // normal deletion could fail (503 for offline pool) or destroy
                         // data the user wanted to preserve via the accept flags.
+                        // A K8s event is emitted so the user can see the error via
+                        // `kubectl describe`.
                         let delete_body = match Self::parse_delete_opts(&dsp) {
                             Ok(body) => body,
                             Err(e) => {
@@ -1340,7 +1333,7 @@ impl ResourceContext {
                                     "Invalid {DELETE_OPTS_ANNOTATION} annotation: {e}. \
                                      Fix the annotation to proceed with deletion."
                                 );
-                                error!(pool = %self.name_any(), "{msg}");
+                                error!(pool.name = %self.name_any(), "{msg}");
                                 self.k8s_notify("Destroy", "InvalidDeleteOpts", &msg, "Warning")
                                     .await;
                                 return Err(e);
