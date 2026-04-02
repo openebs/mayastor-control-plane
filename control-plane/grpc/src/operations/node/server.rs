@@ -5,9 +5,9 @@ use crate::{
         cordon_node_reply, drain_node_reply, get_nodes_reply, label_node_reply,
         node_grpc_server::{NodeGrpc, NodeGrpcServer},
         uncordon_node_reply, unlabel_node_reply, CordonNodeReply, CordonNodeRequest,
-        DrainNodeReply, DrainNodeRequest, GetNodesReply, GetNodesRequest, LabelNodeReply,
-        LabelNodeRequest, ProbeRequest, ProbeResponse, UncordonNodeReply, UncordonNodeRequest,
-        UnlabelNodeReply, UnlabelNodeRequest,
+        DeleteNodeReply, DeleteNodeRequest, DrainNodeReply, DrainNodeRequest, GetNodesReply,
+        GetNodesRequest, LabelNodeReply, LabelNodeRequest, ProbeRequest, ProbeResponse,
+        UncordonNodeReply, UncordonNodeRequest, UnlabelNodeReply, UnlabelNodeRequest,
     },
     operations::node::traits::NodeOperations,
 };
@@ -160,5 +160,12 @@ impl NodeGrpc for NodeServer {
                 reply: Some(unlabel_node_reply::Reply::Error(err.into())),
             })),
         }
+    }
+
+    async fn delete_node(
+        &self,
+        _request: tonic::Request<DeleteNodeRequest>,
+    ) -> Result<tonic::Response<DeleteNodeReply>, tonic::Status> {
+        Err(tonic::Status::unimplemented("Not yet implemented"))
     }
 }

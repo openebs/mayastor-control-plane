@@ -82,6 +82,12 @@ enum ReplyErrorKind {
   PoolPurgeAcceptRequired = 40;
   PoolPurgeVolumeLossAcceptRequired = 41;
   PoolPurgeSnapshotLossAcceptRequired = 42;
+  NodeIsOnline = 43;
+  NodeNotCordoned = 44;
+  NodeHasResources = 45;
+  NodePurgeAcceptRequired = 46;
+  NodePurgeVolumeLossAcceptRequired = 47;
+  NodePurgeSnapshotLossAcceptRequired = 48;
 }
 
 // ResourceKind for the resource which has undergone this error

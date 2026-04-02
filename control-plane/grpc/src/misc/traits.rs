@@ -117,6 +117,16 @@ impl From<ReplyErrorKind> for common::ReplyErrorKind {
             ReplyErrorKind::PoolPurgeSnapshotLossAcceptRequired => {
                 Self::PoolPurgeSnapshotLossAcceptRequired
             }
+            ReplyErrorKind::NodeIsOnline => Self::NodeIsOnline,
+            ReplyErrorKind::NodeNotCordoned => Self::NodeNotCordoned,
+            ReplyErrorKind::NodeHasResources => Self::NodeHasResources,
+            ReplyErrorKind::NodePurgeAcceptRequired => Self::NodePurgeAcceptRequired,
+            ReplyErrorKind::NodePurgeVolumeLossAcceptRequired => {
+                Self::NodePurgeVolumeLossAcceptRequired
+            }
+            ReplyErrorKind::NodePurgeSnapshotLossAcceptRequired => {
+                Self::NodePurgeSnapshotLossAcceptRequired
+            }
         }
     }
 }
@@ -170,6 +180,16 @@ impl From<common::ReplyErrorKind> for ReplyErrorKind {
             }
             common::ReplyErrorKind::PoolPurgeSnapshotLossAcceptRequired => {
                 Self::PoolPurgeSnapshotLossAcceptRequired
+            }
+            common::ReplyErrorKind::NodeIsOnline => Self::NodeIsOnline,
+            common::ReplyErrorKind::NodeNotCordoned => Self::NodeNotCordoned,
+            common::ReplyErrorKind::NodeHasResources => Self::NodeHasResources,
+            common::ReplyErrorKind::NodePurgeAcceptRequired => Self::NodePurgeAcceptRequired,
+            common::ReplyErrorKind::NodePurgeVolumeLossAcceptRequired => {
+                Self::NodePurgeVolumeLossAcceptRequired
+            }
+            common::ReplyErrorKind::NodePurgeSnapshotLossAcceptRequired => {
+                Self::NodePurgeSnapshotLossAcceptRequired
             }
         }
     }

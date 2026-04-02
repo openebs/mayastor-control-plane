@@ -16,7 +16,7 @@ use stor_port::{
         v0::{BlockDevices, Nodes},
         ReplyError, ResourceKind, TimeoutOptions,
     },
-    types::v0::transport::{Filter, MessageIdVs, Node, NodeId},
+    types::v0::transport::{DestroyNode, Filter, MessageIdVs, Node, NodeDeleteResult, NodeId},
 };
 use tonic::transport::Uri;
 
@@ -177,6 +177,19 @@ impl NodeOperations for NodeClient {
                 unlabel_node_reply::Reply::Node(node) => Ok(Node::try_from(node)?),
                 unlabel_node_reply::Reply::Error(err) => Err(err.into()),
             },
+            None => Err(ReplyError::invalid_response(ResourceKind::Node)),
+        }
+    }
+
+    #[tracing::instrument(name = "NodeClient::delete", level = "debug", skip(self), err)]
+    async fn delete(&self, request: &DestroyNode) -> Result<NodeDeleteResult, ReplyError> {
+        let req = crate::node::DeleteNodeRequest::from(request.clone());
+        let response = self.client().delete_node(req).await?.into_inner();
+        match response.reply {
+            Some(crate::node::delete_node_reply::Reply::Result(result)) => {
+                Ok(NodeDeleteResult::try_from(result)?)
+            }
+            Some(crate::node::delete_node_reply::Reply::Error(err)) => Err(err.into()),
             None => Err(ReplyError::invalid_response(ResourceKind::Node)),
         }
     }

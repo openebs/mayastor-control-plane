@@ -10,7 +10,8 @@ use crate::controller::{
 };
 use agents::errors::SvcError;
 use stor_port::types::v0::transport::{
-    Deregister, Filter, Node, NodeId, NodeState, NodeStatus, Register,
+    Deregister, DestroyNode, Filter, Node, NodeDeleteResult, NodeId, NodeState, NodeStatus,
+    Register,
 };
 
 use crate::controller::{io_engine::HostApi, wrapper::InternalOps};
@@ -152,6 +153,11 @@ impl NodeOperations for Service {
         }
         let node = self.unlabel(id, label_key).await?;
         Ok(node)
+    }
+
+    /// Delete a node and all its resources (purge).
+    async fn delete(&self, _request: &DestroyNode) -> Result<NodeDeleteResult, ReplyError> {
+        Err(ReplyError::unimplemented("Not implemented".into()))
     }
 }
 
