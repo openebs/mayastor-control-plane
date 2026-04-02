@@ -201,7 +201,13 @@ impl From<ReplyError> for tonic::Status {
             | ReplyErrorKind::PoolCordonInsufficient
             | ReplyErrorKind::PoolPurgeAcceptRequired
             | ReplyErrorKind::PoolPurgeVolumeLossAcceptRequired
-            | ReplyErrorKind::PoolPurgeSnapshotLossAcceptRequired => {
+            | ReplyErrorKind::PoolPurgeSnapshotLossAcceptRequired
+            | ReplyErrorKind::NodeIsOnline
+            | ReplyErrorKind::NodeNotCordoned
+            | ReplyErrorKind::NodeHasResources
+            | ReplyErrorKind::NodePurgeAcceptRequired
+            | ReplyErrorKind::NodePurgeVolumeLossAcceptRequired
+            | ReplyErrorKind::NodePurgeSnapshotLossAcceptRequired => {
                 tonic::Status::failed_precondition(error.full_string())
             }
             ReplyErrorKind::FailedPersist => {
@@ -461,6 +467,12 @@ pub enum ReplyErrorKind {
     PoolPurgeAcceptRequired,
     PoolPurgeVolumeLossAcceptRequired,
     PoolPurgeSnapshotLossAcceptRequired,
+    NodeIsOnline,
+    NodeNotCordoned,
+    NodeHasResources,
+    NodePurgeAcceptRequired,
+    NodePurgeVolumeLossAcceptRequired,
+    NodePurgeSnapshotLossAcceptRequired,
 }
 
 impl From<tonic::Code> for ReplyErrorKind {

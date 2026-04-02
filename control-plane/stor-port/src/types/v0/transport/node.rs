@@ -277,6 +277,155 @@ impl From<Register> for NodeState {
     }
 }
 
+/// Destroy Node Request.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DestroyNode {
+    /// Id of the node to delete.
+    pub id: NodeId,
+    /// Purge node and all its resources without contacting io-engine.
+    #[serde(default)]
+    pub purge: bool,
+    /// Accept deletion when node has resources (pools, replicas, nexuses).
+    #[serde(default)]
+    pub accept: bool,
+    /// Accept volume loss (last healthy replica for volumes).
+    #[serde(default)]
+    pub accept_volume_loss: bool,
+    /// Accept snapshot loss (last replica snapshot for snapshots).
+    #[serde(default)]
+    pub accept_snapshot_loss: bool,
+}
+
+impl DestroyNode {
+    /// Create a new DestroyNode request.
+    pub fn new(id: NodeId) -> Self {
+        Self {
+            id,
+            purge: false,
+            accept: false,
+            accept_volume_loss: false,
+            accept_snapshot_loss: false,
+        }
+    }
+
+    /// Create a purge request for the given node.
+    pub fn purge(id: NodeId) -> Self {
+        Self {
+            id,
+            purge: true,
+            accept: false,
+            accept_volume_loss: false,
+            accept_snapshot_loss: false,
+        }
+    }
+
+    /// Set purge option.
+    pub fn with_purge(mut self, purge: bool) -> Self {
+        self.purge = purge;
+        self
+    }
+
+    /// Set accept option.
+    pub fn with_accept(mut self, accept: bool) -> Self {
+        self.accept = accept;
+        self
+    }
+
+    /// Set accept_volume_loss option.
+    pub fn with_accept_volume_loss(mut self, accept_volume_loss: bool) -> Self {
+        self.accept_volume_loss = accept_volume_loss;
+        self
+    }
+
+    /// Set accept_snapshot_loss option.
+    pub fn with_accept_snapshot_loss(mut self, accept_snapshot_loss: bool) -> Self {
+        self.accept_snapshot_loss = accept_snapshot_loss;
+        self
+    }
+}
+
+/// Result of a node purge operation.
+///
+/// Always returned by node delete (purge) operations. The `volume_loss` and `snapshot_loss`
+/// fields are always present — empty lists indicate no loss occurred.
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
+pub struct NodeDeleteResult {
+    /// The deleted node ID.
+    pub node_id: NodeId,
+    /// Information about volumes that lost healthy replicas.
+    pub volume_loss: VolumeLossInfo,
+    /// Information about snapshots that lost replica snapshots.
+    pub snapshot_loss: SnapshotLossInfo,
+}
+
+impl NodeDeleteResult {
+    /// Create a new result for a node purge with no data or snapshot loss.
+    pub fn new(node_id: NodeId) -> Self {
+        Self {
+            node_id,
+            volume_loss: VolumeLossInfo::default(),
+            snapshot_loss: SnapshotLossInfo::default(),
+        }
+    }
+
+    /// Check if any data loss occurred.
+    pub fn has_volume_loss(&self) -> bool {
+        !self.volume_loss.volumes.is_empty()
+    }
+
+    /// Check if any snapshot loss occurred.
+    pub fn has_snapshot_loss(&self) -> bool {
+        !self.snapshot_loss.snapshots.is_empty()
+    }
+
+    /// Merge volume and snapshot loss from a pool delete result.
+    pub fn merge_pool_result(&mut self, pool_result: &super::PoolDeleteResult) {
+        self.volume_loss
+            .volumes
+            .extend(pool_result.volume_loss.volumes.iter().cloned());
+        self.snapshot_loss
+            .snapshots
+            .extend(pool_result.snapshot_loss.snapshots.iter().cloned());
+    }
+}
+
+impl From<NodeDeleteResult> for models::NodeDeleteResult {
+    fn from(src: NodeDeleteResult) -> Self {
+        models::NodeDeleteResult {
+            node_id: src.node_id.to_string(),
+            volume_loss: models::VolumeLossInfo {
+                volumes: src
+                    .volume_loss
+                    .volumes
+                    .into_iter()
+                    .map(|v| models::VolumeLossDetail {
+                        volume_id: v.volume_id.to_string(),
+                        replicas_before: v.replicas_before,
+                        healthy_before: v.healthy_before,
+                        lost_on_pool: v.lost_on_pool,
+                        healthy_after: v.healthy_after,
+                    })
+                    .collect(),
+            },
+            snapshot_loss: models::SnapshotLossInfo {
+                snapshots: src
+                    .snapshot_loss
+                    .snapshots
+                    .into_iter()
+                    .map(|s| models::SnapshotLossDetail {
+                        snapshot_id: s.snapshot_id.to_string(),
+                        replica_snapshots_before: s.replica_snapshots_before,
+                        healthy_before: s.healthy_before,
+                        lost_on_pool: s.lost_on_pool,
+                        healthy_after: s.healthy_after,
+                    })
+                    .collect(),
+            },
+        }
+    }
+}
+
 rpc_impl_string_id!(NodeId, "ID of a node");
 
 impl From<NodeState> for models::NodeState {
