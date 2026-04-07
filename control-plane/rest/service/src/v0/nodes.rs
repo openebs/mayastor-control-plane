@@ -23,6 +23,20 @@ impl apis::actix_server::Nodes for RestApi {
         Ok(result.into())
     }
 
+    async fn delete_node_cordon(
+        Path((id, label)): Path<(String, String)>,
+    ) -> Result<models::Node, RestError<RestJsonError>> {
+        let node = client().uncordon(id.into(), label).await?;
+        Ok(node.into())
+    }
+
+    async fn delete_node_label(
+        Path((id, label_key)): Path<(String, String)>,
+    ) -> Result<models::Node, RestError<RestJsonError>> {
+        let node = client().unlabel(id.into(), label_key).await?;
+        Ok(node.into())
+    }
+
     async fn get_node(Path(id): Path<String>) -> Result<models::Node, RestError<RestJsonError>> {
         let node = node(
             id.clone(),
@@ -59,13 +73,6 @@ impl apis::actix_server::Nodes for RestApi {
         Ok(node.into())
     }
 
-    async fn delete_node_cordon(
-        Path((id, label)): Path<(String, String)>,
-    ) -> Result<models::Node, RestError<RestJsonError>> {
-        let node = client().uncordon(id.into(), label).await?;
-        Ok(node.into())
-    }
-
     async fn put_node_drain(
         Path((id, label)): Path<(String, String)>,
     ) -> Result<models::Node, RestError<RestJsonError>> {
@@ -81,13 +88,6 @@ impl apis::actix_server::Nodes for RestApi {
         let node = client()
             .label(id.into(), [(key, value)].into(), overwrite)
             .await?;
-        Ok(node.into())
-    }
-
-    async fn delete_node_label(
-        Path((id, label_key)): Path<(String, String)>,
-    ) -> Result<models::Node, RestError<RestJsonError>> {
-        let node = client().unlabel(id.into(), label_key).await?;
         Ok(node.into())
     }
 }
