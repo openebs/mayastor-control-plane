@@ -152,6 +152,12 @@ impl ResourceSpecsLocked {
             })
             .collect()
     }
+
+    /// Remove the Node `id` from the spec list.
+    pub(crate) fn remove_node(&self, id: &NodeId) {
+        let mut specs = self.write();
+        specs.nodes.remove(id);
+    }
 }
 
 impl ResourceSpecs {
@@ -175,8 +181,9 @@ impl GuardedOperationsHelper for OperationGuardArc<NodeSpec> {
     type UpdateOp = NodeOperation;
     type Inner = NodeSpec;
 
-    fn remove_spec(&self, _registry: &Registry) {
-        unimplemented!();
+    fn remove_spec(&self, registry: &Registry) {
+        let id = self.lock().id().clone();
+        registry.specs().remove_node(&id);
     }
 }
 
@@ -256,7 +263,7 @@ impl SpecOperationsHelper for NodeSpec {
         unimplemented!();
     }
     fn start_destroy_op(&mut self) {
-        unimplemented!();
+        self.start_op(NodeOperation::Destroy);
     }
 
     fn dirty(&self) -> bool {
@@ -269,10 +276,10 @@ impl SpecOperationsHelper for NodeSpec {
         self.id().to_string()
     }
     fn status(&self) -> SpecStatus<Self::Status> {
-        SpecStatus::Created(())
+        self.status.clone()
     }
-    fn set_status(&mut self, _status: SpecStatus<Self::Status>) {
-        unimplemented!();
+    fn set_status(&mut self, status: SpecStatus<Self::Status>) {
+        self.status = status;
     }
     fn operation_result(&self) -> Option<Option<bool>> {
         self.operation.as_ref().map(|r| r.result)

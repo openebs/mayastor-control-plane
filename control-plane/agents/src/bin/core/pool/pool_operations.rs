@@ -22,8 +22,7 @@ use stor_port::{
         },
         transport::{
             CreatePool, CtrlPoolState, DestroyPool, ExpandPool, Pool, PoolDeleteResult, PoolDiag,
-            PoolDiskError, PoolId, PoolStatus, ReplicaOwners, ReplicaTopology, SnapshotId,
-            SnapshotLossDetail, SnapshotLossInfo, VolumeId, VolumeLossDetail, VolumeLossInfo,
+            PoolDiskError, PoolId, PoolStatus, ReplicaOwners,
         },
     },
 };
@@ -478,7 +477,7 @@ impl OperationGuardArc<PoolSpec> {
             // Node is online - check pool state via ctrl_pool_state
             if let Ok(ctrl_state) = registry.ctrl_pool_state(pool_id).await {
                 if !matches!(ctrl_state.status, PoolStatus::Unknown | PoolStatus::Offline) {
-                    return Err(SvcError::PoolStateNotUnknown {
+                    return Err(SvcError::PoolStateNotOfflineOrUnknown {
                         pool_id: pool_id.clone(),
                         state: ctrl_state.status.clone(),
                     });
@@ -530,116 +529,5 @@ impl OperationGuardArc<PoolSpec> {
             }
         }
         result
-    }
-
-    /// Analyze volume loss impact by examining each affected volume's replica topology.
-    ///
-    /// For each volume that has replicas on the pool being purged, we fetch the
-    /// `Volume` object and use its `replica_topology` to determine how many
-    /// healthy replicas exist before and after the deletion. A replica is
-    /// considered healthy if it is online and marked as fully synced.
-    async fn analyze_volume_loss(
-        registry: &Registry,
-        pool_id: &PoolId,
-        volume_ids: &HashSet<VolumeId>,
-    ) -> Result<Option<VolumeLossInfo>, SvcError> {
-        let mut volumes_with_volume_loss = Vec::new();
-
-        for volume_id in volume_ids {
-            let volume = match registry.volume(volume_id).await {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-            let topology = &volume.state().replica_topology;
-
-            let total_replicas = topology.len() as u32;
-            let healthy_before = topology
-                .values()
-                .filter(|rt| rt.status().online() && rt.healthy() == Some(true))
-                .count() as u32;
-
-            let on_pool = |rt: &&ReplicaTopology| rt.pool().as_ref() == Some(pool_id);
-
-            let replicas_on_pool = topology.values().filter(on_pool).count() as u32;
-            let healthy_lost = topology
-                .values()
-                .filter(on_pool)
-                .filter(|rt| rt.status().online() && rt.healthy() == Some(true))
-                .count() as u32;
-
-            let healthy_after = healthy_before.saturating_sub(healthy_lost);
-
-            if healthy_after == 0 && replicas_on_pool > 0 {
-                volumes_with_volume_loss.push(VolumeLossDetail {
-                    volume_id: volume_id.clone(),
-                    replicas_before: total_replicas,
-                    healthy_before,
-                    lost_on_pool: replicas_on_pool,
-                    healthy_after,
-                });
-            }
-        }
-
-        if volumes_with_volume_loss.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(VolumeLossInfo {
-                volumes: volumes_with_volume_loss,
-            }))
-        }
-    }
-
-    /// Analyze snapshot loss impact for replica snapshots being deleted.
-    ///
-    /// Replica snapshots on the pool being purged are permanently lost. Any
-    /// replica snapshot on a different pool is a surviving copy. If a volume
-    /// snapshot has no surviving copies after the purge, it is reported as lost.
-    fn analyze_snapshot_loss(
-        registry: &Registry,
-        pool_id: &PoolId,
-    ) -> Result<Option<SnapshotLossInfo>, SvcError> {
-        let mut snapshots_with_loss: HashMap<SnapshotId, SnapshotLossDetail> = HashMap::new();
-
-        for vol_snapshot in registry.specs().volume_snapshots_rsc() {
-            let vol_snap = vol_snapshot.lock();
-            let vol_snap_id = vol_snap.spec().uuid().clone();
-
-            let mut total_replica_snaps = 0u32;
-            let mut on_this_pool = 0u32;
-
-            for txn_replicas in vol_snap.metadata().transactions().values() {
-                for rs in txn_replicas {
-                    total_replica_snaps += 1;
-                    if rs.spec().source_id().pool_id() == pool_id {
-                        on_this_pool += 1;
-                    }
-                }
-            }
-
-            if on_this_pool > 0 {
-                let surviving = total_replica_snaps - on_this_pool;
-
-                if surviving == 0 && !snapshots_with_loss.contains_key(&vol_snap_id) {
-                    snapshots_with_loss.insert(
-                        vol_snap_id.clone(),
-                        SnapshotLossDetail {
-                            snapshot_id: vol_snap_id,
-                            replica_snapshots_before: total_replica_snaps,
-                            healthy_before: total_replica_snaps - on_this_pool,
-                            lost_on_pool: on_this_pool,
-                            healthy_after: 0,
-                        },
-                    );
-                }
-            }
-        }
-
-        if snapshots_with_loss.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(SnapshotLossInfo {
-                snapshots: snapshots_with_loss.into_values().collect(),
-            }))
-        }
     }
 }

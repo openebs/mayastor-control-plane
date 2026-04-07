@@ -31,6 +31,7 @@ use itertools::Itertools;
 use regex::Regex;
 use snafu::OptionExt;
 use std::{collections::HashSet, ops::Deref, sync::Arc};
+use stor_port::types::v0::transport::{PoolId, SnapshotLossInfo, VolumeId, VolumeLossInfo};
 use tokio::sync::RwLock;
 
 impl OperationGuardArc<PoolSpec> {
@@ -284,6 +285,28 @@ impl OperationGuardArc<PoolSpec> {
         let pool_spec = registry.specs().pool(self.uid())?;
 
         Ok(Pool::new(pool_spec, Some(CtrlPoolState::new(pool_state))))
+    }
+
+    /// Analyze volume loss impact for a single pool being purged.
+    pub(crate) async fn analyze_volume_loss(
+        registry: &Registry,
+        pool_id: &PoolId,
+        volume_ids: &HashSet<VolumeId>,
+    ) -> Result<Option<VolumeLossInfo>, SvcError> {
+        let pool_ids = HashSet::from([pool_id.clone()]);
+        crate::controller::resources::operations_helper::analyze_volume_loss(
+            registry, &pool_ids, volume_ids,
+        )
+        .await
+    }
+
+    /// Analyze snapshot loss impact for a single pool being purged.
+    pub(crate) fn analyze_snapshot_loss(
+        registry: &Registry,
+        pool_id: &PoolId,
+    ) -> Result<Option<SnapshotLossInfo>, SvcError> {
+        let pool_ids = HashSet::from([pool_id.clone()]);
+        crate::controller::resources::operations_helper::analyze_snapshot_loss(registry, &pool_ids)
     }
 }
 

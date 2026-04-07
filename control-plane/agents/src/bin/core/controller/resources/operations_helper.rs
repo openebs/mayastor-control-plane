@@ -24,7 +24,10 @@ use stor_port::{
             volume::{AffinityGroupSpec, VolumeContentSource, VolumeSpec},
             AsOperationSequencer, OperationMode, SpecStatus, SpecTransaction,
         },
-        transport::{AppNodeId, NexusId, NodeId, PoolId, ReplicaId, SnapshotId, VolumeId},
+        transport::{
+            AppNodeId, NexusId, NodeId, PoolId, ReplicaId, ReplicaTopology, SnapshotId,
+            SnapshotLossDetail, SnapshotLossInfo, VolumeId, VolumeLossDetail, VolumeLossInfo,
+        },
     },
 };
 
@@ -32,7 +35,12 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
-use std::{fmt::Debug, ops::Deref, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    ops::Deref,
+    sync::Arc,
+};
 
 #[derive(Debug, Snafu)]
 #[snafu(context(suffix(false)))]
@@ -1122,4 +1130,115 @@ fn get_affinity_group_specs(volume_specs: &[VolumeSpec]) -> Vec<AffinityGroupSpe
         }
     }
     affinity_group_specs
+}
+
+/// Analyze volume loss impact across one or more pools being purged.
+///
+/// For each volume that has replicas on the given pool(s), fetches the
+/// `Volume` object and uses its `replica_topology` to determine how many
+/// healthy replicas exist before and after the deletion.
+pub(crate) async fn analyze_volume_loss(
+    registry: &Registry,
+    pool_ids: &HashSet<PoolId>,
+    volume_ids: &HashSet<VolumeId>,
+) -> Result<Option<VolumeLossInfo>, SvcError> {
+    let mut volumes_with_volume_loss = Vec::new();
+
+    for volume_id in volume_ids {
+        let volume = match registry.volume(volume_id).await {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let topology = &volume.state().replica_topology;
+
+        let total_replicas = topology.len() as u32;
+        let healthy_before = topology
+            .values()
+            .filter(|rt| rt.status().online() && rt.healthy() == Some(true))
+            .count() as u32;
+
+        let on_pools =
+            |rt: &&ReplicaTopology| rt.pool().as_ref().is_some_and(|p| pool_ids.contains(p));
+
+        let replicas_on_pool = topology.values().filter(on_pools).count() as u32;
+        let healthy_lost = topology
+            .values()
+            .filter(on_pools)
+            .filter(|rt| rt.status().online() && rt.healthy() == Some(true))
+            .count() as u32;
+
+        let healthy_after = healthy_before.saturating_sub(healthy_lost);
+
+        if healthy_after == 0 && replicas_on_pool > 0 {
+            volumes_with_volume_loss.push(VolumeLossDetail {
+                volume_id: volume_id.clone(),
+                replicas_before: total_replicas,
+                healthy_before,
+                lost_on_pool: replicas_on_pool,
+                healthy_after,
+            });
+        }
+    }
+
+    if volumes_with_volume_loss.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(VolumeLossInfo {
+            volumes: volumes_with_volume_loss,
+        }))
+    }
+}
+
+/// Analyze snapshot loss impact across one or more pools being purged.
+///
+/// Replica snapshots on the given pool(s) are permanently lost. Any
+/// replica snapshot on a different pool is a surviving copy. If a volume
+/// snapshot has no surviving copies after the purge, it is reported as lost.
+pub(crate) fn analyze_snapshot_loss(
+    registry: &Registry,
+    pool_ids: &HashSet<PoolId>,
+) -> Result<Option<SnapshotLossInfo>, SvcError> {
+    let mut snapshots_with_loss: HashMap<SnapshotId, SnapshotLossDetail> = HashMap::new();
+
+    for vol_snapshot in registry.specs().volume_snapshots_rsc() {
+        let vol_snap = vol_snapshot.lock();
+        let vol_snap_id = vol_snap.spec().uuid().clone();
+
+        let mut total_replica_snaps = 0u32;
+        let mut on_these_pools = 0u32;
+
+        for txn_replicas in vol_snap.metadata().transactions().values() {
+            for rs in txn_replicas {
+                total_replica_snaps += 1;
+                if pool_ids.contains(rs.spec().source_id().pool_id()) {
+                    on_these_pools += 1;
+                }
+            }
+        }
+
+        if on_these_pools > 0 {
+            let surviving = total_replica_snaps - on_these_pools;
+
+            if surviving == 0 && !snapshots_with_loss.contains_key(&vol_snap_id) {
+                snapshots_with_loss.insert(
+                    vol_snap_id.clone(),
+                    SnapshotLossDetail {
+                        snapshot_id: vol_snap_id,
+                        replica_snapshots_before: total_replica_snaps,
+                        healthy_before: total_replica_snaps - on_these_pools,
+                        lost_on_pool: on_these_pools,
+                        healthy_after: 0,
+                    },
+                );
+            }
+        }
+    }
+
+    if snapshots_with_loss.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(SnapshotLossInfo {
+            snapshots: snapshots_with_loss.into_values().collect(),
+        }))
+    }
 }
