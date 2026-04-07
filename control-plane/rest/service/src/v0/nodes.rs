@@ -1,7 +1,6 @@
 use super::*;
 use grpc::operations::node::traits::NodeOperations;
-// use rest_client::versions::v0::models::NodeDeleteResult;
-// use stor_port::types::v0::transport::DestroyNode;
+use stor_port::types::v0::transport::DestroyNode;
 
 fn client() -> impl NodeOperations {
     core_grpc().node()
@@ -10,19 +9,32 @@ fn client() -> impl NodeOperations {
 #[async_trait::async_trait]
 impl apis::actix_server::Nodes for RestApi {
     async fn del_node(
-        Path(_id): Path<String>,
+        Path(id): Path<String>,
         Body(body): Body<Option<models::DeleteNodeBody>>,
     ) -> Result<models::NodeDeleteResult, RestError<RestJsonError>> {
-        let _body = body.unwrap_or_default();
-        // let request = DestroyNode::new(id.into())
-        //     .with_purge(body.purge.unwrap_or(false))
-        //     .with_accept(body.accept.unwrap_or(false))
-        //     .with_accept_volume_loss(body.accept_volume_loss.unwrap_or(false))
-        //     .with_accept_snapshot_loss(body.accept_snapshot_loss.unwrap_or(false));
+        let body = body.unwrap_or_default();
+        let request = DestroyNode::new(id.into())
+            .with_purge(body.purge.unwrap_or(false))
+            .with_accept(body.accept.unwrap_or(false))
+            .with_accept_volume_loss(body.accept_volume_loss.unwrap_or(false))
+            .with_accept_snapshot_loss(body.accept_snapshot_loss.unwrap_or(false));
 
-        // let result = client().delete(&request).await?;
-        // Ok(result.into())
-        Ok(models::NodeDeleteResult::default())
+        let result = client().delete(&request).await?;
+        Ok(result.into())
+    }
+
+    async fn delete_node_cordon(
+        Path((id, label)): Path<(String, String)>,
+    ) -> Result<models::Node, RestError<RestJsonError>> {
+        let node = client().uncordon(id.into(), label).await?;
+        Ok(node.into())
+    }
+
+    async fn delete_node_label(
+        Path((id, label_key)): Path<(String, String)>,
+    ) -> Result<models::Node, RestError<RestJsonError>> {
+        let node = client().unlabel(id.into(), label_key).await?;
+        Ok(node.into())
     }
 
     async fn get_node(Path(id): Path<String>) -> Result<models::Node, RestError<RestJsonError>> {
@@ -61,13 +73,6 @@ impl apis::actix_server::Nodes for RestApi {
         Ok(node.into())
     }
 
-    async fn delete_node_cordon(
-        Path((id, label)): Path<(String, String)>,
-    ) -> Result<models::Node, RestError<RestJsonError>> {
-        let node = client().uncordon(id.into(), label).await?;
-        Ok(node.into())
-    }
-
     async fn put_node_drain(
         Path((id, label)): Path<(String, String)>,
     ) -> Result<models::Node, RestError<RestJsonError>> {
@@ -83,13 +88,6 @@ impl apis::actix_server::Nodes for RestApi {
         let node = client()
             .label(id.into(), [(key, value)].into(), overwrite)
             .await?;
-        Ok(node.into())
-    }
-
-    async fn delete_node_label(
-        Path((id, label_key)): Path<(String, String)>,
-    ) -> Result<models::Node, RestError<RestJsonError>> {
-        let node = client().unlabel(id.into(), label_key).await?;
         Ok(node.into())
     }
 }
