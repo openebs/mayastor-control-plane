@@ -1,3 +1,4 @@
+use super::RECONCILE_TIMEOUT_SECS;
 use crate::volume::helpers::wait_node_online;
 use deployer_cluster::{Cluster, ClusterBuilder, FindVolumeRequest};
 use grpc::operations::{
@@ -676,29 +677,43 @@ async fn snapshot_upgrade() {
         .expect_err("No rebuild on older version!");
     assert_eq!(error.kind, ReplyErrorKind::FailedPrecondition);
 
+    // Replace node 0 with its idle replacement (registers under same CP node ID).
+    // replace_node waits for Offline, ensuring the old process releases hugepages.
     cluster
         .replace_node(cluster.node(0), cluster.node(2))
         .await
         .unwrap();
     cluster.wait_pool_online(cluster.pool(0, 0)).await.unwrap();
+
+    // Replace node 1.
     cluster
         .replace_node(cluster.node(1), cluster.node(3))
         .await
         .unwrap();
     cluster.wait_pool_online(cluster.pool(1, 0)).await.unwrap();
 
-    tokio::time::sleep(gc_period * 5).await;
-
-    let _volume = vol_cli
-        .set_replica(
-            &SetVolumeReplica {
-                uuid: volume_1.uuid().clone(),
-                replicas: 2,
-            },
-            None,
-        )
-        .await
-        .expect("After upgrade this should work!");
+    // Wait for set_replica to succeed — the reconciler needs time to process
+    // the node upgrades and rebuild volume state after replacement.
+    let timeout = Duration::from_secs(RECONCILE_TIMEOUT_SECS);
+    let start = std::time::Instant::now();
+    let _volume = loop {
+        match vol_cli
+            .set_replica(
+                &SetVolumeReplica {
+                    uuid: volume_1.uuid().clone(),
+                    replicas: 2,
+                },
+                None,
+            )
+            .await
+        {
+            Ok(v) => break v,
+            Err(_) if std::time::Instant::now() < start + timeout => {
+                tokio::time::sleep(Duration::from_millis(250)).await;
+            }
+            Err(e) => panic!("set_replica should succeed after upgrade: {e}"),
+        }
+    };
 
     vol_cli
         .create_snapshot(
