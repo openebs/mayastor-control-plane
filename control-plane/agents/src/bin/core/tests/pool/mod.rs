@@ -925,6 +925,8 @@ async fn reconciler_missing_pool_state() {
     let error = pool_diag.import_errors.first().unwrap();
     assert_eq!(error.error.code, PoolErrorCode::InvalidSuperBlock);
 
+    cluster.composer().kill(maya.as_str()).await.unwrap();
+
     // move original disk back and now import should succeed!
     drop(new_disk);
     disk.rename(POOL_FILE_NAME).unwrap();
