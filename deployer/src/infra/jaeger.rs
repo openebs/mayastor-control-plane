@@ -47,6 +47,7 @@ impl ComponentAction for Jaeger {
                 }
             }
             .with_portmap("4317", "4317")
+            .with_env("GOMAXPROCS", "2")
             .with_env("COLLECTOR_OTLP_ENABLED", "true");
 
             if cfg.container_exists("elastic") {
