@@ -96,6 +96,7 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
                         }],
                         status: PoolStatus::Unknown,
                         error: Some(error),
+                        ..Default::default()
                     });
                 }
             }
@@ -318,9 +319,9 @@ impl OperationGuardArc<PoolSpec> {
                         tonic::Code::Cancelled | tonic::Code::Aborted => {
                             if let Some(error) = Self::pool_import_error(&error) {
                                 self.lock().metadata.runtime.diag = Some(PoolDiag {
-                                    import_errors: vec![],
                                     status: PoolStatus::Unknown,
                                     error: Some(error),
+                                    ..Default::default()
                                 });
                             }
                             Err(error)

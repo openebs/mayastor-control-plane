@@ -315,6 +315,15 @@ impl PoolSpec {
             None => false,
         }
     }
+
+    /// May retry the pool import.
+    /// Otherwise, try again next time.
+    pub fn can_retry_import(&self) -> bool {
+        let Some(diag) = &self.metadata.runtime.diag else {
+            return true;
+        };
+        diag.import.retriable()
+    }
 }
 
 impl From<&PoolSpec> for ImportPool {

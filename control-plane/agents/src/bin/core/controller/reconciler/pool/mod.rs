@@ -145,6 +145,10 @@ async fn missing_pool_state_reconciler(
             Ok(Ok(node)) => node,
         };
 
+        if !pool.as_ref().can_retry_import() {
+            return PollResult::Ok(PollerState::Idle);
+        }
+
         if !pool.probe(&pool_spec, &node).await? {
             // if probing fails, there's no point in trying to import
             return PollResult::Ok(PollerState::Idle);

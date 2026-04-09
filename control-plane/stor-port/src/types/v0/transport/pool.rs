@@ -1,7 +1,9 @@
 use super::*;
 
 use crate::{
-    types::v0::store::pool::{Encryption, EncryptionSecret, PoolLabel, PoolSpec, PoolUSpec},
+    types::v0::store::pool::{
+        Encryption, EncryptionSecret, PoolLabel, PoolRuntimeMetadata, PoolSpec, PoolUSpec,
+    },
     IntoOption,
 };
 use serde::{Deserialize, Serialize};
@@ -155,6 +157,9 @@ pub struct PoolDiskError {
 pub struct PoolDiag {
     /// Errors encountered when trying to import the pool.
     pub import_errors: Vec<PoolDiskError>,
+    /// Information about import timings.
+    #[serde(skip)]
+    pub import: ImportBackoff,
     /// Inferred error of the pool, if any.
     #[serde(skip)]
     pub error: Option<PoolError>,
@@ -168,6 +173,46 @@ impl PoolDiag {
         Self {
             status: state.status.clone(),
             ..self
+        }
+    }
+}
+
+/// Pool import backoff.
+/// Used to avoid thrashing the logs.
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct ImportBackoff {
+    pub retries: u64,
+    pub next_retry: Option<std::time::SystemTime>,
+}
+impl ImportBackoff {
+    /// We may retry the import at this time.
+    pub fn retriable(&self) -> bool {
+        let Some(next_retry) = &self.next_retry else {
+            return true;
+        };
+        next_retry <= &std::time::SystemTime::now()
+    }
+    /// Create a new ImportBackoff.
+    pub fn new(old: &PoolRuntimeMetadata, gc_period: std::time::Duration) -> Self {
+        const MAX_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
+        let retries = match &old.diag {
+            Some(diag) => diag.import.retries + 1,
+            None => 0,
+        };
+
+        let cooldown = if retries < 5 {
+            gc_period
+        } else if retries < 10 {
+            gc_period * retries as u32
+        } else {
+            gc_period * 10 * (retries - 9) as u32
+        }
+        .min(MAX_COOLDOWN);
+
+        Self {
+            retries,
+            next_retry: std::time::SystemTime::now().checked_add(cooldown),
         }
     }
 }

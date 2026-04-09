@@ -476,6 +476,7 @@ impl From<pool::PoolDiag> for PoolDiag {
         Self {
             status: diag.status().into(),
             error: diag.error.into_opt(),
+            import: Default::default(),
             import_errors: diag.import_errors.into_iter().map(import_error).collect(),
         }
     }
