@@ -20,9 +20,9 @@ use stor_port::{
             replica::{PoolRef, ReplicaSpec},
         },
         transport::{
-            CreatePool, CtrlPoolState, DestroyReplica, GetBlockDevices, ImportPool, NodeId,
-            NodeStatus, Pool, PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode,
-            PoolState, PoolStatus, ReplicaOwners,
+            CreatePool, CtrlPoolState, DestroyReplica, GetBlockDevices, ImportBackoff, ImportPool,
+            NodeId, NodeStatus, Pool, PoolDeviceUri, PoolDiag, PoolDiskError, PoolError,
+            PoolErrorCode, PoolState, PoolStatus, ReplicaOwners,
         },
     },
 };
@@ -114,9 +114,9 @@ impl OperationGuardArc<PoolSpec> {
         let mut pool = self.lock();
         let Some(ref mut diag) = &mut pool.metadata.runtime.diag else {
             pool.metadata.runtime.diag = Some(PoolDiag {
-                import_errors: vec![],
                 error: Some(error),
                 status,
+                ..Default::default()
             });
             return;
         };
@@ -227,6 +227,7 @@ impl OperationGuardArc<PoolSpec> {
                     }],
                     status: PoolStatus::Offline,
                     error: Some(error),
+                    import: ImportBackoff::new(&spec.metadata.runtime, registry.reconcile_period()),
                 });
             }
         }

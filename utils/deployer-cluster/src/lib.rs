@@ -273,15 +273,19 @@ impl Cluster {
         let start = std::time::Instant::now();
         let mut seen_status = None;
         loop {
-            let node = node_cli
+            let result = node_cli
                 .get(Filter::Node(node_id.clone()), true, None)
-                .await
-                .expect("To get node object");
-            if let Some(node) = node.0.first() {
-                if node.state().map(|n| &n.status) == Some(&status) {
-                    return Ok(());
+                .await;
+            match result {
+                Ok(nodes) => {
+                    if let Some(node) = nodes.0.first() {
+                        if node.state().map(|n| &n.status) == Some(&status) {
+                            return Ok(());
+                        }
+                        seen_status = node.state().map(|n| n.status);
+                    }
                 }
-                seen_status = node.state().map(|n| n.status);
+                Err(error) => tracing::error!(%error, "Failed to fetch node"),
             }
             if std::time::Instant::now() > (start + timeout) {
                 break;
