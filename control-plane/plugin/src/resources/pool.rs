@@ -341,7 +341,7 @@ impl GetWithArgs for Pool {
 #[derive(Debug, Clone, clap::Args)]
 pub struct DeletePoolArgs {
     /// Id of the pool to delete.
-    pool_id: PoolId,
+    pub pool_id: PoolId,
 
     /// Purge pool without contacting io-engine.{n}
     /// Use this when the pool's node is offline or the pool state is Unknown.

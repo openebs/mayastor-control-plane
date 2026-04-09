@@ -379,7 +379,9 @@ impl DiskPoolStatus {
 
         state.status.into()
     }
-    fn combine_alert_error(mut self) -> Self {
+
+    /// Consolidate alerts into one single error message.
+    pub fn combine_alert_error(mut self) -> Self {
         let Some(error_info) = self.error_info.as_ref() else {
             return self;
         };
