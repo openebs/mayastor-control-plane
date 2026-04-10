@@ -1,3 +1,5 @@
+mod purge;
+
 use deployer_cluster::ClusterBuilder;
 use grpc::operations::node::traits::NodeOperations;
 use std::time::Duration;
