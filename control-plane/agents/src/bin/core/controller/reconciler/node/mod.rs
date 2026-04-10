@@ -1,12 +1,17 @@
 mod nexus;
+mod purge;
 mod snapshot;
 
 use crate::controller::{
-    reconciler::node::{nexus::NodeNexusReconciler, snapshot::NodeSnapshotGarbageCollector},
+    reconciler::node::{
+        nexus::NodeNexusReconciler, purge::NodePurgeReconciler,
+        snapshot::NodeSnapshotGarbageCollector,
+    },
     task_poller::{PollContext, PollPeriods, PollResult, PollTimer, TaskPoller},
 };
 
-/// Node reconciler loop which moves nexuses from draining nodes.
+/// Node reconciler loop which moves nexuses from draining nodes
+/// and resumes interrupted node purge operations.
 #[derive(Debug)]
 pub(crate) struct NodeReconciler {
     counter: PollTimer,
@@ -20,6 +25,7 @@ impl NodeReconciler {
             poll_targets: vec![
                 Box::new(NodeNexusReconciler::new()),
                 Box::new(NodeSnapshotGarbageCollector::new()),
+                Box::new(NodePurgeReconciler::new()),
             ],
         }
     }
