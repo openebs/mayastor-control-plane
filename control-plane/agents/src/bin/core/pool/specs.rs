@@ -526,4 +526,16 @@ impl ResourceSpecsLocked {
             }),
         }
     }
+
+    /// Get an operation guard for the given pool, if it exists.
+    /// Returns `None` if the pool spec is not found (instead of an error).
+    pub(crate) async fn pool_guard(
+        &self,
+        pool_id: &PoolId,
+    ) -> Result<Option<OperationGuardArc<PoolSpec>>, SvcError> {
+        Ok(match self.pool_rsc(pool_id) {
+            None => None,
+            Some(pool) => Some(pool.operation_guard_wait().await?),
+        })
+    }
 }

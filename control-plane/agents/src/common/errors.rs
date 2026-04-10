@@ -450,12 +450,12 @@ pub enum SvcError {
     #[snafu(display("Pool {name} underlying disk rescan failed"))]
     DiskRescanFailed { name: PoolId },
     #[snafu(display(
-        "Cannot purge pool {pool_id}: pool state is {state}, purge only allowed when state is Unknown",
+        "Cannot purge pool {pool_id}: pool state is {state}, purge only allowed when state is Offline or Unknown",
     ))]
-    PoolStateNotUnknown { pool_id: PoolId, state: PoolStatus },
+    PoolStateNotOfflineOrUnknown { pool_id: PoolId, state: PoolStatus },
 
     #[snafu(display(
-        "Cannot purge pool {pool_id}: pool must be cordoned with --replicas --snapshots flags first",
+        "Cannot purge pool {pool_id}: pool must be cordoned for replicas and snapshots first",
     ))]
     PoolNotCordonedForPurge { pool_id: PoolId },
 
@@ -465,7 +465,7 @@ pub enum SvcError {
     PoolCordonInsufficientForPurge { pool_id: PoolId },
 
     #[snafu(display(
-        "Cannot purge pool {pool_id}: pool has {replica_count} replica(s), use --yes to proceed",
+        "Cannot purge pool {pool_id}: pool has {replica_count} replica(s), accept=true required",
     ))]
     PoolPurgeAcceptRequired {
         pool_id: PoolId,
@@ -473,7 +473,7 @@ pub enum SvcError {
     },
 
     #[snafu(display(
-        "Cannot purge pool {pool_id}: {volume_count} volume(s) would lose their last healthy replica, use --accept-volume-loss to proceed",
+        "Cannot purge pool {pool_id}: {volume_count} volume(s) would lose their last healthy replica, accept_volume_loss=true required",
     ))]
     PoolPurgeVolumeLossAcceptRequired {
         pool_id: PoolId,
@@ -482,10 +482,46 @@ pub enum SvcError {
     },
 
     #[snafu(display(
-        "Cannot purge pool {pool_id}: {snapshot_count} snapshot(s) would lose their last replica snapshot, use --accept-snapshot-loss to proceed",
+        "Cannot purge pool {pool_id}: {snapshot_count} snapshot(s) would lose their last replica snapshot, accept_snapshot_loss=true required",
     ))]
     PoolPurgeSnapshotLossAcceptRequired {
         pool_id: PoolId,
+        snapshot_count: usize,
+        snapshot_loss: SnapshotLossInfo,
+    },
+
+    #[snafu(display("Cannot delete node {node_id}: node is online"))]
+    NodeIsOnline { node_id: NodeId },
+
+    #[snafu(display("Cannot delete node {node_id}: node must be cordoned first"))]
+    NodeNotCordoned { node_id: NodeId },
+
+    #[snafu(display(
+        "Cannot delete node {node_id}: node has resources. purge=true required to delete all resources"
+    ))]
+    NodeHasResources { node_id: NodeId },
+
+    #[snafu(display(
+        "Cannot delete node {node_id}: node has {pool_count} pool(s), accept=true required"
+    ))]
+    NodePurgeAcceptRequired { node_id: NodeId, pool_count: usize },
+
+    #[snafu(display(
+        "Cannot delete node {node_id}: {volume_count} volume(s) across {pool_count} pool(s) would lose their last healthy replica, accept_volume_loss=true required"
+    ))]
+    NodePurgeVolumeLossAcceptRequired {
+        node_id: NodeId,
+        pool_count: usize,
+        volume_count: usize,
+        volume_loss: VolumeLossInfo,
+    },
+
+    #[snafu(display(
+        "Cannot delete node {node_id}: {snapshot_count} snapshot(s) across {pool_count} pool(s) would lose their last replica snapshot, accept_snapshot_loss=true required"
+    ))]
+    NodePurgeSnapshotLossAcceptRequired {
+        node_id: NodeId,
+        pool_count: usize,
         snapshot_count: usize,
         snapshot_loss: SnapshotLossInfo,
     },
@@ -1252,7 +1288,7 @@ impl From<SvcError> for ReplyError {
                 source,
                 extra,
             },
-            SvcError::PoolStateNotUnknown { .. } => ReplyError {
+            SvcError::PoolStateNotOfflineOrUnknown { .. } => ReplyError {
                 kind: ReplyErrorKind::PoolNotPurgeable,
                 resource: ResourceKind::Pool,
                 source,
@@ -1285,6 +1321,42 @@ impl From<SvcError> for ReplyError {
             SvcError::PoolPurgeSnapshotLossAcceptRequired { .. } => ReplyError {
                 kind: ReplyErrorKind::PoolPurgeSnapshotLossAcceptRequired,
                 resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::NodeIsOnline { .. } => ReplyError {
+                kind: ReplyErrorKind::NodeIsOnline,
+                resource: ResourceKind::Node,
+                source,
+                extra,
+            },
+            SvcError::NodeNotCordoned { .. } => ReplyError {
+                kind: ReplyErrorKind::NodeNotCordoned,
+                resource: ResourceKind::Node,
+                source,
+                extra,
+            },
+            SvcError::NodeHasResources { .. } => ReplyError {
+                kind: ReplyErrorKind::NodeHasResources,
+                resource: ResourceKind::Node,
+                source,
+                extra,
+            },
+            SvcError::NodePurgeAcceptRequired { .. } => ReplyError {
+                kind: ReplyErrorKind::NodePurgeAcceptRequired,
+                resource: ResourceKind::Node,
+                source,
+                extra,
+            },
+            SvcError::NodePurgeVolumeLossAcceptRequired { .. } => ReplyError {
+                kind: ReplyErrorKind::NodePurgeVolumeLossAcceptRequired,
+                resource: ResourceKind::Node,
+                source,
+                extra,
+            },
+            SvcError::NodePurgeSnapshotLossAcceptRequired { .. } => ReplyError {
+                kind: ReplyErrorKind::NodePurgeSnapshotLossAcceptRequired,
+                resource: ResourceKind::Node,
                 source,
                 extra,
             },
