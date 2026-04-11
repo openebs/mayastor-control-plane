@@ -137,6 +137,28 @@ impl ResourceSpecsLocked {
             .collect()
     }
 
+    /// Worker that reconciles dirty NodeSpec's with the persistent store.
+    /// This is useful when node operations are performed but we fail to
+    /// update the spec with the persistent store.
+    pub(crate) async fn reconcile_dirty_nodes(&self, registry: &Registry) -> bool {
+        let mut pending_ops = false;
+
+        let nodes = self.nodes_rsc();
+        for node in nodes {
+            // Skip nodes with no pending operation to avoid unnecessary guard
+            // acquisition. This keeps the reconciler low-cost for healthy nodes.
+            if !node.lock().has_pending_op() {
+                continue;
+            }
+            if let Ok(mut guard) = node.operation_guard() {
+                if !guard.handle_incomplete_ops(registry).await {
+                    pending_ops = true;
+                }
+            }
+        }
+        pending_ops
+    }
+
     /// Get all cordoned nodes.
     pub(crate) fn cordoned_nodes(&self) -> Vec<NodeSpec> {
         self.read()
