@@ -32,3 +32,5 @@ __pycache__
 /ci-report/
 pytest.log
 /bundle
+/deployer/misc/rwx-vm/nixos.qcow2
+/deployer/misc/rwx-vm/result
