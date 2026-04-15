@@ -69,14 +69,22 @@ pub fn timeout_grpc(op_id: MessageId, timeout_opts: TimeoutOptions) -> Duration 
                 MessageIdVs::DestroyReplicaSnapshot => min_timeouts.replica_snapshot(),
 
                 MessageIdVs::CreatePool => min_timeouts.pool(),
-                MessageIdVs::ImportPool => min_timeouts.pool() * 3,
+                MessageIdVs::ImportPool => min_timeouts.pool_import(),
                 MessageIdVs::DestroyPool => min_timeouts.pool(),
 
                 MessageIdVs::ReplacePathInfo => min_timeouts.nvme_reconnect(),
                 _ => base,
             },
         };
-        let timeout = Duration::max(base, op_timeout).min(Duration::from_secs(59));
+        let timeout = Duration::max(base, op_timeout);
+        // Apply the 59s cap only when the operation's minimum timeout fits within it.
+        // Operations like nvme_reconnect (62s) and explicitly configured pool_import
+        // intentionally exceed this cap and should not be clamped.
+        let timeout = if op_timeout > Duration::from_secs(59) {
+            timeout
+        } else {
+            timeout.min(Duration::from_secs(59))
+        };
         match timeout_opts.client() {
             // the rest server should have some slack to allow for the CoreAgent to timeout first.
             ClientId::RestServer => timeout + Duration::from_secs(1),
@@ -208,5 +216,61 @@ impl<C: Clone> Client<C> {
     /// Returns a new client.
     pub(crate) fn client(&self) -> C {
         self.client.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use stor_port::transport_api::RequestMinTimeout;
+
+    fn opts_with_base(secs: u64) -> TimeoutOptions {
+        TimeoutOptions::new()
+            .with_req_timeout(Duration::from_secs(secs))
+            .with_min_req_timeout(Some(RequestMinTimeout::default()))
+    }
+
+    #[test]
+    fn import_pool_default_timeout_not_capped() {
+        let opts = opts_with_base(5);
+        let timeout = timeout_grpc(MessageId::v0(MessageIdVs::ImportPool), opts);
+        // Default: pool(20s) * 3 = 60s, not capped because op_timeout > 59s
+        assert_eq!(timeout, Duration::from_secs(60));
+    }
+
+    #[test]
+    fn create_pool_timeout_is_capped() {
+        // base=120s exceeds pool(20s), but 120s is capped at 59s
+        let opts = opts_with_base(120);
+        let timeout = timeout_grpc(MessageId::v0(MessageIdVs::CreatePool), opts);
+        assert_eq!(timeout, Duration::from_secs(59));
+    }
+
+    #[test]
+    fn nvme_reconnect_not_capped() {
+        // nvme_reconnect default is 62s, which should NOT be capped at 59s
+        let opts = opts_with_base(5);
+        let timeout = timeout_grpc(MessageId::v0(MessageIdVs::ReplacePathInfo), opts);
+        assert_eq!(timeout, Duration::from_secs(62));
+    }
+
+    #[test]
+    fn import_pool_explicit_timeout_not_capped() {
+        let min = RequestMinTimeout::default()
+            .with_pool_import_timeout(Duration::from_secs(300));
+        let opts = TimeoutOptions::new()
+            .with_req_timeout(Duration::from_secs(5))
+            .with_min_req_timeout(Some(min));
+        let timeout = timeout_grpc(MessageId::v0(MessageIdVs::ImportPool), opts);
+        assert_eq!(timeout, Duration::from_secs(300));
+    }
+
+    #[test]
+    fn no_min_timeouts_uses_base() {
+        let opts = TimeoutOptions::new()
+            .with_req_timeout(Duration::from_secs(120))
+            .with_min_req_timeout(None);
+        let timeout = timeout_grpc(MessageId::v0(MessageIdVs::ImportPool), opts);
+        assert_eq!(timeout, Duration::from_secs(120));
     }
 }
