@@ -54,6 +54,13 @@ pub(crate) struct CliArgs {
     #[clap(long, default_value = "15m")]
     pub(crate) pool_async_creat_tmo: humantime::Duration,
 
+    /// The gRPC timeout for pool import operations.
+    /// Large pools with many volumes may take longer than the default 60s to
+    /// import after an io-engine restart. Set this to accommodate the expected
+    /// import time for your largest pool.
+    #[clap(long, env = "POOL_IMPORT_TIMEOUT")]
+    pub(crate) pool_import_timeout: Option<humantime::Duration>,
+
     /// Disable partial rebuild for volume targets.
     #[clap(long, env = "DISABLE_PARTIAL_REBUILD")]
     pub(crate) disable_partial_rebuild: bool,

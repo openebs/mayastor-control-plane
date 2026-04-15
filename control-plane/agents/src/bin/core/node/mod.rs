@@ -35,6 +35,8 @@ async fn create_node_service<S>(builder: &Service<S>) -> service::Service {
     let request = CliArgs::args().request_timeout.into();
     let connect = CliArgs::args().connect_timeout.into();
     let no_min = CliArgs::args().no_min_timeouts;
+    let pool_import_timeout = CliArgs::args().pool_import_timeout.map(Into::into);
 
-    service::Service::new(registry.clone(), deadline, request, connect, no_min).await
+    service::Service::new(registry.clone(), deadline, request, connect, no_min, pool_import_timeout)
+        .await
 }
