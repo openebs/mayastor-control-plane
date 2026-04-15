@@ -8,6 +8,7 @@ mod garbage_collection;
 mod helpers;
 mod hotspare;
 mod resize;
+mod rwx;
 mod snapshot;
 mod snapshot_clone;
 mod switchover;
