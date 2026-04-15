@@ -37,3 +37,4 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tower = { workspace = true, features = ["timeout", "util"] }
 events-api = { workspace = true }
 anyhow = { workspace = true }
+nix = { workspace = true }

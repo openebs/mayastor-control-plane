@@ -2,8 +2,7 @@ use crate::infra::{
     async_trait, Builder, ComponentAction, ComposeTest, CsiNode, Error, HaNodeAgent, StartOptions,
 };
 use composer::{Binary, ContainerSpec};
-use std::convert::TryFrom;
-
+use std::str::FromStr;
 use tokio::time::{sleep, Duration};
 use tonic::transport::Endpoint;
 
@@ -51,19 +50,29 @@ impl ComponentAction for HaNodeAgent {
 
     async fn wait_on(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
         // Wait till node-agent's gRPC server is ready to server the request
-        loop {
-            match Endpoint::try_from(format!(
-                "https://{}:11600",
-                cfg.container_ip("agent-ha-node")
-            ))?
+        wait_on(&format!(
+            "https://{}:11600",
+            cfg.container_ip("agent-ha-node")
+        ))
+        .await?;
+
+        wait_on("https://10.1.0.1:11600").await?;
+
+        Ok(())
+    }
+}
+
+async fn wait_on(uri: &str) -> Result<(), Error> {
+    // Wait till node-agent's gRPC server is ready to server the request
+    loop {
+        match Endpoint::from_str(uri)?
             .connect_timeout(Duration::from_millis(100))
             .connect()
             .await
-            {
-                Ok(_) => break,
-                Err(_) => sleep(Duration::from_millis(25)).await,
-            }
+        {
+            Ok(_) => break,
+            Err(_) => sleep(Duration::from_millis(25)).await,
         }
-        Ok(())
     }
+    Ok(())
 }

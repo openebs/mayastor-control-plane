@@ -1002,6 +1002,12 @@ impl ClusterBuilder {
         self.opts = self.opts.with_app_nodes(nodes);
         self
     }
+    /// Run RWX vm for csi-node-2.
+    #[must_use]
+    pub fn with_rwx_vm(mut self, rwx_vm: bool) -> Self {
+        self.opts = self.opts.with_rwx_vm(rwx_vm);
+        self
+    }
     /// Specify whether csi node registration should be enabled.
     #[must_use]
     pub fn with_csi_registration(mut self, opt: bool) -> Self {
