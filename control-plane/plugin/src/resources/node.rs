@@ -1,5 +1,5 @@
 use crate::{
-    operations::{Cordoning, Drain, GetWithArgs, Label, ListWithArgs, PluginResult},
+    operations::{Cordoning, Delete, Drain, GetWithArgs, Label, ListWithArgs, PluginResult},
     resources::{
         error::{Error, LabelAssignSnafu, OpError, TopologyError},
         utils::{
@@ -11,7 +11,7 @@ use crate::{
     rest_wrapper::RestClient,
 };
 use async_trait::async_trait;
-use openapi::{apis::StatusCode, models::CordonDrainState};
+use openapi::{apis::StatusCode, models, models::CordonDrainState};
 use prettytable::{Cell, Row};
 use serde::Serialize;
 use snafu::ResultExt;
@@ -762,5 +762,107 @@ impl Label for Node {
             }
         }
         Ok(())
+    }
+}
+
+/// Arguments for deleting a node.
+#[derive(Debug, Clone, clap::Args)]
+pub struct DeleteNodeArgs {
+    /// Id of the node to delete.
+    pub node_id: NodeId,
+
+    /// Purge node and all its resources without contacting io-engine.{n}
+    /// Use this when the node is permanently offline or decommissioned.
+    /// Requires the node to be offline and cordoned.
+    #[arg(long)]
+    purge: bool,
+
+    /// Show what would happen if this node is purged, without actually deleting.
+    /// Displays node status, cordon state, per-pool replica counts, and affected volumes.
+    #[arg(long)]
+    pub show_impact: bool,
+
+    /// Accept both volume loss and snapshot loss.
+    /// Shorthand for --accept-volume-loss --accept-snapshot-loss.
+    #[arg(long)]
+    accept_data_loss: bool,
+
+    /// Accept volume loss for volumes losing their last healthy replica.
+    /// Required when --purge would cause volume data loss.
+    #[arg(long)]
+    accept_volume_loss: bool,
+
+    /// Accept snapshot loss for snapshots losing their last replica snapshot.
+    /// Required when --purge would cause snapshot loss.
+    #[arg(long)]
+    accept_snapshot_loss: bool,
+}
+
+#[async_trait(?Send)]
+impl Delete for Node {
+    type ID = DeleteNodeArgs;
+
+    async fn del(id: &Self::ID, ignore_not_found: bool, output: &OutputFormat) -> PluginResult {
+        // If --show-impact is set, show purge impact analysis and return without deleting.
+        if id.show_impact {
+            return super::impact::show_node_impact(&id.node_id, output).await;
+        }
+
+        // --accept-data-loss is shorthand for both volume and snapshot loss.
+        let accept_volume_loss = id.accept_volume_loss || id.accept_data_loss;
+        let accept_snapshot_loss = id.accept_snapshot_loss || id.accept_data_loss;
+        let body = openapi::models::DeleteNodeBody {
+            purge: Some(id.purge),
+            // If we've come this far, then the user must have opted yes when they were prompted
+            // to confirm their choice. We use that same yes as a consent for deleting despite
+            // loss of replicas.
+            accept: Some(true),
+            accept_volume_loss: Some(accept_volume_loss),
+            accept_snapshot_loss: Some(accept_snapshot_loss),
+        };
+
+        match RestClient::client()
+            .nodes_api()
+            .del_node(&id.node_id, Some(body))
+            .await
+        {
+            Ok(response) => {
+                utils::print_table(output, response.into_body());
+                Ok(())
+            }
+            Err(source) => {
+                if ignore_not_found && source.status() == Some(StatusCode::NOT_FOUND) {
+                    return Ok(());
+                }
+                match super::error::PurgeReason::from_api_error(&source) {
+                    Some(reason) => Err(Error::Purge { reason }),
+                    None => Err(Error::DeleteNodeError {
+                        id: id.node_id.clone(),
+                        source,
+                    }),
+                }
+            }
+        }
+    }
+}
+
+impl GetHeaderRow for models::NodeDeleteResult {
+    fn get_header_row(&self) -> Row {
+        row!["NODE", "VOLUME-LOSS", "SNAPSHOT-LOSS"]
+    }
+}
+
+impl CreateRow for models::NodeDeleteResult {
+    fn row(&self) -> Row {
+        let volume_loss = optional_cell(
+            (!self.volume_loss.volumes.is_empty())
+                .then(|| format!("{} volume(s)", self.volume_loss.volumes.len())),
+        );
+        let snapshot_loss = optional_cell(
+            (!self.snapshot_loss.snapshots.is_empty())
+                .then(|| format!("{} snapshot(s)", self.snapshot_loss.snapshots.len())),
+        );
+
+        row![self.node_id, volume_loss, snapshot_loss]
     }
 }

@@ -326,6 +326,10 @@ impl ExecuteOperation for DeleteArgs {
                 // --show-impact is read-only, skip confirmation prompt.
                 pool::Pool::del(args, self.ignore_not_found, &cli_args.output).await
             }
+            DeleteResources::Node(args) if args.show_impact => {
+                // --show-impact is read-only, skip confirmation prompt.
+                node::Node::del(args, self.ignore_not_found, &cli_args.output).await
+            }
             _ => {
                 resources::confirm(
                     "Are you sure you want to delete the resource?",
@@ -335,6 +339,9 @@ impl ExecuteOperation for DeleteArgs {
                 match &self.resource {
                     DeleteResources::Pool(args) => {
                         pool::Pool::del(args, self.ignore_not_found, &cli_args.output).await
+                    }
+                    DeleteResources::Node(args) => {
+                        node::Node::del(args, self.ignore_not_found, &cli_args.output).await
                     }
                     DeleteResources::Volume { id } => {
                         volume::Volume::del(id, self.ignore_not_found, &cli_args.output).await
