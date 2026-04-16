@@ -165,6 +165,7 @@ impl TryFrom<pool::PoolState> for PoolState {
         Ok(PoolState {
             node: pool_state.node_id.into(),
             id: pool_state.pool_id.into(),
+            uuid: None,
             disks: pool_state.disks_uri.iter().map(|i| i.into()).collect(),
             status: status.into(),
             capacity: pool_state.capacity,
@@ -587,6 +588,27 @@ pub trait DestroyPoolInfo: Sync + Send + std::fmt::Debug {
     fn accept_volume_loss(&self) -> bool;
     /// Accept snapshot loss (snapshots losing last replica snapshot).
     fn accept_snapshot_loss(&self) -> bool;
+}
+
+impl DestroyPoolInfo for Pool {
+    fn pool_id(&self) -> PoolId {
+        self.id().clone()
+    }
+    fn node_id(&self) -> NodeId {
+        self.node()
+    }
+    fn purge(&self) -> bool {
+        false
+    }
+    fn accept(&self) -> bool {
+        false
+    }
+    fn accept_volume_loss(&self) -> bool {
+        false
+    }
+    fn accept_snapshot_loss(&self) -> bool {
+        false
+    }
 }
 
 impl CreatePoolInfo for CreatePool {

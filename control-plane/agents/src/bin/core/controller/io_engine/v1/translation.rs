@@ -670,6 +670,7 @@ impl IoEngineToAgent for v1::pool::Pool {
         transport::PoolState {
             node: Default::default(),
             id: self.name.clone().into(),
+            uuid: self.uuid.clone().try_into().ok(),
             disks: self.disks.clone().into_vec(),
             capacity: self.capacity,
             used: self.used,

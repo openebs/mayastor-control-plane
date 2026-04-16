@@ -225,6 +225,8 @@ pub struct PoolState {
     pub node: NodeId,
     /// Id of the pool.
     pub id: PoolId,
+    /// Uuid of the pool.
+    pub uuid: Option<PoolUuid>,
     /// Absolute disk paths claimed by the pool.
     pub disks: Vec<PoolDeviceUri>,
     /// Current state of the pool.
