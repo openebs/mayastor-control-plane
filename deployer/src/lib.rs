@@ -116,6 +116,10 @@ pub struct StartOptions {
     #[clap(long, requires = "csi_node")]
     pub app_nodes: Option<u32>,
 
+    /// Deploy a nix-vm running both csi-node-2 and agent-ha-node-2.
+    #[clap(long)]
+    pub rwx_vm: bool,
+
     /// Run csi-node instances on io-engine nodes.
     #[clap(short, long, requires = "csi_node")]
     pub local_nodes: bool,
@@ -487,6 +491,16 @@ impl StartOptions {
     pub fn with_csi(mut self, controller: bool, node: bool) -> Self {
         self.csi_controller = controller;
         self.csi_node = node;
+        self
+    }
+    #[must_use]
+    pub fn with_app_nodes(mut self, nodes: u32) -> Self {
+        self.app_nodes = Some(nodes);
+        self
+    }
+    #[must_use]
+    pub fn with_rwx_vm(mut self, rwx_vm: bool) -> Self {
+        self.rwx_vm = rwx_vm;
         self
     }
     #[must_use]

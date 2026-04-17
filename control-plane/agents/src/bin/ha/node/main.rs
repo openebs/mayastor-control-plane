@@ -54,6 +54,10 @@ struct Cli {
     #[clap(long, default_value_t = DEFAULT_NODE_AGENT_SERVER_PORT)]
     grpc_port: u16,
 
+    /// Reports this endpoint.
+    #[clap(long)]
+    fake_grpc_endpoint: Option<SocketAddr>,
+
     /// Add process service tags to the traces.
     #[clap(short, long, env = "TRACING_TAGS", value_delimiter=',', value_parser = utils::tracing_telemetry::parse_key_value)]
     tracing_tags: Vec<KeyValue>,
@@ -136,6 +140,17 @@ impl Cli {
             std::net::SocketAddr::new(self.grpc_ip, self.grpc_port)
         }
     }
+
+    fn reported_grpc_endpoint(&self) -> SocketAddr {
+        #[allow(deprecated)]
+        if let Some(endpoint) = &self.fake_grpc_endpoint {
+            *endpoint
+        } else if let Some(deprecated_endpoint) = &self.deprecated_grpc_endpoint {
+            *deprecated_endpoint
+        } else {
+            std::net::SocketAddr::new(self.grpc_ip, self.grpc_port)
+        }
+    }
 }
 
 #[tokio::main]
@@ -167,7 +182,10 @@ async fn main() -> anyhow::Result<()> {
 
     if let Err(error) = cluster_agent_client()
         .register(
-            &NodeAgentInfo::new(cli_args.node_name.clone(), cli_args.grpc_endpoint()),
+            &NodeAgentInfo::new(
+                cli_args.node_name.clone(),
+                cli_args.reported_grpc_endpoint(),
+            ),
             None,
         )
         .await

@@ -11,6 +11,7 @@ mod jaeger;
 mod kibana;
 pub mod nats;
 mod rest;
+mod rwx_vm;
 
 use super::StartOptions;
 use async_trait::async_trait;
@@ -441,6 +442,7 @@ impl_component! {
     Dns,            0,
     Etcd,           0,
     FioSpdk,        0,
+    RwxVm,          0,
     Elastic,        1,
     Kibana,         1,
     CoreAgent,      2,

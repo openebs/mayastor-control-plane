@@ -38,6 +38,9 @@ impl ComponentAction for CsiNode {
             }
 
             for i in 0..options.app_nodes() {
+                if Self::vm_node(i, options) {
+                    continue;
+                }
                 cfg = CsiNode::with_app_node(
                     i,
                     cfg,
@@ -63,6 +66,9 @@ impl ComponentAction for CsiNode {
             }
 
             for i in 0..options.app_nodes() {
+                if Self::vm_node(i, options) {
+                    continue;
+                }
                 cfg.start(&Self::container_name(i)).await?;
             }
         }
@@ -85,6 +91,10 @@ impl ComponentAction for CsiNode {
         }
 
         for i in 0..options.app_nodes() {
+            if Self::vm_node(i, options) {
+                CsiNode::wait_node_vm().await?;
+                continue;
+            }
             CsiNode::wait_app_node(i).await?;
         }
 
@@ -143,6 +153,9 @@ impl CsiNode {
             options.csi_node_rest,
             options.io_engine_cores,
         )
+    }
+    fn vm_node(index: u32, option: &StartOptions) -> bool {
+        index == 1 && option.rwx_vm
     }
     fn with_node(
         container_name: &str,
@@ -233,6 +246,34 @@ impl CsiNode {
         let mut client = IdentityClient::new(channel);
 
         // Step 2: Make sure we can perform a successful RPC call.
+        loop {
+            match client
+                .get_plugin_info(GetPluginInfoRequest::default())
+                .await
+            {
+                Ok(_) => break,
+                Err(_) => sleep(Duration::from_millis(25)).await,
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn wait_node_vm() -> Result<(), Error> {
+        // Step 1: Wait till CSI node's gRPC server is registered and is ready
+        // to serve API requests.
+        let endpoint = Endpoint::try_from("http://127.0.0.1:50059")?
+            .connect_timeout(Duration::from_millis(150));
+
+        let channel = loop {
+            match endpoint.connect().await {
+                Ok(channel) => break channel,
+                Err(_) => sleep(Duration::from_millis(25)).await,
+            }
+        };
+
+        // Step 2: Make sure we can perform a successful RPC call.
+        let mut client = IdentityClient::new(channel);
         loop {
             match client
                 .get_plugin_info(GetPluginInfoRequest::default())

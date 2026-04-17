@@ -297,7 +297,7 @@ impl PathFailureDetector {
                     && (subsystem.hostnqn.starts_with(&host_nqn_prefix) || !in_deployer)
                 {
                     // todo: would we ever see non-mayastor subsystems here?
-                    // tracing::trace!(subsystem.hostnqn, "Ignoring subsystem");
+                    tracing::trace!(subsystem.hostnqn, gen_hostnqn, "Ignoring subsystem");
                     continue;
                 }
                 match subsystem.state.as_str() {

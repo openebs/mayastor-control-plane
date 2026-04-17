@@ -26,6 +26,22 @@ cleanup_ws_tmp() {
   return 0
 }
 
+cleanup_rwx_vm() {
+  # The VM disk path relative to workspace
+  local qcow2="$(realpath "$ROOT_DIR/deployer/misc/rwx-vm/nixos.qcow2")"
+
+  pids=$(ps aux | grep qemu-system | grep "file=$qcow2" | grep -v grep | awk '{print $2}')
+  if [ -z "$pids" ]; then
+      echo "No QEMU processes found using $qcow2"
+      return 0
+  fi
+  echo "Found QEMU processes: $pids"
+
+  for pid in $pids; do
+     kill "$pid" || kill -9 "$pid" || :
+  done
+}
+
 $SUDO $(which nvme) disconnect-all
 "$ROOT_DIR"/target/debug/deployer stop
 
@@ -39,3 +55,4 @@ for n in $(docker network ls --filter "label=io.composer.test.name" --format '{{
 done
 
 cleanup_ws_tmp
+cleanup_rwx_vm

@@ -1175,6 +1175,7 @@ dependencies = [
  "grpc",
  "humantime",
  "hyper-util",
+ "nix",
  "paste",
  "reqwest",
  "rpc",

@@ -373,6 +373,21 @@ impl Cluster {
         Ok(CsiNodeClient { csi, internal })
     }
 
+    /// Return a grpc handle to the csi-node plugin via TCP.
+    /// This is useful when unix socket cannot be used directly.
+    pub async fn csi_node_client_tcp(&self) -> Result<CsiNodeClient, Error> {
+        let csi_endpoint = "127.0.0.1";
+        let csi =
+            rpc::csi::node_client::NodeClient::connect(format!("http://{csi_endpoint}:50059"))
+                .await?;
+        let internal = csi_driver::node::internal::node_plugin_client::NodePluginClient::connect(
+            format!("http://{csi_endpoint}:50056"),
+        )
+        .await?;
+
+        Ok(CsiNodeClient { csi, internal })
+    }
+
     /// Return a grpc handle to the csi-controller.
     pub async fn csi_controller_client(&self) -> Result<CsiControllerClient, Error> {
         let endpoint = tonic::transport::Endpoint::try_from("http://[::]")?
@@ -981,6 +996,18 @@ impl ClusterBuilder {
         self.opts = self.opts.with_csi(controller, node);
         self
     }
+    /// Specify which csi components should be enabled.
+    #[must_use]
+    pub fn with_app_nodes(mut self, nodes: u32) -> Self {
+        self.opts = self.opts.with_app_nodes(nodes);
+        self
+    }
+    /// Run RWX vm for csi-node-2.
+    #[must_use]
+    pub fn with_rwx_vm(mut self, rwx_vm: bool) -> Self {
+        self.opts = self.opts.with_rwx_vm(rwx_vm);
+        self
+    }
     /// Specify whether csi node registration should be enabled.
     #[must_use]
     pub fn with_csi_registration(mut self, opt: bool) -> Self {
@@ -1265,14 +1292,33 @@ impl CsiNodeClient {
         volume: &Volume,
         publish_context: HashMap<String, String>,
     ) -> Result<NodeStageVolumeResponse, Error> {
+        let uuid = &volume.spec.uuid;
+        let uri = &volume.state.target.as_ref().unwrap().device_uri;
+        self.node_stage_volume_inner(uuid, uri, publish_context)
+            .await
+    }
+    /// Similar to [`node_stage_volume`] but with the internal volume type.
+    pub async fn node_stage_volume_(
+        &mut self,
+        volume: &transport::Volume,
+        publish_context: HashMap<String, String>,
+    ) -> Result<NodeStageVolumeResponse, Error> {
+        let uuid = volume.uuid();
+        let uri = volume.state().target.unwrap().device_uri;
+        self.node_stage_volume_inner(uuid, uri, publish_context)
+            .await
+    }
+    async fn node_stage_volume_inner(
+        &mut self,
+        uuid: &impl ToString,
+        uri: impl Into<String>,
+        publish_context: HashMap<String, String>,
+    ) -> Result<NodeStageVolumeResponse, Error> {
         let mut context = std::collections::HashMap::new();
-        context.insert(
-            "uri".into(),
-            volume.state.target.as_ref().unwrap().device_uri.to_string(),
-        );
+        context.insert("uri".into(), uri.into());
         context.extend(publish_context);
         let request = rpc::csi::NodeStageVolumeRequest {
-            volume_id: volume.spec.uuid.to_string(),
+            volume_id: uuid.to_string(),
             publish_context: context,
             staging_target_path: "unused".to_string(),
             volume_capability: Some(rpc::csi::VolumeCapability {
@@ -1339,6 +1385,19 @@ impl CsiNodeClient {
         let request = rpc::csi::NodeUnstageVolumeRequest {
             volume_id: volume.spec.uuid.to_string(),
             staging_target_path: format!("/var/tmp/staging/mount/{}", volume.spec.uuid),
+        };
+        let response = self.csi.node_unstage_volume(request).await?;
+        Ok(response.into_inner())
+    }
+    /// Similar to [`node_unstage_volume`] but with the internal volume type.
+    pub async fn node_unstage_volume_(
+        &mut self,
+        volume: &transport::Volume,
+    ) -> Result<NodeUnstageVolumeResponse, Error> {
+        let uuid = volume.uuid();
+        let request = rpc::csi::NodeUnstageVolumeRequest {
+            volume_id: uuid.to_string(),
+            staging_target_path: format!("/var/tmp/staging/mount/{uuid}"),
         };
         let response = self.csi.node_unstage_volume(request).await?;
         Ok(response.into_inner())
