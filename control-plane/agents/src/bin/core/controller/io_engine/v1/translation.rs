@@ -1069,7 +1069,7 @@ impl From<rpc::v1::pool::ProbeDiskInfo> for ProbeDiskInfo {
                     RpcErrorCode::PciNotNvme => PoolErrorCode::PCINotNvme,
                     RpcErrorCode::InvalidDiskUri => PoolErrorCode::InvalidDiskUri,
                 },
-                msg: error.msg.unwrap_or_default(),
+                msg: error.msg,
             },
         });
         Self {

@@ -629,7 +629,7 @@ impl From<openapi::models::PoolProbeError> for PoolError {
     fn from(value: openapi::models::PoolProbeError) -> Self {
         Self {
             code: value.code.into(),
-            message: Some(value.message),
+            message: value.message,
         }
     }
 }

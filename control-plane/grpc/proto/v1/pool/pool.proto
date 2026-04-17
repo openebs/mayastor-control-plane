@@ -57,7 +57,7 @@ enum ProbeErrorCode {
 message ProbeError {
   ProbeErrorCode code = 1;
   // additional as human readable
-  string          msg = 2;
+  optional string msg = 2;
 }
 
 // An IoEngine Storage Pool

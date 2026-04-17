@@ -139,7 +139,7 @@ pub struct PoolError {
     /// Code of the encountered error.
     pub code: PoolErrorCode,
     /// Human-readable message.
-    pub msg: String,
+    pub msg: Option<String>,
 }
 
 /// Pool Disk Errors.

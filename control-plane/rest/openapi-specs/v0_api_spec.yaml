@@ -3514,7 +3514,6 @@ components:
         code:
           $ref: '#/components/schemas/PoolProbeErrorCode'
       required:
-        - message
         - code
     PoolProbeErrorCode:
       description: Pool Disk Probe Errors
