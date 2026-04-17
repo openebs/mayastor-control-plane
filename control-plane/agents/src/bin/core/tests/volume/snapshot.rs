@@ -12,9 +12,9 @@ use stor_port::{
     types::v0::{
         openapi::models,
         transport::{
-            CreateReplica, CreateVolume, DestroyPool, DestroyReplica, DestroyVolume, Filter,
-            PublishVolume, ReplicaId, SetVolumeReplica, SnapshotId, Volume, VolumeShareProtocol,
-            VolumeStatus,
+            CreatePool, CreateReplica, CreateVolume, DestroyPool, DestroyReplica, DestroyVolume,
+            Filter, LabelledTopology, NodeStatus, PoolTopology, PublishVolume, ReplicaId,
+            SetVolumeReplica, SnapshotId, Topology, Volume, VolumeShareProtocol, VolumeStatus,
         },
     },
 };
@@ -426,10 +426,25 @@ async fn unknown_snapshot_garbage_collector() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
         .with_io_engines(1)
-        .with_pools(1)
         .with_cache_period("50ms")
         .with_reconcile_period(Duration::from_millis(50), Duration::from_millis(50))
         .build()
+        .await
+        .unwrap();
+
+    pool_uuid_changed(&cluster).await;
+
+    let pool_cli = cluster.grpc_client().pool();
+    pool_cli
+        .create(
+            &CreatePool {
+                node: cluster.node(0),
+                id: cluster.pool(0, 0),
+                disks: vec!["malloc:///xc?size=100MiB".into()],
+                ..Default::default()
+            },
+            None,
+        )
         .await
         .unwrap();
 
@@ -939,4 +954,116 @@ async fn run_fio_vol_verify(
         node.node_unstage_volume(&volume).await.unwrap();
         code
     })
+}
+
+async fn pool_uuid_changed(cluster: &Cluster) {
+    let pool_cli = cluster.grpc_client().pool();
+    let vol_cli = cluster.grpc_client().volume();
+
+    let pool_disk = "malloc:///xc?size=32MiB";
+    let labels = HashMap::from([("node".into(), "0".into())]);
+    let pool = pool_cli
+        .create(
+            &CreatePool {
+                node: cluster.node(0),
+                id: "pool-uuid-xc".into(),
+                disks: vec![pool_disk.into()],
+                labels: Some(labels.clone()),
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let volume = vol_cli
+        .create(
+            &CreateVolume {
+                uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd7b8".try_into().unwrap(),
+                size: 8 * 1024 * 1024,
+                replicas: 1,
+                thin: true,
+                topology: Some(Topology {
+                    node: None,
+                    pool: Some(PoolTopology::Labelled(LabelledTopology {
+                        inclusion: labels,
+                        ..Default::default()
+                    })),
+                }),
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let replica_snapshot = vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(volume.uuid(), SnapshotId::new()),
+            None,
+        )
+        .await
+        .unwrap();
+
+    tracing::info!("Replica Snapshot: {replica_snapshot:?}");
+
+    // Get snapshot by source id and snapshot id.
+    let snaps = vol_cli
+        .get_snapshots(
+            Filter::VolumeSnapshot(
+                volume.uuid().clone(),
+                replica_snapshot.spec().snap_id.clone(),
+            ),
+            false,
+            None,
+            None,
+        )
+        .await
+        .expect("Error while listing snapshot...");
+
+    tracing::info!("List Snapshot by sourceid and snapid: {snaps:?}");
+
+    // Get snapshot by snapshot id.
+    let snaps = vol_cli
+        .get_snapshots(
+            Filter::Snapshot(replica_snapshot.spec().snap_id.clone()),
+            false,
+            None,
+            None,
+        )
+        .await
+        .expect("Error while listing snapshot...");
+
+    tracing::info!("List Snapshot by snapid: {snaps:?}");
+    assert!(!snaps.entries().is_empty());
+
+    cluster.composer().restart(&cluster.node(0)).await.unwrap();
+
+    cluster
+        .wait_node_status(cluster.node(0), NodeStatus::Online)
+        .await
+        .unwrap();
+
+    let error = vol_cli
+        .destroy_snapshot(&DestroyVolumeSnapshot::from(&replica_snapshot), None)
+        .await
+        .expect_err("Pool Offline");
+    assert_eq!(error.kind, ReplyErrorKind::Deleting);
+
+    let mut rpc = cluster.grpc_handle(&cluster.node(0)).await.unwrap();
+    rpc.create_pool(pool.id(), pool_disk).await.unwrap();
+
+    cluster.wait_pool_online(pool.id().clone()).await.unwrap();
+
+    if let Err(error) = vol_cli
+        .destroy_snapshot(&DestroyVolumeSnapshot::from(&replica_snapshot), None)
+        .await
+    {
+        assert_eq!(error.kind, ReplyErrorKind::NotFound);
+    }
+
+    tracing::info!("Deleted Snapshot: {}", replica_snapshot.spec().snap_id);
+
+    vol_cli.destroy(&volume, None).await.unwrap();
+    pool_cli.destroy(&pool, None).await.unwrap();
 }

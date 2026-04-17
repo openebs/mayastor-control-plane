@@ -475,14 +475,37 @@ impl OperationGuardArc<VolumeSnapshot> {
         let node_wrapper = registry.node_wrapper(&node_id).await?;
 
         // Execute the call for corresponding dataplane node.
-        node_wrapper
+        let Err(error) = node_wrapper
             .destroy_repl_snapshot(&DestroyReplicaSnapshot::new(
                 replica_snapshot.spec().uuid().clone(),
                 source.pool_uuid().clone(),
             ))
-            .await?;
+            .await
+        else {
+            return Ok(());
+        };
 
-        Ok(())
+        if error.tonic_code() == tonic::Code::NotFound {
+            return Ok(());
+        }
+
+        tracing::error!(%error, "Failed to destroy replica snapshot");
+
+        if error.tonic_code() == tonic::Code::FailedPrecondition {
+            if let Ok(pool) = registry.pool_wrapper(source.pool_id()).await {
+                let snap_pool = source.pool_uuid();
+                let snap_uid = replica_snapshot.spec().uuid();
+                match pool.uuid.as_ref() {
+                    Some(pool_uuid) if pool_uuid != source.pool_uuid() => {
+                        tracing::warn!("Forgetting about snapshot {snap_uid} since its pool {snap_pool} has been replaced with {pool_uuid}");
+                        return Ok(());
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Err(error)
     }
 
     async fn check_nodes_availability(&self, registry: &Registry) -> bool {
@@ -545,12 +568,13 @@ impl OperationGuardArc<VolumeSnapshot> {
     ) -> Vec<ReplicaSnapshot> {
         let mut failed = vec![];
         for snapshot in snapshots {
-            if let Err(err) = Self::destroy_replica_snapshot(registry, snapshot).await {
-                if err.tonic_code() != tonic::Code::NotFound {
-                    let mut snapshot = snapshot.clone();
-                    snapshot.set_status_deleting();
-                    failed.push(snapshot);
-                }
+            if Self::destroy_replica_snapshot(registry, snapshot)
+                .await
+                .is_err()
+            {
+                let mut snapshot = snapshot.clone();
+                snapshot.set_status_deleting();
+                failed.push(snapshot);
             }
         }
         failed

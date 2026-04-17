@@ -139,7 +139,7 @@ pub struct PoolError {
     /// Code of the encountered error.
     pub code: PoolErrorCode,
     /// Human-readable message.
-    pub msg: String,
+    pub msg: Option<String>,
 }
 
 /// Pool Disk Errors.
@@ -225,6 +225,8 @@ pub struct PoolState {
     pub node: NodeId,
     /// Id of the pool.
     pub id: PoolId,
+    /// Uuid of the pool.
+    pub uuid: Option<PoolUuid>,
     /// Absolute disk paths claimed by the pool.
     pub disks: Vec<PoolDeviceUri>,
     /// Current state of the pool.

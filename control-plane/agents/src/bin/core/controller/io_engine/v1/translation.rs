@@ -670,6 +670,7 @@ impl IoEngineToAgent for v1::pool::Pool {
         transport::PoolState {
             node: Default::default(),
             id: self.name.clone().into(),
+            uuid: self.uuid.clone().try_into().ok(),
             disks: self.disks.clone().into_vec(),
             capacity: self.capacity,
             used: self.used,
@@ -1068,7 +1069,7 @@ impl From<rpc::v1::pool::ProbeDiskInfo> for ProbeDiskInfo {
                     RpcErrorCode::PciNotNvme => PoolErrorCode::PCINotNvme,
                     RpcErrorCode::InvalidDiskUri => PoolErrorCode::InvalidDiskUri,
                 },
-                msg: error.msg.unwrap_or_default(),
+                msg: error.msg,
             },
         });
         Self {

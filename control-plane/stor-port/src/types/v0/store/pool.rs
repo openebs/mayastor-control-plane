@@ -592,6 +592,7 @@ impl From<&PoolSpec> for transport::PoolState {
         Self {
             node: pool.node.clone(),
             id: pool.id.clone(),
+            uuid: None,
             disks: pool.disks.clone(),
             status: transport::PoolStatus::Unknown,
             capacity: 0,

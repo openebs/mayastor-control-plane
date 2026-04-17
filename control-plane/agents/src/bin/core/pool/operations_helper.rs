@@ -79,7 +79,7 @@ impl OperationGuardArc<PoolSpec> {
                 if node_guard.is_offline() {
                     self.mark_diag_error(PoolError {
                         code: PoolErrorCode::NodeIsOffline,
-                        msg: "".to_string(),
+                        msg: None,
                     });
                     return Ok(Err(node_guard.status()));
                 }
@@ -93,7 +93,7 @@ impl OperationGuardArc<PoolSpec> {
             if node.is_shutdown() {
                 self.mark_diag_error(PoolError {
                     code: PoolErrorCode::NodeIsOffline,
-                    msg: "".to_string(),
+                    msg: None,
                 });
                 return Ok(Err(NodeStatus::Offline));
             }
@@ -101,7 +101,7 @@ impl OperationGuardArc<PoolSpec> {
 
         self.mark_diag_error(PoolError {
             code: PoolErrorCode::NodeIsUnknown,
-            msg: "".to_string(),
+            msg: None,
         });
         Err(error)
     }
@@ -158,7 +158,7 @@ impl OperationGuardArc<PoolSpec> {
     pub(crate) fn mark_as_import_cordoned(&mut self) {
         let error = PoolError {
             code: PoolErrorCode::ImportDisabled,
-            msg: "".to_string(),
+            msg: None,
         };
         self.mark_diag(PoolStatus::Offline, error);
     }
@@ -267,7 +267,10 @@ impl OperationGuardArc<PoolSpec> {
             }
             _error => _error.to_string(),
         };
-        Some(PoolError { code, msg })
+        Some(PoolError {
+            code,
+            msg: Some(msg),
+        })
     }
 
     // todo: fit in a trait
