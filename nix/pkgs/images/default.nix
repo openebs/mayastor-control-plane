@@ -51,7 +51,7 @@ let
         syft "dir:${mergedRootfs}" -o "spdx-json=$out/share/sbom/image.spdx.json"
       '';
     in
-    (dockerTools.buildImage {
+    dockerTools.buildImage {
       inherit tag;
       created = "now";
       name = "${repo-org}/${img_prefix}-${name}${image_suffix.${buildType}}";
@@ -59,7 +59,7 @@ let
       config = {
         Entrypoint = [ "tini" "--" package.binary ];
       } // config;
-    }) // { passthru = { inherit sbom; }; };
+    };
   build-agent-image = { buildType, name }:
     build-control-plane-image {
       inherit buildType;
