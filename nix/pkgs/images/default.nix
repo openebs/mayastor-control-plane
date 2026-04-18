@@ -39,16 +39,16 @@ let
   build-control-plane-image = { buildType, name, package, config ? { } }:
     let
       imageContents = [ tini busybox package ];
+      mergedRootfs = pkgs.buildEnv {
+        name = "rootfs-${img_prefix}-${name}${image_suffix.${buildType}}-${tag}";
+        paths = imageContents;
+        pathsToLink = [ "/" ];
+      };
       sbom = pkgs.runCommand "sbom-${img_prefix}-${name}${image_suffix.${buildType}}-${tag}" {
         nativeBuildInputs = with pkgs; [ syft ];
-        imagePaths = lib.escapeShellArgs (map toString imageContents);
       } ''
-        mkdir -p rootfs
-        for path in $imagePaths; do
-          cp -a "$path"/. rootfs/
-        done
         mkdir -p "$out/share/sbom"
-        syft --quiet "dir:rootfs" -o "spdx-json=$out/share/sbom/image.spdx.json"
+        syft "dir:${mergedRootfs}" -o "spdx-json=$out/share/sbom/image.spdx.json"
       '';
     in
     dockerTools.buildImage {
