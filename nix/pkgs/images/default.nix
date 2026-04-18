@@ -37,11 +37,28 @@ let
   tag = if img_tag != "" then img_tag else control-plane.version;
   image_suffix = { "release" = ""; "debug" = "-dev"; "coverage" = "-cov"; };
   build-control-plane-image = { buildType, name, package, config ? { } }:
+    let
+      imageContents = [ tini busybox package ];
+      sbom = pkgs.runCommand "sbom-${img_prefix}-${name}${image_suffix.${buildType}}-${tag}" {
+        nativeBuildInputs = with pkgs; [ syft ];
+        imagePaths = lib.escapeShellArgs (map toString imageContents);
+      } ''
+        mkdir -p rootfs
+        for path in $imagePaths; do
+          cp -a "$path"/. rootfs/
+        done
+        mkdir -p "$out/share/sbom"
+        syft --quiet "dir:rootfs" -o "spdx-json=$out/share/sbom/image.spdx.json"
+      '';
+    in
     dockerTools.buildImage {
       inherit tag;
       created = "now";
       name = "${repo-org}/${img_prefix}-${name}${image_suffix.${buildType}}";
-      copyToRoot = [ tini busybox package ];
+      copyToRoot = imageContents ++ [ sbom ];
+      passthru = {
+        inherit sbom;
+      };
       config = {
         Entrypoint = [ "tini" "--" package.binary ];
       } // config;
