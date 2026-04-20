@@ -414,6 +414,18 @@ impl DiskPoolStatus {
         .with_conditions(dsp)
     }
 
+    /// Set when Pool fails to create, but with diagnostic information available.
+    pub fn create_error_diag(dsp: &DiskPool, error: PoolError, status: PoolStatus) -> Self {
+        let cr_status = dsp.status.as_ref();
+        Self {
+            cr_state: cr_status.map(|s| s.cr_state).unwrap_or_default(),
+            status: Some(status),
+            error: Some(error),
+            ..Default::default()
+        }
+        .with_conditions(dsp)
+    }
+
     /// Set when Pool is not found for some reason.
     pub fn disk_not_found(dsp: &DiskPool) -> Self {
         let status = dsp.status.as_ref();

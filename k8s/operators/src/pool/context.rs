@@ -4,7 +4,7 @@ use super::{
     error::Error,
 };
 use crate::diskpool::crd::v1beta3::{
-    EncryptionSecretConfig, EncryptionSource, PoolError, PoolErrorCode,
+    EncryptionSecretConfig, EncryptionSource, PoolError, PoolErrorCode, PoolStatus,
 };
 use openapi::{
     apis::StatusCode,
@@ -607,6 +607,21 @@ impl ResourceContext {
         Ok(Action::requeue(Duration::from_secs(30)))
     }
 
+    /// Update pool with creation failed, but with diagnostic information.
+    async fn mark_pool_creat_diag(
+        &self,
+        error: PoolError,
+        status: PoolStatus,
+    ) -> Result<Action, Error> {
+        self.patch_status(DiskPoolStatus::create_error_diag(
+            &self.inner,
+            error,
+            status,
+        ))
+        .await?;
+        Ok(Action::requeue(Duration::from_secs(30)))
+    }
+
     /// Mark Pool state as None and error as DiskNotFound as we couldn't find the
     /// pool disk during the creation/import attempt.
     async fn mark_disk_not_found(&self) -> Result<(), Error> {
@@ -853,6 +868,18 @@ impl ResourceContext {
         &self,
         error: openapi::tower::client::Error<models::RestJsonError>,
     ) -> Result<(), Error> {
+        if let clients::tower::Error::Response(response) = &error {
+            if let Some(diag) = response
+                .error_body()
+                .and_then(|e| e.custom_info.as_ref().and_then(|i| i.pool_diag.as_ref()))
+            {
+                if let Some(probe) = diag.error.as_ref() {
+                    self.handle_error_diag(probe, diag).await?;
+                    return Err(error.into());
+                }
+            }
+        }
+
         if let Ok(pool) = self
             .pools_api()
             .get_node_pool(&self.spec.node, &self.name_any())
@@ -977,6 +1004,26 @@ impl ResourceContext {
         .await?;
         error!("Unable to find io-engine node {}", self.spec.node);
         Err(error.into())
+    }
+
+    async fn handle_error_diag(
+        &self,
+        diag_error: &models::PoolProbeError,
+        diag: &models::PoolDiag,
+    ) -> Result<(), Error> {
+        let message = diag_error.message.as_deref().unwrap_or("");
+        let code = PoolErrorCode::from(diag_error.code);
+        self.k8s_notify("Create/Import", code.as_ref(), message, "Warning")
+            .await;
+        self.mark_pool_creat_diag(
+            PoolError {
+                code,
+                message: diag_error.message.clone(),
+            },
+            diag.status.into(),
+        )
+        .await?;
+        Ok(())
     }
 
     async fn handle_create_error(
