@@ -3881,6 +3881,7 @@ components:
             - NodePurgeAcceptRequired
             - NodePurgeVolumeLossAcceptRequired
             - NodePurgeSnapshotLossAcceptRequired
+      x-no-derive-dbg: true
       required:
         - details
         - kind

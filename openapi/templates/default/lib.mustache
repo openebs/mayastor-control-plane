@@ -22,3 +22,13 @@ pub mod actix {
     #[cfg(feature = "actix-server")]
     pub use crate::apis::actix_server as server;
 }
+
+impl std::fmt::Debug for models::RestJsonError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RestJsonError")
+            .field("details", &self.details)
+            .field("message", &self.message)
+            .field("kind", &self.kind)
+            .finish()
+    }
+}
