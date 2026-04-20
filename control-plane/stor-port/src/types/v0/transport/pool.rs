@@ -177,6 +177,23 @@ impl PoolDiag {
     }
 }
 
+impl std::fmt::Display for PoolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match &self.msg {
+            None => write!(f, "{:?}", self.code),
+            Some(msg) => write!(f, "{msg}: {:?}", self.code),
+        }
+    }
+}
+impl std::fmt::Display for PoolDiag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match &self.error {
+            None => Ok(()),
+            Some(error) => write!(f, "{error}"),
+        }
+    }
+}
+
 /// Pool import backoff.
 /// Used to avoid thrashing the logs.
 #[derive(Default, Debug, Clone, PartialEq)]

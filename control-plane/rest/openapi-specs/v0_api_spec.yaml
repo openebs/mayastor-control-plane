@@ -3881,11 +3881,19 @@ components:
             - NodePurgeAcceptRequired
             - NodePurgeVolumeLossAcceptRequired
             - NodePurgeSnapshotLossAcceptRequired
+            - PoolCreateWithDiag
+        customInfo:
+          $ref: '#/components/schemas/CustomErrorInfo'
       x-no-derive-dbg: true
       required:
         - details
         - kind
         - message
+    CustomErrorInfo:
+      type: object
+      properties:
+        poolDiag:
+          $ref: '#/components/schemas/PoolDiag'
     RestWatch:
       example:
         callback: 'https://api.myserver.com/volume/e2fc5ce8-a56e-47a1-94e9-04dd2f73b88f/callback'

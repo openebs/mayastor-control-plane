@@ -473,6 +473,7 @@ pub enum ReplyErrorKind {
     NodePurgeAcceptRequired,
     NodePurgeVolumeLossAcceptRequired,
     NodePurgeSnapshotLossAcceptRequired,
+    PoolCreateWithDiag,
 }
 
 impl From<tonic::Code> for ReplyErrorKind {

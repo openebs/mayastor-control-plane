@@ -212,6 +212,7 @@ message CreatePoolReply {
     Pool pool = 1;
     common.ReplyError error = 2;
   }
+  optional PoolDiag poolDiag = 3;
 }
 
 // Request type for expand pool

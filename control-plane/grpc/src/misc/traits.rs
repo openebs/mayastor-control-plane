@@ -127,6 +127,7 @@ impl From<ReplyErrorKind> for common::ReplyErrorKind {
             ReplyErrorKind::NodePurgeSnapshotLossAcceptRequired => {
                 Self::NodePurgeSnapshotLossAcceptRequired
             }
+            ReplyErrorKind::PoolCreateWithDiag => Self::PoolCreateWithDiag,
         }
     }
 }
@@ -191,6 +192,7 @@ impl From<common::ReplyErrorKind> for ReplyErrorKind {
             common::ReplyErrorKind::NodePurgeSnapshotLossAcceptRequired => {
                 Self::NodePurgeSnapshotLossAcceptRequired
             }
+            common::ReplyErrorKind::PoolCreateWithDiag => Self::PoolCreateWithDiag,
         }
     }
 }

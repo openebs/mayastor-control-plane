@@ -37,7 +37,7 @@ use stor_port::{
 };
 
 use crate::controller::resources::{operations::ResourceCordon, ResourceUid};
-use grpc::operations::pool::traits::{ClearErrorsRequest, PoolCordonRequest};
+use grpc::operations::pool::traits::{ClearErrorsRequest, PoolCordonRequest, PoolCreateError};
 use snafu::OptionExt;
 
 #[derive(Debug, Clone)]
@@ -51,7 +51,7 @@ impl PoolOperations for Service {
         &self,
         pool: &dyn CreatePoolInfo,
         _ctx: Option<Context>,
-    ) -> Result<Pool, ReplyError> {
+    ) -> Result<Pool, PoolCreateError> {
         let mut req: CreatePool = pool.into();
         let service = self.clone();
         // Set the cluster_size which is potentially configured via cli args.

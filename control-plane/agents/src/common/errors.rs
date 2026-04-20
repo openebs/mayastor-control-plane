@@ -5,8 +5,8 @@ use stor_port::{
     types::v0::{
         store::definitions::StoreError,
         transport::{
-            pool::PoolDeviceUri, ApiVersion, Filter, NodeId, NvmeNqnParseError, PoolId, PoolStatus,
-            ReplicaId, SnapshotLossInfo, VolumeLossInfo,
+            pool::PoolDeviceUri, ApiVersion, Filter, NodeId, NvmeNqnParseError, PoolDiag, PoolId,
+            PoolStatus, ReplicaId, SnapshotLossInfo, VolumeLossInfo,
         },
     },
 };
@@ -525,6 +525,8 @@ pub enum SvcError {
         snapshot_count: usize,
         snapshot_loss: SnapshotLossInfo,
     },
+    #[snafu(display("Failed to create pool: {diag}"))]
+    PoolCreateError { diag: PoolDiag },
 }
 
 impl SvcError {
@@ -1359,6 +1361,27 @@ impl From<SvcError> for ReplyError {
                 resource: ResourceKind::Node,
                 source,
                 extra,
+            },
+            SvcError::PoolCreateError { .. } => ReplyError {
+                kind: ReplyErrorKind::PoolCreateWithDiag,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+        }
+    }
+}
+
+impl From<SvcError> for grpc::operations::pool::traits::PoolCreateError {
+    fn from(error: SvcError) -> Self {
+        match &error {
+            SvcError::PoolCreateError { diag } => Self {
+                diag: Some(diag.clone()),
+                error: error.into(),
+            },
+            _error => Self {
+                diag: None,
+                error: error.into(),
             },
         }
     }
