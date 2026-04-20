@@ -82,24 +82,31 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
             .await?;
         let _ = pool.start_create(registry, request).await?;
 
-        let result = node.create_pool(request).await;
+        let mut result = node.create_pool(request).await;
         let on_fail = OnCreateFail::on_pool_create_err(&result);
-        if matches!(on_fail, OnCreateFail::LeaveAsIs) {
-            if let Err(error) = &result {
-                if let Some(error) = Self::pool_import_error(error) {
-                    let disks = pool.as_ref().disks.first().map(|d| d.to_string());
-                    pool.lock().metadata.runtime.diag = Some(PoolDiag {
-                        import_errors: vec![PoolDiskError {
-                            error: error.clone(),
-                            disk: disks.unwrap_or_default(),
-                        }],
-                        status: PoolStatus::Unknown,
-                        error: Some(error),
-                        ..Default::default()
-                    });
+
+        if let Err(ref error) = result {
+            let diag = Self::pool_import_error(error).map(|error| {
+                let disks = pool.as_ref().disks.first().map(|d| d.to_string());
+                PoolDiag {
+                    import_errors: vec![PoolDiskError {
+                        error: error.clone(),
+                        disk: disks.unwrap_or_default(),
+                    }],
+                    status: PoolStatus::Unknown,
+                    error: Some(error),
+                    ..Default::default()
                 }
+            });
+
+            if matches!(on_fail, OnCreateFail::LeaveAsIs) {
+                pool.lock().metadata.runtime.diag = diag.clone();
+            }
+            if let Some(diag) = diag {
+                result = Err(SvcError::PoolCreateError { diag });
             }
         }
+
         let state = pool.complete_create(result, registry, on_fail).await?;
         let spec = pool.lock().clone();
         Ok(Pool::new(spec, Some(CtrlPoolState::new(state))))
