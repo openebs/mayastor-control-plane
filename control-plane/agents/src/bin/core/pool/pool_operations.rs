@@ -76,6 +76,9 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
             devlink_preflight_checks(request, node.clone(), registry).await?
         }
 
+        // Validate the pool backend to avoid thrashing the logs
+        Self::validate_probe(request, &node).await?;
+
         let mut pool = specs
             .get_or_create_pool(request)
             .operation_guard_wait()
@@ -93,7 +96,7 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
                         error: error.clone(),
                         disk: disks.unwrap_or_default(),
                     }],
-                    status: PoolStatus::Unknown,
+                    status: Self::pool_error_to_status(error.code),
                     error: Some(error),
                     ..Default::default()
                 }

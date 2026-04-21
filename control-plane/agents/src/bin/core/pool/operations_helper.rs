@@ -107,7 +107,7 @@ impl OperationGuardArc<PoolSpec> {
     }
 
     fn mark_diag_error(&mut self, error: PoolError) {
-        let status = self.pool_error_to_status(error.code);
+        let status = Self::pool_error_to_status(error.code);
         self.mark_diag(status, error);
     }
 
@@ -132,7 +132,7 @@ impl OperationGuardArc<PoolSpec> {
     /// If we're not sure what the error was, or if we timed out then we're unsure, so
     /// we map it as unknown.
     /// If the pool has invalid metadata then we map it as faulted.
-    fn pool_error_to_status(&self, error: PoolErrorCode) -> PoolStatus {
+    pub(super) fn pool_error_to_status(error: PoolErrorCode) -> PoolStatus {
         match error {
             PoolErrorCode::Unknown => PoolStatus::Unknown,
             PoolErrorCode::DiskNotFound => PoolStatus::Offline,
@@ -188,11 +188,41 @@ impl OperationGuardArc<PoolSpec> {
         }
         diag.error = diag.import_errors.first().map(|e| e.error.clone());
         diag.status =
-            self.pool_error_to_status(diag.error.as_ref().map(|e| e.code).unwrap_or_default());
+            Self::pool_error_to_status(diag.error.as_ref().map(|e| e.code).unwrap_or_default());
         let mut pool = self.lock();
         pool.metadata.runtime.diag = Some(diag);
 
         Ok(false)
+    }
+
+    /// Probes a pool for any errors with its backing devices during a create operation.
+    /// # NOTE
+    /// In case probe fails we should not log any information to stdout, as we're trying to avoid
+    /// thrashing the logs when a pool is in a bad state for a long time.
+    pub(crate) async fn validate_probe(
+        creat: &CreatePool,
+        node: &Arc<RwLock<NodeWrapper>>,
+    ) -> Result<(), SvcError> {
+        let request: ImportPool =
+            ImportPool::new(&creat.node, &creat.id, &creat.disks, &creat.encryption);
+        let probed = node.probe_pool(&request.into()).await?;
+
+        if probed.success || probed.unimpl {
+            return Ok(());
+        }
+
+        let mut diag = PoolDiag::default();
+
+        for (_, error) in probed.errors {
+            for probe in error.error {
+                diag.import_errors.push(probe);
+            }
+        }
+        diag.error = diag.import_errors.first().map(|e| e.error.clone());
+        diag.status =
+            Self::pool_error_to_status(diag.error.as_ref().map(|e| e.code).unwrap_or_default());
+
+        Err(SvcError::PoolCreateError { diag })
     }
 
     /// Attempt to import a pool.
