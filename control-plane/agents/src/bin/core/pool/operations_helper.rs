@@ -139,7 +139,7 @@ impl OperationGuardArc<PoolSpec> {
             PoolErrorCode::DiskReadIoError => PoolStatus::Offline,
             PoolErrorCode::ForeignPoolName => PoolStatus::Faulted,
             PoolErrorCode::ForeignPoolUid => PoolStatus::Faulted,
-            PoolErrorCode::SuperBlock => PoolStatus::Offline,
+            PoolErrorCode::SuperBlockIoError => PoolStatus::Offline,
             PoolErrorCode::InvalidSuperBlock => PoolStatus::Faulted,
             PoolErrorCode::DiskIsADirectory => PoolStatus::Offline,
             PoolErrorCode::NodeIsUnknown => PoolStatus::Unknown,
@@ -281,7 +281,7 @@ impl OperationGuardArc<PoolSpec> {
             {
                 PoolErrorCode::DiskIsADirectory
             }
-            tonic::Code::DataLoss if errno == nix::Error::EIO => PoolErrorCode::SuperBlock,
+            tonic::Code::DataLoss if errno == nix::Error::EIO => PoolErrorCode::SuperBlockIoError,
             tonic::Code::DataLoss if errno == nix::Error::EILSEQ => {
                 PoolErrorCode::InvalidSuperBlock
             }

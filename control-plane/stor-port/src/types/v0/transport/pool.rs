@@ -107,7 +107,7 @@ pub enum PoolErrorCode {
     /// Pool on-disk uuid doesn't match the expected.
     ForeignPoolUid,
     /// Failed to check super block error.
-    SuperBlock,
+    SuperBlockIoError,
     /// Invalid super block (eg: CRC error).
     InvalidSuperBlock,
     /// Disk is a directory (can happen when setting up incorrect volume mounts).
@@ -440,7 +440,7 @@ impl From<PoolErrorCode> for models::PoolProbeErrorCode {
             PoolErrorCode::DiskReadIoError => Self::DiskReadIoError,
             PoolErrorCode::ForeignPoolName => Self::ForeignPoolName,
             PoolErrorCode::ForeignPoolUid => Self::ForeignPoolUid,
-            PoolErrorCode::SuperBlock => Self::SuperBlock,
+            PoolErrorCode::SuperBlockIoError => Self::SuperBlockIoError,
             PoolErrorCode::InvalidSuperBlock => Self::InvalidSuperBlock,
             PoolErrorCode::DiskIsADirectory => Self::DiskIsADirectory,
             PoolErrorCode::NodeIsUnknown => Self::NodeIsUnknown,

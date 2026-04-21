@@ -231,7 +231,7 @@ pub fn rest_error_from(src: ReplyError, diag: Option<PoolDiag>) -> RestError<Res
                     PoolErrorCode::DiskReadIoError => StatusCode::INSUFFICIENT_STORAGE,
                     PoolErrorCode::ForeignPoolName => StatusCode::EXPECTATION_FAILED,
                     PoolErrorCode::ForeignPoolUid => StatusCode::EXPECTATION_FAILED,
-                    PoolErrorCode::SuperBlock => StatusCode::INSUFFICIENT_STORAGE,
+                    PoolErrorCode::SuperBlockIoError => StatusCode::INSUFFICIENT_STORAGE,
                     PoolErrorCode::InvalidSuperBlock => StatusCode::INSUFFICIENT_STORAGE,
                     PoolErrorCode::DiskIsADirectory => StatusCode::BAD_REQUEST,
                     PoolErrorCode::NodeIsUnknown => StatusCode::PRECONDITION_FAILED,

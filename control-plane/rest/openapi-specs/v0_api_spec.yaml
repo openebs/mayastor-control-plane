@@ -3524,7 +3524,7 @@ components:
         - DiskReadIoError
         - ForeignPoolName
         - ForeignPoolUid
-        - SuperBlock
+        - SuperBlockIoError
         - InvalidSuperBlock
         - DiskIsADirectory
         - NodeIsUnknown

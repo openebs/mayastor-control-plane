@@ -1061,7 +1061,7 @@ impl From<rpc::v1::pool::ProbeDiskInfo> for ProbeDiskInfo {
                     RpcErrorCode::DiskReadIoError => PoolErrorCode::DiskReadIoError,
                     RpcErrorCode::ForeignPoolName => PoolErrorCode::ForeignPoolName,
                     RpcErrorCode::ForeignPoolUid => PoolErrorCode::ForeignPoolUid,
-                    RpcErrorCode::SuperBlockIoError => PoolErrorCode::SuperBlock,
+                    RpcErrorCode::SuperBlockIoError => PoolErrorCode::SuperBlockIoError,
                     RpcErrorCode::InvalidSuperBlock => PoolErrorCode::InvalidSuperBlock,
                     RpcErrorCode::DiskClaimed => PoolErrorCode::DiskClaimed,
                     RpcErrorCode::PciDriverUnsupported => PoolErrorCode::PCIDriverUnsupported,

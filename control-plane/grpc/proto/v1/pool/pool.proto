@@ -29,7 +29,7 @@ enum ProbeErrorCode {
   // Pool on-disk uuid doesn't match the expected
   ForeignPoolUid = 4;
   // Failed to check super block error
-  SuperBlock = 5;
+  SuperBlockIoError = 5;
   // Invalid super block (eg: CRC error)
   InvalidSuperBlock = 6;
   // Disk is a directory (can happen when setting up incorrect volume mounts)
