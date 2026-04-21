@@ -243,6 +243,8 @@ pub fn rest_error_from(src: ReplyError, diag: Option<PoolDiag>) -> RestError<Res
                     PoolErrorCode::PCIKernelBound => StatusCode::EXPECTATION_FAILED,
                     PoolErrorCode::PCINotNvme => StatusCode::BAD_REQUEST,
                     PoolErrorCode::InvalidDiskUri => StatusCode::BAD_REQUEST,
+                    PoolErrorCode::DiskNotImportable => StatusCode::BAD_REQUEST,
+                    PoolErrorCode::UriNotHandled => StatusCode::BAD_REQUEST,
                 },
                 None => StatusCode::PRECONDITION_FAILED,
             };

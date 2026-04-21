@@ -485,6 +485,8 @@ impl From<PoolErrorCode> for pool::ProbeErrorCode {
             PoolErrorCode::PCIKernelBound => Self::PciKernelBound,
             PoolErrorCode::PCINotNvme => Self::PciNotNvme,
             PoolErrorCode::InvalidDiskUri => Self::InvalidDiskUri,
+            PoolErrorCode::DiskNotImportable => Self::DiskNotImportable,
+            PoolErrorCode::UriNotHandled => Self::UriNotHandled,
         }
     }
 }
@@ -524,6 +526,8 @@ impl From<pool::ProbeErrorCode> for PoolErrorCode {
             pool::ProbeErrorCode::PciKernelBound => Self::PCIKernelBound,
             pool::ProbeErrorCode::PciNotNvme => Self::PCINotNvme,
             pool::ProbeErrorCode::InvalidDiskUri => Self::InvalidDiskUri,
+            pool::ProbeErrorCode::DiskNotImportable => Self::DiskNotImportable,
+            pool::ProbeErrorCode::UriNotHandled => Self::UriNotHandled,
         }
     }
 }

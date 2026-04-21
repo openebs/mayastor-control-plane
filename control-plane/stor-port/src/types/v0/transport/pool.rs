@@ -131,6 +131,10 @@ pub enum PoolErrorCode {
     PCINotNvme,
     // The disk URI is invalid or not supported.
     InvalidDiskUri,
+    // Disk is not importable (ie malloc).
+    DiskNotImportable,
+    // Probing is not implemented for this URI.
+    UriNotHandled,
 }
 
 /// Pool error code and human-readable message.
@@ -452,6 +456,8 @@ impl From<PoolErrorCode> for models::PoolProbeErrorCode {
             PoolErrorCode::PCIKernelBound => Self::PciKernelBound,
             PoolErrorCode::PCINotNvme => Self::PciNotNvme,
             PoolErrorCode::InvalidDiskUri => Self::InvalidDiskUri,
+            PoolErrorCode::DiskNotImportable => Self::DiskNotImportable,
+            PoolErrorCode::UriNotHandled => Self::UriNotHandled,
         }
     }
 }

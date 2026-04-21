@@ -1,6 +1,6 @@
 use crate::{
     controller::{
-        io_engine::{HostApi, PoolApi},
+        io_engine::{types::ProbePoolRequest, HostApi, PoolApi},
         registry::Registry,
         resources::{
             operations::ResourceLifecycle,
@@ -22,7 +22,8 @@ use stor_port::{
         transport::{
             CreatePool, CtrlPoolState, DestroyReplica, GetBlockDevices, ImportBackoff, ImportPool,
             NodeId, NodeStatus, Pool, PoolDeviceUri, PoolDiag, PoolDiskError, PoolError,
-            PoolErrorCode, PoolState, PoolStatus, ReplicaOwners,
+            PoolErrorCode, PoolId, PoolState, PoolStatus, ReplicaOwners, SnapshotLossInfo,
+            VolumeId, VolumeLossInfo,
         },
     },
 };
@@ -31,7 +32,6 @@ use itertools::Itertools;
 use regex::Regex;
 use snafu::OptionExt;
 use std::{collections::HashSet, ops::Deref, sync::Arc};
-use stor_port::types::v0::transport::{PoolId, SnapshotLossInfo, VolumeId, VolumeLossInfo};
 use tokio::sync::RwLock;
 
 impl OperationGuardArc<PoolSpec> {
@@ -151,6 +151,8 @@ impl OperationGuardArc<PoolSpec> {
             PoolErrorCode::PCIKernelBound => PoolStatus::Offline,
             PoolErrorCode::PCINotNvme => PoolStatus::Offline,
             PoolErrorCode::InvalidDiskUri => PoolStatus::Offline,
+            PoolErrorCode::DiskNotImportable => PoolStatus::Offline,
+            PoolErrorCode::UriNotHandled => PoolStatus::Offline,
         }
     }
     /// Mark the pool in [`PoolErrorCode::ImportDisabled`] since it cannot be
@@ -200,12 +202,10 @@ impl OperationGuardArc<PoolSpec> {
     /// In case probe fails we should not log any information to stdout, as we're trying to avoid
     /// thrashing the logs when a pool is in a bad state for a long time.
     pub(crate) async fn validate_probe(
-        creat: &CreatePool,
+        create: &CreatePool,
         node: &Arc<RwLock<NodeWrapper>>,
     ) -> Result<(), SvcError> {
-        let request: ImportPool =
-            ImportPool::new(&creat.node, &creat.id, &creat.disks, &creat.encryption);
-        let probed = node.probe_pool(&request.into()).await?;
+        let probed = node.probe_pool(&ProbePoolRequest::from(create)).await?;
 
         if probed.success || probed.unimpl {
             return Ok(());

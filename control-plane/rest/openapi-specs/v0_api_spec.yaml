@@ -3536,6 +3536,8 @@ components:
         - PCIKernelBound
         - PCINotNvme
         - InvalidDiskUri
+        - DiskNotImportable
+        - UriNotHandled
     PoolErrorInfo:
       type: object
       description: Pool alerts and error information

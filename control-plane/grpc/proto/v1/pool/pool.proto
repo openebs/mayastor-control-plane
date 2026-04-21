@@ -53,6 +53,10 @@ enum ProbeErrorCode {
   PCINotNvme = 15;
   // The disk URI is invalid or not supported.
   InvalidDiskUri = 16;
+  // Disk is not importable (ie malloc).
+  DiskNotImportable = 17;
+  // Probing is not implemented for this URI.
+  UriNotHandled = 18;
 }
 message ProbeError {
   ProbeErrorCode code = 1;

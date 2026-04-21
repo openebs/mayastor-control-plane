@@ -1029,6 +1029,7 @@ impl AgentToIoEngine for ProbePoolRequest {
     fn to_rpc(&self) -> Self::IoEngineMessage {
         v1::pool::ProbePoolRequest {
             request: Some(self.import.to_rpc()),
+            import: self.is_import,
             probes: None,
         }
     }
@@ -1068,6 +1069,8 @@ impl From<rpc::v1::pool::ProbeDiskInfo> for ProbeDiskInfo {
                     RpcErrorCode::PciKernelBound => PoolErrorCode::PCIKernelBound,
                     RpcErrorCode::PciNotNvme => PoolErrorCode::PCINotNvme,
                     RpcErrorCode::InvalidDiskUri => PoolErrorCode::InvalidDiskUri,
+                    RpcErrorCode::DiskNotImportable => PoolErrorCode::DiskNotImportable,
+                    RpcErrorCode::UriNotHandled => PoolErrorCode::UriNotHandled,
                 },
                 msg: error.msg,
             },

@@ -112,6 +112,10 @@ pub enum PoolErrorCode {
     Unreachable,
     /// The encryption secret was not found.
     EncryptionSecretError,
+    // Disk is not importable (ie malloc).
+    DiskNotImportable,
+    // Probing is not implemented for this URI.
+    UriNotHandled,
 }
 
 /// Pool error code and human-readable message.
@@ -675,6 +679,10 @@ impl From<openapi::models::PoolProbeErrorCode> for PoolErrorCode {
             openapi::models::PoolProbeErrorCode::PciKernelBound => PoolErrorCode::PciKernelBound,
             openapi::models::PoolProbeErrorCode::PciNotNvme => PoolErrorCode::PciNotNvme,
             openapi::models::PoolProbeErrorCode::InvalidDiskUri => PoolErrorCode::InvalidDiskUri,
+            openapi::models::PoolProbeErrorCode::DiskNotImportable => {
+                PoolErrorCode::DiskNotImportable
+            }
+            openapi::models::PoolProbeErrorCode::UriNotHandled => PoolErrorCode::UriNotHandled,
         }
     }
 }
