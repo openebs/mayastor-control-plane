@@ -3531,6 +3531,7 @@ components:
         - NodeIsOffline
         - ImportDisabled
         - TimeOut
+        - Aborted
         - DiskClaimed
         - PCIDriverUnsupported
         - PCIKernelBound
@@ -3883,7 +3884,7 @@ components:
             - NodePurgeAcceptRequired
             - NodePurgeVolumeLossAcceptRequired
             - NodePurgeSnapshotLossAcceptRequired
-            - PoolCreateWithDiag
+            - DiskFault
         customInfo:
           $ref: '#/components/schemas/CustomErrorInfo'
       x-no-derive-dbg: true

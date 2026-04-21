@@ -13,7 +13,7 @@ use crate::{
 use agents::{errors, errors::SvcError};
 use grpc::operations::pool::traits::ClearErrorsRequest;
 use stor_port::{
-    transport_api::ResourceKind,
+    transport_api::{ReplyErrorKind, ResourceKind},
     types::v0::{
         store::{
             pool::{PoolImportOp, PoolOperation, PoolSpec},
@@ -146,6 +146,7 @@ impl OperationGuardArc<PoolSpec> {
             PoolErrorCode::NodeIsOffline => PoolStatus::Offline,
             PoolErrorCode::ImportDisabled => PoolStatus::Offline,
             PoolErrorCode::TimeOut => PoolStatus::Unknown,
+            PoolErrorCode::Aborted => PoolStatus::Unknown,
             PoolErrorCode::DiskClaimed => PoolStatus::Offline,
             PoolErrorCode::PCIDriverUnsupported => PoolStatus::Offline,
             PoolErrorCode::PCIKernelBound => PoolStatus::Offline,
@@ -155,6 +156,7 @@ impl OperationGuardArc<PoolSpec> {
             PoolErrorCode::UriNotHandled => PoolStatus::Offline,
         }
     }
+
     /// Mark the pool in [`PoolErrorCode::ImportDisabled`] since it cannot be
     /// imported due to being cordoned for imports.
     pub(crate) fn mark_as_import_cordoned(&mut self) {
@@ -219,10 +221,12 @@ impl OperationGuardArc<PoolSpec> {
             }
         }
         diag.error = diag.import_errors.first().map(|e| e.error.clone());
-        diag.status =
-            Self::pool_error_to_status(diag.error.as_ref().map(|e| e.code).unwrap_or_default());
 
-        Err(SvcError::PoolCreateError { diag })
+        let error = diag.error.as_ref().map(|e| e.code).unwrap_or_default();
+        diag.status = Self::pool_error_to_status(error);
+        let (code, kind) = Self::pool_error_to_kind(error);
+
+        Err(SvcError::PoolCreateError { diag, code, kind })
     }
 
     /// Attempt to import a pool.
@@ -272,10 +276,23 @@ impl OperationGuardArc<PoolSpec> {
         on_create_fail(&spec, registry).unwrap_or(OnCreateFail::LeaveAsIs)
     }
 
-    /// Maps a [`SvcError`] obtained after a failed creation or import to a [`PoolError`].
+    /// Maps a [`SvcError`] obtained after a failed creation to a [`PoolError`], [`tonic::Code`]
+    /// and [`ReplyErrorKind`].
+    pub(super) fn pool_create_error(
+        error: &SvcError,
+    ) -> Option<(PoolError, (tonic::Code, ReplyErrorKind))> {
+        Self::pool_grpc_error(error)
+    }
+
+    /// Maps a [`SvcError`] obtained after a failed import to a [`PoolError`].
     pub(super) fn pool_import_error(error: &SvcError) -> Option<PoolError> {
-        let (code, errno) = error.tonic_errno();
-        let code = match code {
+        Self::pool_grpc_error(error).map(|(error, _)| error)
+    }
+
+    /// Maps a [`SvcError`] obtained after a failed creation or import to a [`PoolError`].
+    fn pool_grpc_error(error: &SvcError) -> Option<(PoolError, (tonic::Code, ReplyErrorKind))> {
+        let (tonic_code, errno) = error.tonic_errno();
+        let code = match tonic_code {
             tonic::Code::InvalidArgument
                 if error.to_string().contains("EISDIR: Is a directory") =>
             {
@@ -288,7 +305,7 @@ impl OperationGuardArc<PoolSpec> {
             tonic::Code::InvalidArgument => PoolErrorCode::InvalidSuperBlock,
             tonic::Code::NotFound => PoolErrorCode::DiskNotFound,
             tonic::Code::Cancelled => PoolErrorCode::TimeOut,
-            tonic::Code::Aborted => PoolErrorCode::TimeOut,
+            tonic::Code::Aborted => PoolErrorCode::Aborted,
             _ => return None,
         };
         let msg = match &error {
@@ -297,10 +314,59 @@ impl OperationGuardArc<PoolSpec> {
             }
             _error => _error.to_string(),
         };
-        Some(PoolError {
-            code,
-            msg: Some(msg),
-        })
+        Some((
+            PoolError {
+                code,
+                msg: Some(msg),
+            },
+            Self::pool_error_to_kind(code),
+        ))
+    }
+
+    /// Maps a [`PoolErrorCode`] to a [`tonic::Code`] and [`ReplyErrorKind`].
+    /// We try to map in similar, but reverse mode as [`Self::pool_grpc_error`].
+    /// This is used when we find the error code via the probing information, rather than
+    /// found via the actual create/import as returned by the data-plane.
+    pub(super) fn pool_error_to_kind(error: PoolErrorCode) -> (tonic::Code, ReplyErrorKind) {
+        use tonic::Code;
+        match error {
+            PoolErrorCode::Unknown => (Code::Unknown, ReplyErrorKind::Internal),
+            PoolErrorCode::DiskNotFound => (Code::NotFound, ReplyErrorKind::NotFound),
+            PoolErrorCode::DiskReadIoError => (Code::DataLoss, ReplyErrorKind::DiskFault),
+            PoolErrorCode::ForeignPoolName => (Code::InvalidArgument, ReplyErrorKind::Conflict),
+            PoolErrorCode::ForeignPoolUid => (Code::InvalidArgument, ReplyErrorKind::Conflict),
+            PoolErrorCode::SuperBlockIoError => (Code::DataLoss, ReplyErrorKind::DiskFault),
+            PoolErrorCode::InvalidSuperBlock => (Code::InvalidArgument, ReplyErrorKind::DiskFault),
+            PoolErrorCode::DiskIsADirectory => {
+                (Code::InvalidArgument, ReplyErrorKind::InvalidArgument)
+            }
+            PoolErrorCode::NodeIsUnknown => (Code::NotFound, ReplyErrorKind::NotFound),
+            PoolErrorCode::NodeIsOffline => {
+                (Code::FailedPrecondition, ReplyErrorKind::FailedPrecondition)
+            }
+            PoolErrorCode::ImportDisabled => {
+                (Code::FailedPrecondition, ReplyErrorKind::FailedPrecondition)
+            }
+            PoolErrorCode::TimeOut => (Code::Cancelled, ReplyErrorKind::Cancelled),
+            PoolErrorCode::Aborted => (Code::Aborted, ReplyErrorKind::Aborted),
+            PoolErrorCode::DiskClaimed => (Code::InvalidArgument, ReplyErrorKind::InvalidArgument),
+            PoolErrorCode::PCIDriverUnsupported => {
+                (Code::InvalidArgument, ReplyErrorKind::InvalidArgument)
+            }
+            PoolErrorCode::PCIKernelBound => {
+                (Code::InvalidArgument, ReplyErrorKind::InvalidArgument)
+            }
+            PoolErrorCode::PCINotNvme => (Code::InvalidArgument, ReplyErrorKind::InvalidArgument),
+            PoolErrorCode::InvalidDiskUri => {
+                (Code::InvalidArgument, ReplyErrorKind::InvalidArgument)
+            }
+            PoolErrorCode::DiskNotImportable => {
+                (Code::InvalidArgument, ReplyErrorKind::InvalidArgument)
+            }
+            PoolErrorCode::UriNotHandled => {
+                (Code::InvalidArgument, ReplyErrorKind::InvalidArgument)
+            }
+        }
     }
 
     // todo: fit in a trait

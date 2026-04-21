@@ -57,6 +57,8 @@ enum ProbeErrorCode {
   DiskNotImportable = 17;
   // Probing is not implemented for this URI.
   UriNotHandled = 18;
+  // Request cancelled because it took too long.
+  Aborted = 19;
 }
 message ProbeError {
   ProbeErrorCode code = 1;

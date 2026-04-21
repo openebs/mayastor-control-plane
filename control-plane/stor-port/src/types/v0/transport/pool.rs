@@ -120,6 +120,8 @@ pub enum PoolErrorCode {
     ImportDisabled,
     /// gRPC to the pool timed out.
     TimeOut,
+    /// gRPC aborted because it took too long.
+    Aborted,
     // If the Disk is already claimed by something.
     // This may happen if the disk is used by another pool for example.
     DiskClaimed,
@@ -451,6 +453,7 @@ impl From<PoolErrorCode> for models::PoolProbeErrorCode {
             PoolErrorCode::NodeIsOffline => Self::NodeIsOffline,
             PoolErrorCode::ImportDisabled => Self::ImportDisabled,
             PoolErrorCode::TimeOut => Self::TimeOut,
+            PoolErrorCode::Aborted => Self::Aborted,
             PoolErrorCode::DiskClaimed => Self::DiskClaimed,
             PoolErrorCode::PCIDriverUnsupported => Self::PciDriverUnsupported,
             PoolErrorCode::PCIKernelBound => Self::PciKernelBound,

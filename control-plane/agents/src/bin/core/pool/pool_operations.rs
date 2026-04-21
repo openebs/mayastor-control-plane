@@ -86,12 +86,13 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
         let _ = pool.start_create(registry, request).await?;
 
         let mut result = node.create_pool(request).await;
+
         let on_fail = OnCreateFail::on_pool_create_err(&result);
 
         if let Err(ref error) = result {
-            let diag = Self::pool_import_error(error).map(|error| {
+            let diag = Self::pool_create_error(error).map(|(error, kind)| {
                 let disks = pool.as_ref().disks.first().map(|d| d.to_string());
-                PoolDiag {
+                let diag = PoolDiag {
                     import_errors: vec![PoolDiskError {
                         error: error.clone(),
                         disk: disks.unwrap_or_default(),
@@ -99,14 +100,15 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
                     status: Self::pool_error_to_status(error.code),
                     error: Some(error),
                     ..Default::default()
-                }
+                };
+                (diag, kind)
             });
 
             if matches!(on_fail, OnCreateFail::LeaveAsIs) {
-                pool.lock().metadata.runtime.diag = diag.clone();
+                pool.lock().metadata.runtime.diag = diag.clone().map(|(diag, _)| diag);
             }
-            if let Some(diag) = diag {
-                result = Err(SvcError::PoolCreateError { diag });
+            if let Some((diag, (code, kind))) = diag {
+                result = Err(SvcError::PoolCreateError { diag, code, kind });
             }
         }
 

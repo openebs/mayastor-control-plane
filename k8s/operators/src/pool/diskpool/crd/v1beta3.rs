@@ -95,6 +95,8 @@ pub enum PoolErrorCode {
     ImportDisabled,
     /// gRPC to the pool timed out.
     TimeOut,
+    /// gRPC aborted because it took too long.
+    Aborted,
     // If the Disk is already claimed by something.
     // This may happen if the disk is used by another pool for example.
     DiskClaimed,
@@ -672,6 +674,7 @@ impl From<openapi::models::PoolProbeErrorCode> for PoolErrorCode {
             openapi::models::PoolProbeErrorCode::NodeIsOffline => PoolErrorCode::NodeIsOffline,
             openapi::models::PoolProbeErrorCode::ImportDisabled => PoolErrorCode::ImportDisabled,
             openapi::models::PoolProbeErrorCode::TimeOut => PoolErrorCode::TimeOut,
+            openapi::models::PoolProbeErrorCode::Aborted => PoolErrorCode::Aborted,
             openapi::models::PoolProbeErrorCode::DiskClaimed => PoolErrorCode::DiskClaimed,
             openapi::models::PoolProbeErrorCode::PciDriverUnsupported => {
                 PoolErrorCode::PciDriverUnsupported
