@@ -4,7 +4,7 @@ use crate::{
         openapi::{
             actix::server::RestError,
             apis::actix_server::StatusCode,
-            models::{rest_json_error::Kind, CustomErrorInfo, RestJsonError},
+            models::{rest_json_error::Kind, CustomErrorInfo, CustomErrorPool, RestJsonError},
         },
         transport::{PoolDiag, PoolErrorCode},
     },
@@ -252,7 +252,9 @@ pub fn rest_error_from(src: ReplyError, diag: Option<PoolDiag>) -> RestError<Res
                 Kind::PoolCreateWithDiag
             };
             let custom = diag.map(|d| CustomErrorInfo {
-                pool_diag: Some(d.into()),
+                pool: CustomErrorPool {
+                    diag: Some(d.into()),
+                },
             });
             let error = RestJsonError::new_all(details, message, kind, custom);
             (status, error)

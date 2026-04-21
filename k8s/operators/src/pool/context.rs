@@ -871,7 +871,7 @@ impl ResourceContext {
         if let clients::tower::Error::Response(response) = &error {
             if let Some(diag) = response
                 .error_body()
-                .and_then(|e| e.custom_info.as_ref().and_then(|i| i.pool_diag.as_ref()))
+                .and_then(|e| e.custom_info.as_ref().and_then(|i| i.pool.diag.as_ref()))
             {
                 if let Some(probe) = diag.error.as_ref() {
                     self.handle_error_diag(probe, diag).await?;

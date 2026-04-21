@@ -3892,7 +3892,14 @@ components:
     CustomErrorInfo:
       type: object
       properties:
-        poolDiag:
+        pool:
+          $ref: '#/components/schemas/CustomErrorPool'
+      required:
+        - pool
+    CustomErrorPool:
+      type: object
+      properties:
+        diag:
           $ref: '#/components/schemas/PoolDiag'
     RestWatch:
       example:
