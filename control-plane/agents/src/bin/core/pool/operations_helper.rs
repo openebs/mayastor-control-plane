@@ -1,6 +1,6 @@
 use crate::{
     controller::{
-        io_engine::{HostApi, PoolApi},
+        io_engine::{types::ProbePoolRequest, HostApi, PoolApi},
         registry::Registry,
         resources::{
             operations::ResourceLifecycle,
@@ -13,7 +13,7 @@ use crate::{
 use agents::{errors, errors::SvcError};
 use grpc::operations::pool::traits::ClearErrorsRequest;
 use stor_port::{
-    transport_api::ResourceKind,
+    transport_api::{ReplyErrorKind, ResourceKind},
     types::v0::{
         store::{
             pool::{PoolImportOp, PoolOperation, PoolSpec},
@@ -22,7 +22,8 @@ use stor_port::{
         transport::{
             CreatePool, CtrlPoolState, DestroyReplica, GetBlockDevices, ImportBackoff, ImportPool,
             NodeId, NodeStatus, Pool, PoolDeviceUri, PoolDiag, PoolDiskError, PoolError,
-            PoolErrorCode, PoolState, PoolStatus, ReplicaOwners,
+            PoolErrorCode, PoolId, PoolState, PoolStatus, ReplicaOwners, SnapshotLossInfo,
+            VolumeId, VolumeLossInfo,
         },
     },
 };
@@ -31,7 +32,6 @@ use itertools::Itertools;
 use regex::Regex;
 use snafu::OptionExt;
 use std::{collections::HashSet, ops::Deref, sync::Arc};
-use stor_port::types::v0::transport::{PoolId, SnapshotLossInfo, VolumeId, VolumeLossInfo};
 use tokio::sync::RwLock;
 
 impl OperationGuardArc<PoolSpec> {
@@ -107,7 +107,7 @@ impl OperationGuardArc<PoolSpec> {
     }
 
     fn mark_diag_error(&mut self, error: PoolError) {
-        let status = self.pool_error_to_status(error.code);
+        let status = Self::pool_error_to_status(error.code);
         self.mark_diag(status, error);
     }
 
@@ -132,27 +132,31 @@ impl OperationGuardArc<PoolSpec> {
     /// If we're not sure what the error was, or if we timed out then we're unsure, so
     /// we map it as unknown.
     /// If the pool has invalid metadata then we map it as faulted.
-    fn pool_error_to_status(&self, error: PoolErrorCode) -> PoolStatus {
+    pub(super) fn pool_error_to_status(error: PoolErrorCode) -> PoolStatus {
         match error {
             PoolErrorCode::Unknown => PoolStatus::Unknown,
             PoolErrorCode::DiskNotFound => PoolStatus::Offline,
             PoolErrorCode::DiskReadIoError => PoolStatus::Offline,
             PoolErrorCode::ForeignPoolName => PoolStatus::Faulted,
             PoolErrorCode::ForeignPoolUid => PoolStatus::Faulted,
-            PoolErrorCode::SuperBlock => PoolStatus::Offline,
+            PoolErrorCode::SuperBlockIoError => PoolStatus::Offline,
             PoolErrorCode::InvalidSuperBlock => PoolStatus::Faulted,
             PoolErrorCode::DiskIsADirectory => PoolStatus::Offline,
             PoolErrorCode::NodeIsUnknown => PoolStatus::Unknown,
             PoolErrorCode::NodeIsOffline => PoolStatus::Offline,
             PoolErrorCode::ImportDisabled => PoolStatus::Offline,
             PoolErrorCode::TimeOut => PoolStatus::Unknown,
+            PoolErrorCode::Aborted => PoolStatus::Unknown,
             PoolErrorCode::DiskClaimed => PoolStatus::Offline,
             PoolErrorCode::PCIDriverUnsupported => PoolStatus::Offline,
             PoolErrorCode::PCIKernelBound => PoolStatus::Offline,
             PoolErrorCode::PCINotNvme => PoolStatus::Offline,
             PoolErrorCode::InvalidDiskUri => PoolStatus::Offline,
+            PoolErrorCode::DiskNotImportable => PoolStatus::Offline,
+            PoolErrorCode::UriNotHandled => PoolStatus::Offline,
         }
     }
+
     /// Mark the pool in [`PoolErrorCode::ImportDisabled`] since it cannot be
     /// imported due to being cordoned for imports.
     pub(crate) fn mark_as_import_cordoned(&mut self) {
@@ -188,11 +192,41 @@ impl OperationGuardArc<PoolSpec> {
         }
         diag.error = diag.import_errors.first().map(|e| e.error.clone());
         diag.status =
-            self.pool_error_to_status(diag.error.as_ref().map(|e| e.code).unwrap_or_default());
+            Self::pool_error_to_status(diag.error.as_ref().map(|e| e.code).unwrap_or_default());
         let mut pool = self.lock();
         pool.metadata.runtime.diag = Some(diag);
 
         Ok(false)
+    }
+
+    /// Probes a pool for any errors with its backing devices during a create operation.
+    /// # NOTE
+    /// In case probe fails we should not log any information to stdout, as we're trying to avoid
+    /// thrashing the logs when a pool is in a bad state for a long time.
+    pub(crate) async fn validate_probe(
+        create: &CreatePool,
+        node: &Arc<RwLock<NodeWrapper>>,
+    ) -> Result<(), SvcError> {
+        let probed = node.probe_pool(&ProbePoolRequest::from(create)).await?;
+
+        if probed.success || probed.unimpl {
+            return Ok(());
+        }
+
+        let mut diag = PoolDiag::default();
+
+        for (_, error) in probed.errors {
+            for probe in error.error {
+                diag.import_errors.push(probe);
+            }
+        }
+        diag.error = diag.import_errors.first().map(|e| e.error.clone());
+
+        let error = diag.error.as_ref().map(|e| e.code).unwrap_or_default();
+        diag.status = Self::pool_error_to_status(error);
+        let (code, kind) = Self::pool_error_to_kind(error);
+
+        Err(SvcError::PoolCreateError { diag, code, kind })
     }
 
     /// Attempt to import a pool.
@@ -242,23 +276,36 @@ impl OperationGuardArc<PoolSpec> {
         on_create_fail(&spec, registry).unwrap_or(OnCreateFail::LeaveAsIs)
     }
 
-    /// Maps a [`SvcError`] obtained after a failed creation or import to a [`PoolError`].
+    /// Maps a [`SvcError`] obtained after a failed creation to a [`PoolError`], [`tonic::Code`]
+    /// and [`ReplyErrorKind`].
+    pub(super) fn pool_create_error(
+        error: &SvcError,
+    ) -> Option<(PoolError, (tonic::Code, ReplyErrorKind))> {
+        Self::pool_grpc_error(error)
+    }
+
+    /// Maps a [`SvcError`] obtained after a failed import to a [`PoolError`].
     pub(super) fn pool_import_error(error: &SvcError) -> Option<PoolError> {
-        let (code, errno) = error.tonic_errno();
-        let code = match code {
+        Self::pool_grpc_error(error).map(|(error, _)| error)
+    }
+
+    /// Maps a [`SvcError`] obtained after a failed creation or import to a [`PoolError`].
+    fn pool_grpc_error(error: &SvcError) -> Option<(PoolError, (tonic::Code, ReplyErrorKind))> {
+        let (tonic_code, errno) = error.tonic_errno();
+        let code = match tonic_code {
             tonic::Code::InvalidArgument
                 if error.to_string().contains("EISDIR: Is a directory") =>
             {
                 PoolErrorCode::DiskIsADirectory
             }
-            tonic::Code::DataLoss if errno == nix::Error::EIO => PoolErrorCode::SuperBlock,
+            tonic::Code::DataLoss if errno == nix::Error::EIO => PoolErrorCode::SuperBlockIoError,
             tonic::Code::DataLoss if errno == nix::Error::EILSEQ => {
                 PoolErrorCode::InvalidSuperBlock
             }
             tonic::Code::InvalidArgument => PoolErrorCode::InvalidSuperBlock,
             tonic::Code::NotFound => PoolErrorCode::DiskNotFound,
             tonic::Code::Cancelled => PoolErrorCode::TimeOut,
-            tonic::Code::Aborted => PoolErrorCode::TimeOut,
+            tonic::Code::Aborted => PoolErrorCode::Aborted,
             _ => return None,
         };
         let msg = match &error {
@@ -267,10 +314,59 @@ impl OperationGuardArc<PoolSpec> {
             }
             _error => _error.to_string(),
         };
-        Some(PoolError {
-            code,
-            msg: Some(msg),
-        })
+        Some((
+            PoolError {
+                code,
+                msg: Some(msg),
+            },
+            Self::pool_error_to_kind(code),
+        ))
+    }
+
+    /// Maps a [`PoolErrorCode`] to a [`tonic::Code`] and [`ReplyErrorKind`].
+    /// We try to map in similar, but reverse mode as [`Self::pool_grpc_error`].
+    /// This is used when we find the error code via the probing information, rather than
+    /// found via the actual create/import as returned by the data-plane.
+    pub(super) fn pool_error_to_kind(error: PoolErrorCode) -> (tonic::Code, ReplyErrorKind) {
+        use tonic::Code;
+        match error {
+            PoolErrorCode::Unknown => (Code::Unknown, ReplyErrorKind::Internal),
+            PoolErrorCode::DiskNotFound => (Code::NotFound, ReplyErrorKind::NotFound),
+            PoolErrorCode::DiskReadIoError => (Code::DataLoss, ReplyErrorKind::DiskFault),
+            PoolErrorCode::ForeignPoolName => (Code::InvalidArgument, ReplyErrorKind::Conflict),
+            PoolErrorCode::ForeignPoolUid => (Code::InvalidArgument, ReplyErrorKind::Conflict),
+            PoolErrorCode::SuperBlockIoError => (Code::DataLoss, ReplyErrorKind::DiskFault),
+            PoolErrorCode::InvalidSuperBlock => (Code::InvalidArgument, ReplyErrorKind::DiskFault),
+            PoolErrorCode::DiskIsADirectory => {
+                (Code::InvalidArgument, ReplyErrorKind::InvalidArgument)
+            }
+            PoolErrorCode::NodeIsUnknown => (Code::NotFound, ReplyErrorKind::NotFound),
+            PoolErrorCode::NodeIsOffline => {
+                (Code::FailedPrecondition, ReplyErrorKind::FailedPrecondition)
+            }
+            PoolErrorCode::ImportDisabled => {
+                (Code::FailedPrecondition, ReplyErrorKind::FailedPrecondition)
+            }
+            PoolErrorCode::TimeOut => (Code::Cancelled, ReplyErrorKind::Cancelled),
+            PoolErrorCode::Aborted => (Code::Aborted, ReplyErrorKind::Aborted),
+            PoolErrorCode::DiskClaimed => (Code::InvalidArgument, ReplyErrorKind::InvalidArgument),
+            PoolErrorCode::PCIDriverUnsupported => {
+                (Code::InvalidArgument, ReplyErrorKind::InvalidArgument)
+            }
+            PoolErrorCode::PCIKernelBound => {
+                (Code::InvalidArgument, ReplyErrorKind::InvalidArgument)
+            }
+            PoolErrorCode::PCINotNvme => (Code::InvalidArgument, ReplyErrorKind::InvalidArgument),
+            PoolErrorCode::InvalidDiskUri => {
+                (Code::InvalidArgument, ReplyErrorKind::InvalidArgument)
+            }
+            PoolErrorCode::DiskNotImportable => {
+                (Code::InvalidArgument, ReplyErrorKind::InvalidArgument)
+            }
+            PoolErrorCode::UriNotHandled => {
+                (Code::InvalidArgument, ReplyErrorKind::InvalidArgument)
+            }
+        }
     }
 
     // todo: fit in a trait

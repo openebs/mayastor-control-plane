@@ -82,7 +82,7 @@ pub enum PoolErrorCode {
     /// Pool on-disk uuid doesn't match the expected.
     ForeignPoolUid,
     /// Failed to check super block error.
-    SuperBlock,
+    SuperBlockIoError,
     /// Invalid super block (eg: CRC error).
     InvalidSuperBlock,
     /// Disk is a directory (can happen when setting up incorrect volume mounts).
@@ -95,6 +95,8 @@ pub enum PoolErrorCode {
     ImportDisabled,
     /// gRPC to the pool timed out.
     TimeOut,
+    /// gRPC aborted because it took too long.
+    Aborted,
     // If the Disk is already claimed by something.
     // This may happen if the disk is used by another pool for example.
     DiskClaimed,
@@ -112,6 +114,10 @@ pub enum PoolErrorCode {
     Unreachable,
     /// The encryption secret was not found.
     EncryptionSecretError,
+    // Disk is not importable (ie malloc).
+    DiskNotImportable,
+    // Probing is not implemented for this URI.
+    UriNotHandled,
 }
 
 /// Pool error code and human-readable message.
@@ -414,6 +420,18 @@ impl DiskPoolStatus {
         .with_conditions(dsp)
     }
 
+    /// Set when Pool fails to create, but with diagnostic information available.
+    pub fn create_error_diag(dsp: &DiskPool, error: PoolError, status: PoolStatus) -> Self {
+        let cr_status = dsp.status.as_ref();
+        Self {
+            cr_state: cr_status.map(|s| s.cr_state).unwrap_or_default(),
+            status: Some(status),
+            error: Some(error),
+            ..Default::default()
+        }
+        .with_conditions(dsp)
+    }
+
     /// Set when Pool is not found for some reason.
     pub fn disk_not_found(dsp: &DiskPool) -> Self {
         let status = dsp.status.as_ref();
@@ -643,7 +661,9 @@ impl From<openapi::models::PoolProbeErrorCode> for PoolErrorCode {
             openapi::models::PoolProbeErrorCode::DiskReadIoError => PoolErrorCode::DiskReadIoError,
             openapi::models::PoolProbeErrorCode::ForeignPoolName => PoolErrorCode::ForeignPoolName,
             openapi::models::PoolProbeErrorCode::ForeignPoolUid => PoolErrorCode::ForeignPoolUid,
-            openapi::models::PoolProbeErrorCode::SuperBlock => PoolErrorCode::SuperBlock,
+            openapi::models::PoolProbeErrorCode::SuperBlockIoError => {
+                PoolErrorCode::SuperBlockIoError
+            }
             openapi::models::PoolProbeErrorCode::InvalidSuperBlock => {
                 PoolErrorCode::InvalidSuperBlock
             }
@@ -654,6 +674,7 @@ impl From<openapi::models::PoolProbeErrorCode> for PoolErrorCode {
             openapi::models::PoolProbeErrorCode::NodeIsOffline => PoolErrorCode::NodeIsOffline,
             openapi::models::PoolProbeErrorCode::ImportDisabled => PoolErrorCode::ImportDisabled,
             openapi::models::PoolProbeErrorCode::TimeOut => PoolErrorCode::TimeOut,
+            openapi::models::PoolProbeErrorCode::Aborted => PoolErrorCode::Aborted,
             openapi::models::PoolProbeErrorCode::DiskClaimed => PoolErrorCode::DiskClaimed,
             openapi::models::PoolProbeErrorCode::PciDriverUnsupported => {
                 PoolErrorCode::PciDriverUnsupported
@@ -661,6 +682,10 @@ impl From<openapi::models::PoolProbeErrorCode> for PoolErrorCode {
             openapi::models::PoolProbeErrorCode::PciKernelBound => PoolErrorCode::PciKernelBound,
             openapi::models::PoolProbeErrorCode::PciNotNvme => PoolErrorCode::PciNotNvme,
             openapi::models::PoolProbeErrorCode::InvalidDiskUri => PoolErrorCode::InvalidDiskUri,
+            openapi::models::PoolProbeErrorCode::DiskNotImportable => {
+                PoolErrorCode::DiskNotImportable
+            }
+            openapi::models::PoolProbeErrorCode::UriNotHandled => PoolErrorCode::UriNotHandled,
         }
     }
 }

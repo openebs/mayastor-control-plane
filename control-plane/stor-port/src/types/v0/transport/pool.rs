@@ -107,7 +107,7 @@ pub enum PoolErrorCode {
     /// Pool on-disk uuid doesn't match the expected.
     ForeignPoolUid,
     /// Failed to check super block error.
-    SuperBlock,
+    SuperBlockIoError,
     /// Invalid super block (eg: CRC error).
     InvalidSuperBlock,
     /// Disk is a directory (can happen when setting up incorrect volume mounts).
@@ -120,6 +120,8 @@ pub enum PoolErrorCode {
     ImportDisabled,
     /// gRPC to the pool timed out.
     TimeOut,
+    /// gRPC aborted because it took too long.
+    Aborted,
     // If the Disk is already claimed by something.
     // This may happen if the disk is used by another pool for example.
     DiskClaimed,
@@ -131,6 +133,10 @@ pub enum PoolErrorCode {
     PCINotNvme,
     // The disk URI is invalid or not supported.
     InvalidDiskUri,
+    // Disk is not importable (ie malloc).
+    DiskNotImportable,
+    // Probing is not implemented for this URI.
+    UriNotHandled,
 }
 
 /// Pool error code and human-readable message.
@@ -173,6 +179,23 @@ impl PoolDiag {
         Self {
             status: state.status.clone(),
             ..self
+        }
+    }
+}
+
+impl std::fmt::Display for PoolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match &self.msg {
+            None => write!(f, "{:?}", self.code),
+            Some(msg) => write!(f, "{msg}: {:?}", self.code),
+        }
+    }
+}
+impl std::fmt::Display for PoolDiag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match &self.error {
+            None => Ok(()),
+            Some(error) => write!(f, "{error}"),
         }
     }
 }
@@ -423,18 +446,21 @@ impl From<PoolErrorCode> for models::PoolProbeErrorCode {
             PoolErrorCode::DiskReadIoError => Self::DiskReadIoError,
             PoolErrorCode::ForeignPoolName => Self::ForeignPoolName,
             PoolErrorCode::ForeignPoolUid => Self::ForeignPoolUid,
-            PoolErrorCode::SuperBlock => Self::SuperBlock,
+            PoolErrorCode::SuperBlockIoError => Self::SuperBlockIoError,
             PoolErrorCode::InvalidSuperBlock => Self::InvalidSuperBlock,
             PoolErrorCode::DiskIsADirectory => Self::DiskIsADirectory,
             PoolErrorCode::NodeIsUnknown => Self::NodeIsUnknown,
             PoolErrorCode::NodeIsOffline => Self::NodeIsOffline,
             PoolErrorCode::ImportDisabled => Self::ImportDisabled,
             PoolErrorCode::TimeOut => Self::TimeOut,
+            PoolErrorCode::Aborted => Self::Aborted,
             PoolErrorCode::DiskClaimed => Self::DiskClaimed,
             PoolErrorCode::PCIDriverUnsupported => Self::PciDriverUnsupported,
             PoolErrorCode::PCIKernelBound => Self::PciKernelBound,
             PoolErrorCode::PCINotNvme => Self::PciNotNvme,
             PoolErrorCode::InvalidDiskUri => Self::InvalidDiskUri,
+            PoolErrorCode::DiskNotImportable => Self::DiskNotImportable,
+            PoolErrorCode::UriNotHandled => Self::UriNotHandled,
         }
     }
 }

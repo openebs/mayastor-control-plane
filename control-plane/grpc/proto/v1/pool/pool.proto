@@ -29,7 +29,7 @@ enum ProbeErrorCode {
   // Pool on-disk uuid doesn't match the expected
   ForeignPoolUid = 4;
   // Failed to check super block error
-  SuperBlock = 5;
+  SuperBlockIoError = 5;
   // Invalid super block (eg: CRC error)
   InvalidSuperBlock = 6;
   // Disk is a directory (can happen when setting up incorrect volume mounts)
@@ -53,6 +53,12 @@ enum ProbeErrorCode {
   PCINotNvme = 15;
   // The disk URI is invalid or not supported.
   InvalidDiskUri = 16;
+  // Disk is not importable (ie malloc).
+  DiskNotImportable = 17;
+  // Probing is not implemented for this URI.
+  UriNotHandled = 18;
+  // Request cancelled because it took too long.
+  Aborted = 19;
 }
 message ProbeError {
   ProbeErrorCode code = 1;
@@ -212,6 +218,7 @@ message CreatePoolReply {
     Pool pool = 1;
     common.ReplyError error = 2;
   }
+  optional PoolDiag poolDiag = 3;
 }
 
 // Request type for expand pool

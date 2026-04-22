@@ -3,7 +3,8 @@ use crate::{
     common::{CommonFilter, NodeFilter, NodePoolFilter, PoolFilter},
     context::{Client, Context, TracedChannel},
     operations::pool::traits::{
-        CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo, PoolOperations,
+        CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo, PoolCreateError,
+        PoolOperations,
     },
     pool::{
         self, clear_errors_reply, cordon_pool_reply, create_pool_reply, destroy_pool_reply,
@@ -48,15 +49,18 @@ impl PoolOperations for PoolClient {
         &self,
         request: &dyn CreatePoolInfo,
         ctx: Option<Context>,
-    ) -> Result<Pool, ReplyError> {
+    ) -> Result<Pool, PoolCreateError> {
         let req = self.request(request, ctx, MessageIdVs::CreatePool);
         let response = self.client().create_pool(req).await?.into_inner();
         match response.reply {
             Some(create_pool_reply) => match create_pool_reply {
                 create_pool_reply::Reply::Pool(pool) => Ok(Pool::try_from(pool)?),
-                create_pool_reply::Reply::Error(err) => Err(err.into()),
+                create_pool_reply::Reply::Error(error) => Err(PoolCreateError {
+                    diag: response.pool_diag.map(Into::into),
+                    error: error.into(),
+                }),
             },
-            None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
+            None => Err(ReplyError::invalid_response(ResourceKind::Pool).into()),
         }
     }
 

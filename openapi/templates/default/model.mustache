@@ -61,9 +61,10 @@ pub enum {{{classname}}} {
 {{!-- for non-enum schemas --}}
 {{^isEnum}}
 {{^discriminator}}
-{{#description}}/// {{{description}}}{{/description}}
-{{^oneOf}}
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+{{#description}}/// {{{description}}}{{/description}}{{^oneOf}}{{#vendorExtensions}}{{#x-no-derive-dbg}}
+#[derive(Clone, Default, Eq, PartialEq, Serialize, Deserialize)]{{/x-no-derive-dbg}}{{^x-no-derive-dbg}}
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]{{/x-no-derive-dbg}}{{/vendorExtensions}}{{^vendorExtensions}}
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]{{/vendorExtensions}}
 pub struct {{{classname}}} {
 {{#vars}}
     {{#description}}/// {{{description}}}{{/description}}

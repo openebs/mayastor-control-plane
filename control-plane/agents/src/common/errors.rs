@@ -5,8 +5,8 @@ use stor_port::{
     types::v0::{
         store::definitions::StoreError,
         transport::{
-            pool::PoolDeviceUri, ApiVersion, Filter, NodeId, NvmeNqnParseError, PoolId, PoolStatus,
-            ReplicaId, SnapshotLossInfo, VolumeLossInfo,
+            pool::PoolDeviceUri, ApiVersion, Filter, NodeId, NvmeNqnParseError, PoolDiag, PoolId,
+            PoolStatus, ReplicaId, SnapshotLossInfo, VolumeLossInfo,
         },
     },
 };
@@ -525,6 +525,12 @@ pub enum SvcError {
         snapshot_count: usize,
         snapshot_loss: SnapshotLossInfo,
     },
+    #[snafu(display("Failed to create pool: {diag}"))]
+    PoolCreateError {
+        diag: PoolDiag,
+        code: tonic::Code,
+        kind: ReplyErrorKind,
+    },
 }
 
 impl SvcError {
@@ -549,6 +555,7 @@ impl SvcError {
             Self::RestrictedReplicaCount { .. } => tonic::Code::FailedPrecondition,
             Self::ReplicaSetPropertyFailed { .. } => tonic::Code::DataLoss,
             Self::ReplaceNqnNotFound { .. } => tonic::Code::FailedPrecondition,
+            Self::PoolCreateError { code, .. } => *code,
             _ => tonic::Code::Internal,
         }
     }
@@ -1360,7 +1367,51 @@ impl From<SvcError> for ReplyError {
                 source,
                 extra,
             },
+            SvcError::PoolCreateError { kind, .. } => ReplyError {
+                kind,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
         }
+    }
+}
+
+impl From<SvcError> for grpc::operations::pool::traits::PoolCreateError {
+    fn from(error: SvcError) -> Self {
+        match &error {
+            SvcError::PoolCreateError { diag, .. } => Self {
+                diag: Some(diag.clone()),
+                error: error.into(),
+            },
+            _error => Self {
+                diag: None,
+                error: error.into(),
+            },
+        }
+    }
+}
+
+fn tonic_to_kind(code: tonic::Code) -> ReplyErrorKind {
+    use tonic::Code;
+    match code {
+        Code::Ok => ReplyErrorKind::Internal,
+        Code::Cancelled => ReplyErrorKind::Cancelled,
+        Code::Unknown => ReplyErrorKind::Internal,
+        Code::InvalidArgument => ReplyErrorKind::InvalidArgument,
+        Code::DeadlineExceeded => ReplyErrorKind::DeadlineExceeded,
+        Code::NotFound => ReplyErrorKind::NotFound,
+        Code::AlreadyExists => ReplyErrorKind::AlreadyExists,
+        Code::PermissionDenied => ReplyErrorKind::PermissionDenied,
+        Code::ResourceExhausted => ReplyErrorKind::ResourceExhausted,
+        Code::FailedPrecondition => ReplyErrorKind::FailedPrecondition,
+        Code::Aborted => ReplyErrorKind::Aborted,
+        Code::OutOfRange => ReplyErrorKind::OutOfRange,
+        Code::Unimplemented => ReplyErrorKind::Unimplemented,
+        Code::Internal => ReplyErrorKind::Internal,
+        Code::Unavailable => ReplyErrorKind::Unavailable,
+        Code::DataLoss => ReplyErrorKind::Internal,
+        Code::Unauthenticated => ReplyErrorKind::Unauthenticated,
     }
 }
 
@@ -1371,29 +1422,9 @@ fn grpc_to_reply_error(error: SvcError) -> ReplyError {
             request,
             resource,
         } => {
-            use tonic::Code;
-            let kind = match source.code() {
-                Code::Ok => ReplyErrorKind::Internal,
-                Code::Cancelled => ReplyErrorKind::Cancelled,
-                Code::Unknown => ReplyErrorKind::Internal,
-                Code::InvalidArgument => ReplyErrorKind::InvalidArgument,
-                Code::DeadlineExceeded => ReplyErrorKind::DeadlineExceeded,
-                Code::NotFound => ReplyErrorKind::NotFound,
-                Code::AlreadyExists => ReplyErrorKind::AlreadyExists,
-                Code::PermissionDenied => ReplyErrorKind::PermissionDenied,
-                Code::ResourceExhausted => ReplyErrorKind::ResourceExhausted,
-                Code::FailedPrecondition => ReplyErrorKind::FailedPrecondition,
-                Code::Aborted => ReplyErrorKind::Aborted,
-                Code::OutOfRange => ReplyErrorKind::OutOfRange,
-                Code::Unimplemented => ReplyErrorKind::Unimplemented,
-                Code::Internal => ReplyErrorKind::Internal,
-                Code::Unavailable => ReplyErrorKind::Unavailable,
-                Code::DataLoss => ReplyErrorKind::Internal,
-                Code::Unauthenticated => ReplyErrorKind::Unauthenticated,
-            };
             let extra = format!("{request}::{source}");
             ReplyError {
-                kind,
+                kind: tonic_to_kind(source.code()),
                 resource,
                 source: format!(
                     "SvcError :: GrpcRequestError: {request}: {}",

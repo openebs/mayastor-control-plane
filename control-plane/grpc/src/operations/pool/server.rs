@@ -43,9 +43,11 @@ impl PoolGrpc for PoolServer {
         match self.service.create(&req, None).await {
             Ok(pool) => Ok(Response::new(CreatePoolReply {
                 reply: Some(create_pool_reply::Reply::Pool(pool.into())),
+                pool_diag: None,
             })),
             Err(err) => Ok(Response::new(CreatePoolReply {
-                reply: Some(create_pool_reply::Reply::Error(err.into())),
+                reply: Some(create_pool_reply::Reply::Error(err.error.into())),
+                pool_diag: err.diag.map(Into::into),
             })),
         }
     }

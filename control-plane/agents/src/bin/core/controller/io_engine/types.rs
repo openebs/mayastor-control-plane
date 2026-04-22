@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::SystemTime};
 use stor_port::types::v0::{
     transport,
-    transport::{ImportPool, NexusId, PoolDiskError, RebuildHistory},
+    transport::{CreatePool, ImportPool, NexusId, PoolDiskError, RebuildHistory},
 };
 /// Re-export creation types.
 pub(crate) use transport::{CreateNexusSnapReplDescr, CreateNexusSnapshot};
@@ -98,10 +98,23 @@ pub(crate) struct DestroySnapRebuild {
 pub(crate) struct ProbePoolRequest {
     /// A request like [`ImportPool`].
     pub(crate) import: ImportPool,
+    pub(crate) is_import: bool,
 }
 impl From<ImportPool> for ProbePoolRequest {
     fn from(import: ImportPool) -> Self {
-        Self { import }
+        Self {
+            import,
+            is_import: true,
+        }
+    }
+}
+impl From<&CreatePool> for ProbePoolRequest {
+    fn from(req: &CreatePool) -> Self {
+        let import = ImportPool::new(&req.node, &req.id, &req.disks, &req.encryption);
+        Self {
+            import,
+            is_import: false,
+        }
     }
 }
 

@@ -8,6 +8,7 @@ use crate::{
     },
 };
 use prost::UnknownEnumValue;
+use std::ops::Deref;
 use std::{collections::HashMap, convert::TryFrom};
 use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind},
@@ -44,6 +45,64 @@ impl<T: TryFrom<i32, Error = UnknownEnumValue>> ExternalType<T> {
     }
 }
 
+/// Error type which is returned over the transport for any operation.
+#[derive(Clone, Debug)]
+pub struct PoolCreateError {
+    /// The generic ReplyError.
+    pub error: ReplyError,
+    /// Pool diagnostic information used to identify the errors, similar to the runtime information.
+    pub diag: Option<PoolDiag>,
+}
+
+impl Deref for PoolCreateError {
+    type Target = ReplyError;
+    fn deref(&self) -> &Self::Target {
+        &self.error
+    }
+}
+
+impl From<tokio::task::JoinError> for PoolCreateError {
+    fn from(error: tokio::task::JoinError) -> Self {
+        Self {
+            error: ReplyError::aborted_error(error),
+            diag: None,
+        }
+    }
+}
+
+impl std::fmt::Display for PoolCreateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match &self.diag {
+            None => write!(f, "{}", self.error),
+            Some(diag) => write!(f, "{diag}"),
+        }
+    }
+}
+
+impl From<tonic::Status> for PoolCreateError {
+    fn from(status: tonic::Status) -> Self {
+        Self {
+            error: status.into(),
+            diag: None,
+        }
+    }
+}
+
+impl From<ReplyError> for PoolCreateError {
+    fn from(error: ReplyError) -> Self {
+        Self { error, diag: None }
+    }
+}
+
+impl From<crate::common::ReplyError> for PoolCreateError {
+    fn from(error: crate::common::ReplyError) -> Self {
+        Self {
+            error: error.into(),
+            diag: None,
+        }
+    }
+}
+
 /// Trait implemented by services which support pool operations.
 #[tonic::async_trait]
 pub trait PoolOperations: Send + Sync {
@@ -52,7 +111,7 @@ pub trait PoolOperations: Send + Sync {
         &self,
         pool: &dyn CreatePoolInfo,
         ctx: Option<Context>,
-    ) -> Result<Pool, ReplyError>;
+    ) -> Result<Pool, PoolCreateError>;
     /// Destroy a pool.
     /// Returns `Some(PoolDeleteResult)` for purge operations,
     /// `None` for normal deletes.
@@ -414,18 +473,21 @@ impl From<PoolErrorCode> for pool::ProbeErrorCode {
             PoolErrorCode::DiskReadIoError => Self::DiskReadIoError,
             PoolErrorCode::ForeignPoolName => Self::ForeignPoolName,
             PoolErrorCode::ForeignPoolUid => Self::ForeignPoolUid,
-            PoolErrorCode::SuperBlock => Self::SuperBlock,
+            PoolErrorCode::SuperBlockIoError => Self::SuperBlockIoError,
             PoolErrorCode::InvalidSuperBlock => Self::InvalidSuperBlock,
             PoolErrorCode::DiskIsADirectory => Self::DiskIsADirectory,
             PoolErrorCode::NodeIsUnknown => Self::NodeIsUnknown,
             PoolErrorCode::NodeIsOffline => Self::NodeIsOffline,
             PoolErrorCode::ImportDisabled => Self::ImportDisabled,
             PoolErrorCode::TimeOut => Self::TimeOut,
+            PoolErrorCode::Aborted => Self::Aborted,
             PoolErrorCode::DiskClaimed => Self::DiskClaimed,
             PoolErrorCode::PCIDriverUnsupported => Self::PciDriverUnsupported,
             PoolErrorCode::PCIKernelBound => Self::PciKernelBound,
             PoolErrorCode::PCINotNvme => Self::PciNotNvme,
             PoolErrorCode::InvalidDiskUri => Self::InvalidDiskUri,
+            PoolErrorCode::DiskNotImportable => Self::DiskNotImportable,
+            PoolErrorCode::UriNotHandled => Self::UriNotHandled,
         }
     }
 }
@@ -453,18 +515,21 @@ impl From<pool::ProbeErrorCode> for PoolErrorCode {
             pool::ProbeErrorCode::DiskReadIoError => Self::DiskReadIoError,
             pool::ProbeErrorCode::ForeignPoolName => Self::ForeignPoolName,
             pool::ProbeErrorCode::ForeignPoolUid => Self::ForeignPoolUid,
-            pool::ProbeErrorCode::SuperBlock => Self::SuperBlock,
+            pool::ProbeErrorCode::SuperBlockIoError => Self::SuperBlockIoError,
             pool::ProbeErrorCode::InvalidSuperBlock => Self::InvalidSuperBlock,
             pool::ProbeErrorCode::DiskIsADirectory => Self::DiskIsADirectory,
             pool::ProbeErrorCode::NodeIsUnknown => Self::NodeIsUnknown,
             pool::ProbeErrorCode::NodeIsOffline => Self::NodeIsOffline,
             pool::ProbeErrorCode::ImportDisabled => Self::ImportDisabled,
             pool::ProbeErrorCode::TimeOut => Self::TimeOut,
+            pool::ProbeErrorCode::Aborted => Self::Aborted,
             pool::ProbeErrorCode::DiskClaimed => Self::DiskClaimed,
             pool::ProbeErrorCode::PciDriverUnsupported => Self::PCIDriverUnsupported,
             pool::ProbeErrorCode::PciKernelBound => Self::PCIKernelBound,
             pool::ProbeErrorCode::PciNotNvme => Self::PCINotNvme,
             pool::ProbeErrorCode::InvalidDiskUri => Self::InvalidDiskUri,
+            pool::ProbeErrorCode::DiskNotImportable => Self::DiskNotImportable,
+            pool::ProbeErrorCode::UriNotHandled => Self::UriNotHandled,
         }
     }
 }

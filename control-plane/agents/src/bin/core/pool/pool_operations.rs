@@ -76,30 +76,42 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
             devlink_preflight_checks(request, node.clone(), registry).await?
         }
 
+        // Validate the pool backend to avoid thrashing the logs
+        Self::validate_probe(request, &node).await?;
+
         let mut pool = specs
             .get_or_create_pool(request)
             .operation_guard_wait()
             .await?;
         let _ = pool.start_create(registry, request).await?;
 
-        let result = node.create_pool(request).await;
+        let mut result = node.create_pool(request).await;
+
         let on_fail = OnCreateFail::on_pool_create_err(&result);
-        if matches!(on_fail, OnCreateFail::LeaveAsIs) {
-            if let Err(error) = &result {
-                if let Some(error) = Self::pool_import_error(error) {
-                    let disks = pool.as_ref().disks.first().map(|d| d.to_string());
-                    pool.lock().metadata.runtime.diag = Some(PoolDiag {
-                        import_errors: vec![PoolDiskError {
-                            error: error.clone(),
-                            disk: disks.unwrap_or_default(),
-                        }],
-                        status: PoolStatus::Unknown,
-                        error: Some(error),
-                        ..Default::default()
-                    });
-                }
+
+        if let Err(ref error) = result {
+            let diag = Self::pool_create_error(error).map(|(error, kind)| {
+                let disks = pool.as_ref().disks.first().map(|d| d.to_string());
+                let diag = PoolDiag {
+                    import_errors: vec![PoolDiskError {
+                        error: error.clone(),
+                        disk: disks.unwrap_or_default(),
+                    }],
+                    status: Self::pool_error_to_status(error.code),
+                    error: Some(error),
+                    ..Default::default()
+                };
+                (diag, kind)
+            });
+
+            if matches!(on_fail, OnCreateFail::LeaveAsIs) {
+                pool.lock().metadata.runtime.diag = diag.clone().map(|(diag, _)| diag);
+            }
+            if let Some((diag, (code, kind))) = diag {
+                result = Err(SvcError::PoolCreateError { diag, code, kind });
             }
         }
+
         let state = pool.complete_create(result, registry, on_fail).await?;
         let spec = pool.lock().clone();
         Ok(Pool::new(spec, Some(CtrlPoolState::new(state))))

@@ -1,221 +1,147 @@
 use crate::{
     transport_api::{ReplyError, ReplyErrorKind},
-    types::v0::openapi::{
-        actix::server::RestError,
-        apis::actix_server::StatusCode,
-        models::{rest_json_error::Kind, RestJsonError},
+    types::v0::{
+        openapi::{
+            actix::server::RestError,
+            apis::actix_server::StatusCode,
+            models::{rest_json_error::Kind, CustomErrorInfo, CustomErrorPool, RestJsonError},
+        },
+        transport::PoolDiag,
     },
 };
 
 pub mod v0;
 
 impl From<ReplyError> for RestError<RestJsonError> {
-    fn from(src: ReplyError) -> Self {
-        let details = src.extra.clone();
-        let message = src.source.clone();
-        let (status, error) = match &src.kind {
-            ReplyErrorKind::WithMessage => {
-                let error = RestJsonError::new(details, message, Kind::Internal);
-                (StatusCode::INTERNAL_SERVER_ERROR, error)
-            }
-            ReplyErrorKind::DeserializeReq => {
-                let error = RestJsonError::new(details, message, Kind::Deserialize);
-                (StatusCode::BAD_REQUEST, error)
-            }
-            ReplyErrorKind::Internal => {
-                let error = RestJsonError::new(details, message, Kind::Internal);
-                (StatusCode::INTERNAL_SERVER_ERROR, error)
-            }
-            ReplyErrorKind::Timeout => {
-                let error = RestJsonError::new(details, message, Kind::Timeout);
-                (StatusCode::REQUEST_TIMEOUT, error)
-            }
-            ReplyErrorKind::InvalidArgument => {
-                let error = RestJsonError::new(details, message, Kind::InvalidArgument);
-                (StatusCode::BAD_REQUEST, error)
-            }
-            ReplyErrorKind::DeadlineExceeded => {
-                let error = RestJsonError::new(details, message, Kind::DeadlineExceeded);
-                (StatusCode::GATEWAY_TIMEOUT, error)
-            }
-            ReplyErrorKind::NotFound => {
-                let error = RestJsonError::new(details, message, Kind::NotFound);
-                (StatusCode::NOT_FOUND, error)
-            }
-            ReplyErrorKind::AlreadyExists => {
-                let error = RestJsonError::new(details, message, Kind::AlreadyExists);
-                (StatusCode::UNPROCESSABLE_ENTITY, error)
-            }
-            ReplyErrorKind::PermissionDenied => {
-                let error = RestJsonError::new(details, message, Kind::PermissionDenied);
-                (StatusCode::UNAUTHORIZED, error)
-            }
-            ReplyErrorKind::ResourceExhausted => {
-                let error = RestJsonError::new(details, message, Kind::ResourceExhausted);
-                (StatusCode::INSUFFICIENT_STORAGE, error)
-            }
-            ReplyErrorKind::FailedPrecondition => {
-                let error = RestJsonError::new(details, message, Kind::FailedPrecondition);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::Aborted => {
-                let error = RestJsonError::new(details, message, Kind::Aborted);
-                (StatusCode::SERVICE_UNAVAILABLE, error)
-            }
-            ReplyErrorKind::OutOfRange => {
-                let error = RestJsonError::new(details, message, Kind::OutOfRange);
-                (StatusCode::RANGE_NOT_SATISFIABLE, error)
-            }
-            ReplyErrorKind::Unimplemented => {
-                let error = RestJsonError::new(details, message, Kind::Unimplemented);
-                (StatusCode::NOT_IMPLEMENTED, error)
-            }
-            ReplyErrorKind::Unavailable => {
-                let error = RestJsonError::new(details, message, Kind::Unavailable);
-                (StatusCode::SERVICE_UNAVAILABLE, error)
-            }
-            ReplyErrorKind::Unauthenticated => {
-                let error = RestJsonError::new(details, message, Kind::Unauthenticated);
-                (StatusCode::UNAUTHORIZED, error)
-            }
-            ReplyErrorKind::Unauthorized => {
-                let error = RestJsonError::new(details, message, Kind::Unauthorized);
-                (StatusCode::UNAUTHORIZED, error)
-            }
-            ReplyErrorKind::Conflict => {
-                let error = RestJsonError::new(details, message, Kind::Conflict);
-                (StatusCode::CONFLICT, error)
-            }
-            ReplyErrorKind::FailedPersist => {
-                let error = RestJsonError::new(details, message, Kind::FailedPersist);
-                (StatusCode::INSUFFICIENT_STORAGE, error)
-            }
-            ReplyErrorKind::AlreadyShared => {
-                let error = RestJsonError::new(details, message, Kind::AlreadyShared);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::NotShared => {
-                let error = RestJsonError::new(details, message, Kind::NotShared);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::NotPublished => {
-                let error = RestJsonError::new(details, message, Kind::NotPublished);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::AlreadyPublished => {
-                let error = RestJsonError::new(details, message, Kind::AlreadyPublished);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::PublishedCtxDiffer => {
-                let error = RestJsonError::new(details, message, Kind::PublishedCtxDiffer);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::FrontendLimitExceeded => {
-                let error = RestJsonError::new(details, message, Kind::FrontendLimitExceeded);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::Deleting => {
-                let error = RestJsonError::new(details, message, Kind::Deleting);
-                (StatusCode::CONFLICT, error)
-            }
-            ReplyErrorKind::ReplicaCountAchieved => {
-                let error = RestJsonError::new(details, message, Kind::FailedPrecondition);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::ReplicaChangeCount => {
-                let error = RestJsonError::new(details, message, Kind::FailedPrecondition);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::ReplicaIncrease => {
-                let error = RestJsonError::new(details, message, Kind::FailedPrecondition);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::VolumeNoReplicas => {
-                let error = RestJsonError::new(details, message, Kind::FailedPrecondition);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::InUse => {
-                let error = RestJsonError::new(details, message, Kind::InUse);
-                (StatusCode::CONFLICT, error)
-            }
-            ReplyErrorKind::ReplicaCreateNumber => {
-                let error = RestJsonError::new(details, message, Kind::FailedPrecondition);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::CapacityLimitExceeded => {
-                let error = RestJsonError::new(details, message, Kind::CapacityLimitExceeded);
-                (StatusCode::INSUFFICIENT_STORAGE, error)
-            }
-            ReplyErrorKind::NotAcceptable => {
-                let error = RestJsonError::new(details, message, Kind::NotAcceptable);
-                (StatusCode::NOT_ACCEPTABLE, error)
-            }
-            ReplyErrorKind::Cancelled => {
-                let error = RestJsonError::new(details, message, Kind::Cancelled);
-                (StatusCode::GATEWAY_TIMEOUT, error)
-            }
-            ReplyErrorKind::DiskNotExtended => {
-                let error = RestJsonError::new(details, message, Kind::DiskNotExtended);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::DiskRescanFailed => {
-                let error = RestJsonError::new(details, message, Kind::DiskRescanFailed);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::PoolNotPurgeable => {
-                let error = RestJsonError::new(details, message, Kind::PoolNotPurgeable);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::PoolNotCordoned => {
-                let error = RestJsonError::new(details, message, Kind::PoolNotCordoned);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::PoolCordonInsufficient => {
-                let error = RestJsonError::new(details, message, Kind::PoolCordonInsufficient);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::PoolPurgeAcceptRequired => {
-                let error = RestJsonError::new(details, message, Kind::PoolPurgeAcceptRequired);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::PoolPurgeVolumeLossAcceptRequired => {
-                let error =
-                    RestJsonError::new(details, message, Kind::PoolPurgeVolumeLossAcceptRequired);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::PoolPurgeSnapshotLossAcceptRequired => {
-                let error =
-                    RestJsonError::new(details, message, Kind::PoolPurgeSnapshotLossAcceptRequired);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::NodeIsOnline => {
-                let error = RestJsonError::new(details, message, Kind::NodeIsOnline);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::NodeNotCordoned => {
-                let error = RestJsonError::new(details, message, Kind::NodeNotCordoned);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::NodeHasResources => {
-                let error = RestJsonError::new(details, message, Kind::NodeHasResources);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::NodePurgeAcceptRequired => {
-                let error = RestJsonError::new(details, message, Kind::NodePurgeAcceptRequired);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::NodePurgeVolumeLossAcceptRequired => {
-                let error =
-                    RestJsonError::new(details, message, Kind::NodePurgeVolumeLossAcceptRequired);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-            ReplyErrorKind::NodePurgeSnapshotLossAcceptRequired => {
-                let error =
-                    RestJsonError::new(details, message, Kind::NodePurgeSnapshotLossAcceptRequired);
-                (StatusCode::PRECONDITION_FAILED, error)
-            }
-        };
-
-        RestError::new(status, error)
+    fn from(value: ReplyError) -> Self {
+        rest_error_from(value, None)
     }
+}
+
+/// Convert reply and diag information into a rest error.
+pub fn rest_error_from(src: ReplyError, diag: Option<PoolDiag>) -> RestError<RestJsonError> {
+    let custom = rest_custom(diag);
+
+    let (status, kind) = kind_to_rest(&src);
+
+    let details = src.extra;
+    let message = src.source;
+
+    let error = RestJsonError::new_all(details, message, kind, custom);
+    RestError::new(status, error)
+}
+
+fn kind_to_rest(src: &ReplyError) -> (StatusCode, Kind) {
+    match &src.kind {
+        ReplyErrorKind::WithMessage => (StatusCode::INTERNAL_SERVER_ERROR, Kind::Internal),
+        ReplyErrorKind::DeserializeReq => (StatusCode::BAD_REQUEST, Kind::Deserialize),
+        ReplyErrorKind::Internal => (StatusCode::INTERNAL_SERVER_ERROR, Kind::Internal),
+        ReplyErrorKind::Timeout => (StatusCode::REQUEST_TIMEOUT, Kind::Timeout),
+        ReplyErrorKind::InvalidArgument => (StatusCode::BAD_REQUEST, Kind::InvalidArgument),
+        ReplyErrorKind::DeadlineExceeded => (StatusCode::GATEWAY_TIMEOUT, Kind::DeadlineExceeded),
+        ReplyErrorKind::NotFound => (StatusCode::NOT_FOUND, Kind::NotFound),
+        ReplyErrorKind::AlreadyExists => (StatusCode::UNPROCESSABLE_ENTITY, Kind::AlreadyExists),
+        ReplyErrorKind::PermissionDenied => (StatusCode::UNAUTHORIZED, Kind::PermissionDenied),
+        ReplyErrorKind::ResourceExhausted => {
+            (StatusCode::INSUFFICIENT_STORAGE, Kind::ResourceExhausted)
+        }
+        ReplyErrorKind::FailedPrecondition => {
+            (StatusCode::PRECONDITION_FAILED, Kind::FailedPrecondition)
+        }
+        ReplyErrorKind::Aborted => (StatusCode::SERVICE_UNAVAILABLE, Kind::Aborted),
+        ReplyErrorKind::OutOfRange => (StatusCode::RANGE_NOT_SATISFIABLE, Kind::OutOfRange),
+        ReplyErrorKind::Unimplemented => (StatusCode::NOT_IMPLEMENTED, Kind::Unimplemented),
+        ReplyErrorKind::Unavailable => (StatusCode::SERVICE_UNAVAILABLE, Kind::Unavailable),
+        ReplyErrorKind::Unauthenticated => (StatusCode::UNAUTHORIZED, Kind::Unauthenticated),
+        ReplyErrorKind::Unauthorized => (StatusCode::UNAUTHORIZED, Kind::Unauthorized),
+        ReplyErrorKind::Conflict => (StatusCode::CONFLICT, Kind::Conflict),
+        ReplyErrorKind::FailedPersist => (StatusCode::INSUFFICIENT_STORAGE, Kind::FailedPersist),
+        ReplyErrorKind::AlreadyShared => (StatusCode::PRECONDITION_FAILED, Kind::AlreadyShared),
+        ReplyErrorKind::NotShared => (StatusCode::PRECONDITION_FAILED, Kind::NotShared),
+        ReplyErrorKind::NotPublished => (StatusCode::PRECONDITION_FAILED, Kind::NotPublished),
+        ReplyErrorKind::AlreadyPublished => {
+            (StatusCode::PRECONDITION_FAILED, Kind::AlreadyPublished)
+        }
+        ReplyErrorKind::PublishedCtxDiffer => {
+            (StatusCode::PRECONDITION_FAILED, Kind::PublishedCtxDiffer)
+        }
+        ReplyErrorKind::FrontendLimitExceeded => {
+            (StatusCode::PRECONDITION_FAILED, Kind::FrontendLimitExceeded)
+        }
+        ReplyErrorKind::Deleting => (StatusCode::CONFLICT, Kind::Deleting),
+        ReplyErrorKind::ReplicaCountAchieved => {
+            (StatusCode::PRECONDITION_FAILED, Kind::FailedPrecondition)
+        }
+        ReplyErrorKind::ReplicaChangeCount => {
+            (StatusCode::PRECONDITION_FAILED, Kind::FailedPrecondition)
+        }
+        ReplyErrorKind::ReplicaIncrease => {
+            (StatusCode::PRECONDITION_FAILED, Kind::FailedPrecondition)
+        }
+        ReplyErrorKind::VolumeNoReplicas => {
+            (StatusCode::PRECONDITION_FAILED, Kind::FailedPrecondition)
+        }
+        ReplyErrorKind::InUse => (StatusCode::CONFLICT, Kind::InUse),
+        ReplyErrorKind::ReplicaCreateNumber => {
+            (StatusCode::PRECONDITION_FAILED, Kind::FailedPrecondition)
+        }
+        ReplyErrorKind::CapacityLimitExceeded => (
+            StatusCode::INSUFFICIENT_STORAGE,
+            Kind::CapacityLimitExceeded,
+        ),
+        ReplyErrorKind::NotAcceptable => (StatusCode::NOT_ACCEPTABLE, Kind::NotAcceptable),
+        ReplyErrorKind::Cancelled => (StatusCode::GATEWAY_TIMEOUT, Kind::Cancelled),
+        ReplyErrorKind::DiskNotExtended => (StatusCode::PRECONDITION_FAILED, Kind::DiskNotExtended),
+        ReplyErrorKind::DiskRescanFailed => {
+            (StatusCode::PRECONDITION_FAILED, Kind::DiskRescanFailed)
+        }
+        ReplyErrorKind::PoolNotPurgeable => {
+            (StatusCode::PRECONDITION_FAILED, Kind::PoolNotPurgeable)
+        }
+        ReplyErrorKind::PoolNotCordoned => (StatusCode::PRECONDITION_FAILED, Kind::PoolNotCordoned),
+        ReplyErrorKind::PoolCordonInsufficient => (
+            StatusCode::PRECONDITION_FAILED,
+            Kind::PoolCordonInsufficient,
+        ),
+        ReplyErrorKind::PoolPurgeAcceptRequired => (
+            StatusCode::PRECONDITION_FAILED,
+            Kind::PoolPurgeAcceptRequired,
+        ),
+        ReplyErrorKind::PoolPurgeVolumeLossAcceptRequired => (
+            StatusCode::PRECONDITION_FAILED,
+            Kind::PoolPurgeVolumeLossAcceptRequired,
+        ),
+        ReplyErrorKind::PoolPurgeSnapshotLossAcceptRequired => (
+            StatusCode::PRECONDITION_FAILED,
+            Kind::PoolPurgeSnapshotLossAcceptRequired,
+        ),
+        ReplyErrorKind::NodeIsOnline => (StatusCode::PRECONDITION_FAILED, Kind::NodeIsOnline),
+        ReplyErrorKind::NodeNotCordoned => (StatusCode::PRECONDITION_FAILED, Kind::NodeNotCordoned),
+        ReplyErrorKind::NodeHasResources => {
+            (StatusCode::PRECONDITION_FAILED, Kind::NodeHasResources)
+        }
+        ReplyErrorKind::NodePurgeAcceptRequired => (
+            StatusCode::PRECONDITION_FAILED,
+            Kind::NodePurgeAcceptRequired,
+        ),
+        ReplyErrorKind::NodePurgeVolumeLossAcceptRequired => (
+            StatusCode::PRECONDITION_FAILED,
+            Kind::NodePurgeVolumeLossAcceptRequired,
+        ),
+        ReplyErrorKind::NodePurgeSnapshotLossAcceptRequired => (
+            StatusCode::PRECONDITION_FAILED,
+            Kind::NodePurgeSnapshotLossAcceptRequired,
+        ),
+        ReplyErrorKind::DiskFault => (StatusCode::EXPECTATION_FAILED, Kind::DiskFault),
+    }
+}
+
+fn rest_custom(diag: Option<PoolDiag>) -> Option<CustomErrorInfo> {
+    let diag = diag?;
+
+    Some(CustomErrorInfo {
+        pool: CustomErrorPool {
+            diag: Some(diag.into()),
+        },
+    })
 }

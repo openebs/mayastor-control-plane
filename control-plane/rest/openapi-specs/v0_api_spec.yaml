@@ -3524,18 +3524,21 @@ components:
         - DiskReadIoError
         - ForeignPoolName
         - ForeignPoolUid
-        - SuperBlock
+        - SuperBlockIoError
         - InvalidSuperBlock
         - DiskIsADirectory
         - NodeIsUnknown
         - NodeIsOffline
         - ImportDisabled
         - TimeOut
+        - Aborted
         - DiskClaimed
         - PCIDriverUnsupported
         - PCIKernelBound
         - PCINotNvme
         - InvalidDiskUri
+        - DiskNotImportable
+        - UriNotHandled
     PoolErrorInfo:
       type: object
       description: Pool alerts and error information
@@ -3881,10 +3884,26 @@ components:
             - NodePurgeAcceptRequired
             - NodePurgeVolumeLossAcceptRequired
             - NodePurgeSnapshotLossAcceptRequired
+            - DiskFault
+        customInfo:
+          $ref: '#/components/schemas/CustomErrorInfo'
+      x-no-derive-dbg: true
       required:
         - details
         - kind
         - message
+    CustomErrorInfo:
+      type: object
+      properties:
+        pool:
+          $ref: '#/components/schemas/CustomErrorPool'
+      required:
+        - pool
+    CustomErrorPool:
+      type: object
+      properties:
+        diag:
+          $ref: '#/components/schemas/PoolDiag'
     RestWatch:
       example:
         callback: 'https://api.myserver.com/volume/e2fc5ce8-a56e-47a1-94e9-04dd2f73b88f/callback'

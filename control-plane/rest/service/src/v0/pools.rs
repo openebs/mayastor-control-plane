@@ -126,7 +126,13 @@ impl apis::actix_server::Pools for RestApi {
     ) -> Result<models::Pool, RestError<RestJsonError>> {
         let create =
             CreatePoolBody::from(create_pool_body).to_request(node_id.into(), pool_id.into());
-        let pool = client().create(&create, None).await?;
+        let pool = match client().create(&create, None).await {
+            Ok(pool) => Ok(pool),
+            Err(create_error) => Err(stor_port::types::rest_error_from(
+                create_error.error,
+                create_error.diag,
+            )),
+        }?;
         Ok(pool.into())
     }
 
