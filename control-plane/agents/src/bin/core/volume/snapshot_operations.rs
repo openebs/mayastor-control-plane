@@ -412,6 +412,7 @@ impl OperationGuardArc<VolumeSnapshot> {
                 ),
             )
             .await?;
+            registry.specs().on_snap_create(snapshot.pool_id());
 
             replica_snap.complete_vol(
                 snapshot.timestamp().into(),
@@ -444,6 +445,7 @@ impl OperationGuardArc<VolumeSnapshot> {
                     replica_params,
                 )))
                 .await?;
+            registry.specs().on_snap_create(response.pool_id());
             timestamp = response.timestamp();
             replica_snap.complete_vol(
                 timestamp.into(),
@@ -575,7 +577,11 @@ impl OperationGuardArc<VolumeSnapshot> {
                 let mut snapshot = snapshot.clone();
                 snapshot.set_status_deleting();
                 failed.push(snapshot);
+                continue;
             }
+            registry
+                .specs()
+                .on_snap_destroy(snapshot.spec().source_id().pool_id());
         }
         failed
     }

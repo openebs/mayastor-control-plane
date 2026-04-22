@@ -27,7 +27,7 @@ impl Deref for PoolWrapper {
 
 impl PoolWrapper {
     /// New Pool wrapper with the pool and replicas.
-    pub(crate) fn new(mut pool: PoolState, replicas: Vec<Replica>) -> Self {
+    pub(crate) fn new(mut pool: PoolState, replicas: Vec<Replica>, snapshot_count: u64) -> Self {
         let free_space = if pool.capacity >= pool.used {
             pool.capacity - pool.used
         } else {
@@ -45,6 +45,13 @@ impl PoolWrapper {
             pool.committed = Some(committed);
             committed
         });
+
+        if pool.repl_count.is_none() {
+            pool.repl_count = Some(replicas.len() as u64);
+        }
+        if pool.snap_count.is_none() {
+            pool.snap_count = Some(snapshot_count);
+        }
 
         Self {
             state: pool,

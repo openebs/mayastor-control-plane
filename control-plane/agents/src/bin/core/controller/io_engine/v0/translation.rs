@@ -98,6 +98,8 @@ impl IoEngineToAgent for v0::Pool {
             max_expandable_size: None,
             disk_info: vec![],
             errors: None,
+            repl_count: None,
+            snap_count: None,
         }
     }
 }

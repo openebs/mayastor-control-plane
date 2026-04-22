@@ -68,6 +68,17 @@ async fn pool() {
         )
         .await
         .unwrap();
+    assert_eq!(pool.state.as_ref().unwrap().repl_count, Some(0));
+    assert_eq!(pool.state.as_ref().unwrap().snap_count, Some(0));
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.replica_count,
+        Some(0)
+    );
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.snapshot_count,
+        Some(0)
+    );
+
     let _pool2 = pool_client
         .create(
             &CreatePool {
@@ -109,6 +120,22 @@ async fn pool() {
         .await
         .unwrap();
     tracing::info!("Replicas: {:?}", replica);
+    let pools = pool_client
+        .get(Filter::Pool(replica.pool_id.clone()), None)
+        .await
+        .unwrap()
+        .into_inner();
+    let pool = pools.first().unwrap();
+    assert_eq!(pool.state.as_ref().unwrap().repl_count, Some(1));
+    assert_eq!(pool.state.as_ref().unwrap().snap_count, Some(0));
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.replica_count,
+        Some(1)
+    );
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.snapshot_count,
+        Some(0)
+    );
 
     let replicas = rep_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Replicas: {:?}", replicas);
@@ -209,6 +236,22 @@ async fn pool() {
         )
         .await
         .unwrap();
+    let pools = pool_client
+        .get(Filter::Pool(replica.pool_id.clone()), None)
+        .await
+        .unwrap()
+        .into_inner();
+    let pool = pools.first().unwrap();
+    assert_eq!(pool.state.as_ref().unwrap().repl_count, Some(0));
+    assert_eq!(pool.state.as_ref().unwrap().snap_count, Some(0));
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.replica_count,
+        Some(0)
+    );
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.snapshot_count,
+        Some(0)
+    );
 
     let error = rep_client
         .destroy(
@@ -920,7 +963,7 @@ async fn reconciler_missing_pool_state() {
     tracing::info!("Pools: {:?}", pools);
 
     let hpool = pools.0.first().unwrap();
-    let pool_diag = hpool.diag.as_ref().unwrap();
+    let pool_diag = hpool.diag().unwrap();
     assert_eq!(pool_diag.import_errors.len(), 1);
     let error = pool_diag.import_errors.first().unwrap();
     assert_eq!(error.error.code, PoolErrorCode::InvalidSuperBlock);
@@ -963,7 +1006,7 @@ async fn reconciler_missing_pool_state() {
     tracing::info!("Pools: {:?}", pools);
 
     let hpool = pools.0.first().unwrap();
-    let pool_diag = hpool.diag.as_ref().unwrap();
+    let pool_diag = hpool.diag().unwrap();
     assert_eq!(pool_diag.import_errors.len(), 1);
     let error = pool_diag.import_errors.first().unwrap();
     assert_eq!(error.error.code, PoolErrorCode::DiskNotFound);

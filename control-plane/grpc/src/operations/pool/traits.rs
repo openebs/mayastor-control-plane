@@ -19,10 +19,10 @@ use stor_port::{
         },
         transport::{
             CreatePool, CtrlPoolState, DestroyPool, DiskInfo, ExpandPool, Filter, LabelPool,
-            NodeId, Pool, PoolAlert, PoolAlertStatus, PoolAlerts, PoolDeleteResult, PoolDeviceUri,
-            PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolErrorInfo, PoolId, PoolState,
-            PoolStatus, SnapshotLossDetail, SnapshotLossInfo, UnlabelPool, VolumeId,
-            VolumeLossDetail, VolumeLossInfo,
+            NodeId, Pool, PoolAlert, PoolAlertStatus, PoolAlerts, PoolDef, PoolDeleteResult,
+            PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolErrorInfo,
+            PoolId, PoolState, PoolStatus, SnapshotLossDetail, SnapshotLossInfo, UnlabelPool,
+            VolumeId, VolumeLossDetail, VolumeLossInfo,
         },
     },
     IntoOption, IntoVec,
@@ -211,7 +211,14 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
                     .unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
                 max_expansion: None,
             },
-            metadata: Default::default(),
+            metadata: PoolMetadata {
+                persisted: Default::default(),
+                runtime: PoolRuntimeMetadata {
+                    diag: None,
+                    replica_count: pool_meta.repl_count,
+                    snapshot_count: pool_meta.snap_count,
+                },
+            },
         })
     }
 }
@@ -238,6 +245,8 @@ impl TryFrom<pool::PoolState> for PoolState {
             max_expandable_size: pool_state.max_expandable_size,
             disk_info: pool_state.disk_info.into_vec(),
             errors: pool_state.errors.into_opt(),
+            repl_count: pool_state.repl_count,
+            snap_count: pool_state.snap_count,
         })
     }
 }
@@ -363,12 +372,7 @@ impl From<PoolAlertStatus> for pool::PoolAlertStatus {
 
 fn pool_with_diag(mut pool_spec: PoolSpec, diag: Option<pool::PoolDiag>) -> PoolSpec {
     if let Some(diag) = diag {
-        pool_spec.metadata = PoolMetadata {
-            persisted: Default::default(),
-            runtime: PoolRuntimeMetadata {
-                diag: Some(diag.into()),
-            },
-        };
+        pool_spec.metadata.runtime.diag = Some(diag.into());
     }
     pool_spec
 }
@@ -403,7 +407,18 @@ impl TryFrom<pool::Pool> for Pool {
 }
 
 impl From<PoolUSpec> for pool::PoolDefinition {
-    fn from(pool_spec: PoolUSpec) -> Self {
+    fn from(spec: PoolUSpec) -> Self {
+        PoolDef {
+            spec,
+            ..Default::default()
+        }
+        .into()
+    }
+}
+
+impl From<PoolDef> for pool::PoolDefinition {
+    fn from(pool_def: PoolDef) -> Self {
+        let pool_spec = pool_def.spec;
         let spec_status: common::SpecStatus = pool_spec.status.into();
         pool::PoolDefinition {
             spec: Some(pool::PoolSpec {
@@ -440,6 +455,8 @@ impl From<PoolUSpec> for pool::PoolDefinition {
             metadata: Some(pool::Metadata {
                 uuid: None,
                 spec_status: spec_status as i32,
+                repl_count: pool_def.replica_count,
+                snap_count: pool_def.snapshot_count,
             }),
         }
     }
@@ -461,6 +478,8 @@ impl From<PoolState> for pool::PoolState {
             max_expandable_size: pool_state.max_expandable_size,
             disk_info: pool_state.disk_info.into_vec(),
             errors: pool_state.errors.into_opt(),
+            repl_count: pool_state.repl_count,
+            snap_count: pool_state.snap_count,
         }
     }
 }
@@ -567,10 +586,15 @@ impl From<PoolError> for pool::ProbeError {
 
 impl From<Pool> for pool::Pool {
     fn from(pool: Pool) -> Self {
+        let state = pool.state;
+        let (def, diag) = match pool.config {
+            None => (None, None),
+            Some(cfg) => (Some(cfg.definition), cfg.diag),
+        };
         pool::Pool {
-            definition: pool.spec.map(|pool_spec| pool_spec.into()),
-            state: pool.state.map(|p| p.state).into_opt(),
-            diag: pool.diag.map(Into::into),
+            definition: def.into_opt(),
+            state: state.map(|p| p.state).into_opt(),
+            diag: diag.into_opt(),
         }
     }
 }

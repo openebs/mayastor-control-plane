@@ -3472,9 +3472,23 @@ components:
           $ref: '#/components/schemas/PoolState'
         diag:
           $ref: '#/components/schemas/PoolDiag'
+        meta:
+          $ref: '#/components/schemas/PoolMeta'
       required:
         - id
       minProperties: 2
+    PoolMeta:
+      description: Pool metadata information
+      type: object
+      properties:
+        replicaCount:
+          description: A tally of all volume-replicas configured on this pool
+          type: integer
+          format: uint64
+        snapshotCount:
+          description: A tally of all snapshots configured on this pool
+          type: integer
+          format: uint64
     PoolDiag:
       description: Pool diagnostic information
       type: object
@@ -3686,6 +3700,21 @@ components:
           format: uint64
         errorInfo:
           $ref: '#/components/schemas/PoolErrorInfo'
+        replicaCount:
+          description: -|
+            A tally of all replicas configured to reside on this pool.
+            As of today this can be correlated to the number of volumes hosted in the pool.
+            Note that this number may not match the volumes api, as it will include all replicas,
+            configured to reside in the pool, sometimes even the failed ones until such time they are deleted.
+          type: integer
+          format: uint64
+        snapshotCount:
+          description: -|
+            A tally of all snapshots configured to reside on this pool.
+            Note that this number may not match the volume-snapshots api, as it will include all snapshots,
+            configured to reside in the pool, sometimes even the failed ones until such time they are deleted.
+          type: integer
+          format: uint64
       required:
         - capacity
         - disks

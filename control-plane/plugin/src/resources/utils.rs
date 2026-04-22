@@ -54,7 +54,9 @@ lazy_static! {
         "COMMITTED",
         "ENCRYPTED",
         "DISK-CAPACITY",
-        "MAX-EXPANDABLE-SIZE"
+        "MAX-EXPANDABLE-SIZE",
+        "VOLUMES",
+        "SNAPSHOTS",
     ];
     pub static ref NODE_HEADERS: Row = row!["ID", "GRPC ENDPOINT", "STATUS", "VERSION"];
     pub static ref REPLICA_TOPOLOGIES_PREFIX: Row = row!["VOLUME-ID"];

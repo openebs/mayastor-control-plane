@@ -274,6 +274,10 @@ pub struct PoolState {
     pub disk_info: Vec<DiskInfo>,
     /// Error information at the pool top-level.
     pub errors: Option<PoolErrorInfo>,
+    /// How many replicas exist in the pool.
+    pub repl_count: Option<u64>,
+    /// How many replica-snapshots exist in the pool.
+    pub snap_count: Option<u64>,
 }
 
 /// Pool information related to a specific disk.
@@ -367,6 +371,8 @@ impl From<CtrlPoolState> for models::PoolState {
             src.disk_capacity,
             src.max_expandable_size,
             src.errors.into_opt(),
+            src.repl_count,
+            src.snap_count,
         )
     }
 }
@@ -516,6 +522,49 @@ impl PartialOrd for PoolStatus {
     }
 }
 
+/// User configuration with user specification and metadata information.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PoolDef {
+    /// User specification for the pool.
+    pub spec: PoolUSpec,
+    /// How many replicas are owned by the pool.
+    pub replica_count: Option<u64>,
+    /// How many snapshots are owned by the pool.
+    pub snapshot_count: Option<u64>,
+}
+
+/// User configuration with user specification and metadata information.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PoolConfig {
+    /// Pool definition.
+    pub definition: PoolDef,
+    /// Health of the pool.
+    pub diag: Option<PoolDiag>,
+}
+impl PoolConfig {
+    fn with_state_diag(mut self, state: &CtrlPoolState) -> Self {
+        if let Some(ref mut diag) = self.diag {
+            diag.status = state.state.status.clone();
+        }
+        self
+    }
+}
+
+impl From<PoolSpec> for PoolConfig {
+    fn from(value: PoolSpec) -> Self {
+        Self {
+            definition: PoolDef {
+                spec: value.spec,
+                replica_count: value.metadata.runtime.replica_count,
+                snapshot_count: value.metadata.runtime.snapshot_count,
+            },
+            diag: value.metadata.runtime.diag,
+        }
+    }
+}
+
 /// A Storage Pool.
 /// It may have a spec which is the specification provided by the creator.
 /// It may have a state if such state is retrieved from a storage node.
@@ -524,12 +573,10 @@ impl PartialOrd for PoolStatus {
 pub struct Pool {
     /// Pool identification.
     id: PoolId,
-    /// Desired specification of the pool.
-    pub spec: Option<PoolUSpec>,
+    /// [`PoolConfig`].
+    pub config: Option<PoolConfig>,
     /// Runtime state of the pool.
     pub state: Option<CtrlPoolState>,
-    /// Health of the pool.
-    pub diag: Option<PoolDiag>,
 }
 
 impl Pool {
@@ -537,8 +584,7 @@ impl Pool {
     pub fn new(spec: PoolSpec, state: Option<CtrlPoolState>) -> Self {
         Self {
             id: spec.id.clone(),
-            diag: spec.metadata.runtime.diag.clone(),
-            spec: Some(spec.spec),
+            config: Some(PoolConfig::from(spec)),
             state,
         }
     }
@@ -546,8 +592,7 @@ impl Pool {
     pub fn from_spec(spec: PoolSpec) -> Self {
         Self {
             id: spec.id.clone(),
-            diag: spec.metadata.runtime.diag.clone(),
-            spec: Some(spec.spec),
+            config: Some(PoolConfig::from(spec)),
             state: None,
         }
     }
@@ -555,11 +600,7 @@ impl Pool {
     pub fn from_state(state: CtrlPoolState, spec: Option<PoolSpec>) -> Self {
         Self {
             id: state.id.clone(),
-            diag: spec
-                .as_ref()
-                .and_then(|spec| spec.metadata.runtime.diag.clone())
-                .map(|d| d.with_state(&state.state)),
-            spec: spec.map(|s| s.spec),
+            config: spec.map(|s| PoolConfig::from(s).with_state_diag(&state)),
             state: Some(state),
         }
     }
@@ -574,7 +615,11 @@ impl Pool {
     }
     /// Get the pool spec.
     pub fn spec(&self) -> Option<PoolUSpec> {
-        self.spec.clone()
+        Some(self.config.as_ref()?.definition.spec.clone())
+    }
+    /// Get the pool diagnostics.
+    pub fn diag(&self) -> Option<&PoolDiag> {
+        self.config.as_ref()?.diag.as_ref()
     }
     /// Get the pool identification.
     pub fn id(&self) -> &PoolId {
@@ -590,22 +635,35 @@ impl Pool {
     }
     /// Get the node identification.
     pub fn node(&self) -> NodeId {
-        match &self.spec {
+        match &self.config {
             // guaranteed that at either spec or state are defined
             // todo: use enum derivation
             None => self.state.as_ref().unwrap().node.clone(),
-            Some(spec) => spec.node.clone(),
+            Some(config) => config.definition.spec.node.clone(),
         }
     }
 }
 
 impl From<Pool> for models::Pool {
     fn from(src: Pool) -> Self {
+        let (def, diag) = match src.config {
+            None => (None, None),
+            Some(config) => (Some(config.definition), config.diag),
+        };
+        let (spec, meta) = match def {
+            None => (None, None),
+            Some(def) => {
+                let meta = models::PoolMeta::new_all(def.replica_count, def.snapshot_count);
+                (Some(def.spec), Some(meta))
+            }
+        };
+
         models::Pool::new_all(
             src.id,
-            src.spec.into_opt(),
+            spec.into_opt(),
             src.state.into_opt(),
-            src.diag.into_opt(),
+            diag.into_opt(),
+            meta,
         )
     }
 }

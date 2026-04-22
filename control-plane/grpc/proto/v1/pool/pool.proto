@@ -97,6 +97,14 @@ message Metadata {
   google.protobuf.StringValue uuid = 1;
   // spec status of the pool
   common.SpecStatus spec_status = 2;
+  // A tally of all replicas configured to reside on this pool.
+  // Note that this number may not match the volumes api, as it will include all replicas,
+  // configured to reside in the pool, sometimes even the failed ones until such time they are deleted.
+  optional uint64 repl_count = 3;
+  // A tally of all snapshots configured to reside on this pool.
+  // Note that this number may not match the volume-snapshots api, as it will include all snapshots,
+  // configured to reside in the pool, sometimes even the failed ones until such time they are deleted.
+  optional uint64 snap_count = 4;
 }
 
 // User specification of a pool.
@@ -147,6 +155,10 @@ message PoolState {
   repeated DiskInfo disk_info = 12;
   // Error information at the pool top-level.
   optional PoolErrors errors = 13;
+  // How many replicas in the pool.
+  optional uint64 repl_count = 14;
+  // How many replica-snapshots in the pool.
+  optional uint64 snap_count = 15;
 }
 
 // status of the pool
