@@ -546,7 +546,11 @@ impl NodeWrapper {
                         }
                     })
                     .collect::<Vec<Replica>>();
-                PoolWrapper::new(pool_state.pool, replicas)
+                let snaps = resources
+                    .snapshot_states()
+                    .filter(|s| s.snapshot.pool_id() == pool_state.uid())
+                    .count();
+                PoolWrapper::new(pool_state.pool, replicas, snaps as u64)
             })
             .collect()
     }
@@ -574,7 +578,11 @@ impl NodeWrapper {
                         }
                     })
                     .collect();
-                Some(PoolWrapper::new(pool_state.pool, replicas))
+                let snaps = resources
+                    .snapshot_states()
+                    .filter(|s| s.snapshot.pool_id() == pool_state.uid())
+                    .count();
+                Some(PoolWrapper::new(pool_state.pool, replicas, snaps as u64))
             }
             None => None,
         }

@@ -689,6 +689,8 @@ impl IoEngineToAgent for v1::pool::Pool {
                 info.map(ExternalType).map(Into::into).collect::<Vec<_>>()
             },
             errors: self.errors.clone().map(ExternalType).into_opt(),
+            repl_count: None,
+            snap_count: None,
         }
     }
 }

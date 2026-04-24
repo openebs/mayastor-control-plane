@@ -52,7 +52,9 @@ impl ResourceLifecycle for OperationGuardArc<ReplicaSpec> {
         let result = node.create_replica(request).await;
         let on_fail = OnCreateFail::eeinval_delete(&result);
 
-        replica.complete_create(result, registry, on_fail).await
+        let replica = replica.complete_create(result, registry, on_fail).await?;
+        specs.on_repl_create(&replica.pool_id);
+        Ok(replica)
     }
 
     async fn destroy(
@@ -95,7 +97,9 @@ impl ResourceLifecycle for Option<&mut OperationGuardArc<ReplicaSpec>> {
                 Err(error) if error.tonic_code() == tonic::Code::NotFound => Ok(()),
                 Err(error) => Err(error),
             };
-            replica.complete_destroy(result, registry).await
+            replica.complete_destroy(result, registry).await?;
+            registry.specs().on_repl_destroy(&request.pool_id);
+            Ok(())
         } else {
             node.destroy_replica(request).await
         }

@@ -32,6 +32,7 @@ async fn snapshot() {
         .unwrap();
 
     let vol_cli = cluster.grpc_client().volume();
+    let pool_cli = cluster.grpc_client().pool();
 
     let volume = vol_cli
         .create(
@@ -59,6 +60,22 @@ async fn snapshot() {
         .unwrap();
 
     tracing::info!("Replica Snapshot: {replica_snapshot:?}");
+    let pools = pool_cli
+        .get(Filter::Pool(cluster.pool(0, 0)), None)
+        .await
+        .unwrap()
+        .into_inner();
+    let pool = pools.first().unwrap();
+    assert_eq!(pool.state.as_ref().unwrap().repl_count, Some(1));
+    assert_eq!(pool.state.as_ref().unwrap().snap_count, Some(1));
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.replica_count,
+        Some(1)
+    );
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.snapshot_count,
+        Some(1)
+    );
 
     let volumes = vol_cli
         .get(Filter::Volume(volume.uuid().clone()), false, None, None)
@@ -105,6 +122,22 @@ async fn snapshot() {
         .unwrap();
 
     tracing::info!("Deleted Snapshot: {}", replica_snapshot.spec().snap_id);
+    let pools = pool_cli
+        .get(Filter::Pool(cluster.pool(0, 0)), None)
+        .await
+        .unwrap()
+        .into_inner();
+    let pool = pools.first().unwrap();
+    assert_eq!(pool.state.as_ref().unwrap().repl_count, Some(1));
+    assert_eq!(pool.state.as_ref().unwrap().snap_count, Some(0));
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.replica_count,
+        Some(1)
+    );
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.snapshot_count,
+        Some(0)
+    );
 
     assert!(!volume.spec().thin);
     assert!(volume.spec().as_thin(), "Volume should still be thin!");

@@ -74,7 +74,14 @@ impl From<&CreatePool> for PoolSpec {
                 cluster_size: request.cluster_size.unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
                 max_expansion: request.max_expansion.clone(),
             },
-            metadata: PoolMetadata::default(),
+            metadata: PoolMetadata {
+                runtime: PoolRuntimeMetadata {
+                    snapshot_count: Some(0),
+                    replica_count: Some(0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
         }
     }
 }
@@ -197,6 +204,16 @@ pub struct PoolPersistedMetadata {}
 pub struct PoolRuntimeMetadata {
     /// Diagnostic info for the pool.
     pub diag: Option<PoolDiag>,
+    /// How many replica volumes owned by the pool.
+    /// This value is re-generated from the replicas, and then keep track via create/destroy.
+    /// Note that this count may differ from expected, as it tracks resources in
+    /// created and deleting states
+    pub replica_count: Option<u64>,
+    /// How many replica snapshots owned by the pool.
+    /// This value is re-generated from the volume-snapshots, and then keep track via create/destroy.
+    /// Note that this count may differ from expected, as it tracks resources in
+    /// created and deleting states.
+    pub snapshot_count: Option<u64>,
 }
 
 impl PoolSpec {
@@ -604,6 +621,8 @@ impl From<&PoolSpec> for transport::PoolState {
             max_expandable_size: None,
             disk_info: vec![],
             errors: None,
+            repl_count: pool.metadata.runtime.replica_count,
+            snap_count: pool.metadata.runtime.snapshot_count,
         }
     }
 }

@@ -272,6 +272,31 @@ impl ResourceSpecs {
         }
         false
     }
+    /// Get a count of all volume replicas on the given pool.
+    fn pool_replica_count(&self, id: &PoolId) -> u64 {
+        self.replicas
+            .values()
+            .filter(|r| r.immutable_ref().pool_name() == id)
+            .count() as u64
+    }
+    /// Get a count of all volume snapshots on the given pool.
+    fn pool_snap_count(&self, id: &PoolId) -> u64 {
+        let mut snapshots = 0u64;
+        for snapshot in self.volume_snapshots.values() {
+            let snapshot = snapshot.lock();
+
+            let transactions = snapshot.metadata().transactions();
+            let this_pool = transactions
+                .values()
+                .flatten()
+                .any(|r| r.spec().source_id().pool_id() == id);
+
+            if this_pool {
+                snapshots += 1;
+            }
+        }
+        snapshots
+    }
     /// Get all replicas on the given pool.
     fn pool_replicas(&self, id: &PoolId) -> Vec<ResourceMutex<ReplicaSpec>> {
         self.replicas
@@ -448,6 +473,18 @@ impl ResourceSpecsLocked {
         let specs = self.read();
         specs.pool_replicas(id)
     }
+    /// Calculates the number of replicas owned by the pool by probing the entire list of
+    /// replicas which report the pool as their owner.
+    /// This is necessary when a pool is offline, and as such we can't use the runtime information.
+    pub(crate) fn calculate_repl_count(&self, id: &PoolId) -> u64 {
+        self.read().pool_replica_count(id)
+    }
+    /// Calculates the number of replicas owned by the pool by probing the entire list of
+    /// replicas which report the pool as their owner.
+    /// This is necessary when a pool is offline, and as such we can't use the runtime information.
+    pub(crate) fn calculate_snap_count(&self, id: &PoolId) -> u64 {
+        self.read().pool_snap_count(id)
+    }
     /// Check if the given pool `id` has any snapshots.
     fn pool_has_snapshots(&self, id: &PoolId) -> bool {
         let specs = self.read();
@@ -537,5 +574,60 @@ impl ResourceSpecsLocked {
             None => None,
             Some(pool) => Some(pool.operation_guard_wait().await?),
         })
+    }
+
+    /// On replica creation, update the pool's replica count.
+    pub(crate) fn on_repl_create(&self, pool_id: &PoolId) {
+        let Some(pool) = self.pool_rsc(pool_id) else {
+            return;
+        };
+
+        let mut pool = pool.lock();
+        if let Some(count) = pool.metadata.runtime.replica_count.as_mut() {
+            *count += 1;
+        } else {
+            // this should only happen the first time
+            pool.metadata.runtime.replica_count = Some(self.calculate_repl_count(pool_id));
+        }
+    }
+    /// On replica deletion, update the pool's replica count.
+    pub(crate) fn on_repl_destroy(&self, pool_id: &PoolId) {
+        let Some(pool) = self.pool_rsc(pool_id) else {
+            return;
+        };
+
+        let mut pool = pool.lock();
+        if let Some(count) = pool.metadata.runtime.replica_count.as_mut() {
+            *count = count.saturating_sub(1);
+        } else {
+            pool.metadata.runtime.replica_count = Some(self.calculate_repl_count(pool_id));
+        }
+    }
+
+    /// On replica snapshot creation, update the pool's snapshot count.
+    pub(crate) fn on_snap_create(&self, pool_id: &PoolId) {
+        let Some(pool) = self.pool_rsc(pool_id) else {
+            return;
+        };
+
+        let mut pool = pool.lock();
+        if let Some(count) = pool.metadata.runtime.snapshot_count.as_mut() {
+            *count += 1;
+        } else {
+            pool.metadata.runtime.snapshot_count = Some(self.calculate_snap_count(pool_id));
+        }
+    }
+    /// On replica snapshot deletion, update the pool's snapshot count.
+    pub(crate) fn on_snap_destroy(&self, pool_id: &PoolId) {
+        let Some(pool) = self.pool_rsc(pool_id) else {
+            return;
+        };
+
+        let mut pool = pool.lock();
+        if let Some(count) = pool.metadata.runtime.snapshot_count.as_mut() {
+            *count = count.saturating_sub(1);
+        } else {
+            pool.metadata.runtime.snapshot_count = Some(self.calculate_snap_count(pool_id));
+        }
     }
 }

@@ -996,6 +996,12 @@ impl ResourceSpecsLocked {
                 }
             }
         }
+        // add runtime information for pool replica/snapshot count
+        for pool in self.read().pools.values() {
+            let mut pool = pool.lock();
+            pool.metadata.runtime.replica_count = Some(self.calculate_repl_count(pool.id()));
+            pool.metadata.runtime.snapshot_count = Some(self.calculate_snap_count(pool.id()));
+        }
 
         // Remove all entries of v1 key prefix.
         store

@@ -112,7 +112,9 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
             }
         }
 
-        let state = pool.complete_create(result, registry, on_fail).await?;
+        let mut state = pool.complete_create(result, registry, on_fail).await?;
+        state.repl_count = Some(0);
+        state.snap_count = Some(0);
         let spec = pool.lock().clone();
         Ok(Pool::new(spec, Some(CtrlPoolState::new(state))))
     }

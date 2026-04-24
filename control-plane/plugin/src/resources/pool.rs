@@ -114,7 +114,19 @@ impl CreateRow for openapi::models::Pool {
             optional_cell(state.committed.map(::utils::bytes::into_human)),
             state.encrypted,
             optional_cell(state.disk_capacity.map(::utils::bytes::into_human)),
-            optional_cell(state.max_expandable_size.map(::utils::bytes::into_human))
+            optional_cell(state.max_expandable_size.map(::utils::bytes::into_human)),
+            optional_cell(
+                self.meta
+                    .as_ref()
+                    .and_then(|m| m.replica_count)
+                    .or(state.replica_count)
+            ),
+            optional_cell(
+                self.meta
+                    .as_ref()
+                    .and_then(|m| m.snapshot_count)
+                    .or(state.snapshot_count)
+            ),
         ]
     }
 }
