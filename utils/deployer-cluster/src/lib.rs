@@ -370,7 +370,11 @@ impl Cluster {
         )
         .await?;
 
-        Ok(CsiNodeClient { csi, internal })
+        Ok(CsiNodeClient {
+            csi,
+            internal,
+            name: CsiNode::container_name(index),
+        })
     }
 
     /// Return a grpc handle to the csi-node plugin via TCP.
@@ -385,7 +389,11 @@ impl Cluster {
         )
         .await?;
 
-        Ok(CsiNodeClient { csi, internal })
+        Ok(CsiNodeClient {
+            csi,
+            internal,
+            name: CsiNode::container_name(1),
+        })
     }
 
     /// Return a grpc handle to the csi-controller.
@@ -1270,8 +1278,13 @@ pub struct CsiNodeClient {
     csi: csi_driver::csi::node_client::NodeClient<tonic::transport::Channel>,
     internal:
         csi_driver::node::internal::node_plugin_client::NodePluginClient<tonic::transport::Channel>,
+    name: String,
 }
 impl CsiNodeClient {
+    /// Get the csi node name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
     /// Get a mutable reference to the node-plugin csi client.
     pub fn csi(
         &mut self,

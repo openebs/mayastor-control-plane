@@ -197,3 +197,34 @@ pub(crate) async fn wait_till_volume_status(
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }
+
+/// Wait for a volume to reach the provided status with timeout.
+pub(crate) async fn wait_volume_target_node(
+    cluster: &Cluster,
+    uid: &Uuid,
+    node: &NodeId,
+    timeout: Duration,
+) -> Result<(), String> {
+    let start = std::time::Instant::now();
+    loop {
+        let mut curr_node = None;
+        let volume = cluster
+            .rest_v00()
+            .volumes_api()
+            .get_volume(uid)
+            .await
+            .unwrap();
+        if let Some(nexus) = volume.state.target {
+            if nexus.node.as_str() == node.as_str() {
+                return Ok(());
+            }
+            curr_node = Some(nexus.node);
+        }
+        if std::time::Instant::now() > (start + timeout) {
+            let error =
+                format!("Timeout wait_volume_target_node ('{node}'), current: '{curr_node:?}'");
+            return Err(error);
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
