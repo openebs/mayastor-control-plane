@@ -39,6 +39,7 @@ pub(super) struct NvmfAttach {
     io_tmo: Option<u32>,
     nr_io_queues: Option<u32>,
     ctrl_loss_tmo: Option<u32>,
+    reconnect_delay: Option<u32>,
     keep_alive_tmo: Option<u32>,
     hostnqn: Option<String>,
     warn_bad: std::sync::atomic::AtomicBool,
@@ -55,6 +56,7 @@ impl NvmfAttach {
         nr_io_queues: Option<u32>,
         io_tmo: Option<humantime::Duration>,
         ctrl_loss_tmo: Option<u32>,
+        reconnect_delay: Option<u32>,
         keep_alive_tmo: Option<u32>,
         hostnqn: Option<String>,
     ) -> NvmfAttach {
@@ -67,6 +69,7 @@ impl NvmfAttach {
             io_tmo: io_tmo.map(|io_tmo| io_tmo.as_secs().try_into().unwrap_or(u32::MAX)),
             nr_io_queues,
             ctrl_loss_tmo,
+            reconnect_delay,
             keep_alive_tmo,
             hostnqn,
             warn_bad: std::sync::atomic::AtomicBool::new(true),
@@ -119,6 +122,7 @@ impl TryFrom<&Url> for NvmfAttach {
 
         let nr_io_queues = config().nvme().nr_io_queues();
         let ctrl_loss_tmo = config().nvme().ctrl_loss_tmo();
+        let reconnect_delay = config().nvme().reconnect_delay();
         let keep_alive_tmo = config().nvme().keep_alive_tmo();
         let io_tmo = config().nvme().io_tmo();
 
@@ -136,6 +140,7 @@ impl TryFrom<&Url> for NvmfAttach {
             nr_io_queues,
             io_tmo,
             ctrl_loss_tmo,
+            reconnect_delay,
             keep_alive_tmo,
             hostnqn,
         ))
@@ -164,6 +169,9 @@ impl Attach for NvmfAttach {
         if let Some(keep_alive_tmo) = nvme_config.keep_alive_tmo() {
             self.keep_alive_tmo = Some(keep_alive_tmo);
         }
+        if let Some(reconnect_delay) = nvme_config.reconnect_delay() {
+            self.reconnect_delay = Some(reconnect_delay);
+        }
         if self.io_tmo.is_none() {
             if let Some(io_tmo) = publish_context.io_timeout() {
                 self.io_tmo = Some(*io_tmo);
@@ -188,15 +196,15 @@ impl Attach for NvmfAttach {
             Err(NvmeError::SubsystemNotFound { .. }) => {
                 // The default reconnect delay in linux kernel is set to 10s. Use the
                 // same default value unless the timeout is less or equal to 10.
-                let reconnect_delay = match self.io_tmo {
-                    Some(io_timeout) => {
+                let reconnect_delay = match (self.io_tmo, self.reconnect_delay) {
+                    (Some(io_timeout), None) => {
                         if io_timeout <= 10 {
                             Some(1)
                         } else {
                             Some(10)
                         }
                     }
-                    None => None,
+                    _else => self.reconnect_delay,
                 };
                 let ca = ConnectArgsBuilder::default()
                     .traddr(&self.host)

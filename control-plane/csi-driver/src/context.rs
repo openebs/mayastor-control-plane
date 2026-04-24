@@ -40,6 +40,7 @@ pub enum Parameters {
     NvmeIoTimeout,
     NvmeNrIoQueues,
     NvmeCtrlLossTmo,
+    NvmeReconnectDelay,
     NvmeKeepAliveTmo,
     #[strum(serialize = "repl")]
     ReplicaCount,
@@ -186,6 +187,10 @@ impl Parameters {
     }
     /// Parse the value for `Self::NvmeCtrlLossTmo`.
     pub fn ctrl_loss_tmo(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
+        Self::parse_u32(value)
+    }
+    /// Parse the value for `Self::NvmeReconnectDelay`.
+    pub fn reconnect_delay(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
         Self::parse_u32(value)
     }
     /// Parse the value for `Self::NvmeNrIoQueues`.

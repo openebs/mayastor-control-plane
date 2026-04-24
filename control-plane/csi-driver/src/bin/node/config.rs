@@ -18,6 +18,10 @@ pub fn nvme_keep_alive_tmo() -> String {
 pub fn nvme_ctrl_loss_tmo() -> String {
     Parameters::NvmeCtrlLossTmo.as_ref().to_kebab_case()
 }
+/// Command line arg name for `Parameters::NvmeReconnectDelay`.
+pub fn nvme_reconnect_delay() -> String {
+    Parameters::NvmeReconnectDelay.as_ref().to_kebab_case()
+}
 /// Command line arg name for `Parameters::NvmeIoTimeout`.
 pub fn nvme_io_tmo() -> String {
     Parameters::NvmeIoTimeout.as_ref().to_kebab_case()
@@ -45,6 +49,8 @@ pub(crate) struct NvmeConfig {
     nr_io_queues: Option<u32>,
     /// Default value for `ctrl_loss_tmo` when not specified via the volume parameters (sc).
     ctrl_loss_tmo: Option<u32>,
+    /// Default value for `reconnect_delay` when not specified via the volume parameters (sc).
+    reconnect_delay: Option<u32>,
     keep_alive_tmo: Option<u32>,
     /// Default value for `io_tmo` when not specified via the volume parameters (sc).
     io_tmo: Option<humantime::Duration>,
@@ -53,12 +59,14 @@ impl NvmeConfig {
     fn new(
         nr_io_queues: Option<u32>,
         ctrl_loss_tmo: Option<u32>,
+        reconnect_delay: Option<u32>,
         keep_alive_tmo: Option<u32>,
         io_tmo: Option<humantime::Duration>,
     ) -> Self {
         Self {
             nr_io_queues,
             ctrl_loss_tmo,
+            reconnect_delay,
             keep_alive_tmo,
             io_tmo,
         }
@@ -71,6 +79,11 @@ impl NvmeConfig {
     /// Used to setup the max number of reconnects until the initiator gives up.
     pub(crate) fn ctrl_loss_tmo(&self) -> Option<u32> {
         self.ctrl_loss_tmo
+    }
+    /// The `reconnect_delay` value.
+    /// Used to space out initiator reconnection attempts.
+    pub(crate) fn reconnect_delay(&self) -> Option<u32> {
+        self.reconnect_delay
     }
     /// The keep-alive timeout.
     pub(crate) fn keep_alive_tmo(&self) -> Option<u32> {
@@ -114,6 +127,14 @@ impl TryFrom<NvmeArgValues> for NvmeConfig {
                 error
             )
         })?;
+        let reconnect_delay =
+            Parameters::reconnect_delay(src.0.get(Parameters::NvmeReconnectDelay.as_ref()))
+                .map_err(|error| {
+                    anyhow::anyhow!(
+                        "Invalid value for {}, error = {error}",
+                        Parameters::NvmeReconnectDelay.as_ref(),
+                    )
+                })?;
         let keep_alive_tmo = Parameters::keep_alive_tmo(
             src.0.get(Parameters::NvmeKeepAliveTmo.as_ref()),
         )
@@ -137,6 +158,7 @@ impl TryFrom<NvmeArgValues> for NvmeConfig {
         Ok(Self::new(
             nvme_nr_ioq,
             ctrl_loss_tmo,
+            reconnect_delay,
             keep_alive_tmo,
             nvme_io_tmo,
         ))
@@ -154,6 +176,7 @@ impl TryFrom<NvmeParseParams<'_>> for NvmeArgValues {
         }
         let mut us = Self::default();
         add_param(&value, &mut us, Parameters::NvmeCtrlLossTmo.as_ref());
+        add_param(&value, &mut us, Parameters::NvmeReconnectDelay.as_ref());
         add_param(&value, &mut us, Parameters::NvmeKeepAliveTmo.as_ref());
         Ok(us)
     }
@@ -176,6 +199,12 @@ impl TryFrom<&ArgMatches> for NvmeArgValues {
         if let Some(value) = matches.get_one::<String>(&nvme_ctrl_loss_tmo()) {
             map.0
                 .insert(Parameters::NvmeCtrlLossTmo.to_string(), value.to_string());
+        }
+        if let Some(value) = matches.get_one::<String>(&nvme_reconnect_delay()) {
+            map.0.insert(
+                Parameters::NvmeReconnectDelay.to_string(),
+                value.to_string(),
+            );
         }
 
         if let Some(value) = matches.get_one::<String>(&nvme_keep_alive_tmo()) {
