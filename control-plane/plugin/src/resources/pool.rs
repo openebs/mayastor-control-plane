@@ -427,6 +427,7 @@ impl Delete for Pool {
                 match super::error::PurgeReason::from_api_error(&source) {
                     Some(reason) => Err(Error::Purge { reason }),
                     None => Err(Error::DeletePoolError {
+                        hint: pool_deletion_hint(&id.pool_id).await,
                         id: id.pool_id.to_string(),
                         source,
                     }),
@@ -434,6 +435,29 @@ impl Delete for Pool {
             }
         }
     }
+}
+
+/// GET the pool and, if its spec status is `Deleting` or `Purging`, return a hint
+/// message telling the user that the delete will be retried automatically.
+/// Returns `None` when the pool cannot be fetched or is not in a pending-deletion state.
+async fn pool_deletion_hint(pool_id: &PoolId) -> Option<String> {
+    let pool = RestClient::client()
+        .pools_api()
+        .get_pool(pool_id)
+        .await
+        .ok()?
+        .into_body();
+    let status = pool.spec?.status;
+    matches!(
+        status,
+        models::SpecStatus::Deleting | models::SpecStatus::Purging
+    )
+    .then(|| {
+        format!(
+            "Pool '{pool_id}' is currently in '{status}' state. \
+             This operation will be retried automatically."
+        )
+    })
 }
 
 impl GetHeaderRow for models::PoolDeleteResult {
