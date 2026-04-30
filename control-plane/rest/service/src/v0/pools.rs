@@ -5,10 +5,12 @@ use grpc::operations::pool::traits::{
 use openapi::apis::pools_api::actix::server::{delNodePoolResponse, delPoolResponse};
 use rest_client::versions::v0::{apis::Uuid, models::PoolClearErr};
 use std::collections::HashMap;
-use stor_port::types::v0::openapi;
 use stor_port::{
     transport_api::{ReplyError, ReplyErrorKind, ResourceKind},
-    types::v0::transport::{DestroyPool, ExpandPool, Filter, UnlabelPool},
+    types::v0::{
+        openapi,
+        transport::{DestroyPool, ExpandPool, Filter, UnlabelPool},
+    },
 };
 
 fn client() -> impl PoolOperations {

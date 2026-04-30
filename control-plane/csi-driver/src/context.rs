@@ -1,7 +1,9 @@
 use crate::filesystem::FileSystem;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
-use kube::api::{Patch, PatchParams};
-use kube::{Api, Client};
+use kube::{
+    api::{Patch, PatchParams},
+    Api, Client,
+};
 use parse_size::parse_size;
 use regex::Regex;
 use std::{
@@ -10,11 +12,9 @@ use std::{
     num::ParseIntError,
     str::{FromStr, ParseBoolError},
 };
-use stor_port::platform;
-use stor_port::types::v0::openapi::models::VolumeShareProtocol;
+use stor_port::{platform, types::v0::openapi::models::VolumeShareProtocol};
 use strum_macros::{AsRefStr, Display, EnumString};
-use tracing::log::warn;
-use tracing::{debug, trace};
+use tracing::{debug, log::warn, trace};
 use utils::K8S_STS_PVC_NAMING_REGEX;
 
 use uuid::{Error as UuidError, Uuid};

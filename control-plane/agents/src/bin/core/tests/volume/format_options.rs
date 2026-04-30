@@ -1,8 +1,7 @@
 #![cfg(test)]
 
 use deployer_cluster::ClusterBuilder;
-use stor_port::types::v0::openapi::models;
-use stor_port::types::v0::transport::VolumeId;
+use stor_port::types::v0::{openapi::models, transport::VolumeId};
 
 use std::{collections::HashMap, time::Duration};
 

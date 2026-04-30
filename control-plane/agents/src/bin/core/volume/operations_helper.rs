@@ -31,8 +31,10 @@ use stor_port::{
             nexus_child::NexusChild,
             nexus_persistence::VolumeHealthPrefix,
             replica::ReplicaSpec,
-            volume::RepublishOperation,
-            volume::{FrontendConfig, TargetConfig, VolumeOperation, VolumeSpec, VolumeTarget},
+            volume::{
+                FrontendConfig, RepublishOperation, TargetConfig, VolumeOperation, VolumeSpec,
+                VolumeTarget,
+            },
         },
         transport::{
             CreateNexus, CreateReplica, Nexus, NexusId, NexusNvmePreemption, NexusNvmfConfig,

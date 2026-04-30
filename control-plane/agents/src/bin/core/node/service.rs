@@ -14,8 +14,9 @@ use stor_port::types::v0::transport::{
     Register,
 };
 
-use crate::controller::resources::operations::ResourceLifecycle;
-use crate::controller::{io_engine::HostApi, wrapper::InternalOps};
+use crate::controller::{
+    io_engine::HostApi, resources::operations::ResourceLifecycle, wrapper::InternalOps,
+};
 use grpc::{
     context::Context,
     operations::{
