@@ -66,10 +66,12 @@ pub enum Error {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
-    #[snafu(display("Failed to delete pool {id}. Error {source}"))]
+    #[snafu(display("Failed to delete pool {id}. Error {source}{}", hint.as_deref().map(|h| format!("\nHint: {h}")).unwrap_or_default()))]
     DeletePoolError {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+        /// Optional contextual hint shown when the pool is already being deleted/purged.
+        hint: Option<String>,
     },
     #[snafu(display("Failed to delete node {id}. Error {source}"))]
     DeleteNodeError {
@@ -232,13 +234,13 @@ pub enum PurgeReason {
     NodeHasResources,
     #[strum(to_string = "Node has pools with data. Confirm with --yes to proceed.")]
     NodePurgeAcceptRequired,
-    #[strum(
-        to_string = "Volumes would lose their last healthy replica. Use --accept-volume-loss or --accept-data-loss to proceed."
-    )]
+    #[strum(to_string = "Volumes would lose their last healthy replica. \
+                 Use --accept-volume-loss to proceed, or --accept-data-loss \
+                 to also accept snapshot loss in a single flag.")]
     NodePurgeVolumeLoss,
-    #[strum(
-        to_string = "Snapshots would lose their last replica snapshot. Use --accept-snapshot-loss or --accept-data-loss to proceed."
-    )]
+    #[strum(to_string = "Snapshots would lose their last replica snapshot. \
+                 Use --accept-snapshot-loss to proceed, or --accept-data-loss \
+                 to also accept volume loss in a single flag.")]
     NodePurgeSnapshotLoss,
     #[strum(
         to_string = "Pool state is not Offline or Unknown. Only pools with Offline or Unknown state can be purged."
@@ -254,13 +256,13 @@ pub enum PurgeReason {
     PoolCordonInsufficient,
     #[strum(to_string = "Pool has replicas. Confirm with --yes to proceed.")]
     PoolPurgeAcceptRequired,
-    #[strum(
-        to_string = "Volumes would lose their last healthy replica. Use --accept-volume-loss or --accept-data-loss to proceed."
-    )]
+    #[strum(to_string = "Volumes would lose their last healthy replica. \
+                 Use --accept-volume-loss to proceed, or --accept-data-loss \
+                 to also accept snapshot loss in a single flag.")]
     PoolPurgeVolumeLoss,
-    #[strum(
-        to_string = "Snapshots would lose their last replica snapshot. Use --accept-snapshot-loss or --accept-data-loss to proceed."
-    )]
+    #[strum(to_string = "Snapshots would lose their last replica snapshot. \
+                 Use --accept-snapshot-loss to proceed, or --accept-data-loss \
+                 to also accept volume loss in a single flag.")]
     PoolPurgeSnapshotLoss,
 }
 

@@ -313,6 +313,14 @@ impl VolumeMetadata {
     pub fn has_snapshots(&self) -> bool {
         self.runtime.has_snapshots()
     }
+    /// Check whether the data-loss warning has already been emitted (runtime only).
+    pub fn data_loss_warned(&self) -> bool {
+        self.runtime.data_loss_warned()
+    }
+    /// Mark the data-loss warning as emitted (runtime only).
+    pub fn set_data_loss_warned(&mut self) {
+        self.runtime.set_data_loss_warned();
+    }
 }
 
 /// Volume meta information.
@@ -328,11 +336,22 @@ pub struct VolumePersistedMetadata {
 pub struct VolumeRuntimeMetadata {
     /// Runtime list of all volume snapshots.
     snapshots: super::snapshots::volume::VolumeSnapshotList,
+    /// Avoids flooding logs once-per-reconcile-tick when a published volume is
+    /// stuck with zero replicas after a pool purge.
+    data_loss_warned: bool,
 }
 impl VolumeRuntimeMetadata {
     /// Check if there's any snapshot.
     pub fn has_snapshots(&self) -> bool {
         !self.snapshots.is_empty()
+    }
+    /// Check whether the data-loss warning has already been emitted.
+    pub fn data_loss_warned(&self) -> bool {
+        self.data_loss_warned
+    }
+    /// Mark the data-loss warning as emitted.
+    pub fn set_data_loss_warned(&mut self) {
+        self.data_loss_warned = true;
     }
 }
 
@@ -443,6 +462,16 @@ impl VolumeSpec {
     /// Check if there's any snapshot.
     pub fn has_snapshots(&self) -> bool {
         self.metadata.runtime.has_snapshots()
+    }
+    /// Check whether the data-loss warning has already been emitted for this volume.
+    /// Runtime only — resets on core agent restart.
+    pub fn data_loss_warned(&self) -> bool {
+        self.metadata.data_loss_warned()
+    }
+    /// Mark the data-loss warning as emitted for this volume.
+    /// Runtime only — resets on core agent restart.
+    pub fn set_data_loss_warned(&mut self) {
+        self.metadata.set_data_loss_warned();
     }
     /// Check if the volume behaves as thin provisioned.
     /// This can happen when a volume has snapshots.

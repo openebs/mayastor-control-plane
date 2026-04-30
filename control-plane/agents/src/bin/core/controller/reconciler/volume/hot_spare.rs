@@ -267,6 +267,29 @@ async fn volume_replica_count_reconciler_traced(
 
     match current_replica_count.cmp(&required_replica_count) {
         Ordering::Less => {
+            // Guard: do not materialise a fresh, empty replica when the volume has
+            // already been published but currently has zero spec'd replicas.
+            //
+            // A volume that has never been published has no `health_info_id` and
+            // no data to lose, so a fresh replica there is correct.
+            if current_replica_count == 0 && volume.as_ref().health_info_id().is_some() {
+                // The reconciler cannot recover this volume on its own.
+                // Emit the warning exactly once per agent lifetime per volume to avoid flooding
+                // logs at the reconcile cadence.
+                if !volume.as_ref().data_loss_warned() {
+                    // Mark first, then log. The lock is dropped before the
+                    // tracing macro fires so the lock isn't held across logging.
+                    volume.lock().set_data_loss_warned();
+                    volume.warn_span(|| {
+                        tracing::warn!(
+                            "Volume has no remaining replicas; hot-spare will not create \
+                            additional replicas since no rebuild is possible"
+                        )
+                    });
+                }
+                return PollResult::Ok(PollerState::Idle);
+            }
+
             volume.warn_span(|| {
                 tracing::warn!(
                     "The volume has '{}' replica(s) but it should have '{}'",
