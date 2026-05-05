@@ -3,8 +3,7 @@ use grpc::operations::{
     node::traits::NodeOperations, pool::traits::PoolOperations, replica::traits::ReplicaOperations,
     volume::traits::VolumeOperations,
 };
-use std::collections::HashMap;
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 use stor_port::{
     pstor::{etcd::Etcd, StoreObj},
     transport_api::{ReplyErrorKind, ResourceKind},

@@ -8,8 +8,7 @@ use crate::{
     },
 };
 use prost::UnknownEnumValue;
-use std::ops::Deref;
-use std::{collections::HashMap, convert::TryFrom};
+use std::{collections::HashMap, convert::TryFrom, ops::Deref};
 use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind},
     types::v0::{

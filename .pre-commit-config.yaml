@@ -17,18 +17,18 @@ repos:
         args: [ "--spec-changes" ]
         pass_filenames: false
         language: system
-      - id: rust-lint
-        name: Rust lint
-        description: Run cargo clippy on files included in the commit. clippy should be installed before-hand.
-        entry: nix-shell --pure --run './scripts/rust/linter.sh clippy'
-        pass_filenames: false
-        types: [ file, rust ]
-        language: system
       - id: rust-style
         name: Rust style
         description: Run cargo fmt on files included in the commit. rustfmt should be installed before-hand.
         entry: nix-shell --pure --run './scripts/rust/linter.sh fmt'
         exclude: openapi/
+        pass_filenames: false
+        types: [ file, rust ]
+        language: system
+      - id: rust-lint
+        name: Rust lint
+        description: Run cargo clippy on files included in the commit. clippy should be installed before-hand.
+        entry: nix-shell --pure --run './scripts/rust/linter.sh clippy'
         pass_filenames: false
         types: [ file, rust ]
         language: system

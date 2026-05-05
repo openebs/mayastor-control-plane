@@ -1,7 +1,9 @@
 use crate::filesystem::FileSystem;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
-use kube::api::{Patch, PatchParams};
-use kube::{Api, Client};
+use kube::{
+    api::{Patch, PatchParams},
+    Api, Client,
+};
 use parse_size::parse_size;
 use regex::Regex;
 use std::{
@@ -10,11 +12,9 @@ use std::{
     num::ParseIntError,
     str::{FromStr, ParseBoolError},
 };
-use stor_port::platform;
-use stor_port::types::v0::openapi::models::VolumeShareProtocol;
+use stor_port::{platform, types::v0::openapi::models::VolumeShareProtocol};
 use strum_macros::{AsRefStr, Display, EnumString};
-use tracing::log::warn;
-use tracing::{debug, trace};
+use tracing::{debug, log::warn, trace};
 use utils::K8S_STS_PVC_NAMING_REGEX;
 
 use uuid::{Error as UuidError, Uuid};
@@ -40,6 +40,7 @@ pub enum Parameters {
     NvmeIoTimeout,
     NvmeNrIoQueues,
     NvmeCtrlLossTmo,
+    NvmeReconnectDelay,
     NvmeKeepAliveTmo,
     #[strum(serialize = "repl")]
     ReplicaCount,
@@ -186,6 +187,10 @@ impl Parameters {
     }
     /// Parse the value for `Self::NvmeCtrlLossTmo`.
     pub fn ctrl_loss_tmo(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
+        Self::parse_u32(value)
+    }
+    /// Parse the value for `Self::NvmeReconnectDelay`.
+    pub fn reconnect_delay(value: Option<&String>) -> Result<Option<u32>, ParseIntError> {
         Self::parse_u32(value)
     }
     /// Parse the value for `Self::NvmeNrIoQueues`.

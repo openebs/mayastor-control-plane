@@ -143,6 +143,13 @@ pub(super) async fn main() -> anyhow::Result<()> {
                 .help("Sets the nvme-ctrl-loss-tmo parameter when connecting to a volume target. (May be overridden through the storage class)")
         )
         .arg(
+            Arg::new(crate::config::nvme_reconnect_delay())
+                .long(crate::config::nvme_reconnect_delay())
+                .value_name("NUMBER")
+                .required(false)
+                .help("Sets the nvme-reconnect-delay parameter when connecting to a volume target. (May be overridden through the storage class)")
+        )
+        .arg(
             Arg::new(crate::config::nvme_keep_alive_tmo())
                 .long(crate::config::nvme_keep_alive_tmo())
                 .value_name("NUMBER")

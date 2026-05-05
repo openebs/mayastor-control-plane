@@ -11,24 +11,24 @@ pub use stor_port::{
         },
         store::pool::PoolLabel,
         transport::{
-            AddNexusChild, BlockDevice, Child, ChildUri, CreateNexus, CreatePool, CreateReplica,
-            CreateVolume, DestroyNexus, DestroyPool, DestroyReplica, DestroyVolume, Filter,
-            GetBlockDevices, JsonGrpcRequest, LabelPool, Nexus, NexusId, NexusShareProtocol, Node,
-            NodeId, Pool, PoolDeviceUri, PoolId, Protocol, RemoveNexusChild, Replica, ReplicaId,
-            ReplicaShareProtocol, ShareNexus, ShareReplica, Specs, Topology, UnshareNexus,
-            UnshareReplica, VolumeId, VolumeLabels, VolumePolicy, VolumeProperty, Watch,
-            WatchCallback, WatchResourceId,
+            AddNexusChild, AffinityGroup, BlockDevice, Child, ChildUri, CreateNexus, CreatePool,
+            CreateReplica, CreateSnapshotVolume, CreateVolume, DestroyNexus, DestroyPool,
+            DestroyReplica, DestroyVolume, Filter, GetBlockDevices, HostNqn, HostNqnParseError,
+            JsonGrpcRequest, LabelPool, Nexus, NexusId, NexusShareProtocol, Node, NodeId, Pool,
+            PoolDeviceUri, PoolId, Protocol, RemoveNexusChild, Replica, ReplicaId,
+            ReplicaShareProtocol, ShareNexus, ShareReplica, SnapshotId, Specs, Topology,
+            UnshareNexus, UnshareReplica, VolumeId, VolumeLabels, VolumePolicy, VolumeProperty,
+            Watch, WatchCallback, WatchResourceId,
         },
-        transport::{AffinityGroup, CreateSnapshotVolume, HostNqn, HostNqnParseError, SnapshotId},
     },
     IntoOption, IntoVec,
 };
 
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
+    fmt::Debug,
 };
 use stor_port::TryIntoOption;
 
