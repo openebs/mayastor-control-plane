@@ -116,6 +116,7 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
         let mut state = pool.complete_create(result, registry, on_fail).await?;
         state.repl_count = Some(0);
         state.snap_count = Some(0);
+        registry.specs().on_pool_create(&state.node);
         let spec = pool.lock().clone();
         Ok(Pool::new(spec, Some(CtrlPoolState::new(state))))
     }
@@ -347,6 +348,7 @@ impl OperationGuardArc<PoolSpec> {
             Err(error) => Err(error),
         };
         self.complete_destroy(result, registry).await?;
+        registry.specs().on_pool_destroy(&request.node);
         Ok(None)
     }
 
@@ -444,6 +446,7 @@ impl OperationGuardArc<PoolSpec> {
 
         // 10. Complete the op.
         let result = self.complete_destroy(purge_result, registry).await?;
+        registry.specs().on_pool_destroy(node_id);
         Ok(Some(result))
     }
 

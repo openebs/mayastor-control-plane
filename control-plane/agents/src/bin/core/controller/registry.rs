@@ -88,7 +88,7 @@ pub(crate) struct RegistryInner<S: Store> {
     /// reconciliation period when work is pending.
     reconcile_period: std::time::Duration,
     /// The duration for which the reconciler waits for the replica to
-    /// to be healthy again before attempting to online the faulted child.
+    /// be healthy again before attempting to online the faulted child.
     faulted_child_wait_period: Option<std::time::Duration>,
     /// When the pool creation gRPC times out, the actual call in the io-engine
     /// may still progress.
@@ -119,8 +119,8 @@ pub(crate) struct RegistryInner<S: Store> {
     allow_non_persistent_devlinks: bool,
     /// Prefer encrypted pools for volume replicas.
     encrypted_pools_soft_scheduling: bool,
-    /// Blobstore cluster size(in bytes) required for pool creation and replica scheduling. This is
-    /// not per-pool.
+    /// Blobstore cluster size(in bytes) required for pool creation and replica scheduling.
+    /// This is not per-pool.
     pool_cluster_size: Option<u32>,
     deprecated_access_mode: bool,
     /// Running in simulation mode.

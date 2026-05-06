@@ -180,6 +180,64 @@ impl ResourceSpecsLocked {
         let mut specs = self.write();
         specs.nodes.remove(id);
     }
+
+    /// On replica creation, update the node's replica count.
+    pub(crate) fn node_on_repl_create(&self, node_id: &NodeId) {
+        let Ok(node) = self.node_rsc(node_id) else {
+            return;
+        };
+
+        let mut node = node.lock();
+        node.metadata.runtime.replica_count += 1;
+    }
+    /// On replica deletion, update the node's replica count.
+    pub(crate) fn node_on_repl_destroy(&self, node_id: &NodeId) {
+        let Ok(node) = self.node_rsc(node_id) else {
+            return;
+        };
+
+        let mut node = node.lock();
+        node.metadata.runtime.replica_count = node.metadata.runtime.replica_count.saturating_sub(1);
+    }
+
+    /// On replica snapshot creation, update the node's snapshot count.
+    pub(crate) fn node_on_snap_create(&self, node_id: &NodeId) {
+        let Ok(node) = self.node_rsc(node_id) else {
+            return;
+        };
+
+        let mut node = node.lock();
+        node.metadata.runtime.snapshot_count += 1;
+    }
+    /// On replica snapshot deletion, update the node's snapshot count.
+    pub(crate) fn node_on_snap_destroy(&self, node_id: &NodeId) {
+        let Ok(node) = self.node_rsc(node_id) else {
+            return;
+        };
+
+        let mut node = node.lock();
+        node.metadata.runtime.snapshot_count =
+            node.metadata.runtime.snapshot_count.saturating_sub(1);
+    }
+
+    /// On pool creation, update the node's pool count.
+    pub(crate) fn on_pool_create(&self, node_id: &NodeId) {
+        let Ok(node) = self.node_rsc(node_id) else {
+            return;
+        };
+
+        let mut node = node.lock();
+        node.metadata.runtime.pool_count += 1;
+    }
+    /// On pool deletion, update the node's pool count.
+    pub(crate) fn on_pool_destroy(&self, node_id: &NodeId) {
+        let Ok(node) = self.node_rsc(node_id) else {
+            return;
+        };
+
+        let mut node = node.lock();
+        node.metadata.runtime.pool_count = node.metadata.runtime.pool_count.saturating_sub(1);
+    }
 }
 
 impl ResourceSpecs {

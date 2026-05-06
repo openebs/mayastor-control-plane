@@ -206,6 +206,42 @@ pub struct NodeSpec {
     /// If the node has signaled shutdown by sending deregistration message.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     shutdown: bool,
+    /// Node metadata information.
+    #[serde(default, skip_serializing_if = "super::is_default")]
+    pub metadata: NodeMetadata,
+}
+
+/// Node meta information.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct NodeMetadata {
+    /// Persisted metadata information.
+    #[serde(default, skip_serializing_if = "super::is_default")]
+    pub persisted: NodePersistedMetadata,
+    /// Runtime information, useful to quick checks without having to read out from PSTOR
+    /// or any other control-plane related registry.
+    #[serde(skip)]
+    pub runtime: NodeRuntimeMetadata,
+}
+
+/// Node meta information.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct NodePersistedMetadata {}
+
+/// Runtime pool information.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct NodeRuntimeMetadata {
+    /// How many replica volumes owned by pools in the node.
+    /// This value is re-generated from the replicas, and then keep track via create/destroy.
+    /// Note that this count may differ from expected, as it tracks resources in
+    /// created and deleting states
+    pub replica_count: u64,
+    /// How many replica snapshots owned by pools in the node.
+    /// This value is re-generated from the volume-snapshots, and then keep track via create/destroy.
+    /// Note that this count may differ from expected, as it tracks resources in
+    /// created and deleting states.
+    pub snapshot_count: u64,
+    /// How many pools are owned by the node.
+    pub pool_count: u64,
 }
 
 impl NodeSpec {
@@ -237,6 +273,7 @@ impl NodeSpec {
             bugfixes,
             version,
             shutdown,
+            metadata: NodeMetadata::default(),
         }
     }
 

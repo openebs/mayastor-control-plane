@@ -72,14 +72,46 @@ impl GetNodes {
     }
 }
 
+/// User configuration with user specification and metadata information.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NodeConfig {
+    /// Specification of the node.
+    pub spec: NodeSpec,
+    /// Node resource counts.
+    pub resources: Option<NodeRscCounts>,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NodeRscCounts {
+    /// How many pools are owned by the node.
+    pub pool_count: u64,
+    /// How many replicas are owned by pools on the node.
+    pub replica_count: u64,
+    /// How many snapshots are owned by pools on the node.
+    pub snapshot_count: u64,
+}
+impl From<NodeSpec> for NodeConfig {
+    fn from(spec: NodeSpec) -> Self {
+        Self {
+            resources: Some(NodeRscCounts {
+                pool_count: spec.metadata.runtime.pool_count,
+                replica_count: spec.metadata.runtime.replica_count,
+                snapshot_count: spec.metadata.runtime.snapshot_count,
+            }),
+            spec,
+        }
+    }
+}
+
 /// Node information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Node {
     /// Node identification
     id: NodeId,
-    /// Specification of the node.
-    spec: Option<NodeSpec>,
+    /// [`NodeConfig`].
+    config: Option<NodeConfig>,
     /// Runtime state of the node.
     state: Option<NodeState>,
 }
@@ -87,7 +119,11 @@ pub struct Node {
 impl Node {
     /// Get new `Self` from the given parameters
     pub fn new(id: NodeId, spec: Option<NodeSpec>, state: Option<NodeState>) -> Self {
-        Self { id, spec, state }
+        Self {
+            id,
+            config: spec.map(NodeConfig::from),
+            state,
+        }
     }
     /// Get the node id
     pub fn id(&self) -> &NodeId {
@@ -99,15 +135,22 @@ impl Node {
     pub fn status(&self) -> NodeStatus {
         match &self.state {
             Some(state) => state.status,
-            None => match &self.spec {
+            None => match self.spec() {
                 Some(spec) if spec.is_shutdown() => NodeStatus::Offline,
                 _ => NodeStatus::Unknown,
             },
         }
     }
+    pub fn take_config(&mut self) -> Option<NodeConfig> {
+        self.config.take()
+    }
     /// Get the node specification
     pub fn spec(&self) -> Option<&NodeSpec> {
-        self.spec.as_ref()
+        self.config.as_ref().map(|config| &config.spec)
+    }
+    /// Get the node specification
+    pub fn spec_mut(&mut self) -> Option<&mut NodeSpec> {
+        self.config.as_mut().map(|config| &mut config.spec)
     }
     /// Get the node runtime state
     pub fn state(&self) -> Option<&NodeState> {
@@ -115,7 +158,7 @@ impl Node {
     }
     /// Set the shutdown flag.
     pub fn with_shutdown(mut self, shutdown: bool) -> Self {
-        if let Some(ref mut spec) = self.spec {
+        if let Some(ref mut spec) = self.spec_mut() {
             spec.set_shutdown(shutdown);
         }
         self
@@ -123,11 +166,12 @@ impl Node {
 }
 
 impl From<Node> for models::Node {
-    fn from(src: Node) -> Self {
+    fn from(mut src: Node) -> Self {
         let status = src.status();
+        let config = src.take_config();
         Self::new_all(
             src.id,
-            src.spec.map(Into::into),
+            config.map(|n| n.spec.into()),
             src.state.map(Into::into),
             Some(status.into()),
         )
