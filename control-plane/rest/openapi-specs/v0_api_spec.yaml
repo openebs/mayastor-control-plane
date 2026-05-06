@@ -3444,12 +3444,42 @@ components:
           $ref: '#/components/schemas/NodeId'
         spec:
           $ref: '#/components/schemas/NodeSpec'
+        meta:
+          $ref: '#/components/schemas/NodeMeta'
         state:
           $ref: '#/components/schemas/NodeState'
         status:
           $ref: '#/components/schemas/NodeStatus'
       required:
         - id
+    NodeMeta:
+      description: Node metadata information
+      type: object
+      properties:
+        tallies:
+          $ref: '#/components/schemas/NodeRscTallies'
+      required:
+        - tallies
+    NodeRscTallies:
+      description: Node resource tallies
+      type: object
+      properties:
+        poolCount:
+          description: A tally of all pools configured on this node
+          type: integer
+          format: uint64
+        replicaCount:
+          description: A tally of all volume-replicas configured on this node
+          type: integer
+          format: uint64
+        snapshotCount:
+          description: A tally of all snapshots configured on this node
+          type: integer
+          format: uint64
+      required:
+        - poolCount
+        - replicaCount
+        - snapshotCount
     PoolStatus:
       description: current status of the pool
       type: string

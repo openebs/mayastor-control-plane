@@ -100,6 +100,12 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     let listed_node = client.nodes_api().get_node(io_engine1.as_str()).await;
     let listed_node = listed_node.unwrap();
     let version = listed_node.spec.as_ref().unwrap().version.clone();
+
+    let pools = client
+        .pools_api()
+        .get_node_pools(&io_engine1)
+        .await
+        .unwrap();
     let mut node = models::Node {
         id: io_engine1.to_string(),
         spec: Some(models::NodeSpec {
@@ -125,10 +131,15 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             version,
         }),
         status: Some(models::NodeStatus::Online),
+        meta: Some(models::NodeMeta {
+            tallies: models::NodeRscTallies {
+                pool_count: pools.len() as u64,
+                ..Default::default()
+            },
+        }),
     };
     assert_eq!(listed_node, node);
 
-    let _ = client.pools_api().get_pools(None).await.unwrap();
     let pool = client
         .pools_api()
         .put_node_pool(
@@ -442,6 +453,18 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     if let Some(ref mut spec) = node.spec {
         spec.shutdown = Some(true);
     }
+
+    let pools = client
+        .pools_api()
+        .get_node_pools(&io_engine1)
+        .await
+        .unwrap();
+    node.meta = Some(models::NodeMeta {
+        tallies: models::NodeRscTallies {
+            pool_count: pools.len() as u64,
+            ..Default::default()
+        },
+    });
     assert_eq!(
         client
             .nodes_api()

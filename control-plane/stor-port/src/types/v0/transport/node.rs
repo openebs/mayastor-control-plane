@@ -179,13 +179,29 @@ impl Node {
 impl From<Node> for models::Node {
     fn from(mut src: Node) -> Self {
         let status = src.status();
-        let config = src.take_config();
+        let (spec, meta) = match src.take_config() {
+            None => (None, None),
+            Some(config) => (Some(config.spec), config.resources),
+        };
         Self::new_all(
             src.id,
-            config.map(|n| n.spec.into()),
+            spec.map(Into::into),
+            meta.map(Into::into),
             src.state.map(Into::into),
             Some(status.into()),
         )
+    }
+}
+
+impl From<NodeRscCounts> for models::NodeMeta {
+    fn from(value: NodeRscCounts) -> Self {
+        Self {
+            tallies: models::NodeRscTallies {
+                pool_count: value.pool_count,
+                replica_count: value.replica_count,
+                snapshot_count: value.snapshot_count,
+            },
+        }
     }
 }
 
