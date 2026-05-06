@@ -12,11 +12,11 @@ use stor_port::{
         store::node::{CordonDrainState, CordonedState, DrainState, NodeSpec},
         transport::{
             BlockDevice, DestroyNode, Filesystem, Filter, GetBlockDevices, Node, NodeDeleteResult,
-            NodeId, NodeState, NodeStatus, Partition, SnapshotLossDetail, SnapshotLossInfo,
-            VolumeLossDetail, VolumeLossInfo,
+            NodeId, NodeRscCounts, NodeState, NodeStatus, Partition, SnapshotLossDetail,
+            SnapshotLossInfo, VolumeLossDetail, VolumeLossInfo,
         },
     },
-    TryIntoOption,
+    IntoOption, TryIntoOption,
 };
 
 /// Trait implemented by services which support node operations.
@@ -132,11 +132,20 @@ impl TryFrom<node::Node> for Node {
             }
             None => None,
         };
-        Ok(Node::new(
-            node_grpc_type.node_id.into(),
-            node_spec,
-            node_state,
-        ))
+        Ok(
+            Node::new(node_grpc_type.node_id.into(), node_spec, node_state)
+                .with_rsc(node_grpc_type.meta.and_then(|m| m.tallies.into_opt())),
+        )
+    }
+}
+
+impl From<node::ResourceTallies> for NodeRscCounts {
+    fn from(value: node::ResourceTallies) -> Self {
+        Self {
+            pool_count: value.pool_count,
+            replica_count: value.repl_count,
+            snapshot_count: value.snap_count,
+        }
     }
 }
 
@@ -206,6 +215,13 @@ impl From<Node> for node::Node {
             spec: grpc_node_spec,
             state: grpc_node_state,
             status: Some(node::NodeStatus::from(types_v0_node.status()) as i32),
+            meta: types_v0_node.tallies().map(|c| node::Metadata {
+                tallies: Some(node::ResourceTallies {
+                    pool_count: c.pool_count,
+                    repl_count: c.replica_count,
+                    snap_count: c.snapshot_count,
+                }),
+            }),
         }
     }
 }

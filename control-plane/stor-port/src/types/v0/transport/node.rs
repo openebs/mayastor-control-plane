@@ -125,6 +125,13 @@ impl Node {
             state,
         }
     }
+    /// Add the given node resource tallies.
+    pub fn with_rsc(mut self, rsc: Option<NodeRscCounts>) -> Self {
+        if let Some(ref mut config) = self.config.as_mut() {
+            config.resources = rsc;
+        }
+        self
+    }
     /// Get the node id
     pub fn id(&self) -> &NodeId {
         &self.id
@@ -162,6 +169,10 @@ impl Node {
             spec.set_shutdown(shutdown);
         }
         self
+    }
+    /// Get a reference to the node resource counts.
+    pub fn tallies(&self) -> Option<&NodeRscCounts> {
+        self.config.as_ref().and_then(|c| c.resources.as_ref())
     }
 }
 
