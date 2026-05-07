@@ -21,8 +21,9 @@ use stor_port::{
             snapshots::replica::ReplicaSnapshot,
         },
         transport::{
-            CreatePool, CtrlPoolState, DestroyPool, ExpandPool, Pool, PoolDeleteResult, PoolDiag,
-            PoolDiskError, PoolId, PoolStatus, ReplicaOwners,
+            CreatePool, CtrlPoolState, DestroyPool, ExpandPool, NodeId, Pool, PoolDeleteResult,
+            PoolDiag, PoolDiskError, PoolId, PoolStatus, ReplicaOwners, SnapshotLossInfo,
+            VolumeLossInfo,
         },
     },
 };
@@ -430,9 +431,34 @@ impl OperationGuardArc<PoolSpec> {
         //    complete_destroy can commit the transition to Deleted.
         self.start_destroy_for_purge(registry).await?;
 
-        // 9. Delete replicas: try io-engine RPC first, fall back to spec-only deletion.
-        //    Re-collect replicas here — in the resume case the pre-flight collection
-        //    was skipped, and even in the normal case some state may have changed.
+        // 9. Capture purge result.
+        let purge_result = Self::purge_pool_resources(
+            registry,
+            pool_id,
+            node_id,
+            volume_loss_info,
+            snapshot_loss_info,
+            &replica_snapshots,
+        )
+        .await;
+
+        // 10. Complete the op.
+        let result = self.complete_destroy(purge_result, registry).await?;
+        Ok(Some(result))
+    }
+
+    /// Perform all of the purge work.
+    async fn purge_pool_resources(
+        registry: &Registry,
+        pool_id: &PoolId,
+        node_id: &NodeId,
+        volume_loss_info: Option<VolumeLossInfo>,
+        snapshot_loss_info: Option<SnapshotLossInfo>,
+        replica_snapshots: &[ReplicaSnapshot],
+    ) -> Result<PoolDeleteResult, SvcError> {
+        // Delete replicas: try io-engine RPC first, fall back to spec-only deletion.
+        // Re-collect replicas here — in the resume case the pre-flight collection
+        // was skipped, and even in the normal case some state may have changed.
         let replicas = registry.specs().pool_replicas(pool_id);
         for replica_rsc in &replicas {
             let mut replica = replica_rsc.operation_guard_wait().await?;
@@ -440,7 +466,7 @@ impl OperationGuardArc<PoolSpec> {
             replica.destroy_or_purge(registry, &destroy_request).await?;
         }
 
-        // 10. Note: Replica snapshots are stored within VolumeSnapshot metadata.
+        // Note: Replica snapshots are stored within VolumeSnapshot metadata.
         // The VolumeSnapshot reconciler will detect missing replica snapshots
         // and handle cleanup. We just log for visibility.
         if !replica_snapshots.is_empty() {
@@ -451,10 +477,6 @@ impl OperationGuardArc<PoolSpec> {
             );
         }
 
-        // 11. Complete pool deletion
-        self.complete_destroy(Ok(()), registry).await?;
-
-        // 12. Build and return result
         let mut result = PoolDeleteResult::new(pool_id.clone());
         if let Some(volume_loss) = volume_loss_info {
             result.volume_loss = volume_loss;
@@ -469,10 +491,10 @@ impl OperationGuardArc<PoolSpec> {
             snapshots_affected = replica_snapshots.len(),
             volume_loss = result.has_volume_loss(),
             snapshot_loss = result.has_snapshot_loss(),
-            "Pool purged successfully. Affected volumes will be marked faulted by reconciler."
+            "Pool purged successfully"
         );
 
-        Ok(Some(result))
+        Ok(result)
     }
 
     /// Validate that the pool state allows purge (must be Unknown, Offline, or node offline).

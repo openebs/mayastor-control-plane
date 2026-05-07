@@ -401,7 +401,7 @@ impl OperationGuardArc<NodeSpec> {
             pools_deleted = node_pools.len(),
             volume_loss = result.has_volume_loss(),
             snapshot_loss = result.has_snapshot_loss(),
-            "Node purge resources cleaned up"
+            "Node purged successfully"
         );
 
         Ok(result)
