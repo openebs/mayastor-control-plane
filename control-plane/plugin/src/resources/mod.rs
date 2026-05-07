@@ -1,4 +1,5 @@
 use crate::resources::{
+    app_node::{GetAppNodeArgs, GetAppNodesArgs},
     blockdevice::BlockDeviceArgs,
     node::{DrainNodeArgs, GetNodeArgs, GetNodesArgs},
     pool::{GetPoolArgs, GetPoolsArgs},
@@ -6,6 +7,7 @@ use crate::resources::{
     volume::{VolumeTopologiesArgs, VolumeTopologyArgs, VolumesArgs},
 };
 
+pub mod app_node;
 pub mod blockdevice;
 pub mod cordon;
 pub mod drain;
@@ -61,6 +63,10 @@ pub enum GetResources {
     Nodes(GetNodesArgs),
     /// Get node with the given ID.
     Node(GetNodeArgs),
+    /// Get all nodes.
+    AppNodes(GetAppNodesArgs),
+    /// Get a given node.
+    AppNode(GetAppNodeArgs),
     /// Get BlockDevices present on the Node. Lists usable devices by default.
     /// Currently, disks having blobstore pools not created by control-plane are also shown as
     /// usable.

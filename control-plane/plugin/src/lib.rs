@@ -15,10 +15,10 @@ use crate::{
         RebuildHistory, ReplicaTopology, Scale,
     },
     resources::{
-        blockdevice, cordon, drain, node, pool, snapshot, volume, volume::VolumeTopologiesArgs,
-        ClearErrors, CordonResources, DeleteArgs, DeleteResources, DrainResources, ExpandResources,
-        GetCordonArgs, GetDrainArgs, GetResources, ScaleResources, SetPropertyResources,
-        SetVolumeProperties, UnCordonResources,
+        app_node, blockdevice, cordon, drain, node, pool, snapshot, volume,
+        volume::VolumeTopologiesArgs, ClearErrors, CordonResources, DeleteArgs, DeleteResources,
+        DrainResources, ExpandResources, GetCordonArgs, GetDrainArgs, GetResources, ScaleResources,
+        SetPropertyResources, SetVolumeProperties, UnCordonResources,
     },
 };
 
@@ -185,6 +185,10 @@ impl ExecuteOperation for GetResources {
             GetResources::Nodes(args) => node::Nodes::list(args, &cli_args.output).await,
             GetResources::Node(args) => {
                 node::Node::get(&args.node_id(), args, &cli_args.output).await
+            }
+            GetResources::AppNodes(args) => app_node::AppNodes::list(args, &cli_args.output).await,
+            GetResources::AppNode(args) => {
+                app_node::AppNode::get(&args.node_id, &cli_args.output).await
             }
             GetResources::BlockDevices(bdargs) => {
                 blockdevice::BlockDevice::get_blockdevices(

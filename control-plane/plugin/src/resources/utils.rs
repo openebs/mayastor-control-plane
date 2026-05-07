@@ -67,6 +67,7 @@ lazy_static! {
         "VOLUMES",
         "SNAPSHOTS"
     ];
+    pub static ref APP_NODE_HEADERS: Row = row!["ID", "ENDPOINT", "STATUS", "LABELS"];
     pub static ref REPLICA_TOPOLOGIES_PREFIX: Row = row!["VOLUME-ID"];
     pub static ref REPLICA_TOPOLOGY_HEADERS: Row = row![
         "REPLICA-ID",
