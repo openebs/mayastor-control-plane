@@ -582,13 +582,17 @@ impl ResourceSpecsLocked {
             return;
         };
 
-        let mut pool = pool.lock();
-        if let Some(count) = pool.metadata.runtime.replica_count.as_mut() {
-            *count += 1;
-        } else {
-            // this should only happen the first time
-            pool.metadata.runtime.replica_count = Some(self.calculate_repl_count(pool_id));
-        }
+        let node_id = {
+            let mut pool = pool.lock();
+            if let Some(count) = pool.metadata.runtime.replica_count.as_mut() {
+                *count += 1;
+            } else {
+                // this should only happen the first time
+                pool.metadata.runtime.replica_count = Some(self.calculate_repl_count(pool_id));
+            }
+            pool.node.clone()
+        };
+        self.node_on_repl_create(&node_id);
     }
     /// On replica deletion, update the pool's replica count.
     pub(crate) fn on_repl_destroy(&self, pool_id: &PoolId) {
@@ -596,12 +600,16 @@ impl ResourceSpecsLocked {
             return;
         };
 
-        let mut pool = pool.lock();
-        if let Some(count) = pool.metadata.runtime.replica_count.as_mut() {
-            *count = count.saturating_sub(1);
-        } else {
-            pool.metadata.runtime.replica_count = Some(self.calculate_repl_count(pool_id));
-        }
+        let node_id = {
+            let mut pool = pool.lock();
+            if let Some(count) = pool.metadata.runtime.replica_count.as_mut() {
+                *count = count.saturating_sub(1);
+            } else {
+                pool.metadata.runtime.replica_count = Some(self.calculate_repl_count(pool_id));
+            }
+            pool.node.clone()
+        };
+        self.node_on_repl_destroy(&node_id);
     }
 
     /// On replica snapshot creation, update the pool's snapshot count.
@@ -610,12 +618,16 @@ impl ResourceSpecsLocked {
             return;
         };
 
-        let mut pool = pool.lock();
-        if let Some(count) = pool.metadata.runtime.snapshot_count.as_mut() {
-            *count += 1;
-        } else {
-            pool.metadata.runtime.snapshot_count = Some(self.calculate_snap_count(pool_id));
-        }
+        let node_id = {
+            let mut pool = pool.lock();
+            if let Some(count) = pool.metadata.runtime.snapshot_count.as_mut() {
+                *count += 1;
+            } else {
+                pool.metadata.runtime.snapshot_count = Some(self.calculate_snap_count(pool_id));
+            }
+            pool.node.clone()
+        };
+        self.node_on_snap_create(&node_id);
     }
     /// On replica snapshot deletion, update the pool's snapshot count.
     pub(crate) fn on_snap_destroy(&self, pool_id: &PoolId) {
@@ -623,11 +635,15 @@ impl ResourceSpecsLocked {
             return;
         };
 
-        let mut pool = pool.lock();
-        if let Some(count) = pool.metadata.runtime.snapshot_count.as_mut() {
-            *count = count.saturating_sub(1);
-        } else {
-            pool.metadata.runtime.snapshot_count = Some(self.calculate_snap_count(pool_id));
-        }
+        let node_id = {
+            let mut pool = pool.lock();
+            if let Some(count) = pool.metadata.runtime.snapshot_count.as_mut() {
+                *count = count.saturating_sub(1);
+            } else {
+                pool.metadata.runtime.snapshot_count = Some(self.calculate_snap_count(pool_id));
+            }
+            pool.node.clone()
+        };
+        self.node_on_snap_destroy(&node_id);
     }
 }

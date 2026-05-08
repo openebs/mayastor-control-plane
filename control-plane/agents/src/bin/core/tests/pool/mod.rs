@@ -30,9 +30,9 @@ use stor_port::{
         },
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, ExpandPool, Filter,
-            GetBlockDevices, GetSpecs, NexusId, NodeId, NodeStatus, PoolErrorCode, Protocol,
-            Replica, ReplicaId, ReplicaName, ReplicaOwners, ReplicaShareProtocol, ReplicaStatus,
-            ShareReplica, UnshareReplica, Volume, VolumeId,
+            GetBlockDevices, GetSpecs, NexusId, NodeId, NodeRscCounts, NodeStatus, PoolErrorCode,
+            Protocol, Replica, ReplicaId, ReplicaName, ReplicaOwners, ReplicaShareProtocol,
+            ReplicaStatus, ShareReplica, UnshareReplica, Volume, VolumeId,
         },
     },
 };
@@ -52,6 +52,15 @@ async fn pool() {
     let io_engine = cluster.node(0);
     let nodes = node_client.get(Filter::None, false, None).await.unwrap();
     tracing::info!("Nodes: {:?}", nodes);
+    let node = nodes.0.first().unwrap();
+    assert_eq!(
+        node.tallies(),
+        Some(&NodeRscCounts {
+            pool_count: 0,
+            replica_count: 0,
+            snapshot_count: 0,
+        })
+    );
 
     let pool = pool_client
         .create(
@@ -78,6 +87,16 @@ async fn pool() {
         pool.config.as_ref().unwrap().definition.snapshot_count,
         Some(0)
     );
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
+    let node = nodes.0.first().unwrap();
+    assert_eq!(
+        node.tallies(),
+        Some(&NodeRscCounts {
+            pool_count: 1,
+            replica_count: 0,
+            snapshot_count: 0,
+        })
+    );
 
     let _pool2 = pool_client
         .create(
@@ -96,6 +115,16 @@ async fn pool() {
         .unwrap();
 
     tracing::info!("Pools: {:?}", pool);
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
+    let node = nodes.0.first().unwrap();
+    assert_eq!(
+        node.tallies(),
+        Some(&NodeRscCounts {
+            pool_count: 2,
+            replica_count: 0,
+            snapshot_count: 0,
+        })
+    );
 
     let pools = pool_client.get(Filter::None, None).await.unwrap();
     tracing::info!("Pools: {:?}", pools);
@@ -135,6 +164,16 @@ async fn pool() {
     assert_eq!(
         pool.config.as_ref().unwrap().definition.snapshot_count,
         Some(0)
+    );
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
+    let node = nodes.0.first().unwrap();
+    assert_eq!(
+        node.tallies(),
+        Some(&NodeRscCounts {
+            pool_count: 2,
+            replica_count: 1,
+            snapshot_count: 0,
+        })
     );
 
     let replicas = rep_client.get(Filter::None, None).await.unwrap();
@@ -252,6 +291,16 @@ async fn pool() {
         pool.config.as_ref().unwrap().definition.snapshot_count,
         Some(0)
     );
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
+    let node = nodes.0.first().unwrap();
+    assert_eq!(
+        node.tallies(),
+        Some(&NodeRscCounts {
+            pool_count: 2,
+            replica_count: 0,
+            snapshot_count: 0,
+        })
+    );
 
     let error = rep_client
         .destroy(
@@ -298,6 +347,16 @@ async fn pool() {
         )
         .await
         .unwrap();
+    let nodes = node_client.get(Filter::None, false, None).await.unwrap();
+    let node = nodes.0.first().unwrap();
+    assert_eq!(
+        node.tallies(),
+        Some(&NodeRscCounts {
+            pool_count: 0,
+            replica_count: 0,
+            snapshot_count: 0,
+        })
+    );
 
     let error = rep_client
         .destroy(

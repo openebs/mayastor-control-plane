@@ -102,11 +102,15 @@ impl CreateRow for openapi::models::Node {
                 )
             }
         };
+        let tallies = self.meta.as_ref().map(|m| &m.tallies);
         row![
             self.id,
             state.grpc_endpoint,
             statuses,
-            optional_cell(state.version)
+            optional_cell(state.version),
+            optional_cell(tallies.map(|t| t.pool_count)),
+            optional_cell(tallies.map(|t| t.replica_count)),
+            optional_cell(tallies.map(|t| t.snapshot_count)),
         ]
     }
 }

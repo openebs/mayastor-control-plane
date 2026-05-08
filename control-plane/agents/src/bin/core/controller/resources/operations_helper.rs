@@ -996,11 +996,22 @@ impl ResourceSpecsLocked {
                 }
             }
         }
-        // add runtime information for pool replica/snapshot count
+        // add runtime information for node and pool replica/snapshot count
         for pool in self.read().pools.values() {
             let mut pool = pool.lock();
-            pool.metadata.runtime.replica_count = Some(self.calculate_repl_count(pool.id()));
-            pool.metadata.runtime.snapshot_count = Some(self.calculate_snap_count(pool.id()));
+
+            let replica_count = self.calculate_repl_count(pool.id());
+            let snapshot_count = self.calculate_snap_count(pool.id());
+            pool.metadata.runtime.replica_count = Some(replica_count);
+            pool.metadata.runtime.snapshot_count = Some(snapshot_count);
+
+            let Ok(node) = self.node_rsc(&pool.node) else {
+                continue;
+            };
+            let mut node = node.lock();
+            node.metadata.runtime.pool_count += 1;
+            node.metadata.runtime.replica_count += replica_count;
+            node.metadata.runtime.snapshot_count += snapshot_count;
         }
 
         // Remove all entries of v1 key prefix.

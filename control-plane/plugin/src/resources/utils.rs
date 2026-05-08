@@ -58,7 +58,15 @@ lazy_static! {
         "VOLUMES",
         "SNAPSHOTS",
     ];
-    pub static ref NODE_HEADERS: Row = row!["ID", "GRPC ENDPOINT", "STATUS", "VERSION"];
+    pub static ref NODE_HEADERS: Row = row![
+        "ID",
+        "GRPC ENDPOINT",
+        "STATUS",
+        "VERSION",
+        "POOLS",
+        "VOLUMES",
+        "SNAPSHOTS"
+    ];
     pub static ref REPLICA_TOPOLOGIES_PREFIX: Row = row!["VOLUME-ID"];
     pub static ref REPLICA_TOPOLOGY_HEADERS: Row = row![
         "REPLICA-ID",
