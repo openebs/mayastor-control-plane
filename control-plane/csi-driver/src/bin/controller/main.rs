@@ -135,6 +135,7 @@ async fn main() -> anyhow::Result<()> {
             Arg::new("tls-client-ca-path")
                 .long("tls-client-ca-path")
                 .help("path to the CA certificate file")
+                .value_parser(clap::value_parser!(std::path::PathBuf))
         )
         .get_matches();
 
