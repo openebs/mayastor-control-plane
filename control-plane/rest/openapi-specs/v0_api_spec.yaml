@@ -5110,8 +5110,8 @@ components:
             Deemed Status of the app node.
           type: string
           enum:
-            - Online
             - Offline
+            - Online
       required:
         - id
         - endpoint
