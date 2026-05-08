@@ -988,7 +988,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     match issue_fs_freeze(app_node_endpoint.clone(), volume_uuid.to_string()).await
                     {
                         Err(error) if error.code() == Code::NotFound => {
-                            Err(Status::not_found(format!(
+                            Err(Status::failed_precondition(format!(
                                 "Failed to freeze volume {volume_uuid}, filesystem volume is not attached"
                             )))
                         }
