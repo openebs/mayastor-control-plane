@@ -26,7 +26,7 @@ async fn main() {
     let cli_args = CliArgs::args();
     let _trace_flush = cli_args.args.init_tracing();
     if let Err(error) = cli_args.execute().await {
-        eprintln!("{error:?}");
+        eprintln!("{error}");
         std::process::exit(-1);
     }
 }

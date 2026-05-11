@@ -40,6 +40,7 @@ mkShellNoCC {
     nixpkgs-fmt
     nix
     openapi-generator-cli
+    openssl
     pkg-config
     utillinux
     which

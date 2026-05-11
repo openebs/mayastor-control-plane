@@ -243,7 +243,6 @@ impl From<nexus::ChildStateReason> for ChildStateReason {
             nexus::ChildStateReason::NoSpace => Self::NoSpace,
             nexus::ChildStateReason::TimedOut => Self::TimedOut,
             nexus::ChildStateReason::AdminFailed => Self::AdminCommandFailed,
-            nexus::ChildStateReason::HotRemoved => Self::HotRemoved,
         }
     }
 }
@@ -267,7 +266,6 @@ impl From<&ChildStateReason> for nexus::ChildStateReason {
             ChildStateReason::IoError => Self::IoFailure,
             ChildStateReason::ByClient => Self::ByClient,
             ChildStateReason::AdminCommandFailed => Self::AdminFailed,
-            ChildStateReason::HotRemoved => Self::HotRemoved,
         }
     }
 }

@@ -16,6 +16,9 @@ pub mod tower {
 
 #[cfg(feature = "actix")]
 pub mod actix {
+    #[cfg(feature = "actix-client")]
+    pub use crate::clients::actix as client;
+
     #[cfg(feature = "actix-server")]
     pub use crate::apis::actix_server as server;
 }

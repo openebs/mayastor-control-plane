@@ -85,7 +85,6 @@ enum ChildStateReason {
   CHILD_STATE_REASON_NO_SPACE = 9;        // child faulted because I/O operation failed with ENOSPC
   CHILD_STATE_REASON_TIMED_OUT = 10;      // child faulted because I/O operation failed with timeout
   CHILD_STATE_REASON_ADMIN_FAILED = 11;   // child faulted of an admin command failure
-  CHILD_STATE_REASON_HOT_REMOVED = 12;    // child hot-removed under the nexus (ie mistaken lvol destroy or pool hot-removal)
 }
 
 message NexusSpec {

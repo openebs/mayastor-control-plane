@@ -32,7 +32,10 @@ impl RestClient {
             .with_tracing(tracing)
             .build_url(url)
             .map_err(|error| {
-                anyhow::anyhow!("Failed to create openapi configuration, Error: '{error:?}'")
+                anyhow::anyhow!(
+                    "Failed to create openapi configuration, Error: '{:?}'",
+                    error
+                )
             })?;
         Ok(Self {
             uri,
