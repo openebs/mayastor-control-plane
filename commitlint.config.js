@@ -1,6 +1,6 @@
 export default {
     rules: {
-        'type-enum': [2, 'always', ['build', 'chore', 'ci', 'docs', 'feat', 'fix', 'perf', 'refactor', 'revert', 'style', 'test', 'example']],
+        'type-enum': [2, 'always', ['build', 'chore', 'ci', 'docs', 'feat', 'fix', 'perf', 'refactor', 'revert', 'style', 'test', 'example', 'security']],
         'code-review-rule': [2, 'always'],
         "body-max-line-length": [2, "always", 100],
         "footer-leading-blank": [1, "always"],
