@@ -439,6 +439,7 @@ impl From<ExternalType<v1::nexus::ChildStateReason>> for ChildStateReason {
             v1::nexus::ChildStateReason::NoSpace => Self::NoSpace,
             v1::nexus::ChildStateReason::TimedOut => Self::TimedOut,
             v1::nexus::ChildStateReason::AdminFailed => Self::AdminCommandFailed,
+            v1::nexus::ChildStateReason::HotRemoved => Self::HotRemoved,
         }
     }
 }
