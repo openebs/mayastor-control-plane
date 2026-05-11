@@ -9,6 +9,7 @@ description = "Kubernetes OpenApi Client via k8s-proxy"
 [features]
 default = ["rls"]
 rls = ["openapi/tower-client-rls"]
+tls = ["openapi/tower-client-tls"]
 
 [dependencies]
 kube-forward = { path = "../forward" }

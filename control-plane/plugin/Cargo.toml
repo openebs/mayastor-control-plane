@@ -16,6 +16,7 @@ path = "./src/lib.rs"
 [features]
 default = ["rls"]
 rls = ["openapi/tower-client-rls"]
+tls = ["openapi/tower-client-tls"]
 
 [dependencies]
 tracing = { workspace = true }

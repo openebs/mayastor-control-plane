@@ -168,8 +168,6 @@ pub enum ChildStateReason {
     ByClient,
     /// Admin command failure.
     AdminCommandFailed,
-    /// Children was hot-removed (ie mistaken deletion or pool hot-removed due to disk failure).
-    HotRemoved,
 }
 
 impl From<&ChildStateReason> for Option<models::ChildStateReason> {

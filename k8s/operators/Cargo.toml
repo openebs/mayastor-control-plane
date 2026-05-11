@@ -17,6 +17,7 @@ path = "src/lib.rs"
 default = ["rls", "bin"]
 bin = ["openapi", "utils", "anyhow", "chrono", "clap", "futures", "snafu", "tokio", "humantime", "tracing", "strum_macros", "strum"]
 rls = ["openapi/tower-client-rls"]
+tls = ["openapi/tower-client-tls"]
 
 [dependencies]
 # CRD

@@ -4,6 +4,7 @@
 , lib
 , llvmPackages
 , makeRustPlatform
+, openssl
 , pkg-config
 , protobuf
 , sources
@@ -73,7 +74,7 @@ let
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
     nativeBuildInputs = [ clang pkg-config paperclip which git llvmPackages.bintools ];
-    buildInputs = [ llvmPackages.libclang protobuf systemdMinimal.dev utillinux.dev rdma-core ];
+    buildInputs = [ llvmPackages.libclang protobuf openssl.dev systemdMinimal.dev utillinux.dev rdma-core ];
     doCheck = false;
   };
   release_build = { "release" = true; "debug" = false; };
