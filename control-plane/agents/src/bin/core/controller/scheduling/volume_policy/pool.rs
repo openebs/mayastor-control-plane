@@ -90,9 +90,10 @@ impl PoolBaseFilters {
             false => item.pool.free_space() > request.size,
         }
     }
-    /// Should only attempt to use usable (not faulted) pools.
+    /// Should only attempt to use usable (not faulted) pools, and with no critical alerts.
     pub(crate) fn usable(_: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        item.pool.status != PoolStatus::Faulted && item.pool.status != PoolStatus::Unknown
+        !matches!(item.pool.status, PoolStatus::Faulted | PoolStatus::Unknown)
+            && !item.pool.is_critical()
     }
 
     /// Should only attempt to use uncordoned pools.
