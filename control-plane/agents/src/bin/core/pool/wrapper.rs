@@ -1,6 +1,8 @@
 use stor_port::types::v0::{
     store::replica::PoolRef,
-    transport::{CtrlPoolState, PoolState, PoolStatus, Protocol, Replica, ReplicaId},
+    transport::{
+        CtrlPoolState, PoolAlertStatus, PoolState, PoolStatus, Protocol, Replica, ReplicaId,
+    },
 };
 
 use std::{cmp::Ordering, ops::Deref};
@@ -145,6 +147,13 @@ impl PoolWrapper {
             replica.share = *share;
             replica.uri = uri.to_string();
         }
+    }
+    /// Check if the pool has alert status critical.
+    pub(crate) fn is_critical(&self) -> bool {
+        self.errors
+            .as_ref()
+            .map(|e| e.alerts.status == PoolAlertStatus::Critical)
+            .unwrap_or_default()
     }
 }
 
