@@ -1,12 +1,13 @@
 mod garbage_collector;
 mod hot_spare;
 mod nexus;
+mod offline_rebuild;
 
 use crate::controller::task_poller::{PollContext, PollPeriods, PollResult, PollTimer, TaskPoller};
 
 use crate::controller::reconciler::volume::{
     garbage_collector::GarbageCollector, hot_spare::HotSpareReconciler,
-    nexus::VolumeNexusReconciler,
+    nexus::VolumeNexusReconciler, offline_rebuild::OfflineRebuildReconciler,
 };
 
 /// Volume Reconciler loop which:
@@ -26,6 +27,7 @@ impl VolumeReconciler {
                 Box::new(HotSpareReconciler::new()),
                 Box::new(GarbageCollector::new()),
                 Box::new(VolumeNexusReconciler::new()),
+                Box::new(OfflineRebuildReconciler::new()),
             ],
         }
     }

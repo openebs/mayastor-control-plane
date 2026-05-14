@@ -125,6 +125,9 @@ pub(crate) struct RegistryInner<S: Store> {
     deprecated_access_mode: bool,
     /// Running in simulation mode.
     sim_args: Option<SimArgs>,
+    /// Enable the OfflineRebuildReconciler. Off by default until the
+    /// feature is fully tested and ready for general use.
+    offline_rebuild_enabled: bool,
 }
 
 impl Registry {
@@ -156,6 +159,7 @@ impl Registry {
         pool_cluster_size: Option<u32>,
         deprecated_access_mode: bool,
         sim_args: Option<SimArgs>,
+        offline_rebuild_enabled: bool,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -220,6 +224,7 @@ impl Registry {
                 pool_cluster_size: pool_cluster_size.or(Some(POOL_BS_CLUSTER_SIZE_DEFAULT)),
                 deprecated_access_mode,
                 sim_args,
+                offline_rebuild_enabled,
             }),
         };
         registry.init().await?;
@@ -354,6 +359,10 @@ impl Registry {
     /// Wait period before attempting to online a faulted child.
     pub(crate) fn faulted_child_wait_period(&self) -> Option<std::time::Duration> {
         self.faulted_child_wait_period
+    }
+    /// Whether the OfflineRebuildReconciler is enabled.
+    pub(crate) fn offline_rebuild_enabled(&self) -> bool {
+        self.offline_rebuild_enabled
     }
     /// Allow for this given time before assuming failure and allowing the pool to get deleted.
     pub(crate) fn pool_async_creat_tmo(&self) -> std::time::Duration {
