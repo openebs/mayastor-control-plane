@@ -128,6 +128,9 @@ pub(crate) struct RegistryInner<S: Store> {
     /// Enable the OfflineRebuildReconciler. Off by default until the
     /// feature is fully tested and ready for general use.
     offline_rebuild_enabled: bool,
+    /// Grace period before initiating an offline rebuild for a degraded
+    /// unpublished volume. Prevents unnecessary rebuilds for transient failures.
+    offline_rebuild_grace_period: std::time::Duration,
 }
 
 impl Registry {
@@ -160,6 +163,7 @@ impl Registry {
         deprecated_access_mode: bool,
         sim_args: Option<SimArgs>,
         offline_rebuild_enabled: bool,
+        offline_rebuild_grace_period: std::time::Duration,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -225,6 +229,7 @@ impl Registry {
                 deprecated_access_mode,
                 sim_args,
                 offline_rebuild_enabled,
+                offline_rebuild_grace_period,
             }),
         };
         registry.init().await?;
@@ -363,6 +368,10 @@ impl Registry {
     /// Whether the OfflineRebuildReconciler is enabled.
     pub(crate) fn offline_rebuild_enabled(&self) -> bool {
         self.offline_rebuild_enabled
+    }
+    /// Grace period before initiating an offline rebuild.
+    pub(crate) fn offline_rebuild_grace_period(&self) -> std::time::Duration {
+        self.offline_rebuild_grace_period
     }
     /// Allow for this given time before assuming failure and allowing the pool to get deleted.
     pub(crate) fn pool_async_creat_tmo(&self) -> std::time::Duration {
