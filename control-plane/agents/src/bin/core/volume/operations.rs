@@ -42,7 +42,7 @@ use stor_port::{
             DestroyVolume, NodeTopology, Protocol, PublishVolume, Replica, ReplicaId,
             ReplicaOwners, RepublishVolume, ResizeVolume, SetVolumeProperty, SetVolumeReplica,
             ShareNexus, ShareVolume, ShutdownNexus, UnpublishVolume, UnshareNexus, UnshareVolume,
-            Volume, VolumeShareProtocol,
+            Volume, VolumeShareProtocol, VolumeTargetMode,
         },
     },
     HostAccessControl,
@@ -325,109 +325,12 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         registry: &Registry,
         request: &Self::Publish,
     ) -> Result<Self::PublishOutput, SvcError> {
-        let state = registry.volume_state(&request.uuid).await?;
-
-        if let Some(mut target_cfg) = self.as_ref().target_cfg().cloned() {
-            let host_acl =
-                registry.host_acl_nodename(HostAccessControl::Nexuses, &request.frontend_nodes);
-            target_cfg.frontend_mut().add_acls(host_acl);
-
-            let target = target_cfg.target();
-            let mut nexus = registry.specs().nexus(target.nexus()).await?;
-            let nexus_state = registry.nexus(target.nexus()).await?;
-
-            let operation =
-                VolumeOperation::Publish(PublishOperation::new(target_cfg.clone(), request));
-            let spec_clone = self.start_update(registry, &state, operation).await?;
-
-            let result = nexus
-                .share(
-                    registry,
-                    &ShareNexus::new(
-                        &nexus_state,
-                        VolumeShareProtocol::Nvmf,
-                        target_cfg.frontend().node_nqns(),
-                    ),
-                )
-                .await;
-
-            self.complete_update(registry, result, spec_clone).await?;
-
-            let volume = registry.volume(&request.uuid).await?;
-            registry
-                .notify_if_degraded(&volume, PollTriggerEvent::VolumeDegraded)
-                .await;
-            return Ok(volume);
-        }
-
-        let nexus_node = self
-            .next_target_node(registry, request, &state, false)
-            .await?;
-
-        let last_target = self.as_ref().health_info_id().cloned();
-        let frontend_nodes = &request.frontend_nodes;
-        let target_cfg = self
-            .next_target_config(
-                registry,
-                nexus_node.candidate(),
-                &request.share,
-                frontend_nodes,
-            )
-            .await;
-
-        let operation =
-            VolumeOperation::Publish(PublishOperation::new(target_cfg.clone(), request));
-        let spec_clone = self.start_update(registry, &state, operation).await?;
-
-        // Create a Nexus on the requested or auto-selected node.
-        let result = self.create_nexus(registry, &target_cfg).await;
-
-        let (mut nexus, nexus_state) = self
-            .validate_update_step(registry, result, &spec_clone)
-            .await?;
-
-        // Share the Nexus if it was requested.
-        let mut result = Ok(());
-        if let Some(share) = request.share {
-            let allowed_hosts = target_cfg.frontend().node_nqns();
-            result = match nexus
-                .share(
-                    registry,
-                    &ShareNexus::new(&nexus_state, share, allowed_hosts),
-                )
-                .await
-            {
-                Ok(_) => Ok(()),
-                Err(error) => {
-                    // Since we failed to share, we'll revert back to the previous state.
-                    // If we fail to do this inline, the reconcilers will pick up the slack.
-                    nexus
-                        .destroy(registry, &DestroyNexus::from(nexus_state).with_disown_all())
-                        .await
-                        .ok();
-                    Err(error)
-                }
-            }
-        }
-
-        self.complete_update(registry, result, spec_clone).await?;
-
-        // If there was a previous nexus we should delete the persisted NexusInfo structure.
-        if let Some(nexus_id) = last_target {
-            ResourceSpecsLocked::delete_nexus_info(
-                &NexusInfoKey::new(&Some(self.uuid().clone()), &nexus_id),
-                registry,
-            )
-            .await;
-        }
-
-        self.prune_health(registry);
-
-        let volume = registry.volume(&request.uuid).await?;
-        registry
-            .notify_if_degraded(&volume, PollTriggerEvent::VolumeDegraded)
-            .await;
-        Ok(volume)
+        // Public publish path: all callers that reach the trait method (CSI
+        // publish, REST publish) are front-end app publishes by definition.
+        // Internal callers that need a different mode use `publish_with_mode`
+        // directly on the impl.
+        self.publish_with_mode(registry, request, VolumeTargetMode::ServeFrontendApp)
+            .await
     }
 
     async fn unpublish(
@@ -707,6 +610,169 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         };
 
         self.complete_update(registry, result, spec_clone).await?;
+        self.prune_health(registry);
+
+        let volume = registry.volume(&request.uuid).await?;
+        registry
+            .notify_if_degraded(&volume, PollTriggerEvent::VolumeDegraded)
+            .await;
+        Ok(volume)
+    }
+}
+
+impl OperationGuardArc<VolumeSpec> {
+    /// Publish a volume, recording the supplied `target_mode` on the resulting
+    /// `target_config`. This is the internal entry point used by callers that
+    /// need to set up a target for a non-app purpose (the offline-rebuild
+    /// reconciler, future maintenance flows). The public `ResourcePublishing`
+    /// trait method delegates here with [`VolumeTargetMode::ServeFrontendApp`].
+    pub(crate) async fn publish_with_mode(
+        &mut self,
+        registry: &Registry,
+        request: &PublishVolume,
+        target_mode: VolumeTargetMode,
+    ) -> Result<Volume, SvcError> {
+        // Reject double-offline-rebuild: a publish requesting `OfflineRebuild` on a
+        // volume whose current target is already `OfflineRebuild` would overwrite
+        // the in-flight rebuild's `target_config`. The reconciler self-prevents
+        // this in its own poll loop (it goes to teardown rather than initiate when
+        // a target already exists), and the only other caller today is the test
+        // suite. Defensive guard so any internal caller added later inherits the
+        // same protection without each having to re-implement it.
+        if matches!(target_mode, VolumeTargetMode::OfflineRebuild)
+            && self.as_ref().is_offline_rebuild_target()
+        {
+            let target = self.as_ref().target_cfg().expect("checked above").target();
+            return Err(SvcError::VolumeAlreadyPublished {
+                vol_id: request.uuid.to_string(),
+                node: target.node().to_string(),
+                protocol: "offline-rebuild".to_string(),
+            });
+        }
+
+        let state = registry.volume_state(&request.uuid).await?;
+
+        if let Some(mut target_cfg) = self.as_ref().target_cfg().cloned() {
+            // Promotion happens when CSI publish arrives mid-offline-rebuild —
+            // share the existing nexus and record the new protocol so future
+            // reconciler polls treat the volume as a real publish. Only do this
+            // if the current target_config is one the reconciler set up; an
+            // unshared target produced by a direct REST publish
+            // (`protocol: None`, mode `ServeFrontendApp`) is left alone.
+            let promoting_offline_rebuild = target_cfg.target().protocol().is_none()
+                && request.share.is_some()
+                && self.as_ref().is_offline_rebuild_target();
+
+            if promoting_offline_rebuild {
+                if let Some(share) = request.share {
+                    target_cfg.target_mut().set_protocol(Some(share));
+                }
+            }
+            // Whatever mode the caller asked for now applies to the target. For
+            // an offline-rebuild promotion the CSI publish path passes
+            // `ServeFrontendApp`, transitioning the target out of the
+            // reconciler's ownership.
+            target_cfg.target_mut().set_target_mode(target_mode);
+
+            let host_acl =
+                registry.host_acl_nodename(HostAccessControl::Nexuses, &request.frontend_nodes);
+            target_cfg.frontend_mut().add_acls(host_acl);
+
+            let target = target_cfg.target();
+            let mut nexus = registry.specs().nexus(target.nexus()).await?;
+            let nexus_state = registry.nexus(target.nexus()).await?;
+
+            let share_protocol = target
+                .protocol()
+                .copied()
+                .unwrap_or(VolumeShareProtocol::Nvmf);
+
+            let operation =
+                VolumeOperation::Publish(PublishOperation::new(target_cfg.clone(), request));
+            let spec_clone = self.start_update(registry, &state, operation).await?;
+
+            let result = nexus
+                .share(
+                    registry,
+                    &ShareNexus::new(
+                        &nexus_state,
+                        share_protocol,
+                        target_cfg.frontend().node_nqns(),
+                    ),
+                )
+                .await;
+
+            self.complete_update(registry, result, spec_clone).await?;
+
+            let volume = registry.volume(&request.uuid).await?;
+            registry
+                .notify_if_degraded(&volume, PollTriggerEvent::VolumeDegraded)
+                .await;
+            return Ok(volume);
+        }
+
+        let nexus_node = self
+            .next_target_node(registry, request, &state, false)
+            .await?;
+
+        let last_target = self.as_ref().health_info_id().cloned();
+        let frontend_nodes = &request.frontend_nodes;
+        let target_cfg = self
+            .next_target_config(
+                registry,
+                nexus_node.candidate(),
+                &request.share,
+                frontend_nodes,
+            )
+            .await
+            .with_target_mode(target_mode);
+
+        let operation =
+            VolumeOperation::Publish(PublishOperation::new(target_cfg.clone(), request));
+        let spec_clone = self.start_update(registry, &state, operation).await?;
+
+        // Create a Nexus on the requested or auto-selected node.
+        let result = self.create_nexus(registry, &target_cfg).await;
+
+        let (mut nexus, nexus_state) = self
+            .validate_update_step(registry, result, &spec_clone)
+            .await?;
+
+        // Share the Nexus if it was requested.
+        let mut result = Ok(());
+        if let Some(share) = request.share {
+            let allowed_hosts = target_cfg.frontend().node_nqns();
+            result = match nexus
+                .share(
+                    registry,
+                    &ShareNexus::new(&nexus_state, share, allowed_hosts),
+                )
+                .await
+            {
+                Ok(_) => Ok(()),
+                Err(error) => {
+                    // Since we failed to share, we'll revert back to the previous state.
+                    // If we fail to do this inline, the reconcilers will pick up the slack.
+                    nexus
+                        .destroy(registry, &DestroyNexus::from(nexus_state).with_disown_all())
+                        .await
+                        .ok();
+                    Err(error)
+                }
+            }
+        }
+
+        self.complete_update(registry, result, spec_clone).await?;
+
+        // If there was a previous nexus we should delete the persisted NexusInfo structure.
+        if let Some(nexus_id) = last_target {
+            ResourceSpecsLocked::delete_nexus_info(
+                &NexusInfoKey::new(&Some(self.uuid().clone()), &nexus_id),
+                registry,
+            )
+            .await;
+        }
+
         self.prune_health(registry);
 
         let volume = registry.volume(&request.uuid).await?;

@@ -13,6 +13,7 @@ use crate::{
             self, AffinityGroup, CreateVolume, HostNqn, NexusId, NexusNvmfConfig, NodeId,
             PublishVolume, ReplicaId, SnapshotId, Topology, VolumeAccessMode, VolumeId,
             VolumeLabels, VolumePolicy, VolumeProperty, VolumeShareProtocol, VolumeStatus,
+            VolumeTargetMode,
         },
     },
     IntoOption,
@@ -161,15 +162,30 @@ pub struct VolumeTarget {
     nexus: NexusId,
     /// The protocol to use on the target.
     protocol: Option<VolumeShareProtocol>,
+    /// Purpose this target is serving. Defaults to `ServeFrontendApp` so existing
+    /// persisted state round-trips unchanged. Used by the offline-rebuild
+    /// reconciler to identify its own nexus, by the promote-on-publish path to
+    /// decide whether to flip the protocol on an incoming CSI publish, and as
+    /// the extension point for future `MaintenanceMode` flows.
+    #[serde(default, skip_serializing_if = "VolumeTargetMode::is_default")]
+    target_mode: VolumeTargetMode,
 }
 impl VolumeTarget {
     /// Create a new `Self` based on the given parameters.
+    /// The target mode defaults to [`VolumeTargetMode::ServeFrontendApp`]; use
+    /// [`Self::with_target_mode`] to override for internal callers.
     pub fn new(node: NodeId, nexus: NexusId, protocol: Option<VolumeShareProtocol>) -> Self {
         Self {
             node,
             nexus,
             protocol,
+            target_mode: VolumeTargetMode::default(),
         }
+    }
+    /// Builder: set the target mode on the resulting target.
+    pub fn with_target_mode(mut self, target_mode: VolumeTargetMode) -> Self {
+        self.target_mode = target_mode;
+        self
     }
     /// Get a reference to the node identification.
     pub fn node(&self) -> &NodeId {
@@ -182,6 +198,20 @@ impl VolumeTarget {
     /// Get a reference to the volume protocol.
     pub fn protocol(&self) -> Option<&VolumeShareProtocol> {
         self.protocol.as_ref()
+    }
+    /// Set the volume protocol. Used when promoting an offline-rebuild nexus
+    /// (originally unshared) into a real publish on CSI request.
+    pub fn set_protocol(&mut self, protocol: Option<VolumeShareProtocol>) {
+        self.protocol = protocol;
+    }
+    /// Get the purpose this target is serving.
+    pub fn target_mode(&self) -> VolumeTargetMode {
+        self.target_mode
+    }
+    /// Set the purpose this target is serving. Used on promote-on-publish, where
+    /// an offline-rebuild target is being taken over by a CSI publish.
+    pub fn set_target_mode(&mut self, target_mode: VolumeTargetMode) {
+        self.target_mode = target_mode;
     }
 }
 impl From<&InitiatorAC> for models::NodeAccessInfo {
@@ -437,6 +467,10 @@ impl TargetConfig {
     pub fn target(&self) -> &VolumeTarget {
         &self.target
     }
+    /// Get a mutable reference to the target.
+    pub fn target_mut(&mut self) -> &mut VolumeTarget {
+        &mut self.target
+    }
     /// Get the active target.
     pub fn active_target(&self) -> Option<&VolumeTarget> {
         match self.active {
@@ -459,6 +493,11 @@ impl TargetConfig {
     /// Get the target's nvmf configuration.
     pub fn config(&self) -> &NexusNvmfConfig {
         &self.config
+    }
+    /// Builder: set the target mode on the inner [`VolumeTarget`].
+    pub fn with_target_mode(mut self, target_mode: VolumeTargetMode) -> Self {
+        self.target = self.target.with_target_mode(target_mode);
+        self
     }
 }
 
@@ -564,6 +603,22 @@ impl VolumeSpec {
         }
         // todo: is there any case where we might want to keep it around?
         self.publish_context = None;
+        // No need to reset the target mode here: it lives on the target
+        // itself, so it goes away when the target is replaced on the next
+        // publish.
+    }
+    /// Purpose the current `target_config` is serving, if any. Proxies through
+    /// the target so the volume only carries the mode while a target exists.
+    pub fn target_mode(&self) -> VolumeTargetMode {
+        self.target_config
+            .as_ref()
+            .map(|cfg| cfg.target().target_mode())
+            .unwrap_or_default()
+    }
+    /// Convenience: whether the current `target_config` was set up by the
+    /// offline-rebuild reconciler.
+    pub fn is_offline_rebuild_target(&self) -> bool {
+        matches!(self.target_mode(), VolumeTargetMode::OfflineRebuild)
     }
     /// Get the health info key which is used to retrieve the volume's replica health information.
     pub fn health_info_id(&self) -> Option<&NexusId> {
@@ -636,6 +691,8 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                 }
                 VolumeOperation::Publish(args) => {
                     self.last_nexus_id = None;
+                    // The target mode is carried on the embedded `VolumeTarget`
+                    // inside `args.config`, so storing the config is sufficient.
                     self.target_config = Some(args.config);
                     self.publish_context = Some(args.publish_context);
                 }
@@ -780,6 +837,9 @@ pub struct OldPublishOperation {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PublishOperation {
     /// The new target configuration, considering a successful completion.
+    /// The target mode is carried on the embedded `VolumeTarget` inside
+    /// this `TargetConfig`, so callers configure it there before constructing
+    /// the operation.
     config: TargetConfig,
     publish_context: HashMap<String, String>,
     access_mode: VolumeAccessMode,
@@ -814,6 +874,10 @@ impl PublishOperation {
     /// Get the volume access mode.
     pub fn access_mode(&self) -> VolumeAccessMode {
         self.access_mode
+    }
+    /// Get the target mode being established by this publish.
+    pub fn target_mode(&self) -> VolumeTargetMode {
+        self.config.target().target_mode()
     }
 }
 

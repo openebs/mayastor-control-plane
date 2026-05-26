@@ -703,6 +703,69 @@ impl PublishVolume {
     }
 }
 
+/// Describes the purpose a volume target is currently serving.
+/// Persisted on the volume metadata so internal callers (reconcilers, future
+/// maintenance flows) can identify a target they themselves established
+/// without leaking that distinction through the public publish API.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VolumeTargetMode {
+    /// The target is serving a front-end application publish (the default
+    /// path: CSI publish or REST publish that fronts a user workload).
+    ServeFrontendApp,
+    /// The target was set up by the offline-rebuild reconciler to drive a
+    /// rebuild on an unpublished volume. The reconciler owns its lifecycle.
+    OfflineRebuild,
+    /// The target was set up for an operator-initiated maintenance flow
+    /// (fsck, grow, migrate) and must not be promoted to serve app traffic
+    /// until the maintenance flow releases it. Reserved for future use.
+    MaintenanceMode,
+}
+
+impl Default for VolumeTargetMode {
+    fn default() -> Self {
+        Self::ServeFrontendApp
+    }
+}
+
+impl VolumeTargetMode {
+    /// Skip-serializing-if helper so the common case stays out of the persisted
+    /// volume metadata.
+    pub fn is_default(&self) -> bool {
+        matches!(self, Self::ServeFrontendApp)
+    }
+}
+
+/// Internal wrapper around `PublishVolume` that carries the `VolumeTargetMode`
+/// alongside the request. Used by core-agent call paths that need to record
+/// the purpose of a publish (e.g. the offline-rebuild reconciler) without
+/// exposing it on the public `PublishVolume` API.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PublishVolumeWithMode {
+    /// The underlying publish request.
+    pub request: PublishVolume,
+    /// The purpose of the publish.
+    pub target_mode: VolumeTargetMode,
+}
+
+impl PublishVolumeWithMode {
+    /// Wrap a `PublishVolume` request with the given target mode.
+    pub fn new(request: PublishVolume, target_mode: VolumeTargetMode) -> Self {
+        Self {
+            request,
+            target_mode,
+        }
+    }
+}
+
+impl From<PublishVolume> for PublishVolumeWithMode {
+    fn from(request: PublishVolume) -> Self {
+        Self {
+            request,
+            target_mode: VolumeTargetMode::default(),
+        }
+    }
+}
+
 /// Republishes the target on a new node (pre-selected or determined by the control-plane).
 /// If online, the previous target nexus is first shutdown which may gives us enough time for the
 /// switchover as it'd be prevent from failing any IO outright.
