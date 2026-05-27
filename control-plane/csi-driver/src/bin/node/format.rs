@@ -18,8 +18,13 @@ pub(crate) async fn prepare_device(
 
     let fs_ops = fstype.fs_ops()?;
 
-    if let Ok(fs) = fs {
-        debug!("Found existing filesystem ({}) on device {}", fs, device);
+    if let Ok(ref found_fs) = fs {
+        debug!("Found existing filesystem ({found_fs}) on device {device}");
+        if found_fs != fstype.as_ref() {
+            return Err(format!(
+                "device {device} has filesystem {found_fs} but {fstype} was requested; cross-filesystem restores are not supported"
+            ));
+        }
         if let Some(fs_id) = fs_id {
             debug!("Attempting to set uuid for filesystem {fs_id}, device: {device}");
             fs_ops
