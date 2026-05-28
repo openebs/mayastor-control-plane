@@ -47,6 +47,12 @@ pub(crate) struct CliArgs {
     #[clap(long)]
     pub(crate) faulted_child_wait_period: Option<humantime::Duration>,
 
+    /// Enable the OfflineRebuildReconciler, which detects unpublished
+    /// volumes with degraded replicas and logs them as rebuild candidates.
+    /// Disabled by default; rebuild action is not yet implemented.
+    #[clap(long, env = "OFFLINE_REBUILD_ENABLED")]
+    pub(crate) offline_rebuild_enabled: bool,
+
     /// When the pool creation gRPC times out, the actual call in the io-engine
     /// may still progress.
     /// We wait up to this period before considering the operation a failure and
@@ -288,6 +294,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         cli_args.pool_cluster_size,
         cli_args.deprecated_access_mode,
         sim_args,
+        cli_args.offline_rebuild_enabled,
     )
     .await?;
 
