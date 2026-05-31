@@ -20,9 +20,14 @@ use actix_web::{
 use clap::Parser;
 use grpc::{client::CoreClient, operations::jsongrpc::client::JsonGrpcClient};
 use http::Uri;
-use rustls::{pki_types::PrivateKeyDer, ServerConfig};
-use rustls_pemfile::{certs, rsa_private_keys};
-use std::{fs::File, io::BufReader, time::Duration};
+use rcgen::generate_simple_self_signed;
+use rustls::{
+    pki_types::{CertificateDer, PrivateKeyDer},
+    server::{danger::ClientCertVerifier, WebPkiClientVerifier},
+    RootCertStore, ServerConfig,
+};
+use rustls_pemfile::{certs, private_key};
+use std::{fs::File, io::BufReader, path::PathBuf, sync::Arc, time::Duration};
 use stor_port::transport_api::{RequestMinTimeout, TimeoutOptions};
 use utils::{
     tracing_telemetry::{FmtLayer, FmtStyle, KeyValue},
@@ -51,16 +56,25 @@ pub(crate) struct CliArgs {
     #[clap(long, short = 'J')]
     json_grpc: Option<Uri>,
 
-    /// Path to the certificate file.
-    #[clap(long, short, required_unless_present = "dummy_certificates")]
-    cert_file: Option<String>,
-    /// Path to the key file.
-    #[clap(long, short, required_unless_present = "dummy_certificates")]
-    key_file: Option<String>,
+    /// Path to the TLS server certificate chain file.
+    #[clap(long = "tls-cert-file", required_unless_present_any = ["dummy_certificates", "auto_tls"])]
+    cert_file: Option<PathBuf>,
+    /// Path to the TLS server private key file.
+    #[clap(long = "tls-key-file", required_unless_present_any = ["dummy_certificates", "auto_tls"])]
+    key_file: Option<PathBuf>,
 
     /// Use dummy HTTPS certificates (for testing).
-    #[clap(long, short, required_unless_present = "cert_file")]
+    #[clap(long, short, required_unless_present_any = ["cert_file", "auto_tls"], conflicts_with_all = ["cert_file", "key_file"])]
     dummy_certificates: bool,
+
+    /// Auto-generate an ephemeral self-signed server certificate for HTTPS.
+    #[clap(long, conflicts_with_all = ["dummy_certificates", "cert_file", "key_file"])]
+    auto_tls: bool,
+
+    /// Path to the certificate authority (CA) bundle used to authenticate TLS clients.
+    /// When specified, TLS client authentication is required.
+    #[clap(long = "tls-ca-file", alias = "client-ca-file")]
+    client_ca_file: Option<PathBuf>,
 
     /// Trace rest requests to the Jaeger endpoint agent.
     #[clap(long, short)]
@@ -68,7 +82,7 @@ pub(crate) struct CliArgs {
 
     /// Path to JSON Web KEY file used for authenticating REST requests.
     #[clap(long, required_unless_present = "no_auth")]
-    jwk: Option<String>,
+    jwk: Option<PathBuf>,
 
     /// Don't authenticate REST requests.
     #[clap(long, required_unless_present = "jwk")]
@@ -151,7 +165,11 @@ where
 }
 
 fn get_certificates() -> anyhow::Result<ServerConfig> {
-    if CliArgs::args().dummy_certificates {
+    let client_ca_file = CliArgs::args().client_ca_file;
+
+    if CliArgs::args().auto_tls {
+        get_auto_certificates(client_ca_file)
+    } else if CliArgs::args().dummy_certificates {
         get_dummy_certificates()
     } else {
         // guaranteed to be `Some` by the require_unless attribute
@@ -159,43 +177,116 @@ fn get_certificates() -> anyhow::Result<ServerConfig> {
         let key_file = CliArgs::args().key_file.expect("key_file is required");
         let cert_file = &mut BufReader::new(File::open(cert_file)?);
         let key_file = &mut BufReader::new(File::open(key_file)?);
-        load_certificates(cert_file, key_file)
+        let mut client_ca = match client_ca_file {
+            Some(path) => Some(BufReader::new(File::open(path)?)),
+            None => None,
+        };
+
+        load_certificates(
+            cert_file,
+            key_file,
+            client_ca
+                .as_mut()
+                .map(|file| file as &mut dyn std::io::BufRead),
+        )
     }
 }
 
 fn get_dummy_certificates() -> anyhow::Result<ServerConfig> {
     let cert_file = &mut BufReader::new(&std::include_bytes!("../../certs/rsa/user.chain")[..]);
     let key_file = &mut BufReader::new(&std::include_bytes!("../../certs/rsa/user.rsa")[..]);
+    let mut client_ca = BufReader::new(&std::include_bytes!("../../certs/rsa/ca.cert")[..]);
 
-    load_certificates(cert_file, key_file)
+    load_certificates(
+        cert_file,
+        key_file,
+        Some(&mut client_ca as &mut dyn std::io::BufRead),
+    )
 }
 
-fn load_certificates<R: std::io::Read>(
-    cert_file: &mut BufReader<R>,
-    key_file: &mut BufReader<R>,
+fn get_auto_certificates(client_ca_file: Option<PathBuf>) -> anyhow::Result<ServerConfig> {
+    let cert_material = generate_simple_self_signed(vec!["localhost".to_string()])
+        .map_err(|error| anyhow::anyhow!("Failed to generate self-signed certificate: {error}"))?;
+
+    let cert_pem = cert_material.cert.pem();
+    let key_pem = cert_material.key_pair.serialize_pem();
+
+    let cert_file = &mut BufReader::new(cert_pem.as_bytes());
+    let key_file = &mut BufReader::new(key_pem.as_bytes());
+    let mut client_ca = match client_ca_file {
+        Some(path) => Some(BufReader::new(File::open(path)?)),
+        None => None,
+    };
+
+    load_certificates(
+        cert_file,
+        key_file,
+        client_ca
+            .as_mut()
+            .map(|file| file as &mut dyn std::io::BufRead),
+    )
+}
+
+fn load_certificates(
+    cert_file: &mut dyn std::io::BufRead,
+    key_file: &mut dyn std::io::BufRead,
+    client_ca_file: Option<&mut dyn std::io::BufRead>,
 ) -> anyhow::Result<ServerConfig> {
     let config = ServerConfig::builder();
-    let cert_chain = certs(cert_file)
+    let cert_chain: Vec<CertificateDer<'static>> = certs(cert_file)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|_| {
-            anyhow::anyhow!("Failed to retrieve certificates from the certificate file",)
+            anyhow::anyhow!("Failed to retrieve certificates from the certificate file")
         })?;
-    let mut keys = rsa_private_keys(key_file)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| {
-            anyhow::anyhow!("Failed to retrieve the rsa private keys from the key file",)
+    let key: PrivateKeyDer<'static> = private_key(key_file)
+        .map_err(|_| anyhow::anyhow!("Failed to retrieve private key from the key file"))?
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No private key found in the key file (expected a PEM key like PKCS#8, PKCS#1, or SEC1)"
+            )
         })?;
 
-    if keys.is_empty() {
-        anyhow::bail!("No keys found in the keys file");
-    }
     let config = config
-        .with_no_client_auth()
-        .with_single_cert(cert_chain, PrivateKeyDer::Pkcs1(keys.remove(0)))?;
+        .with_client_cert_verifier(client_cert_verifier(client_ca_file)?)
+        .with_single_cert(cert_chain, key)?;
+
     Ok(config)
 }
 
-fn get_jwk_path() -> Option<String> {
+fn client_cert_verifier(
+    client_ca_file: Option<&mut dyn std::io::BufRead>,
+) -> anyhow::Result<Arc<dyn ClientCertVerifier>> {
+    let Some(ca_file) = client_ca_file else {
+        return Ok(WebPkiClientVerifier::no_client_auth());
+    };
+    let client_certs = certs(ca_file)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| anyhow::anyhow!("Failed to retrieve certificates from client CA file"))?;
+
+    if client_certs.is_empty() {
+        anyhow::bail!("No certificates found in the client CA file");
+    }
+
+    let mut roots = RootCertStore::empty();
+    let (valid, invalid) = roots.add_parsable_certificates(client_certs);
+    if valid == 0 {
+        anyhow::bail!("No valid certificates found in the client CA file");
+    }
+    if invalid > 0 {
+        tracing::warn!(
+            ignored = invalid,
+            "Some certificates from the client CA file were ignored"
+        );
+    }
+
+    WebPkiClientVerifier::builder(Arc::new(roots))
+        .build()
+        .map_err(|error| {
+            anyhow::anyhow!("Failed to configure client certificate verifier: {error}")
+        })
+}
+
+fn get_jwk_path() -> Option<PathBuf> {
     match CliArgs::args().jwk {
         Some(path) => Some(path),
         None => match CliArgs::args().no_auth {

@@ -132,10 +132,30 @@ async fn main() -> anyhow::Result<()> {
                 .help("Enable force unstage volume feature")
         )
         .arg(
-            Arg::new("tls-client-ca-path")
-                .long("tls-client-ca-path")
+            Arg::new("tls-ca-file")
+                .long("tls-ca-file")
                 .help("path to the CA certificate file")
                 .value_parser(clap::value_parser!(std::path::PathBuf))
+        )
+        .arg(
+            Arg::new("tls-cert-file")
+                .long("tls-cert-file")
+                .help("path to the TLS client certificate file")
+                .requires("tls-key-file")
+                .value_parser(clap::value_parser!(std::path::PathBuf))
+        )
+        .arg(
+            Arg::new("tls-key-file")
+                .long("tls-key-file")
+                .help("path to the TLS client private key file")
+                .requires("tls-cert-file")
+                .value_parser(clap::value_parser!(std::path::PathBuf))
+        )
+        .arg(
+            Arg::new("jwt")
+                .long("jwt")
+                .value_parser(clap::value_parser!(std::path::PathBuf))
+                .help("path to a file containing the JWT bearer token for REST authentication")
         )
         .get_matches();
 

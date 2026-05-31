@@ -29,7 +29,7 @@ pub enum AuthError {
 
 /// Initialize JWK with the contents of the file at 'jwk_path'.
 /// If jwk_path is 'None', authentication is disabled.
-pub fn init(jwk_path: Option<String>) -> JsonWebKey {
+pub fn init(jwk_path: Option<std::path::PathBuf>) -> JsonWebKey {
     match jwk_path {
         Some(path) => {
             let jwk_file = File::open(path).expect("Failed to open JWK file");

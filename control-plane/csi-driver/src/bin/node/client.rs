@@ -1,21 +1,17 @@
 use stor_port::types::v0::openapi::{
-    apis::app_nodes_api::tower::client::AppNodesClient,
-    clients,
-    clients::tower::StatusCode,
-    models::{RegisterAppNode, RestJsonError},
-};
-
-use anyhow::anyhow;
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
-use stor_port::types::v0::openapi::{
     apis::{
-        app_nodes_api::tower::client::direct::AppNodes,
+        app_nodes_api::tower::client::{direct::AppNodes, AppNodesClient},
         volumes_api::tower::client::{direct::Volumes, VolumesClient},
     },
-    models::NexusState,
+    clients::{
+        self,
+        tower::{configuration::Configuration, StatusCode},
+    },
+    models::{NexusState, RegisterAppNode, RestJsonError},
 };
+
+use std::sync::Arc;
 use tonic::Status;
-use tracing::info;
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq)]
@@ -104,71 +100,11 @@ pub(crate) struct AppNodesClientWrapper {
 }
 
 impl AppNodesClientWrapper {
-    /// Initialize AppNodes API client instance.
-    pub(crate) fn initialize(
-        endpoint: Option<&String>,
-        ca_certificate_path: Option<&PathBuf>,
-    ) -> anyhow::Result<Option<AppNodesClientWrapper>> {
-        const REST_TIMEOUT: Duration = Duration::from_secs(5);
-
-        let Some(endpoint) = endpoint else {
-            return Ok(None);
-        };
-
-        let url = clients::tower::Url::parse(endpoint)
-            .map_err(|error| anyhow!("Invalid API endpoint URL {endpoint}: {error:?}"))?;
-
-        let cert = match ca_certificate_path {
-            Some(path) => {
-                let cert = std::fs::read(path).map_err(|error| {
-                    anyhow::anyhow!(
-                        "Failed to create openapi configuration at path {}, Error: '{:?}'",
-                        path.display(),
-                        error
-                    )
-                })?;
-                Some(cert)
-            }
-            None => None,
-        };
-
-        let tower = match (url.scheme(), cert) {
-            ("https", Some(cert)) => clients::tower::Configuration::builder()
-                .with_timeout(REST_TIMEOUT)
-                .with_concurrency_limit(Some(10))
-                .with_certificate(&cert)
-                .build_url(url)
-                .map_err(|error| {
-                    anyhow::anyhow!(
-                        "Failed to create openapi configuration***, Error: '{:?}'",
-                        error
-                    )
-                })?,
-            ("https", None) => {
-                anyhow::bail!("HTTPS endpoint requires a CA certificate path");
-            }
-            (_, Some(_path)) => {
-                anyhow::bail!("CA certificate path is only supported for HTTPS endpoints");
-            }
-            _ => clients::tower::Configuration::builder()
-                .with_timeout(REST_TIMEOUT)
-                .with_concurrency_limit(Some(10))
-                .build_url(url)
-                .map_err(|error| {
-                    anyhow::anyhow!(
-                        "Failed to create openapi configuration, Error???: '{:?}'",
-                        error
-                    )
-                })?,
-        };
-
-        info!(
-            "API client is initialized with endpoint {endpoint}, request timeout = {REST_TIMEOUT:?}"
-        );
-
-        Ok(Some(Self {
-            client: AppNodesClient::new(Arc::new(tower)),
-        }))
+    /// Create from a shared configuration.
+    pub(crate) fn new(configuration: Configuration) -> Self {
+        Self {
+            client: AppNodesClient::new(Arc::new(configuration)),
+        }
     }
 
     /// Register an app node.
@@ -176,7 +112,7 @@ impl AppNodesClientWrapper {
         &self,
         app_node_id: &str,
         endpoint: &str,
-        labels: &Option<HashMap<String, String>>,
+        labels: &Option<std::collections::HashMap<String, String>>,
     ) -> Result<(), ApiClientError> {
         self.client
             .register_app_node(
@@ -206,65 +142,11 @@ pub(crate) struct VolumesClientWrapper {
 }
 
 impl VolumesClientWrapper {
-    /// Initialize VolumesClientWrapper instance.
-    pub(crate) fn new(
-        endpoint: &str,
-        ca_certificate_path: Option<PathBuf>,
-    ) -> anyhow::Result<Self> {
-        /// TODO: what's the NodeStage timeout?
-        const REST_TIMEOUT: Duration = Duration::from_secs(10);
-
-        let url = clients::tower::Url::parse(endpoint)
-            .map_err(|error| anyhow!("Invalid API endpoint URL {endpoint}: {error:?}"))?;
-        let cert = match ca_certificate_path {
-            Some(path) => {
-                let cert = std::fs::read(path.clone()).map_err(|error| {
-                    anyhow::anyhow!(
-                        "Failed to create openapi configuration at path {}, Error: '{:?}'",
-                        path.display(),
-                        error
-                    )
-                })?;
-                Some(cert)
-            }
-            None => None,
-        };
-
-        let config = match (url.scheme(), cert) {
-            ("https", Some(cert)) => clients::tower::Configuration::builder()
-                .with_timeout(REST_TIMEOUT)
-                .with_certificate(&cert)
-                .build_url(url)
-                .map_err(|error| {
-                    anyhow::anyhow!(
-                        "Failed to create openapi configuration***, Error: '{:?}'",
-                        error
-                    )
-                })?,
-            ("https", None) => {
-                anyhow::bail!("HTTPS endpoint requires a CA certificate path");
-            }
-            (_, Some(_path)) => {
-                anyhow::bail!("CA certificate path is only supported for HTTPS endpoints");
-            }
-            _ => clients::tower::Configuration::builder()
-                .with_timeout(REST_TIMEOUT)
-                .build_url(url)
-                .map_err(|error| {
-                    anyhow::anyhow!(
-                        "Failed to create openapi configuration, Error???: '{:?}'",
-                        error
-                    )
-                })?,
-        };
-
-        info!(
-            "VolumesClient API is initialized with endpoint {endpoint}, request timeout = {REST_TIMEOUT:?}"
-        );
-
-        Ok(Self {
-            client: VolumesClient::new(Arc::new(config)),
-        })
+    /// Create from a shared configuration.
+    pub(crate) fn new(configuration: Configuration) -> Self {
+        Self {
+            client: VolumesClient::new(Arc::new(configuration)),
+        }
     }
 
     /// Get the target URI for the given volume.

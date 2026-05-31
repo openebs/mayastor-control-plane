@@ -17,7 +17,7 @@ impl ComponentAction for Rest {
                     .status()?;
             }
             let binary = Binary::from_dbg("rest")
-                .with_arg("--dummy-certificates")
+                .with_arg("--auto-tls")
                 .with_args(vec!["--https", "rest:8080"])
                 .with_args(vec!["--http", "rest:8081"])
                 .with_arg("--workers=1");

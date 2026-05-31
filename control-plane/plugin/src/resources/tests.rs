@@ -53,6 +53,7 @@ async fn setup() {
         cluster.rest_url().clone(),
         false,
         Duration::from_millis(200),
+        Default::default(),
     )
     .unwrap();
 

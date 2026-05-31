@@ -5,7 +5,7 @@ pub type ReqBody = hyper_body::Body;
 pub use hyper::{body, Request, Response, Uri};
 
 use hyper_rustls::ConfigBuilderExt;
-use std::{sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tower::{util::BoxCloneService, Layer, Service, ServiceExt};
 
@@ -41,6 +41,9 @@ pub struct ApiKey {
 pub enum Error {
     NativeRootCerts(std::io::Error),
     Certificate,
+    ClientKey,
+    ClientIdentity,
+    ClientAuth(rustls::Error),
     TlsConnector,
     NoTracingFeature,
     UrlToUri(hyper::http::uri::InvalidUri),
@@ -48,17 +51,142 @@ pub enum Error {
     AddingVersionPath(hyper::http::uri::InvalidUri),
 }
 
+/// The TLS configuration for HTTPS connections.
+#[derive(Debug, Clone, Default)]
+pub enum TlsMode {
+    /// No TLS, plain HTTP. This is not recommended for production use.
+    None,
+    /// No verification of the server's TLS certificate, and no client TLS certificate.
+    #[default]
+    Auto,
+    /// Verification of the server's TLS certificate using the provided CA certificate, 
+    /// but no client TLS certificate.
+    ServerVerify {
+        ca_certificate: Vec<u8>,
+    },
+    /// No verification of the server's TLS certificate, 
+    /// but use the provided client TLS certificate for authentication.
+    ClientVerify {
+        client_certificate: Vec<u8>,
+        client_key: Vec<u8>,
+    },
+    /// Verification of the server's TLS certificate using the provided CA certificate,
+    /// and use the provided client TLS certificate for authentication.
+    /// Essentially, mTLS.
+    Mtls {
+        ca_certificate: Vec<u8>,
+        client_certificate: Vec<u8>,
+        client_key: Vec<u8>,
+    },
+}
+impl TlsMode {
+    /// Check if tls mode is auto.
+    pub fn is_auto(&self) -> bool {
+        matches!(self, Self::Auto)
+    }
+    /// Check if tls mode is None.
+    pub fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
+}
+
+/// Authentication and TLS settings for OpenAPI client connections.
+#[derive(Debug, Clone, Default)]
+pub struct ClientSecurity {
+    /// Optional JWT bearer token for HTTP Authorization.
+    pub jwt: Option<String>,
+    /// TLS mode for HTTPS connections.
+    pub tls: TlsMode,
+    /// Discovery of properties. 
+    /// If true, the client will attempt to discover the required TLS and Auth configuration
+    pub discover: bool,
+}
+impl ClientSecurity {
+    /// Creates a new client security configuration.
+    pub fn try_new(jwt: &Option<PathBuf>, tls: TlsMode) -> Result<Self, std::io::Error> {
+        let jwt = jwt.as_ref().map(std::fs::read_to_string).transpose()?;
+        Ok(Self {
+            discover: tls.is_auto() || jwt.is_none(),
+            jwt: jwt.map(|jwt| jwt.trim().to_string()),
+            tls,
+        })
+    }
+    /// Creates a new client security configuration.
+    pub fn new(jwt: Option<String>, tls: TlsMode) -> Self {
+        Self {
+            discover: tls.is_auto() || jwt.is_none(),
+            jwt,
+            tls,
+        }
+    }
+    /// Check if the client security configuration requires discovery 
+    /// (i.e. if TLS is auto or JWT is not provided).
+    pub fn discover(&self) -> bool {
+        self.discover
+    }
+}
+
+impl TlsMode {
+    /// Creates a new TLS mode configuration from the given certificate and client key paths.
+    pub fn new(
+        certificate: Option<&PathBuf>,
+        client_cert: Option<&PathBuf>,
+        client_key: Option<&PathBuf>,
+    ) -> Result<Self, std::io::Error> {
+        let ca = certificate.map(std::fs::read).transpose()?;
+        let cl = client_cert
+            .zip(client_key)
+            .map(|(cert_path, key_path)| {
+                Ok::<_, std::io::Error>((std::fs::read(cert_path)?, std::fs::read(key_path)?))
+            })
+            .transpose()?;
+
+        Ok(match (ca, cl) {
+            (None, None) => TlsMode::Auto,
+            (Some(ca_certificate), None) => TlsMode::ServerVerify {
+                ca_certificate
+            },
+            (None, Some((client_certificate, client_key))) => Self::ClientVerify {
+                client_certificate,
+                client_key,
+            },
+            (Some(ca_certificate), Some((client_certificate, client_key))) => Self::Mtls {
+                ca_certificate,
+                client_certificate,
+                client_key,
+            }
+        })
+    }
+    fn certificate(&self) -> Option<&[u8]> {
+        match &self {
+            Self::ServerVerify { ca_certificate } | Self::Mtls { ca_certificate, .. } => Some(&ca_certificate[..]),
+            _ => None,
+        }
+    }
+    fn client_cert(&self) -> Option<&[u8]> {
+        match &self {
+            Self::ClientVerify { client_certificate, .. } | Self::Mtls { client_certificate, .. } => Some(&client_certificate[..]),
+            _ => None,
+        }
+    }
+    fn client_key(&self) -> Option<&[u8]> {
+        match &self {
+            Self::ClientVerify { client_key, .. } | Self::Mtls { client_key, .. } => Some(&client_key[..]),
+            _ => None,
+        }
+    }
+}
+
 /// `ConfigurationBuilder` that can be used to build a `Configuration`.
 #[derive(Clone)]
 pub struct ConfigurationBuilder {
     /// Timeout for each HTTP Request.
     timeout: Option<std::time::Duration>,
-    /// Bearer Access Token for bearer-configured routes.
-    bearer_token: Option<String>,
+    /// Optional client security configuration (JWT + TLS mode).
+    client_security: Option<ClientSecurity>,
     /// OpenTel and Tracing layer.
     #[cfg(feature = "tower-trace")]
     tracing_layer: bool,
-    certificate: Option<Vec<u8>>,
     concurrency_limit: Option<usize>,
 }
 
@@ -66,10 +194,9 @@ impl Default for ConfigurationBuilder {
     fn default() -> Self {
         Self {
             timeout: Some(std::time::Duration::from_secs(5)),
-            bearer_token: None,
+            client_security: None,
             #[cfg(feature = "tower-trace")]
             tracing_layer: true,
-            certificate: None,
             concurrency_limit: None,
         }
     }
@@ -85,9 +212,20 @@ impl ConfigurationBuilder {
         self.timeout = timeout.into();
         self
     }
+    /// Enable/Disable the given request client security configuration.
+    pub fn with_client_security(mut self, client_security: Option<ClientSecurity>) -> Self {
+        self.client_security = client_security;
+        self
+    }
+    /// Enable/Disable the given request auth configuration.
+    pub fn with_auth(self, auth: Option<ClientSecurity>) -> Self {
+        self.with_client_security(auth)
+    }
     /// Enable/Disable the given request bearer token.
     pub fn with_bearer_token(mut self, bearer_token: Option<String>) -> Self {
-        self.bearer_token = bearer_token;
+        let mut client_security = self.client_security.unwrap_or_default();
+        client_security.jwt = bearer_token;
+        self.client_security = Some(client_security);
         self
     }
     /// Add a request concurrency limit.
@@ -95,9 +233,11 @@ impl ConfigurationBuilder {
         self.concurrency_limit = limit;
         self
     }
-    /// Add a PEM-format certificate file.
-    pub fn with_certificate(mut self, certificate: &[u8]) -> Self {
-        self.certificate = Some(certificate.to_vec());
+    /// TLS.
+    pub fn with_tls(mut self, tls: TlsMode) -> Self {
+        let mut client_security = self.client_security.unwrap_or_default();
+        client_security.tls = tls;
+        self.client_security = Some(client_security);
         self
     }
     /// Enable/Disable the telemetry and tracing layer.
@@ -111,8 +251,7 @@ impl ConfigurationBuilder {
         Configuration::new(
             uri.to_string().parse().map_err(Error::UriToUrl)?,
             self.timeout.unwrap(),
-            self.bearer_token,
-            self.certificate.as_ref().map(|c| &c[..]),
+            self.client_security,
             self.tracing_layer,
             self.concurrency_limit,
         )
@@ -122,8 +261,7 @@ impl ConfigurationBuilder {
         Configuration::new(
             url,
             self.timeout.unwrap_or_else(|| Duration::from_secs(5)),
-            self.bearer_token,
-            self.certificate.as_ref().map(|c| &c[..]),
+            self.client_security,
             self.tracing_layer,
             self.concurrency_limit,
         )
@@ -147,7 +285,7 @@ impl ConfigurationBuilder {
             uri,
             client_service,
             self.timeout,
-            self.bearer_token,
+            self.client_security.and_then(|security| security.jwt),
             tracing_layer,
             self.concurrency_limit,
         )
@@ -278,27 +416,46 @@ impl Configuration {
     pub fn new(
         mut url: url::Url,
         timeout: Duration,
-        bearer_access_token: Option<String>,
-        certificate: Option<&[u8]>,
+        client_security: Option<ClientSecurity>,
         trace_requests: bool,
         concurrency_limit: Option<usize>,
     ) -> Result<Self, Error> {
+        let client_security = client_security.unwrap_or_default();
+        let bearer_access_token = client_security.jwt;
+        let tls = client_security.tls;
+        let insecure_skip_verify = url.scheme() == "https" && tls.certificate().is_none();
         #[cfg(all(not(feature = "tower-client-tls"), feature = "tower-client-rls"))]
         let client = {
-            match certificate {
+            match tls.certificate() {
                 None => {
                     let mut http = hyper_util::client::legacy::connect::HttpConnector::new();
 
                     let tls = match url.scheme() == "https" {
                         true => {
                             http.enforce_http(false);
-                            let mut config = rustls::ClientConfig::builder()
+                            let builder = rustls::ClientConfig::builder()
                                 .with_native_roots()
-                                .map_err(Error::NativeRootCerts)?
-                                .with_no_client_auth();
-                            config
-                                .dangerous()
-                                .set_certificate_verifier(Arc::new(NoCertificateVerification {}));
+                                .map_err(Error::NativeRootCerts)?;
+                            let mut config = match (tls.client_cert(), tls.client_key()) {
+                                (Some(cert_bytes), Some(key_bytes)) => {
+                                    let cert_chain = rustls_pemfile::certs(&mut std::io::BufReader::new(cert_bytes))
+                                        .collect::<Result<Vec<_>, _>>()
+                                        .map_err(|_| Error::Certificate)?;
+                                    let key = rustls_pemfile::private_key(&mut std::io::BufReader::new(key_bytes))
+                                        .map_err(|_| Error::ClientKey)?
+                                        .ok_or(Error::ClientKey)?;
+                                    builder
+                                        .with_client_auth_cert(cert_chain, key)
+                                        .map_err(Error::ClientAuth)?
+                                }
+                                (None, None) => builder.with_no_client_auth(),
+                                _ => return Err(Error::ClientIdentity),
+                            };
+                            if insecure_skip_verify {
+                                config
+                                    .dangerous()
+                                    .set_certificate_verifier(Arc::new(NoCertificateVerification {}));
+                            }
                             config
                         }
                         false => rustls::ClientConfig::builder()
@@ -319,9 +476,22 @@ impl Configuration {
                             .collect::<Result<Vec<_>, _>>()
                             .map_err(|_| Error::Certificate)?,
                     );
-                    let config = rustls::ClientConfig::builder()
-                        .with_root_certificates(root_store)
-                        .with_no_client_auth();
+                    let builder = rustls::ClientConfig::builder()
+                        .with_root_certificates(root_store);
+                    let config = match (tls.client_cert(), tls.client_key()) {
+                        (Some(cert_bytes), Some(key_bytes)) => {
+                            let cert_chain = rustls_pemfile::certs(&mut std::io::BufReader::new(cert_bytes))
+                                .collect::<Result<Vec<_>, _>>()
+                                .map_err(|_| Error::Certificate)?;
+                            let key = rustls_pemfile::private_key(&mut std::io::BufReader::new(key_bytes))
+                                .map_err(|_| Error::ClientKey)?
+                                .ok_or(Error::ClientKey)?;
+                            builder.with_client_auth_cert(cert_chain, key)
+                                .map_err(Error::ClientAuth)?
+                        }
+                        (None, None) => builder.with_no_client_auth(),
+                        _ => return Err(Error::ClientIdentity),
+                    };
 
                     let mut http = hyper_util::client::legacy::connect::HttpConnector::new();
                     http.enforce_http(false);
@@ -335,17 +505,28 @@ impl Configuration {
         };
         #[cfg(feature = "tower-client-tls")]
         let client = {
-            match certificate {
+            match tls.certificate() {
                 None => {
                     let mut http = hyper_tls::HttpsConnector::new();
                     if url.scheme() == "https" {
                         http.https_only(true);
                     }
 
-                    let tls = hyper_tls::native_tls::TlsConnector::builder()
-                        .danger_accept_invalid_certs(true)
-                        .build()
-                        .map_err(|_| Error::TlsConnector)?;
+                    let mut tls_builder = hyper_tls::native_tls::TlsConnector::builder();
+                    tls_builder
+                        .danger_accept_invalid_certs(insecure_skip_verify)
+                        .danger_accept_invalid_hostnames(insecure_skip_verify);
+                    match (tls.client_cert(), tls.client_key()) {
+                        (Some(cert_bytes), Some(key_bytes)) => {
+                            let identity =
+                                hyper_tls::native_tls::Identity::from_pkcs8(cert_bytes, key_bytes)
+                                    .map_err(|_| Error::ClientIdentity)?;
+                            tls_builder.identity(identity);
+                        }
+                        (None, None) => {}
+                        _ => return Err(Error::ClientIdentity),
+                    }
+                    let tls = tls_builder.build().map_err(|_| Error::TlsConnector)?;
                     let tls = tokio_native_tls::TlsConnector::from(tls);
 
                     let connector = hyper_tls::HttpsConnector::from((http, tls));
@@ -356,12 +537,22 @@ impl Configuration {
                     let certificate = hyper_tls::native_tls::Certificate::from_pem(bytes)
                         .map_err(|_| Error::Certificate)?;
 
-                    let tls = hyper_tls::native_tls::TlsConnector::builder()
+                    let mut tls_builder = hyper_tls::native_tls::TlsConnector::builder();
+                    tls_builder
                         .add_root_certificate(certificate)
-                        .danger_accept_invalid_hostnames(true)
-                        .disable_built_in_roots(true)
-                        .build()
-                        .map_err(|_| Error::TlsConnector)?;
+                        .danger_accept_invalid_hostnames(insecure_skip_verify)
+                        .disable_built_in_roots(true);
+                    match (tls.client_cert(), tls.client_key()) {
+                        (Some(cert_bytes), Some(key_bytes)) => {
+                            let identity =
+                                hyper_tls::native_tls::Identity::from_pkcs8(cert_bytes, key_bytes)
+                                    .map_err(|_| Error::ClientIdentity)?;
+                            tls_builder.identity(identity);
+                        }
+                        (None, None) => {}
+                        _ => return Err(Error::ClientIdentity),
+                    }
+                    let tls = tls_builder.build().map_err(|_| Error::TlsConnector)?;
                     let tls = tokio_native_tls::TlsConnector::from(tls);
 
                     let mut http = hyper_tls::HttpsConnector::new();

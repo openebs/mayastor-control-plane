@@ -2,7 +2,10 @@ use crate::CsiControllerConfig;
 use stor_port::types::v0::openapi::{
     client::Error,
     clients,
-    clients::tower::StatusCode,
+    clients::tower::{
+        configuration::{ClientSecurity, TlsMode},
+        StatusCode,
+    },
     models,
     models::{
         rest_json_error::Kind, AffinityGroup, AppNode, CreateVolumeBody, Node, NodeTopology, Pool,
@@ -124,57 +127,30 @@ impl RestApiClient {
         let url = clients::tower::Url::parse(endpoint)
             .map_err(|error| anyhow!("Invalid API endpoint URL {}: {:?}", endpoint, error))?;
         let concurrency_limit = cfg.create_volume_limit() * 2;
-        let ca_certificate_path = cfg.ca_certificate_path();
-        let cert = match ca_certificate_path {
-            Some(path) => {
-                let cert = std::fs::read(path).map_err(|error| {
-                    anyhow::anyhow!(
-                        "Failed to create openapi configuration at path {}, Error: '{:?}'",
-                        path.display(),
-                        error
-                    )
-                })?;
-                Some(cert)
-            }
-            None => None,
-        };
-        let tower = match (url.scheme(), cert) {
-            ("https", Some(cert)) => clients::tower::Configuration::builder()
-                .with_timeout(Some(cfg.io_timeout()))
-                .with_concurrency_limit(Some(concurrency_limit))
-                .with_certificate(cert.as_slice())
-                .build_url(url)
-                .map_err(|error| {
-                    anyhow::anyhow!(
-                        "Failed to create openapi configuration, Error: '{:?}'",
-                        error
-                    )
-                })?,
-            ("https", None) => {
-                anyhow::bail!("HTTPS endpoint requires a CA certificate path");
-            }
-            (_, Some(_path)) => {
-                anyhow::bail!("CA certificate path is only supported for HTTPS endpoints");
-            }
-            _ => clients::tower::Configuration::builder()
-                .with_timeout(Some(cfg.io_timeout()))
-                .with_concurrency_limit(Some(concurrency_limit))
-                .build_url(url)
-                .map_err(|error| {
-                    anyhow::anyhow!(
-                        "Failed to create openapi configuration, Error: '{:?}'",
-                        error
-                    )
-                })?,
-        };
+        let tls = TlsMode::new(
+            cfg.ca_certificate_path(),
+            cfg.client_certificate_path(),
+            cfg.client_key_path(),
+        )
+        .map_err(|error| anyhow!("Failed to create TLS configuration: {error}"))?;
+        let client_security = ClientSecurity::try_new(cfg.jwt(), tls)
+            .map_err(|error| anyhow!("Failed to read JWT file: {error}"))?;
+
+        let builder = clients::tower::Configuration::builder()
+            .with_timeout(Some(cfg.io_timeout()))
+            .with_concurrency_limit(Some(concurrency_limit))
+            .with_client_security(Some(client_security));
+
+        let tower = builder.build_url(url).map_err(|error| {
+            anyhow::anyhow!("Failed to create openapi configuration, Error: '{error:?}'")
+        })?;
 
         REST_CLIENT.get_or_init(|| Self {
             rest_client: clients::tower::ApiClient::new(tower.clone()),
         });
 
         info!(
-            "API client is initialized with endpoint {}, I/O timeout = {:?}",
-            endpoint,
+            "API client is initialized with endpoint {endpoint}, I/O timeout = {:?}",
             cfg.io_timeout(),
         );
         Ok(())

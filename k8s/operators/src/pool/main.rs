@@ -19,7 +19,13 @@ use diskpool::crd::{
 };
 use error::Error;
 use mayastorpool::client::{check_crd, delete, list};
-use openapi::clients::{self, tower::Url};
+use openapi::clients::{
+    self,
+    tower::{
+        configuration::{ClientSecurity, TlsMode},
+        Url,
+    },
+};
 use tracing::{error, info, trace, warn};
 use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
@@ -34,7 +40,14 @@ use kube::{
     },
     Client, CustomResourceExt, Resource, ResourceExt,
 };
-use std::{collections::HashMap, fs::File, io::Write, path::Path, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::Write,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 use strum_macros::{Display, EnumString};
 
 const PAGINATION_LIMIT: u32 = 100;
@@ -195,49 +208,23 @@ async fn pool_controller(args: ArgMatches) -> anyhow::Result<()> {
         .expect("timeout value is invalid")
         .into();
 
-    let ca_certificate_path: Option<&str> = args
-        .get_one::<String>("tls-client-ca-path")
-        .map(|x| x.as_str());
-    // take in cert path and make pem file
-    let cert = match ca_certificate_path {
-        Some(path) => {
-            let cert = std::fs::read(path).map_err(|error| {
-                anyhow::anyhow!("Failed to read certificate file, Error: '{:?}'", error)
-            })?;
-            Some(cert)
-        }
-        None => None,
-    };
-    let cfg = match (url.scheme(), cert) {
-        ("https", Some(cert)) => clients::tower::Configuration::new(
-            url,
-            timeout,
-            None,
-            Some(cert.as_slice()),
-            true,
-            None,
-        )
+    let tls = TlsMode::new(
+        args.get_one::<PathBuf>("tls-ca-file"),
+        args.get_one::<PathBuf>("tls-cert-file"),
+        args.get_one::<PathBuf>("tls-key-file"),
+    )
+    .map_err(|error| anyhow::anyhow!("Failed to create TLS configuration, Error: {error:?}"))?;
+    let jwt_file = args.get_one::<PathBuf>("jwt").cloned();
+    let client_security = ClientSecurity::try_new(&jwt_file, tls)
+        .map_err(|error| anyhow::anyhow!("Failed to read JWT file, Error: {error:?}"))?;
+
+    let cfg = clients::tower::Configuration::builder()
+        .with_timeout(timeout)
+        .with_client_security(Some(client_security))
+        .build_url(url)
         .map_err(|error| {
-            anyhow::anyhow!(
-                "Failed to create openapi configuration, Error: '{:?}'",
-                error
-            )
-        })?,
-        ("https", None) => {
-            anyhow::bail!("HTTPS endpoint requires a CA certificate path");
-        }
-        (_, Some(_path)) => {
-            anyhow::bail!("CA certificate path is only supported for HTTPS endpoints");
-        }
-        _ => clients::tower::Configuration::new(url, timeout, None, None, true, None).map_err(
-            |error| {
-                anyhow::anyhow!(
-                    "Failed to create openapi configuration, Error: '{:?}'",
-                    error
-                )
-            },
-        )?,
-    };
+            anyhow::anyhow!("Failed to create openapi configuration, Error: {error:?}")
+        })?;
     let interval = args
         .get_one::<String>("interval")
         .unwrap()
@@ -376,9 +363,30 @@ async fn main() -> anyhow::Result<()> {
                 .help("Enable ansi color for logs"),
         )
         .arg(
-            Arg::new("tls-client-ca-path")
-                .long("tls-client-ca-path")
+            Arg::new("tls-ca-file")
+                .long("tls-ca-file")
+                .value_parser(clap::value_parser!(PathBuf))
                 .help("path to the CA certificate file"),
+        )
+        .arg(
+            Arg::new("tls-cert-file")
+                .long("tls-cert-file")
+                .requires("tls-key-file")
+                .value_parser(clap::value_parser!(PathBuf))
+                .help("path to the TLS client certificate file"),
+        )
+        .arg(
+            Arg::new("tls-key-file")
+                .long("tls-key-file")
+                .requires("tls-cert-file")
+                .value_parser(clap::value_parser!(PathBuf))
+                .help("path to the TLS client private key file"),
+        )
+        .arg(
+            Arg::new("jwt")
+                .long("jwt")
+                .value_parser(clap::value_parser!(PathBuf))
+                .help("path to a file containing the JWT bearer token for REST authentication"),
         )
         .get_matches();
 
