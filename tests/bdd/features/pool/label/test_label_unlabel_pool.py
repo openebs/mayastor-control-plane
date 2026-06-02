@@ -42,7 +42,7 @@ REPLICA_ERROR = "replica_error"
 
 @pytest.fixture(scope="module")
 def init():
-    Deployer.start(NUM_IO_ENGINES, io_engine_env="MAYASTOR_HB_INTERVAL_SEC=0")
+    Deployer.start(NUM_IO_ENGINES, io_engine_env="MAYASTOR_HB_INTERVAL_SEC=1")
     ApiClient.pools_api().put_node_pool(
         NODE_1_NAME,
         POOL_1_UUID,

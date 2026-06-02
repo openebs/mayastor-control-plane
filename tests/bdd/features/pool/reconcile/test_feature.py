@@ -10,6 +10,7 @@ from openapi.exceptions import ApiException, NotFoundException
 from openapi.models.create_pool_body import CreatePoolBody
 from openapi.models.node_status import NodeStatus
 from openapi.models.pool_status import PoolStatus
+from openapi.models.spec_status import SpecStatus
 from pytest_bdd import (
     given,
     scenario,
@@ -78,7 +79,7 @@ def the_pool_should_eventually_be_imported(pool):
 
 @pytest.fixture(scope="module")
 def background():
-    Deployer.start(2, node_deadline="250ms", io_engine_env="MAYASTOR_HB_INTERVAL_SEC=0")
+    Deployer.start(2, node_deadline="250ms", io_engine_env="MAYASTOR_HB_INTERVAL_SEC=1")
     yield
     Deployer.stop()
 
@@ -143,7 +144,7 @@ def wait_node_offline(node_id):
 def wait_pool_deleted(pool):
     try:
         pool = ApiClient.pools_api().get_pool(pool.id)
-        assert pool.state == PoolStatus("Deleted")
+        assert pool.spec.status == SpecStatus("Deleted")
     except NotFoundException:
         pass
 
