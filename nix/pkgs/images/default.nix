@@ -41,7 +41,7 @@ let
       inherit tag;
       created = "now";
       name = "${repo-org}/${img_prefix}-${name}${image_suffix.${buildType}}";
-      copyToRoot = [ tini busybox package ];
+      copyToRoot = [ tini busybox package pkgs.cacert ];
       config = {
         Entrypoint = [ "tini" "--" package.binary ];
       } // config;
