@@ -91,7 +91,7 @@ async fn pool_purge() {
     normal_delete_still_works(&pool_client, &delete_pool).await;
 
     // --- Phase 2: io-engine offline ---
-    cluster.composer().stop("io-engine-1").await.unwrap();
+    cluster.composer().stop(&cluster.node(0)).await.unwrap();
     cluster
         .wait_node_status_tmo(cluster.node(0), NodeStatus::Offline, NODE_OFFLINE_TIMEOUT)
         .await
