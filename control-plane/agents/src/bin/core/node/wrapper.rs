@@ -441,9 +441,19 @@ impl NodeWrapper {
         })
     }
 
+    /// Set the node as down if it's not already offline.
+    pub(super) fn set_down(&mut self) -> NodeStatus {
+        let status = self.status();
+        if status == NodeStatus::Offline {
+            return status;
+        }
+        self.set_status_(status, NodeStatus::Unknown)
+    }
     /// Set the node status and return the previous status.
     pub(super) fn set_status(&mut self, next: NodeStatus) -> NodeStatus {
-        let previous = self.status();
+        self.set_status_(self.status(), next)
+    }
+    fn set_status_(&mut self, previous: NodeStatus, next: NodeStatus) -> NodeStatus {
         if previous != next {
             if next == NodeStatus::Online {
                 tracing::info!(
@@ -665,6 +675,7 @@ impl NodeWrapper {
         tracing::info!(
             node.id = %self.id(),
             node.endpoint = self.endpoint_str(),
+            node.status = %self.status(),
             api.versions = ?self.node_state.api_versions,
             startup,
             "Preloading node"
@@ -678,13 +689,14 @@ impl NodeWrapper {
                 Ok(())
             }
             Err(error) => {
-                self.set_status(NodeStatus::Unknown);
                 tracing::error!(
                     node.id = %self.id(),
                     node.endpoint = %self.endpoint_str(),
-                    %error,
+                    node.status = %self.status(),
+                    ?error,
                     "Failed to preload node"
                 );
+                self.set_down();
                 Err(error)
             }
         }
@@ -720,12 +732,13 @@ impl NodeWrapper {
                     Ok(())
                 }
                 Err(error) => {
-                    self.set_status(NodeStatus::Unknown);
                     tracing::error!(
                         node.id = %self.id(),
+                        node.status = %self.status(),
                         ?error,
                         "Failed to reload node"
                     );
+                    self.set_down();
                     Err(error)
                 }
             }
@@ -1225,7 +1238,7 @@ impl InternalOps for Arc<tokio::sync::RwLock<NodeWrapper>> {
                 node.update(setting_online, results)
             }
             Err((_guard, error)) => {
-                self.write().await.set_status(NodeStatus::Unknown);
+                self.write().await.set_down();
                 Err(error)
             }
         }
