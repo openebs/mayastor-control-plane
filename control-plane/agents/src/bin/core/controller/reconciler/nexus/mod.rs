@@ -36,7 +36,8 @@ use stor_port::{
         },
         transport::{
             Child, ChildUri, CreateNexus, Nexus, NexusChildActionContext, NexusShareProtocol,
-            NexusStatus, NodeStatus, ReplicaId, ResizeNexus, ShareNexus, UnshareNexus,
+            NexusStatus, NodeStatus, ReplicaId, ResizeNexus, ResizeReplica, ShareNexus,
+            UnshareNexus,
         },
     },
 };
@@ -670,6 +671,45 @@ pub(super) async fn fixup_nexus_size(
     // Nexus's size doesn't need any fixup.
     if nexus.as_ref().size == required_size {
         return PollResult::Ok(PollerState::Idle);
+    }
+
+    // Ensure all nexus children (replicas) are at the required size before attempting
+    // nexus resize. Only resize replicas that are actual nexus children — disconnected
+    // volume replicas are handled separately by other reconcilers.
+    for child in nexus
+        .as_ref()
+        .children
+        .iter()
+        .filter_map(|c| c.as_replica_ref())
+    {
+        // Spec size only updates on successful resize, so if it's already at
+        // required size we can skip this child entirely.
+        let Some(rsc) = registry.specs().replica_rsc(child.uuid()) else {
+            continue;
+        };
+        if rsc.lock().size >= required_size {
+            continue;
+        }
+        let mut replica = registry.specs().replica(child.uuid()).await?;
+        let state = registry.replica(child.uuid()).await?;
+        nexus.info(&format!(
+            "Child replica {} is undersized (spec {}B < {}B), resizing before nexus resize",
+            child.uuid(),
+            replica.as_ref().size,
+            required_size
+        ));
+        replica
+            .resize(
+                registry,
+                &ResizeReplica::new(
+                    &state.node,
+                    replica.as_ref().pool_name(),
+                    None,
+                    child.uuid(),
+                    required_size,
+                ),
+            )
+            .await?;
     }
 
     let nexus_state = registry.nexus(nexus.as_ref().uid()).await?;
