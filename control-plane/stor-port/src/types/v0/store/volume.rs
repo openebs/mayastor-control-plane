@@ -321,6 +321,16 @@ impl VolumeMetadata {
     pub fn set_data_loss_warned(&mut self) {
         self.runtime.set_data_loss_warned();
     }
+    /// How long the offline-rebuild reconciler has been seeing this volume as
+    /// Degraded. First call stamps `now` and returns `0`; later calls return
+    /// the elapsed duration since that stamp.
+    pub fn offline_rebuild_degraded(&mut self) -> std::time::Duration {
+        self.runtime.offline_rebuild_degraded()
+    }
+    /// Clear the offline-rebuild degraded mark.
+    pub fn clear_offline_rebuild_degraded(&mut self) {
+        self.runtime.clear_offline_rebuild_degraded();
+    }
 }
 
 /// Volume meta information.
@@ -339,6 +349,10 @@ pub struct VolumeRuntimeMetadata {
     /// Avoids flooding logs once-per-reconcile-tick when a published volume is
     /// stuck with zero replicas after a pool purge.
     data_loss_warned: bool,
+    /// First time the offline-rebuild reconciler observed this volume as
+    /// Degraded; used to enforce the grace period before starting a rebuild.
+    /// Tied to the volume's lifetime so it goes away when the volume is deleted.
+    offline_rebuild_degraded_since: Option<std::time::Instant>,
 }
 impl VolumeRuntimeMetadata {
     /// Check if there's any snapshot.
@@ -352,6 +366,20 @@ impl VolumeRuntimeMetadata {
     /// Mark the data-loss warning as emitted.
     pub fn set_data_loss_warned(&mut self) {
         self.data_loss_warned = true;
+    }
+    /// How long the offline-rebuild reconciler has been seeing this volume as
+    /// Degraded. The first call stamps `now`; subsequent calls return the
+    /// elapsed duration since that stamp. Use `clear_offline_rebuild_degraded`
+    /// to reset.
+    pub fn offline_rebuild_degraded(&mut self) -> std::time::Duration {
+        let now = std::time::Instant::now();
+        let first = *self.offline_rebuild_degraded_since.get_or_insert(now);
+        now.duration_since(first)
+    }
+    /// Clear the offline-rebuild degraded mark (e.g. when the volume is no
+    /// longer Degraded or rebuild has been initiated).
+    pub fn clear_offline_rebuild_degraded(&mut self) {
+        self.offline_rebuild_degraded_since = None;
     }
 }
 

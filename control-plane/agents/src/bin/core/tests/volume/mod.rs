@@ -7,6 +7,7 @@ mod format_options;
 mod garbage_collection;
 mod helpers;
 mod hotspare;
+mod offline_rebuild;
 mod resize;
 mod rwx;
 mod snapshot;
