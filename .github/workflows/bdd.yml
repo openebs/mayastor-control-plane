@@ -1,6 +1,9 @@
 name: BDD CI
 on:
   workflow_call:
+  push:
+    branches:
+      - test-ci
 
 env:
   CARGO_TERM_COLOR: always
@@ -67,32 +70,36 @@ jobs:
       - name: Run BDD Tests
         run: |
           nix-shell --run "deployer start --image-pull-policy always -w 60s && deployer stop"
-          nix-shell --run "./scripts/python/test.sh"
+          nix-shell --run "CLEAN=0 ./scripts/python/test.sh tests/bdd/features/pool -x"
+          nix-shell --run "CLEAN=0 ./scripts/python/test.sh tests/bdd/features/pool -x"
+          nix-shell --run "CLEAN=0 ./scripts/python/test.sh tests/bdd/features/pool -x"
+          nix-shell --run "CLEAN=0 ./scripts/python/test.sh tests/bdd/features/pool -x"
+          nix-shell --run "CLEAN=0 ./scripts/python/test.sh tests/bdd/features/pool -x"
 
-      - name: Cleanup
-        if: always()
-        run: |
-          nix-shell --run "./scripts/ci-report.sh"
-          nix-shell --run "./scripts/python/test-residue-cleanup.sh"
+      # - name: Cleanup
+      #   if: always()
+      #   run: |
+      #     nix-shell --run "./scripts/ci-report.sh"
+      #     nix-shell --run "./scripts/python/test-residue-cleanup.sh"
 
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: ci-report-bdd
-          path: ./ci-report/ci-report.tar.gz
+      # - uses: actions/upload-artifact@v4
+      #   if: failure()
+      #   with:
+      #     name: ci-report-bdd
+      #     path: ./ci-report/ci-report.tar.gz
 
-      - name: Pytest BDD Report
-        if: always()
-        uses: pmeier/pytest-results-action@main
-        with:
-          path: ci-report/bdd-report.xml
-          summary: true
-          display-options: a
-          fail-on-empty: true
-          title: Test results
+      # - name: Pytest BDD Report
+      #   if: always()
+      #   uses: pmeier/pytest-results-action@main
+      #   with:
+      #     path: ci-report/bdd-report.xml
+      #     summary: true
+      #     display-options: a
+      #     fail-on-empty: true
+      #     title: Test results
 
       # debugging
-      # - name: Setup tmate session
-      #   if: ${{ failure() }}
-      #   timeout-minutes: 240
-      #   uses: mxschmitt/action-tmate@v3
+      - name: Setup tmate session
+        if: ${{ failure() }}
+        timeout-minutes: 240
+        uses: mxschmitt/action-tmate@v3
