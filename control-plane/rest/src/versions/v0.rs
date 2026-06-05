@@ -16,9 +16,9 @@ pub use stor_port::{
             DestroyReplica, DestroyVolume, Filter, GetBlockDevices, HostNqn, HostNqnParseError,
             JsonGrpcRequest, LabelPool, Nexus, NexusId, NexusShareProtocol, Node, NodeId, Pool,
             PoolDeviceUri, PoolId, Protocol, RemoveNexusChild, Replica, ReplicaId,
-            ReplicaShareProtocol, ShareNexus, ShareReplica, SnapshotId, Specs, Topology,
-            UnshareNexus, UnshareReplica, VolumeId, VolumeLabels, VolumePolicy, VolumeProperty,
-            Watch, WatchCallback, WatchResourceId,
+            ReplicaShareProtocol, ShareNexus, ShareReplica, SnapshotId, SnapshotRestorePolicy,
+            Specs, Topology, UnshareNexus, UnshareReplica, VolumeId, VolumeLabels, VolumePolicy,
+            VolumeProperty, Watch, WatchCallback, WatchResourceId,
         },
     },
     IntoOption, IntoVec,
@@ -220,6 +220,10 @@ pub struct CreateVolumeBody {
     pub encryption: bool,
     /// Blobstore cluster size required for pools hosting this volume's replicas.
     pub cluster_size: Option<u32>,
+    /// Policy controlling how a snapshot restore behaves when not every replica
+    /// pool can host a clone of the source snapshot. Only meaningful when the
+    /// create request is part of a snapshot restore.
+    pub snapshot_restore_policy: SnapshotRestorePolicy,
 }
 impl From<models::CreateVolumeBody> for CreateVolumeBody {
     fn from(src: models::CreateVolumeBody) -> Self {
@@ -234,6 +238,10 @@ impl From<models::CreateVolumeBody> for CreateVolumeBody {
             max_snapshots: src.max_snapshots,
             encryption: src.encrypted,
             cluster_size: src.cluster_size.map(|c| c as u32),
+            snapshot_restore_policy: src
+                .snapshot_restore_policy
+                .map(SnapshotRestorePolicy::from)
+                .unwrap_or_default(),
         }
     }
 }
@@ -250,6 +258,7 @@ impl From<CreateVolume> for CreateVolumeBody {
             max_snapshots: create.max_snapshots,
             encryption: create.encrypted,
             cluster_size: create.cluster_size,
+            snapshot_restore_policy: create.snapshot_restore_policy,
         }
     }
 }
@@ -269,6 +278,7 @@ impl CreateVolumeBody {
             max_snapshots: self.max_snapshots,
             encrypted: self.encryption,
             cluster_size: self.cluster_size,
+            snapshot_restore_policy: self.snapshot_restore_policy,
         }
     }
     /// Convert into rpc request type.

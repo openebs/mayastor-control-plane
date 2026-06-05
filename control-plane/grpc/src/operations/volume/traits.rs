@@ -30,9 +30,9 @@ use stor_port::{
             DestroyVolume, ExplicitNodeTopology, Filter, LabelledTopology, Nexus, NexusId,
             NexusNvmfConfig, NodeId, NodeTopology, NvmeNqn, PoolTopology, PublishVolume, ReplicaId,
             ReplicaStatus, ReplicaTopology, ReplicaUsage, RepublishVolume, ResizeVolume,
-            SetVolumeProperty, SetVolumeReplica, ShareVolume, SnapshotId, Topology,
-            UnpublishVolume, UnshareVolume, Volume, VolumeAccessMode, VolumeHealth, VolumeId,
-            VolumeLabels, VolumePolicy, VolumeProperty, VolumeShareProtocol, VolumeState,
+            SetVolumeProperty, SetVolumeReplica, ShareVolume, SnapshotId, SnapshotRestorePolicy,
+            Topology, UnpublishVolume, UnshareVolume, Volume, VolumeAccessMode, VolumeHealth,
+            VolumeId, VolumeLabels, VolumePolicy, VolumeProperty, VolumeShareProtocol, VolumeState,
             VolumeUsage,
         },
     },
@@ -948,6 +948,9 @@ pub trait CreateVolumeInfo: Send + Sync + std::fmt::Debug {
     fn encrypted(&self) -> bool;
     /// Pool's blobstore cluster size required for replicas of this volume.
     fn cluster_size(&self) -> Option<u32>;
+    /// Policy controlling how a snapshot restore behaves when not every replica
+    /// pool can host a clone of the source snapshot.
+    fn snapshot_restore_policy(&self) -> SnapshotRestorePolicy;
 }
 
 impl CreateVolumeInfo for CreateVolume {
@@ -998,6 +1001,10 @@ impl CreateVolumeInfo for CreateVolume {
     fn cluster_size(&self) -> Option<u32> {
         self.cluster_size
     }
+
+    fn snapshot_restore_policy(&self) -> SnapshotRestorePolicy {
+        self.snapshot_restore_policy
+    }
 }
 
 /// Intermediate structure that validates the conversion to CreateVolumeRequest type.
@@ -1006,6 +1013,7 @@ pub struct ValidatedCreateVolumeRequest {
     inner: CreateVolumeRequest,
     uuid: VolumeId,
     topology: Option<Topology>,
+    snapshot_restore_policy: SnapshotRestorePolicy,
 }
 
 impl CreateVolumeInfo for ValidatedCreateVolumeRequest {
@@ -1062,11 +1070,30 @@ impl CreateVolumeInfo for ValidatedCreateVolumeRequest {
     fn cluster_size(&self) -> Option<u32> {
         self.inner.cluster_size
     }
+
+    fn snapshot_restore_policy(&self) -> SnapshotRestorePolicy {
+        self.snapshot_restore_policy
+    }
 }
 
 impl ValidateRequestTypes for CreateVolumeRequest {
     type Validated = ValidatedCreateVolumeRequest;
     fn validated(self) -> Result<Self::Validated, ReplyError> {
+        // Validate the snapshot restore policy here rather than at field-access time so an
+        // unknown enum value (e.g. a newer client talking to an older agent) fails fast with
+        // an explicit InvalidArgument instead of being silently treated as the default.
+        let snapshot_restore_policy = match self.snapshot_restore_policy {
+            Some(value) => volume::SnapshotRestorePolicy::try_from(value)
+                .map(SnapshotRestorePolicy::from)
+                .map_err(|_| {
+                    ReplyError::invalid_argument(
+                        ResourceKind::Volume,
+                        "create_volume_request.snapshot_restore_policy",
+                        format!("unknown SnapshotRestorePolicy value: {value}"),
+                    )
+                })?,
+            None => SnapshotRestorePolicy::default(),
+        };
         Ok(ValidatedCreateVolumeRequest {
             uuid: VolumeId::try_from(StringValue(self.uuid.clone()))?,
             topology: match self.topology.clone() {
@@ -1082,6 +1109,7 @@ impl ValidateRequestTypes for CreateVolumeRequest {
                 },
                 None => None,
             },
+            snapshot_restore_policy,
             inner: self,
         })
     }
@@ -1102,6 +1130,7 @@ impl From<&dyn CreateVolumeInfo> for CreateVolume {
             max_snapshots: data.max_snapshots(),
             encrypted: data.encrypted(),
             cluster_size: data.cluster_size(),
+            snapshot_restore_policy: data.snapshot_restore_policy(),
         }
     }
 }
@@ -1123,6 +1152,27 @@ impl From<&dyn CreateVolumeInfo> for CreateVolumeRequest {
             max_snapshots: data.max_snapshots(),
             encrypted: Some(data.encrypted()),
             cluster_size: data.cluster_size(),
+            snapshot_restore_policy: Some(volume::SnapshotRestorePolicy::from(
+                data.snapshot_restore_policy(),
+            ) as i32),
+        }
+    }
+}
+
+impl From<SnapshotRestorePolicy> for volume::SnapshotRestorePolicy {
+    fn from(value: SnapshotRestorePolicy) -> Self {
+        match value {
+            SnapshotRestorePolicy::Strict => Self::Strict,
+            SnapshotRestorePolicy::BestEffort => Self::BestEffort,
+        }
+    }
+}
+
+impl From<volume::SnapshotRestorePolicy> for SnapshotRestorePolicy {
+    fn from(value: volume::SnapshotRestorePolicy) -> Self {
+        match value {
+            volume::SnapshotRestorePolicy::Strict => Self::Strict,
+            volume::SnapshotRestorePolicy::BestEffort => Self::BestEffort,
         }
     }
 }

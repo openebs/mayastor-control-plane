@@ -9,7 +9,10 @@ use stor_port::{
     transport_api::ReplyErrorKind,
     types::v0::{
         store::pool::POOL_BS_CLUSTER_SIZE_DEFAULT,
-        transport::{CreatePool, CreateSnapshotVolume, CreateVolume, Filter, SnapshotId},
+        transport::{
+            CreatePool, CreateSnapshotVolume, CreateVolume, Filter, SnapshotId,
+            SnapshotRestorePolicy,
+        },
     },
 };
 
@@ -298,4 +301,108 @@ async fn snapshot_clone_pool_cluster_size_constraint() {
         .unwrap();
     vol_cli.destroy(&volume_1, None).await.unwrap();
     vol_cli.destroy(&volume_2, None).await.unwrap();
+}
+
+/// Restoring a snapshot when only a subset of source pools can host a clone.
+///
+/// Setup: 2 io-engines, 2-replica volume, snapshot. Then pause one of the
+/// io-engines so its pool is unreachable for new replica creation. With
+/// only one usable source pool left:
+///
+/// - `Strict` (default) restore must fail.
+/// - `BestEffort` restore must succeed with one clone replica. The remaining
+///   replica is left for the regular replica reconciler to fill in.
+#[tokio::test]
+async fn snapshot_restore_best_effort() {
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_io_engines(2)
+        .with_pools(1)
+        .with_cache_period("1s")
+        .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
+        .build()
+        .await
+        .unwrap();
+
+    let vol_cli = cluster.grpc_client().volume();
+
+    let source = vol_cli
+        .create(
+            &CreateVolume {
+                uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd8a0".try_into().unwrap(),
+                size: 20 * 1024 * 1024,
+                replicas: 2,
+                thin: true,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let snapshot = vol_cli
+        .create_snapshot(
+            &CreateVolumeSnapshot::new(source.uuid(), SnapshotId::new()),
+            None,
+        )
+        .await
+        .unwrap();
+
+    // Make one of the two source pools unreachable.
+    cluster.composer().pause(&cluster.node(1)).await.unwrap();
+
+    // Strict: 2 replicas requested, only one source pool reachable, must fail.
+    // The upfront `setup` gate accepts both source pools (the scheduler does
+    // not drop the paused-node pool at candidate-listing time), so the failure
+    // surfaces from the per-replica create on the unreachable node and the
+    // post-create check against the requested replica count.
+    let strict_err = vol_cli
+        .create_snapshot_volume(
+            &CreateSnapshotVolume::new(
+                snapshot.spec().snap_id().clone(),
+                CreateVolume {
+                    uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd8a1".try_into().unwrap(),
+                    size: 20 * 1024 * 1024,
+                    replicas: 2,
+                    thin: true,
+                    snapshot_restore_policy: SnapshotRestorePolicy::Strict,
+                    ..Default::default()
+                },
+            ),
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(strict_err.kind, ReplyErrorKind::ReplicaCreateNumber);
+
+    // BestEffort: same request must succeed with one clone replica.
+    let restored = vol_cli
+        .create_snapshot_volume(
+            &CreateSnapshotVolume::new(
+                snapshot.spec().snap_id().clone(),
+                CreateVolume {
+                    uuid: "1e3cf927-80c2-47a8-adf0-95c486bdd8a2".try_into().unwrap(),
+                    size: 20 * 1024 * 1024,
+                    replicas: 2,
+                    thin: true,
+                    snapshot_restore_policy: SnapshotRestorePolicy::BestEffort,
+                    ..Default::default()
+                },
+            ),
+            None,
+        )
+        .await
+        .unwrap();
+
+    // The volume spec still asks for 2 replicas, but only one was provisioned
+    // up-front. The replica reconciler is responsible for bringing the count
+    // back up once the paused node returns or another pool becomes a candidate.
+    assert_eq!(restored.spec().num_replicas, 2);
+    let actual_replicas = restored.state().replica_topology.len();
+    assert!(
+        actual_replicas >= 1,
+        "BestEffort restore should produce at least one replica, got {actual_replicas}",
+    );
+
+    cluster.composer().thaw(&cluster.node(1)).await.unwrap();
 }

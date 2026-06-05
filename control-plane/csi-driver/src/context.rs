@@ -12,7 +12,10 @@ use std::{
     num::ParseIntError,
     str::{FromStr, ParseBoolError},
 };
-use stor_port::{platform, types::v0::openapi::models::VolumeShareProtocol};
+use stor_port::{
+    platform,
+    types::v0::{openapi::models::VolumeShareProtocol, transport::SnapshotRestorePolicy},
+};
 use strum_macros::{AsRefStr, Display, EnumString};
 use tracing::{debug, log::warn, trace};
 use utils::K8S_STS_PVC_NAMING_REGEX;
@@ -85,6 +88,8 @@ pub enum Parameters {
     PoolClusterSize,
     #[strum(serialize = "rwxBlock")]
     RwxBlock,
+    #[strum(serialize = "snapshotRestorePolicy")]
+    SnapshotRestorePolicy,
 }
 impl Parameters {
     fn parse_human_time(
@@ -288,6 +293,22 @@ impl Parameters {
         }
         Ok(None)
     }
+    /// Parse the value for `Self::SnapshotRestorePolicy`. Accepts the canonical
+    /// camelCase value names: `strict` or `bestEffort`.
+    pub fn snapshot_restore_policy(
+        value: Option<&String>,
+    ) -> Result<Option<SnapshotRestorePolicy>, tonic::Status> {
+        let Some(value) = value else {
+            return Ok(None);
+        };
+        match value.as_str() {
+            "strict" => Ok(Some(SnapshotRestorePolicy::Strict)),
+            "bestEffort" => Ok(Some(SnapshotRestorePolicy::BestEffort)),
+            other => Err(tonic::Status::invalid_argument(format!(
+                "Invalid `snapshotRestorePolicy` value {other:?}, expected `strict` or `bestEffort`",
+            ))),
+        }
+    }
 }
 
 /// Volume publish parameters.
@@ -452,6 +473,7 @@ pub struct CreateParams {
     node_affinity_topology_label: Option<HashMap<String, String>>,
     node_has_topology_key: Option<HashMap<String, String>>,
     node_spread_topology_key: Option<HashMap<String, String>>,
+    snapshot_restore_policy: Option<SnapshotRestorePolicy>,
 }
 impl CreateParams {
     /// Get the `Parameters::RwxBlock` value.
@@ -509,6 +531,10 @@ impl CreateParams {
     /// Get the `Parameters::NodeSpreadTopologyKey` value.
     pub fn node_spread_topology_key(&self) -> &Option<HashMap<String, String>> {
         &self.node_spread_topology_key
+    }
+    /// Get the `Parameters::SnapshotRestorePolicy` value.
+    pub fn snapshot_restore_policy(&self) -> Option<SnapshotRestorePolicy> {
+        self.snapshot_restore_policy
     }
 
     /// Get the sts_affinity_group name from annotations if exists else generate it.
@@ -730,6 +756,10 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
         validate_topology_params(&node_affinity_topology_label, &node_spread_topology_key)?;
         validate_topology_params(&node_has_topology_key, &node_spread_topology_key)?;
 
+        let snapshot_restore_policy = Parameters::snapshot_restore_policy(
+            args.get(Parameters::SnapshotRestorePolicy.as_ref()),
+        )?;
+
         Ok(Self {
             publish_params,
             rwx_block,
@@ -748,6 +778,7 @@ impl TryFrom<&HashMap<String, String>> for CreateParams {
             node_affinity_topology_label,
             node_has_topology_key,
             node_spread_topology_key,
+            snapshot_restore_policy,
         })
     }
 }

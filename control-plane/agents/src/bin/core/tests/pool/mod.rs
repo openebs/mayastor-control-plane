@@ -606,6 +606,7 @@ async fn volume_repl_placement_with_cluster_size() {
             Some(10),
             false,
             Some(33554432),
+            None,
         );
         let volume = VolumeId::new();
         volumes_api.put_volume(&volume, body).await.unwrap();

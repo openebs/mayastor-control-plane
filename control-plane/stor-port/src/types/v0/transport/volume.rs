@@ -487,6 +487,44 @@ impl GetVolumes {
     }
 }
 
+/// Policy for restoring a volume from a snapshot when one or more snapshot
+/// replica pools cannot accept a new clone (for example, the source pool is full).
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SnapshotRestorePolicy {
+    /// Require every requested replica to be cloned from the source snapshot.
+    /// The restore fails if any clone cannot be created. This is the default.
+    Strict,
+    /// Allow the restore to proceed with fewer clones than the requested replica
+    /// count, as long as at least one clone can be created. The volume is created
+    /// in a degraded state and the missing replicas are filled in by the regular
+    /// replica reconciler via a full rebuild.
+    BestEffort,
+}
+
+impl Default for SnapshotRestorePolicy {
+    fn default() -> Self {
+        Self::Strict
+    }
+}
+
+impl From<models::SnapshotRestorePolicy> for SnapshotRestorePolicy {
+    fn from(value: models::SnapshotRestorePolicy) -> Self {
+        match value {
+            models::SnapshotRestorePolicy::Strict => Self::Strict,
+            models::SnapshotRestorePolicy::BestEffort => Self::BestEffort,
+        }
+    }
+}
+
+impl From<SnapshotRestorePolicy> for models::SnapshotRestorePolicy {
+    fn from(value: SnapshotRestorePolicy) -> Self {
+        match value {
+            SnapshotRestorePolicy::Strict => Self::Strict,
+            SnapshotRestorePolicy::BestEffort => Self::BestEffort,
+        }
+    }
+}
+
 /// Create volume request.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -515,6 +553,10 @@ pub struct CreateVolume {
     pub encrypted: bool,
     /// Pool's blobstore cluster size required for replicas of this volume.
     pub cluster_size: Option<u32>,
+    /// Policy controlling how the volume is restored from a snapshot source.
+    /// Only meaningful when the create request is part of a snapshot restore.
+    #[serde(default)]
+    pub snapshot_restore_policy: SnapshotRestorePolicy,
 }
 
 /// Resize volume request.
