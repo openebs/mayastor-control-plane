@@ -456,6 +456,9 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                         // thin:false explicitly.
                         let thin_arg_passed = args.parameters.contains_key("thin");
                         let thin = !thin_arg_passed || thin;
+                        let snapshot_restore_policy = context
+                            .snapshot_restore_policy()
+                            .map(models::SnapshotRestorePolicy::from);
                         RestApiClient::get_client()
                             .create_snapshot_volume(
                                 &parsed_vol_uuid,
@@ -467,6 +470,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                                 affinity_group_name.map(AffinityGroup::new),
                                 max_snapshots,
                                 encrypted,
+                                snapshot_restore_policy,
                             )
                             .await?
                     }
@@ -1000,8 +1004,15 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                     .create_volume_snapshot(&volume_uuid, &snap_uuid)
                     .await
                     .map_err(|error| match error {
+                        // The external-snapshotter side-car treats `ResourceExhausted` as retriable
+                        // and ends up in a tight retry loop when the failure is actually a permanent
+                        // capacity problem (no pool has enough space to host the snapshot). Report
+                        // it as `FailedPrecondition` instead so the side-car surfaces the failure to
+                        // the user rather than hammering the control-plane. The proper fix lives in
+                        // the side-car itself (kubernetes-csi/external-snapshotter#1334) and this
+                        // mapping can be reverted once that lands.
                         ApiClientError::ResourceExhausted(reason) => {
-                            Status::resource_exhausted(reason)
+                            Status::failed_precondition(reason)
                         }
                         ApiClientError::PreconditionFailed(reason) => {
                             Status::failed_precondition(reason)

@@ -3,8 +3,8 @@ use crate::{
         registry::Registry,
         resources::{
             operations::{ResourceCloning, ResourceLifecycle, ResourceLifecycleExt},
-            operations_helper::{GuardedOperationsHelper, SpecOperationsHelper},
-            OperationGuardArc, TraceStrLog,
+            operations_helper::{GuardedOperationsHelper, OnCreateFail, SpecOperationsHelper},
+            OperationGuardArc, ResourceUid, TraceStrLog,
         },
         scheduling::{volume::CloneVolumeSnapshot, ResourceFilter},
     },
@@ -23,7 +23,7 @@ use stor_port::{
         },
         transport::{
             CreateSnapshotVolume, DestroyVolume, Replica, SnapshotCloneId, SnapshotCloneParameters,
-            SnapshotCloneSpecParams,
+            SnapshotCloneSpecParams, SnapshotRestorePolicy,
         },
     },
 };
@@ -120,16 +120,60 @@ impl CreateVolumeExeVal for SnapshotCloneOp<'_> {
 impl CreateVolumeExe for SnapshotCloneOp<'_> {
     type Candidates = Vec<SnapshotCloneSpecParams>;
 
+    async fn run<'a>(&'a self, mut context: Context<'a>) -> Result<Vec<Replica>, SvcError> {
+        // Override the default `run` so that BestEffort restores can succeed
+        // with fewer replicas than `num_replicas`. The remaining replicas are
+        // filled in afterwards by the regular replica reconciler.
+        let result = self.setup(&mut context).await;
+        let candidates = context
+            .volume
+            .validate_create_step_ext(context.registry, result, OnCreateFail::Delete)
+            .await?;
+        let replicas = self.create(&mut context, candidates).await;
+
+        let policy = self.0.params().snapshot_restore_policy;
+        let min_replicas = match policy {
+            SnapshotRestorePolicy::Strict => context.volume.as_ref().num_replicas as usize,
+            SnapshotRestorePolicy::BestEffort => 1,
+        };
+        if replicas.len() < min_replicas {
+            self.undo(&mut context, replicas).await;
+            Err(SvcError::ReplicaCreateNumber {
+                id: context.volume.uid_str(),
+            })
+        } else {
+            Ok(replicas)
+        }
+    }
+
     async fn setup<'a>(&'a self, context: &mut Context<'a>) -> Result<Self::Candidates, SvcError> {
         // todo: topology is not being used here at all
         let clonable_snapshots = self.cloneable_snapshot(context).await?;
         let volume = context.volume.as_ref();
-        if volume.num_replicas > clonable_snapshots.len() as u8 {
-            return Err(SvcError::InsufficientSnapshotsForClone {
-                snapshots: clonable_snapshots.len() as u8,
-                replicas: volume.num_replicas,
-                id: volume.uuid_str(),
-            });
+        let policy = self.0.params().snapshot_restore_policy;
+        match policy {
+            SnapshotRestorePolicy::Strict => {
+                if volume.num_replicas > clonable_snapshots.len() as u8 {
+                    return Err(SvcError::InsufficientSnapshotsForClone {
+                        snapshots: clonable_snapshots.len() as u8,
+                        replicas: volume.num_replicas,
+                        id: volume.uuid_str(),
+                    });
+                }
+            }
+            SnapshotRestorePolicy::BestEffort => {
+                // BestEffort: as long as at least one snapshot replica can be
+                // cloned, allow the restore to proceed. The missing replicas
+                // are filled in afterwards by the regular replica reconciler
+                // via a normal rebuild.
+                if clonable_snapshots.is_empty() {
+                    return Err(SvcError::InsufficientSnapshotsForClone {
+                        snapshots: 0,
+                        replicas: volume.num_replicas,
+                        id: volume.uuid_str(),
+                    });
+                }
+            }
         }
         Ok(clonable_snapshots)
     }
@@ -141,8 +185,6 @@ impl CreateVolumeExe for SnapshotCloneOp<'_> {
     ) -> Vec<Replica> {
         let mut replicas = Vec::new();
         let volume_replicas = context.volume.as_ref().num_replicas as usize;
-        // todo: need to add new replica and do full rebuild, if clonable snapshots
-        // count is less than volume replicas count.
         for clone_replica in clone_replicas {
             match OperationGuardArc::<ReplicaSpec>::create_ext(context.registry, &clone_replica)
                 .await
@@ -165,8 +207,9 @@ impl CreateVolumeExe for SnapshotCloneOp<'_> {
     }
 
     async fn undo<'a>(&'a self, _context: &mut Context<'a>, _replicas: Vec<Replica>) {
-        // nothing to undo since we only support 1-replica snapshot
-        // todo: we do support multi-replica snapshots, this should have been tweaked :(
+        // nothing to undo: replicas created so far are owned by the volume
+        // spec and will be cleaned up via the standard destroy path if the
+        // overall create fails.
     }
 }
 
@@ -190,7 +233,12 @@ impl SnapshotCloneOp<'_> {
         let pools = CloneVolumeSnapshot::builder_with_defaults(registry, new_volume, snapshots)
             .await
             .collect();
-        if pools.len() < new_volume.num_replicas as usize || pools.is_empty() {
+        let policy = self.0.params().snapshot_restore_policy;
+        let required_pools = match policy {
+            SnapshotRestorePolicy::Strict => new_volume.num_replicas as usize,
+            SnapshotRestorePolicy::BestEffort => 1,
+        };
+        if pools.is_empty() || pools.len() < required_pools {
             return Err(SvcError::NoSnapshotPools {
                 id: snapshot.spec().uuid().to_string(),
             });

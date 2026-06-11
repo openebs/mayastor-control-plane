@@ -302,6 +302,21 @@ message CreateVolumeRequest {
   optional bool encrypted = 12;
   // Blobstore cluster size required for pools hosting this volume's replicas.
   optional uint32 cluster_size = 13;
+  // Policy controlling how a snapshot restore behaves when not every replica
+  // pool can host a clone of the source snapshot. Only meaningful for snapshot
+  // restore requests.
+  optional SnapshotRestorePolicy snapshot_restore_policy = 14;
+}
+
+// Policy controlling how a snapshot restore behaves when not every replica
+// pool can accept a clone of the source snapshot.
+enum SnapshotRestorePolicy {
+  // Require every requested replica to be cloned from the source snapshot.
+  STRICT = 0;
+  // Allow the restore to proceed with fewer clones than the requested replica
+  // count, as long as at least one clone succeeds. Missing replicas are filled
+  // in later by the regular replica reconciler.
+  BEST_EFFORT = 1;
 }
 
 enum AccessMode {

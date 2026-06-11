@@ -6,8 +6,8 @@ use stor_port::types::v0::openapi::{
     models,
     models::{
         rest_json_error::Kind, AffinityGroup, AppNode, CreateVolumeBody, Node, NodeTopology, Pool,
-        PoolTopology, PublishVolumeBody, ResizeVolumeBody, RestJsonError, Topology, Volume,
-        VolumeAccessMode, VolumePolicy, VolumeShareProtocol, Volumes,
+        PoolTopology, PublishVolumeBody, ResizeVolumeBody, RestJsonError, SnapshotRestorePolicy,
+        Topology, Volume, VolumeAccessMode, VolumePolicy, VolumeShareProtocol, Volumes,
     },
 };
 
@@ -281,6 +281,7 @@ impl RestApiClient {
             max_snapshots,
             encrypted,
             cluster_size,
+            snapshot_restore_policy: None,
         };
 
         let result = self
@@ -307,6 +308,7 @@ impl RestApiClient {
         affinity_group: Option<AffinityGroup>,
         max_snapshots: Option<u32>,
         encrypted: bool,
+        snapshot_restore_policy: Option<SnapshotRestorePolicy>,
     ) -> Result<Volume, ApiClientError> {
         let topology =
             Topology::new_all(volume_topology.node_topology, volume_topology.pool_topology);
@@ -322,6 +324,7 @@ impl RestApiClient {
             max_snapshots,
             encrypted,
             cluster_size: None,
+            snapshot_restore_policy,
         };
         let result = self
             .rest_client

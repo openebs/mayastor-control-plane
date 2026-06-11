@@ -3088,12 +3088,32 @@ components:
           format: int64
           minimum: 4194304
           multipleOf: 4194304
+        snapshot_restore_policy:
+          description: |-
+            Policy controlling how a snapshot restore behaves when not every replica
+            pool can host a clone of the source snapshot. Only meaningful when the
+            create request is part of a snapshot restore.
+          allOf:
+            - $ref: '#/components/schemas/SnapshotRestorePolicy'
       required:
         - policy
         - replicas
         - size
         - thin
         - encrypted
+    SnapshotRestorePolicy:
+      description: |-
+        Policy controlling how a snapshot restore behaves when not every replica
+        pool can accept a clone of the source snapshot.
+        - `strict`: every requested replica must be cloned from the source snapshot.
+        - `bestEffort`: allow the restore to proceed with fewer clones than the
+          requested replica count, as long as at least one clone succeeds. The
+          missing replicas are filled in later by the regular replica reconciler.
+      type: string
+      enum:
+        - strict
+        - bestEffort
+      default: strict
     SetVolumePropertyBody:
       example:
         max_snapshots: 10

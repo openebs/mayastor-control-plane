@@ -44,6 +44,7 @@ async fn setup() {
                 max_snapshots: None,
                 encrypted: false,
                 cluster_size: None,
+                snapshot_restore_policy: None,
             },
         )
         .await
@@ -126,6 +127,7 @@ async fn get_volumes_paginated() {
                     max_snapshots: None,
                     encrypted: false,
                     cluster_size: None,
+                    snapshot_restore_policy: None,
                 },
             )
             .await
