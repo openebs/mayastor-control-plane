@@ -343,6 +343,8 @@ impl ResourceLifecycleExt<SnapshotCloneSpecParams> for OperationGuardArc<Replica
         let result = node.create_snapshot_clone(request.params()).await;
         let on_fail = OnCreateFail::eeinval_delete(&result);
 
-        replica.complete_create(result, registry, on_fail).await
+        let replica = replica.complete_create(result, registry, on_fail).await?;
+        specs.on_repl_create(&replica.pool_id);
+        Ok(replica)
     }
 }

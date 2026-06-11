@@ -325,8 +325,10 @@ impl Service {
     /// Deregister a node through the deregister information.
     #[tracing::instrument(level = "debug", skip(self), fields(node.id = %node.id))]
     pub(super) async fn deregister(&self, node: &Deregister) {
+        tracing::error!(node.id=%node.id, "Node is deregistering itself");
+
         if let Err(error) = self.specs().deregister_node(&self.registry, node).await {
-            tracing::error!(node=%node.id, %error, "Failed to deregister node with pstor");
+            tracing::error!(node.id=%node.id, %error, "Failed to deregister node with pstor");
         }
 
         let nodes = self.registry.nodes().read().await.get(&node.id).cloned();

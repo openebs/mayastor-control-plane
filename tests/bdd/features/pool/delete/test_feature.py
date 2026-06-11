@@ -146,7 +146,12 @@ VOLUME_SIZE = 10485761
 
 @pytest.fixture(scope="module")
 def background():
-    Deployer.start(2, node_deadline="250ms", io_engine_env="MAYASTOR_HB_INTERVAL_SEC=0")
+    Deployer.start(
+        2,
+        io_engine_coreisol=True,
+        node_deadline="250ms",
+        io_engine_env="MAYASTOR_HB_INTERVAL_SEC=1",
+    )
     yield
     Deployer.stop()
 
@@ -221,10 +226,7 @@ def a_pool_on_an_unreachable_online_node(pool):
     wait_node_offline(pool.spec.node)
     Docker.restart_container(pool.spec.node)
     wait_node_online(pool.spec.node)
-    try:
-        ApiClient.pools_api().del_pool(pool.id)
-    except NotFoundException:
-        pass
+    wait_pool_deleted(pool.id)
 
 
 @pytest.fixture
@@ -234,10 +236,7 @@ def a_pool_on_an_unreachable_offline_node(pool):
     yield pool
     Docker.restart_container(pool.spec.node)
     wait_node_online(pool.spec.node)
-    try:
-        ApiClient.pools_api().del_pool(pool.id)
-    except NotFoundException:
-        pass
+    wait_pool_deleted(pool.id)
 
 
 @retry(wait_fixed=200, stop_max_attempt_number=30)
@@ -249,3 +248,11 @@ def wait_node_online(node_id):
 def wait_node_offline(node_id):
     node_status = ApiClient.nodes_api().get_node(node_id).state.status
     assert node_status == NodeStatus("Offline") or node_status == NodeStatus("Unknown")
+
+
+@retry(wait_fixed=50, stop_max_attempt_number=30)
+def wait_pool_deleted(pool_id):
+    try:
+        ApiClient.pools_api().del_pool(pool_id)
+    except NotFoundException:
+        pass
