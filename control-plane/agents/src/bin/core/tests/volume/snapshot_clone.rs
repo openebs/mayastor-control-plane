@@ -29,6 +29,7 @@ async fn snapshot_clone() {
         .unwrap();
 
     let vol_cli = cluster.grpc_client().volume();
+    let pool_cli = cluster.grpc_client().pool();
 
     let volume = vol_cli
         .create(
@@ -56,6 +57,23 @@ async fn snapshot_clone() {
         .unwrap();
 
     tracing::info!("Replica Snapshot: {replica_snapshot:?}");
+
+    let pools = pool_cli
+        .get(Filter::Pool(cluster.pool(0, 0)), None)
+        .await
+        .unwrap()
+        .into_inner();
+    let pool = pools.first().unwrap();
+    assert_eq!(pool.state.as_ref().unwrap().repl_count, Some(1));
+    assert_eq!(pool.state.as_ref().unwrap().snap_count, Some(1));
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.replica_count,
+        Some(1)
+    );
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.snapshot_count,
+        Some(1)
+    );
 
     let error = vol_cli
         .create_snapshot_volume(
@@ -91,6 +109,22 @@ async fn snapshot_clone() {
         )
         .await
         .unwrap();
+    let pools = pool_cli
+        .get(Filter::Pool(cluster.pool(0, 0)), None)
+        .await
+        .unwrap()
+        .into_inner();
+    let pool = pools.first().unwrap();
+    assert_eq!(pool.state.as_ref().unwrap().repl_count, Some(2));
+    assert_eq!(pool.state.as_ref().unwrap().snap_count, Some(1));
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.replica_count,
+        Some(2)
+    );
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.snapshot_count,
+        Some(1)
+    );
     let clone_2 = vol_cli
         .create_snapshot_volume(
             &CreateSnapshotVolume::new(
@@ -107,9 +141,58 @@ async fn snapshot_clone() {
         )
         .await
         .unwrap();
+    let pools = pool_cli
+        .get(Filter::Pool(cluster.pool(0, 0)), None)
+        .await
+        .unwrap()
+        .into_inner();
+    let pool = pools.first().unwrap();
+    assert_eq!(pool.state.as_ref().unwrap().repl_count, Some(3));
+    assert_eq!(pool.state.as_ref().unwrap().snap_count, Some(1));
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.replica_count,
+        Some(3)
+    );
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.snapshot_count,
+        Some(1)
+    );
 
     vol_cli.destroy(&clone_1, None).await.unwrap();
+    let pools = pool_cli
+        .get(Filter::Pool(cluster.pool(0, 0)), None)
+        .await
+        .unwrap()
+        .into_inner();
+    let pool = pools.first().unwrap();
+    assert_eq!(pool.state.as_ref().unwrap().repl_count, Some(2));
+    assert_eq!(pool.state.as_ref().unwrap().snap_count, Some(1));
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.replica_count,
+        Some(2)
+    );
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.snapshot_count,
+        Some(1)
+    );
+
     vol_cli.destroy(&clone_2, None).await.unwrap();
+    let pools = pool_cli
+        .get(Filter::Pool(cluster.pool(0, 0)), None)
+        .await
+        .unwrap()
+        .into_inner();
+    let pool = pools.first().unwrap();
+    assert_eq!(pool.state.as_ref().unwrap().repl_count, Some(1));
+    assert_eq!(pool.state.as_ref().unwrap().snap_count, Some(1));
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.replica_count,
+        Some(1)
+    );
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.snapshot_count,
+        Some(1)
+    );
 
     let volumes = vol_cli.get(Filter::None, false, None, None).await.unwrap();
     assert_eq!(volumes.entries.len(), 1);
@@ -130,6 +213,22 @@ async fn snapshot_clone() {
         )
         .await
         .unwrap();
+    let pools = pool_cli
+        .get(Filter::Pool(cluster.pool(0, 0)), None)
+        .await
+        .unwrap()
+        .into_inner();
+    let pool = pools.first().unwrap();
+    assert_eq!(pool.state.as_ref().unwrap().repl_count, Some(2));
+    assert_eq!(pool.state.as_ref().unwrap().snap_count, Some(1));
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.replica_count,
+        Some(2)
+    );
+    assert_eq!(
+        pool.config.as_ref().unwrap().definition.snapshot_count,
+        Some(1)
+    );
 }
 
 #[tokio::test]
