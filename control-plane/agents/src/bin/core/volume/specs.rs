@@ -360,7 +360,18 @@ fn validate_publish(
         let target = target_cfg.target();
         let frontend = target_cfg.frontend();
 
-        if volume.publish_context.as_ref() != Some(args.publish_context()) {
+        // Promotion of an offline-rebuild target on an incoming publish: the existing
+        // `target_config` was set up by the reconciler with a default/empty publish_context and
+        // an empty frontend (the reconciler doesn't know anything about CSI publish_context or
+        // app-side frontend nodes), so the incoming publish is what should win for both. Skip
+        // the divergence and frontend-update checks in that case. The
+        // `is_offline_rebuild_target()` gate keeps a user-created unshared target out of this
+        // path.
+        let promoting_offline_rebuild = volume.is_offline_rebuild_target();
+
+        if !promoting_offline_rebuild
+            && volume.publish_context.as_ref() != Some(args.publish_context())
+        {
             return Err(SvcError::VolumePublishCtxDiffer {
                 vol_id: volume.uuid_str(),
                 current: volume.publish_context.clone().unwrap_or_default(),
@@ -374,7 +385,7 @@ fn validate_publish(
             });
         }
 
-        if !frontend.needs_update(args.new_frontend().nodes_info()) {
+        if !promoting_offline_rebuild && !frontend.needs_update(args.new_frontend().nodes_info()) {
             return Err(SvcError::VolumeAlreadyPublished {
                 vol_id: volume.uuid_str(),
                 node: target.node().to_string(),
@@ -383,8 +394,10 @@ fn validate_publish(
         }
 
         // Volume already published to different frontend node, and specified mode is SNW,
-        // then we must error out since this is not allowed
-        if args.access_mode() == VolumeAccessMode::SingleNodeWriter {
+        // then we must error out since this is not allowed.
+        // Exception: offline-rebuild target_cfg has an empty frontend by design, so the
+        // empty→single transition during promotion is legitimate.
+        if !promoting_offline_rebuild && args.access_mode() == VolumeAccessMode::SingleNodeWriter {
             return Err(SvcError::VolumePublishSingle {
                 vol_id: volume.uuid_str(),
                 nodes: target_cfg.frontend().node_names(),

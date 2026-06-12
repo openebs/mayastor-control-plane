@@ -9,7 +9,7 @@ use crate::controller::{
 
 use stor_port::types::v0::{
     store::volume::VolumeSpec,
-    transport::{PublishVolume, UnpublishVolume, VolumeState, VolumeStatus},
+    transport::{PublishVolume, UnpublishVolume, VolumeState, VolumeStatus, VolumeTargetMode},
 };
 
 /// Offline Volume Rebuild.
@@ -67,10 +67,12 @@ async fn offline_rebuild_reconcile(
     }
 
     // Early bails that don't need the volume state: a real (shared) publish is
-    // not our concern, and a never-published volume has no data to rebuild.
+    // not our concern, an unshared target we don't own is also not our concern
+    // (e.g. user produced one via direct REST publish), and a never-published
+    // volume has no data to rebuild.
     let has_offline_rebuild_target = match volume.as_ref().target() {
         Some(target) => {
-            if target.protocol().is_some() {
+            if target.protocol().is_some() || !volume.as_ref().is_offline_rebuild_target() {
                 return PollResult::Ok(PollerState::Idle);
             }
             true
@@ -148,7 +150,10 @@ async fn initiate_offline_rebuild(
         Default::default(),
     );
 
-    match volume.publish(registry, &request).await {
+    match volume
+        .publish_with_mode(registry, &request, VolumeTargetMode::OfflineRebuild)
+        .await
+    {
         Ok(_) => {
             tracing::info!(
                 volume.uuid = %volume.uuid(),

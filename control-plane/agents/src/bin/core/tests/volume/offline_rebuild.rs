@@ -1,11 +1,11 @@
 #![cfg(test)]
 
-use super::helpers::wait_till_volume_status;
+use super::helpers::{wait_node_online, wait_till_volume_status};
 use deployer_cluster::ClusterBuilder;
 use std::{collections::HashMap, time::Duration};
 use stor_port::types::v0::{
     openapi::models::{self, VolumePolicy, VolumeStatus},
-    transport::VolumeId,
+    transport::{NodeId, VolumeId},
 };
 use uuid::Uuid;
 
@@ -13,13 +13,25 @@ const RECONCILE_PERIOD_MS: u64 = 250;
 const GRACE_PERIOD_SECS: u64 = 2;
 const REBUILD_TIMEOUT_SECS: u64 = 30;
 
-/// Happy path: create a 2-replica volume, publish to establish health_info,
-/// unpublish, stop one io-engine node → volume becomes Degraded.
-/// With offline rebuild enabled, the reconciler creates a temp nexus,
-/// HotSpare rebuilds the replica, then the reconciler tears down the nexus.
-/// Final state: volume Online with no target (unpublished).
+/// End-to-end coverage for the offline-rebuild reconciler. Drives three
+/// scenarios sequentially on a single shared cluster (each scenario takes a
+/// node down and brings it back up before handing off), which avoids the
+/// per-test cluster spin-up cost while still exercising each path on a clean
+/// pool layout:
+///
+/// 1. **Happy path**: degraded unpublished volume gets a temp nexus, the
+///    rebuild runs, the temp nexus is torn down, the volume returns to
+///    Online with no target. A second volume that was never published must
+///    not be touched.
+/// 2. **Promote-on-publish**: while the temp nexus exists, a CSI publish
+///    promotes the existing unshared nexus instead of creating a new one.
+///    The rebuild keeps going on the now-shared nexus and the volume reaches
+///    Online still published.
+/// 3. **GC safety**: during an active offline rebuild, the GarbageCollector
+///    must not strip ownership from the surviving healthy replicas of the
+///    volume being rebuilt.
 #[tokio::test]
-async fn offline_rebuild_happy_path() {
+async fn offline_rebuild_e2e() {
     let reconcile = Duration::from_millis(RECONCILE_PERIOD_MS);
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
@@ -39,6 +51,13 @@ async fn offline_rebuild_happy_path() {
         .await
         .unwrap();
 
+    happy_path(&cluster).await;
+    promote_on_publish(&cluster).await;
+    gc_safety(&cluster).await;
+}
+
+/// Happy path scenario, see [`offline_rebuild_e2e`] doc.
+async fn happy_path(cluster: &deployer_cluster::Cluster) {
     let api_client = cluster.rest_v00();
     let volume_api = api_client.volumes_api();
 
@@ -78,7 +97,6 @@ async fn offline_rebuild_happy_path() {
 
     assert_eq!(volume.state.status, VolumeStatus::Online);
 
-    // Unpublish — volume returns to no-target state.
     volume_api
         .del_volume_target(&uid, None, None)
         .await
@@ -90,23 +108,16 @@ async fn offline_rebuild_happy_path() {
         "Volume should have no target after unpublish"
     );
 
-    // Stop a node hosting a replica — makes volume Degraded.
-    let replicas = api_client.replicas_api().get_replicas().await.unwrap();
-    let victim_replica = replicas
-        .iter()
-        .find(|r| r.node != cluster.node(0).to_string())
-        .expect("Should have a replica on a non-target node");
-    let victim_node = victim_replica.node.clone();
-
+    // Stop a node hosting a replica, this makes the volume Degraded.
+    let victim_node = pick_victim_node(&api_client, &cluster.node(0).to_string(), uid).await;
     cluster
         .composer()
         .stop(&victim_node)
         .await
         .expect("Should stop io-engine node");
 
-    // Wait for Degraded status.
     wait_till_volume_status(
-        &cluster,
+        cluster,
         &uid,
         VolumeStatus::Degraded,
         Duration::from_secs(10),
@@ -114,27 +125,293 @@ async fn offline_rebuild_happy_path() {
     .await
     .expect("Volume should become Degraded");
 
-    // Now wait for grace period + rebuild time. The reconciler should:
-    // 1. Wait for grace period (GRACE_PERIOD_SECS)
-    // 2. Create temporary unshared nexus
-    // 3. HotSpare rebuilds replica onto remaining healthy node's pool
-    // 4. Volume goes Online
-    // 5. Reconciler tears down temporary nexus
-    //
-    // We wait for the volume to return to Online with no target.
+    // Wait for grace period + rebuild. Final state: Online, no target.
     let timeout = Duration::from_secs(GRACE_PERIOD_SECS + REBUILD_TIMEOUT_SECS);
-    wait_till_volume_online_no_target(&cluster, &uid, timeout)
+    wait_till_volume_online_no_target(cluster, &uid, timeout)
         .await
         .expect("Volume should be Online with no target after offline rebuild");
 
-    // The never-published volume must still have no target — the reconciler
-    // skips it for lack of health_info_id.
+    // The never-published volume must still have no target.
     let never_pub = volume_api.get_volume(&never_pub_uid).await.unwrap();
     assert!(
         never_pub.state.target.is_none(),
         "Never-published volume must not be touched by the offline rebuild reconciler; got {:?}",
         never_pub.state.target
     );
+
+    // Cleanup so later scenarios start from a known volume set, and bring the
+    // stopped node back so subsequent scenarios have the full 3-node pool.
+    volume_api.del_volume(&uid).await.unwrap();
+    volume_api.del_volume(&never_pub_uid).await.unwrap();
+    restart_node(cluster, &victim_node).await;
+}
+
+/// Promote-on-publish scenario, see [`offline_rebuild_e2e`] doc.
+async fn promote_on_publish(cluster: &deployer_cluster::Cluster) {
+    let api_client = cluster.rest_v00();
+    let volume_api = api_client.volumes_api();
+
+    let volid = VolumeId::new();
+    let body = models::CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false, false);
+    let volume = volume_api.put_volume(&volid, body).await.unwrap();
+    let uid = volume.spec.uuid;
+
+    // Publish + unpublish to establish health_info.
+    volume_api
+        .put_volume_target(
+            &uid,
+            models::PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                cluster.node(0).to_string(),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+                cluster.csi_node(0),
+                None,
+            ),
+        )
+        .await
+        .unwrap();
+    volume_api
+        .del_volume_target(&uid, None, None)
+        .await
+        .unwrap();
+
+    // Stop a replica node so the volume becomes Degraded.
+    let victim_node = pick_victim_node(&api_client, &cluster.node(0).to_string(), uid).await;
+    cluster.composer().stop(&victim_node).await.unwrap();
+
+    // Wait for the offline-rebuild reconciler to create the unshared nexus.
+    let unshared_target = wait_for_unshared_target(cluster, &uid, Duration::from_secs(15))
+        .await
+        .expect("Offline rebuild should create unshared target");
+    let rebuild_node = unshared_target.node.clone();
+
+    // CSI publish arrives mid-rebuild, should promote (share the existing nexus).
+    let volume = volume_api
+        .put_volume_target(
+            &uid,
+            models::PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                rebuild_node.clone(),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+                cluster.csi_node(0),
+                None,
+            ),
+        )
+        .await
+        .expect("Publish should promote the offline-rebuild nexus");
+
+    let target = volume.state.target.expect("target present after promote");
+    assert_eq!(
+        target.node, rebuild_node,
+        "Promoted nexus should stay on same node"
+    );
+    assert!(
+        !target.device_uri.is_empty(),
+        "Promoted nexus should be shared (device_uri set)"
+    );
+
+    // Rebuild continues on the promoted (now shared) nexus, volume eventually Online.
+    let volume = wait_for_volume_state(
+        cluster,
+        &uid,
+        VolumeStatus::Online,
+        Duration::from_secs(REBUILD_TIMEOUT_SECS),
+    )
+    .await
+    .expect("Volume should reach Online after promoted rebuild");
+
+    assert!(
+        volume.state.target.is_some(),
+        "Volume stays published after promotion"
+    );
+
+    volume_api
+        .del_volume_target(&uid, None, None)
+        .await
+        .unwrap();
+    volume_api.del_volume(&uid).await.unwrap();
+    restart_node(cluster, &victim_node).await;
+}
+
+/// GC safety scenario, see [`offline_rebuild_e2e`] doc.
+async fn gc_safety(cluster: &deployer_cluster::Cluster) {
+    let api_client = cluster.rest_v00();
+    let volume_api = api_client.volumes_api();
+
+    let volid = VolumeId::new();
+    let body = models::CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false, false);
+    let volume = volume_api.put_volume(&volid, body).await.unwrap();
+    let uid = volume.spec.uuid;
+
+    volume_api
+        .put_volume_target(
+            &uid,
+            models::PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                cluster.node(0).to_string(),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+                cluster.csi_node(0),
+                None,
+            ),
+        )
+        .await
+        .unwrap();
+    volume_api
+        .del_volume_target(&uid, None, None)
+        .await
+        .unwrap();
+
+    // Snapshot the surviving replicas before triggering rebuild. Ownership
+    // lives on the spec; runtime state has the node placement. We need both:
+    // state to find a victim node, spec to identify the volume's own replicas
+    // and verify ownership after the fact.
+    let pre_state = api_client.replicas_api().get_replicas().await.unwrap();
+    let pre_specs = api_client.specs_api().get_specs().await.unwrap();
+    let owned_replica_uuids: Vec<uuid::Uuid> = pre_specs
+        .replicas
+        .iter()
+        .filter(|r| r.owners.volume == Some(uid))
+        .map(|r| r.uuid)
+        .collect();
+    let victim_node = pre_state
+        .iter()
+        .find(|r| owned_replica_uuids.contains(&r.uuid) && r.node != cluster.node(0).to_string())
+        .expect("Should find a replica of the test volume on a non-target node")
+        .node
+        .clone();
+    let live_replica_uuids: Vec<_> = owned_replica_uuids
+        .iter()
+        .filter(|u| {
+            !pre_state
+                .iter()
+                .any(|r| r.uuid == **u && r.node == victim_node)
+        })
+        .copied()
+        .collect();
+    assert!(!live_replica_uuids.is_empty());
+
+    cluster.composer().stop(&victim_node).await.unwrap();
+
+    // Wait until offline rebuild creates the unshared nexus.
+    wait_for_unshared_target(cluster, &uid, Duration::from_secs(15))
+        .await
+        .expect("Offline rebuild should start");
+
+    // Sleep briefly to let GC poll at least once with the rebuild active.
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    // The surviving replicas should still exist *and* still be owned by the
+    // test volume. Without the ownership check, a disown-without-destroy would
+    // slip past.
+    let post_specs = api_client.specs_api().get_specs().await.unwrap();
+    for live_uuid in &live_replica_uuids {
+        let live = post_specs
+            .replicas
+            .iter()
+            .find(|r| r.uuid == *live_uuid)
+            .unwrap_or_else(|| {
+                panic!("Live replica {live_uuid} was destroyed during offline rebuild")
+            });
+        assert_eq!(
+            live.owners.volume,
+            Some(uid),
+            "Live replica {live_uuid} was disowned (owners.volume cleared) during offline rebuild"
+        );
+    }
+
+    volume_api.del_volume(&uid).await.unwrap();
+    restart_node(cluster, &victim_node).await;
+}
+
+/// Pick a node that hosts a replica of the given volume, excluding the publish
+/// target node. Filtering by the test volume's ownership matters because
+/// leftover replicas from a prior scenario can otherwise be picked, and
+/// stopping a node that doesn't host *this* volume's data leaves the volume
+/// Online, the reconciler never sees a degraded state, and the test stalls.
+async fn pick_victim_node(
+    api_client: &stor_port::types::v0::openapi::tower::client::direct::ApiClient,
+    target_node: &str,
+    volume_uid: uuid::Uuid,
+) -> String {
+    let specs = api_client.specs_api().get_specs().await.unwrap();
+    let owned_replica_uuids: Vec<uuid::Uuid> = specs
+        .replicas
+        .iter()
+        .filter(|r| r.owners.volume == Some(volume_uid))
+        .map(|r| r.uuid)
+        .collect();
+    let replicas = api_client.replicas_api().get_replicas().await.unwrap();
+    replicas
+        .iter()
+        .find(|r| owned_replica_uuids.contains(&r.uuid) && r.node != target_node)
+        .expect("Should have a replica of this volume on a non-target node")
+        .node
+        .clone()
+}
+
+/// Restart a node previously stopped by `composer().stop()` so the next
+/// scenario starts from a healthy 3-node cluster. Waits for the node to
+/// re-register as Online before returning, so the caller can assume a clean
+/// cluster state.
+async fn restart_node(cluster: &deployer_cluster::Cluster, node: &str) {
+    cluster
+        .composer()
+        .start(node)
+        .await
+        .expect("Should restart io-engine node");
+    let node_client = cluster.grpc_client().node();
+    wait_node_online(&node_client, NodeId::from(node))
+        .await
+        .expect("Restarted node should come back Online");
+}
+
+/// Wait for the volume to have a target with no share protocol (offline-rebuild marker).
+async fn wait_for_unshared_target(
+    cluster: &deployer_cluster::Cluster,
+    volume: &Uuid,
+    timeout: Duration,
+) -> Result<models::Nexus, String> {
+    let start = std::time::Instant::now();
+    loop {
+        if let Ok(vol) = cluster.rest_v00().volumes_api().get_volume(volume).await {
+            if let Some(target) = vol.state.target {
+                if target.protocol == models::Protocol::None {
+                    return Ok(target);
+                }
+            }
+        }
+        if std::time::Instant::now() > (start + timeout) {
+            return Err("Timeout waiting for unshared target".to_string());
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+}
+
+/// Wait for the volume to reach a specific status, returning the full Volume.
+async fn wait_for_volume_state(
+    cluster: &deployer_cluster::Cluster,
+    volume: &Uuid,
+    status: VolumeStatus,
+    timeout: Duration,
+) -> Result<models::Volume, String> {
+    let start = std::time::Instant::now();
+    loop {
+        if let Ok(vol) = cluster.rest_v00().volumes_api().get_volume(volume).await {
+            if vol.state.status == status {
+                return Ok(vol);
+            }
+        }
+        if std::time::Instant::now() > (start + timeout) {
+            return Err(format!("Timeout waiting for volume status {status:?}"));
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
 }
 
 /// Wait for volume to reach Online status with no target (nexus torn down).
