@@ -2,6 +2,9 @@
 
 set -xe
 
+SCRIPT_DIR="$(dirname "$0")"
+cd "$SCRIPT_DIR"
+
 rm -rf rsa/
 mkdir -p rsa/
 

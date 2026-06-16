@@ -1,4 +1,10 @@
-use openapi::tower::{client, client::Url};
+use openapi::tower::{
+    client,
+    client::{
+        configuration::{ClientSecurity, TlsMode},
+        Url,
+    },
+};
 
 /// Tower Rest Client
 #[derive(Clone)]
@@ -43,11 +49,16 @@ impl RestClient {
         trace: bool,
     ) -> anyhow::Result<Self> {
         let cert_file = &std::include_bytes!("../../../control-plane/rest/certs/rsa/ca.cert")[..];
+        let client_security = ClientSecurity::new(
+            bearer_token,
+            TlsMode::ServerVerify {
+                ca_certificate: cert_file.to_vec(),
+            },
+        );
 
         let openapi_client_config = client::Configuration::builder()
             .with_timeout(timeout)
-            .with_bearer_token(bearer_token)
-            .with_certificate(cert_file)
+            .with_client_security(Some(client_security))
             .with_tracing(trace)
             .build_url(url.clone())
             .map_err(|e| anyhow::anyhow!("Failed to create rest client config: '{:?}'", e))?;
@@ -65,9 +76,10 @@ impl RestClient {
         bearer_token: Option<String>,
         trace: bool,
     ) -> anyhow::Result<Self> {
+        let client_security = bearer_token.map(|jwt| ClientSecurity::new(Some(jwt), TlsMode::Auto));
         let openapi_client_config = client::Configuration::builder()
             .with_timeout(timeout)
-            .with_bearer_token(bearer_token)
+            .with_client_security(client_security)
             .with_tracing(trace)
             .build_url(url.clone())
             .map_err(|e| anyhow::anyhow!("Failed to create rest client config: '{:?}'", e))?;

@@ -65,6 +65,8 @@ pub const DSP_OPERATOR: &str = "operator-diskpool";
 pub const API_REST_LABEL: &str = "app=api-rest";
 /// The service port for the api-rest label for the etcd pods.
 pub const API_REST_HTTP_PORT: &str = "http";
+/// The service port for the api-rest label for the etcd pods.
+pub const API_REST_HTTPS_PORT: &str = "https";
 
 /// The service label for the upgrade operator service.
 pub const UPGRADE_OPERATOR_LABEL: &str = "app=operator-upgrade";

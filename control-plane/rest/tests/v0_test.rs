@@ -64,8 +64,10 @@ fn bearer_token() -> String {
 async fn client() {
     // Run the client test both with and without authentication.
     for auth in &[false, true] {
-        let cluster = test_setup(auth).await;
-        client_test(&cluster, auth).await;
+        {
+            let cluster = test_setup(auth).await;
+            client_test(&cluster, auth).await;
+        }
         // Seems that with otlp we can't simply reinstall a new tracer if running on the same
         // thread. todo: handle this within Cluster build.
         // https://github.com/open-telemetry/opentelemetry-rust/issues/868

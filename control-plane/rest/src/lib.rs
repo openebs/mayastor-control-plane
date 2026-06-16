@@ -15,7 +15,10 @@
 /// expose different versions of the client
 pub mod versions;
 
-use stor_port::types::v0::openapi::client;
+use stor_port::types::v0::openapi::{
+    client,
+    client::configuration::{ClientSecurity, TlsMode},
+};
 
 /// Tower Rest Client
 #[derive(Clone)]
@@ -55,16 +58,14 @@ impl RestClient {
         bearer_token: Option<String>,
         trace: bool,
     ) -> anyhow::Result<Self> {
-        let cert_file = &std::include_bytes!("../certs/rsa/ca.cert")[..];
+        let client_security = ClientSecurity::new(bearer_token, TlsMode::Auto);
 
         let openapi_client_config =
-            client::Configuration::new(url, timeout, bearer_token, Some(cert_file), trace, None)
-                .map_err(|e| anyhow::anyhow!("Failed to create rest client config: '{:?}'", e))?;
-        let openapi_client = client::direct::ApiClient::new(openapi_client_config);
+            client::Configuration::new(url, timeout, Some(client_security), trace, None)
+                .map_err(|e| anyhow::anyhow!("Failed to create rest client config: '{e:?}'"))?;
+        let openapi_client_v0 = client::direct::ApiClient::new(openapi_client_config);
 
-        Ok(Self {
-            openapi_client_v0: openapi_client,
-        })
+        Ok(Self { openapi_client_v0 })
     }
     /// creates a new client
     fn new_http(
@@ -73,12 +74,11 @@ impl RestClient {
         bearer_token: Option<String>,
         trace: bool,
     ) -> anyhow::Result<Self> {
+        let client_security = bearer_token.map(|jwt| ClientSecurity::new(Some(jwt), TlsMode::Auto));
         let openapi_client_config =
-            client::Configuration::new(url, timeout, bearer_token, None, trace, None)
-                .map_err(|e| anyhow::anyhow!("Failed to create rest client config: '{:?}'", e))?;
-        let openapi_client = client::direct::ApiClient::new(openapi_client_config);
-        Ok(Self {
-            openapi_client_v0: openapi_client,
-        })
+            client::Configuration::new(url, timeout, client_security, trace, None)
+                .map_err(|e| anyhow::anyhow!("Failed to create rest client config: '{e:?}'"))?;
+        let openapi_client_v0 = client::direct::ApiClient::new(openapi_client_config);
+        Ok(Self { openapi_client_v0 })
     }
 }

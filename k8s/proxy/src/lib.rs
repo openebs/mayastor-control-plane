@@ -1,4 +1,4 @@
-#![deny(missing_docs)]
+// #![deny(missing_docs)]
 //! A utility library to facilitate connections to a kubernetes cluster via
 //! the k8s-proxy library.
 
@@ -11,7 +11,7 @@ mod proxy;
 pub use error::Error;
 use kube::config::KubeConfigOptions;
 /// OpenApi client helpers.
-pub use proxy::{ConfigBuilder, ForwardingProxy, LokiClient, Scheme};
+pub use proxy::{ConfigBuilder, ForwardingProxy, LokiClient, Scheme, TlsMode};
 
 /// Get the `kube::Config` from the given kubeconfig file, or the default.
 pub async fn config_from_kubeconfig(

@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 kube = { workspace = true, features = ["ws"] }
 k8s-openapi = { workspace = true }
+openapi = { workspace = true, default-features = false, features = ["tower-trace"] }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = { workspace = true, features = ["net"] }
 futures = { workspace = true }

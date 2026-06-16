@@ -200,11 +200,34 @@ pub(super) async fn main() -> anyhow::Result<()> {
                 .help("Kubelet path on the host system")
         )
         .arg(
-            Arg::new("tls-client-ca-path")
-                .long("tls-client-ca-path")
+            Arg::new("tls-ca-file")
+                .long("tls-ca-file")
                 .value_parser(clap::value_parser!(PathBuf))
                 .requires("enable-rest")
                 .help("path to the CA certificate file")
+        )
+        .arg(
+            Arg::new("tls-cert-file")
+                .long("tls-cert-file")
+                .value_parser(clap::value_parser!(PathBuf))
+                .requires("enable-rest")
+                .requires("tls-key-file")
+                .help("path to the TLS client certificate file")
+        )
+        .arg(
+            Arg::new("tls-key-file")
+                .long("tls-key-file")
+                .value_parser(clap::value_parser!(PathBuf))
+                .requires("enable-rest")
+                .requires("tls-cert-file")
+                .help("path to the TLS client private key file")
+        )
+        .arg(
+            Arg::new("jwt")
+                .long("jwt")
+                .requires("enable-rest")
+                .value_parser(clap::value_parser!(PathBuf))
+                .help("path to a file containing the JWT bearer token for REST authentication")
         )
         .subcommand(
             clap::Command::new("fs-freeze")
@@ -359,11 +382,43 @@ pub(super) async fn main() -> anyhow::Result<()> {
         }
     }
 
+    // Build REST API configuration once, shared by all clients.
+    let rest_config = match matches.get_one::<String>("rest-endpoint") {
+        Some(endpoint) => {
+            use stor_port::types::v0::openapi::clients::tower::{
+                configuration::{ClientSecurity, TlsMode},
+                Url,
+            };
+
+            let url = Url::parse(endpoint)
+                .map_err(|e| anyhow::anyhow!("Invalid REST endpoint URL {endpoint}: {e}"))?;
+            let tls = TlsMode::new(
+                matches.get_one::<PathBuf>("tls-ca-file"),
+                matches.get_one::<PathBuf>("tls-cert-file"),
+                matches.get_one::<PathBuf>("tls-key-file"),
+            )
+            .map_err(|e| anyhow::anyhow!("Failed to create TLS configuration: {e}"))?;
+            let security =
+                ClientSecurity::try_new(&matches.get_one::<PathBuf>("jwt").cloned(), tls)
+                    .map_err(|e| anyhow::anyhow!("Failed to read JWT file: {e}"))?;
+
+            let config = stor_port::types::v0::openapi::clients::tower::Configuration::builder()
+                .with_timeout(std::time::Duration::from_secs(10))
+                .with_concurrency_limit(Some(10))
+                .with_client_security(Some(security))
+                .build_url(url)
+                .map_err(|e| anyhow::anyhow!("Failed to create openapi configuration: {e:?}"))?;
+
+            info!("REST API client configured for endpoint {endpoint}");
+            Some(config)
+        }
+        None => None,
+    };
+
     // Initialize the rest api client.
-    let client = AppNodesClientWrapper::initialize(
-        matches.get_one::<String>("rest-endpoint"),
-        matches.get_one::<PathBuf>("tls-client-ca-path"),
-    )?;
+    let client = rest_config
+        .as_ref()
+        .map(|cfg| AppNodesClientWrapper::new(cfg.clone()));
 
     let registration_enabled = matches.get_flag("enable-registration");
 
@@ -376,7 +431,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
     // enabled.
     *crate::config::config().nvme_as_mut() = TryFrom::try_from(&matches)?;
     let (csi, grpc, registration) = tokio::join!(
-        CsiServer::run(csi_socket, &matches)?,
+        CsiServer::run(csi_socket, &matches, &rest_config)?,
         NodePluginGrpcServer::run(grpc_sock_addr, kubelet_path.to_owned()),
         run_registration_loop(
             node_name.clone(),
@@ -395,6 +450,7 @@ impl CsiServer {
     fn run(
         csi_socket: &str,
         cli_args: &clap::ArgMatches,
+        rest_config: &Option<stor_port::types::v0::openapi::clients::tower::Configuration>,
     ) -> anyhow::Result<impl Future<Output = anyhow::Result<()>>> {
         let node_name = cli_args.get_one::<String>("node-name").expect("required");
         let node_selector = csi_driver::csi_node_selector_parse(
@@ -420,10 +476,9 @@ impl CsiServer {
             UnixListenerStream::new(uds)
         };
 
-        let vol_client = match cli_args.get_one::<String>("rest-endpoint") {
-            Some(ep) if cli_args.get_flag("enable-rest") => {
-                let cert = cli_args.get_one::<PathBuf>("tls-client-ca-path");
-                Some(VolumesClientWrapper::new(ep, cert.cloned())?)
+        let vol_client = match rest_config {
+            Some(cfg) if cli_args.get_flag("enable-rest") => {
+                Some(VolumesClientWrapper::new(cfg.clone()))
             }
             _ => {
                 tracing::warn!("The rest client is not enabled - functionality may be limited");

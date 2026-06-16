@@ -61,7 +61,7 @@ impl rpc::csi::identity_server::Identity for CsiIdentitySvc {
         let ready = match RestApiClient::get_client().list_nodes().await {
             Ok(_) => true,
             Err(ApiClientError::ServerCommunication { .. }) => {
-                error!("Failed to access REST API gateway, CSI Controller plugin is not ready",);
+                error!("Failed to access REST API gateway, CSI Controller plugin is not ready");
                 false
             }
             Err(_) => true,

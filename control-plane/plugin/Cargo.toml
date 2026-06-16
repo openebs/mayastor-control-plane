@@ -39,6 +39,7 @@ chrono = { workspace = true }
 snafu = { workspace = true }
 inquire = { workspace = true, default-features = false, features = ["crossterm"] }
 itertools = { workspace = true }
+kube-proxy = { path = "../../k8s/proxy" }
 
 [dev-dependencies]
 shutdown_hooks = { workspace = true }

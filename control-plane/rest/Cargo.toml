@@ -41,6 +41,7 @@ utils = { path = "../../utils/utils-lib" }
 humantime = { workspace = true }
 grpc = { path = "../grpc" }
 num_cpus = { workspace = true }
+rcgen = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

@@ -782,7 +782,7 @@ impl ListOptions {
         }
         components.sort_by_key(|a| a.0.clone());
         for (name, ip, command) in components {
-            println!("[{name}] [{ip}] {command}",);
+            println!("[{name}] [{ip}] {command}");
         }
         Ok(())
     }

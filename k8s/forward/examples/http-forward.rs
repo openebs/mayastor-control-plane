@@ -10,7 +10,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let selector = kube_forward::TargetSelector::svc_label("app", "api-rest");
-    let target = kube_forward::Target::new(selector, "http", "mayastor");
+    let target = kube_forward::Target::new(selector, "https", "mayastor");
     let uri = kube_forward::HttpForward::new(target, None, kube::Client::try_default().await?)
         .uri()
         .await?;

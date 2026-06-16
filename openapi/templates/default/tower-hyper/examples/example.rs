@@ -38,7 +38,6 @@ async fn main() {
         "http://localhost:8081/".parse().unwrap(),
         Duration::from_secs(5),
         None,
-        None,
         true,
         Some(1),
     )

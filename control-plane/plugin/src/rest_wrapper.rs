@@ -1,6 +1,6 @@
 use anyhow::Result;
 use once_cell::sync::OnceCell;
-use openapi::tower::client::{ApiClient, Configuration, Uri, Url};
+use openapi::tower::client::{configuration::ClientSecurity, ApiClient, Configuration, Uri, Url};
 
 static REST_SERVER: OnceCell<RestClient> = OnceCell::new();
 
@@ -12,8 +12,13 @@ pub struct RestClient {
 
 impl RestClient {
     /// Initialize the URL of the REST server.
-    pub fn init(url: Url, tracing: bool, timeout: std::time::Duration) -> Result<()> {
-        REST_SERVER.get_or_try_init(|| Self::new(url, tracing, timeout))?;
+    pub fn init(
+        url: Url,
+        tracing: bool,
+        timeout: std::time::Duration,
+        tls: ClientSecurity,
+    ) -> Result<()> {
+        REST_SERVER.get_or_try_init(|| Self::new(url, tracing, timeout, tls))?;
         Ok(())
     }
 
@@ -24,19 +29,23 @@ impl RestClient {
     }
 
     /// Create new Rest Client.
-    pub fn new(url: Url, tracing: bool, timeout: std::time::Duration) -> Result<RestClient> {
-        // TODO: Support HTTPS Certificates
+    pub fn new(
+        url: Url,
+        tracing: bool,
+        timeout: std::time::Duration,
+        security: ClientSecurity,
+    ) -> Result<RestClient> {
         let uri = url.as_str().parse()?;
-        let cfg = Configuration::builder()
+
+        let builder = Configuration::builder()
             .with_timeout(timeout)
             .with_tracing(tracing)
-            .build_url(url)
-            .map_err(|error| {
-                anyhow::anyhow!(
-                    "Failed to create openapi configuration, Error: '{:?}'",
-                    error
-                )
-            })?;
+            .with_tls(security.tls)
+            .with_bearer_token(security.jwt);
+
+        let cfg = builder.build_url(url).map_err(|error| {
+            anyhow::anyhow!("Failed to create openapi configuration, Error: '{error:?}'")
+        })?;
         Ok(Self {
             uri,
             client: ApiClient::new(cfg),

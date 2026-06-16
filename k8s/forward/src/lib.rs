@@ -13,6 +13,7 @@ mod port_forward;
 
 /// Layer 7 proxies.
 pub use http_forward::{HttpForward, HttpProxy};
+use openapi::tower::client::configuration::TlsMode;
 /// Layer 4 proxies.
 pub use port_forward::PortForward;
 
@@ -23,6 +24,128 @@ use anyhow::Context;
 use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 use kube::ResourceExt;
 use vx::Pod;
+
+/// Default pod annotation prefix for TLS/JWT material.
+pub const DEFAULT_REST_TLS_PREFIX: &str = "openebs.io/rest";
+
+/// The purpose of a Kubernetes Secret, which determines the expected key names.
+#[derive(Debug, Clone)]
+pub(crate) enum SecretPurpose {
+    Tls(crate::TlsModeAnno),
+    Jwt(crate::AuthModeAnno),
+}
+
+/// TLS mode as specified by pod annotation.
+#[derive(Default, Clone, Copy, Debug)]
+pub(crate) enum TlsModeAnno {
+    #[default]
+    None,
+    Auto,
+    ClientVerify,
+    ServerVerify,
+    Mtls,
+}
+impl From<&str> for TlsModeAnno {
+    fn from(s: &str) -> Self {
+        match s {
+            "none" => Self::None,
+            "auto" => Self::Auto,
+            "client-verify" => Self::ClientVerify,
+            "server-verify" => Self::ServerVerify,
+            "mtls" => Self::Mtls,
+            _ => Self::None,
+        }
+    }
+}
+
+/// Authentication mode as specified by pod annotation.
+#[derive(Default, Clone, Copy, Debug)]
+pub(crate) enum AuthModeAnno {
+    #[default]
+    None,
+    Jwt,
+}
+impl From<&str> for AuthModeAnno {
+    fn from(s: &str) -> Self {
+        match s {
+            "none" => Self::None,
+            "jwt" => Self::Jwt,
+            _ => Self::None,
+        }
+    }
+}
+
+/// A reference to a Kubernetes Secret with fixed key names.
+#[derive(Clone, Debug)]
+pub(crate) struct SecretRef {
+    /// Name of the Kubernetes Secret.
+    pub(crate) name: String,
+    /// Purpose of the Kubernetes Secret (ie tls or auth).
+    pub(crate) kind: SecretPurpose,
+}
+impl SecretRef {
+    /// Create a new `SecretRef` with the given secret name.
+    pub(crate) fn new_tls(name: impl Into<String>, mode: crate::TlsModeAnno) -> Self {
+        Self {
+            name: name.into(),
+            kind: SecretPurpose::Tls(mode),
+        }
+    }
+    /// Create a new `SecretRef` with the given secret name.
+    pub(crate) fn new_jwt(name: impl Into<String>, mode: crate::AuthModeAnno) -> Self {
+        Self {
+            name: name.into(),
+            kind: SecretPurpose::Jwt(mode),
+        }
+    }
+    fn ca_key(&self) -> &str {
+        "ca.crt"
+    }
+    fn cert_key(&self) -> &str {
+        "tls.crt"
+    }
+    fn key_key(&self) -> &str {
+        "tls.key"
+    }
+    fn jwt_key(&self) -> &str {
+        "jwt"
+    }
+}
+
+/// Data fetched from a Kubernetes Secret.
+#[derive(Clone, Default, Debug)]
+pub(crate) struct SecretData {
+    /// CA certificate PEM bytes, if found.
+    pub(crate) ca_certificate: Option<Vec<u8>>,
+    /// Client certificate PEM bytes, if found.
+    pub(crate) client_certificate: Option<Vec<u8>>,
+    /// Client private key PEM bytes, if found.
+    pub(crate) client_key: Option<Vec<u8>>,
+    /// JWT bearer token string, if found.
+    pub(crate) jwt: Option<String>,
+}
+
+impl From<SecretData> for TlsMode {
+    fn from(data: SecretData) -> Self {
+        match (
+            data.ca_certificate,
+            data.client_certificate,
+            data.client_key,
+        ) {
+            (Some(ca_certificate), None, None) => TlsMode::ServerVerify { ca_certificate },
+            (None, Some(client_certificate), Some(client_key)) => TlsMode::ClientVerify {
+                client_certificate,
+                client_key,
+            },
+            (Some(ca_certificate), Some(client_certificate), Some(client_key)) => TlsMode::Mtls {
+                ca_certificate,
+                client_certificate,
+                client_key,
+            },
+            _ => TlsMode::Auto,
+        }
+    }
+}
 
 /// The error exposed.
 pub use crate::error::Error;

@@ -1,11 +1,7 @@
 use anyhow::Context;
 use clap::ArgMatches;
 use once_cell::sync::OnceCell;
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::{collections::HashMap, path::PathBuf, time::Duration};
 
 static CONFIG: OnceCell<CsiControllerConfig> = OnceCell::new();
 
@@ -23,6 +19,12 @@ pub(crate) struct CsiControllerConfig {
     force_unstage_volume: bool,
     /// Path to the CA certificate file.
     ca_certificate_path: Option<PathBuf>,
+    /// Path to the TLS client certificate file.
+    client_certificate_path: Option<PathBuf>,
+    /// Path to the TLS client private key file.
+    client_key_path: Option<PathBuf>,
+    /// Path to a file containing the JWT bearer token for REST authentication.
+    jwt: Option<PathBuf>,
 }
 
 impl CsiControllerConfig {
@@ -58,7 +60,10 @@ impl CsiControllerConfig {
             );
         };
 
-        let ca_certificate_path: Option<&PathBuf> = args.get_one::<PathBuf>("tls-client-ca-path");
+        let ca_certificate_path: Option<&PathBuf> = args.get_one::<PathBuf>("tls-ca-file");
+        let client_certificate_path: Option<&PathBuf> = args.get_one::<PathBuf>("tls-cert-file");
+        let client_key_path: Option<&PathBuf> = args.get_one::<PathBuf>("tls-key-file");
+        let jwt = args.get_one::<PathBuf>("jwt").cloned();
 
         CONFIG.get_or_init(|| Self {
             rest_endpoint: rest_endpoint.into(),
@@ -67,6 +72,9 @@ impl CsiControllerConfig {
             create_volume_limit,
             force_unstage_volume,
             ca_certificate_path: ca_certificate_path.cloned(),
+            client_certificate_path: client_certificate_path.cloned(),
+            client_key_path: client_key_path.cloned(),
+            jwt,
         });
         Ok(())
     }
@@ -103,7 +111,22 @@ impl CsiControllerConfig {
     }
 
     /// Path to the CA certificate file.
-    pub(crate) fn ca_certificate_path(&self) -> Option<&Path> {
-        self.ca_certificate_path.as_deref()
+    pub(crate) fn ca_certificate_path(&self) -> Option<&PathBuf> {
+        self.ca_certificate_path.as_ref()
+    }
+
+    /// Path to the TLS client certificate file.
+    pub(crate) fn client_certificate_path(&self) -> Option<&PathBuf> {
+        self.client_certificate_path.as_ref()
+    }
+
+    /// Path to the TLS client private key file.
+    pub(crate) fn client_key_path(&self) -> Option<&PathBuf> {
+        self.client_key_path.as_ref()
+    }
+
+    /// Path to the file containing the JWT bearer token for REST authentication.
+    pub(crate) fn jwt(&self) -> &Option<PathBuf> {
+        &self.jwt
     }
 }

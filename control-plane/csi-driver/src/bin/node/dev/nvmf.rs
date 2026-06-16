@@ -262,7 +262,7 @@ impl Attach for NvmfAttach {
                         // If the timeout was higher than nexus's timeout then IOs could
                         // error out earlier than they should. Therefore we should make sure
                         // that timeouts in the nexus are set to a very high value.
-                        tracing::debug!("Setting IO timeout on \"{path_str}\" to {io_timeout}s",);
+                        tracing::debug!("Setting IO timeout on \"{path_str}\" to {io_timeout}s");
                         sysfs::write_value(&path, "io_timeout", 1000 * io_timeout).map_err(
                             |error| {
                                 tracing::error!(%error, path=%path_str, "Failed to set io_timeout to {io_timeout}s");
