@@ -91,7 +91,7 @@ impl TlsMode {
 }
 
 /// Authentication and TLS settings for OpenAPI client connections.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ClientSecurity {
     /// Optional JWT bearer token for HTTP Authorization.
     pub jwt: Option<String>,
@@ -100,6 +100,15 @@ pub struct ClientSecurity {
     /// Discovery of properties. 
     /// If true, the client will attempt to discover the required TLS and Auth configuration
     pub discover: bool,
+}
+impl Default for ClientSecurity {
+    fn default() -> Self {
+        Self {
+            jwt: None,
+            tls: TlsMode::default(),
+            discover: true,
+        }
+    }
 }
 impl ClientSecurity {
     /// Creates a new client security configuration.
@@ -118,6 +127,10 @@ impl ClientSecurity {
             jwt,
             tls,
         }
+    }
+    /// Update self with the discover field.
+    pub fn with_discover(self, discover: bool) -> Self {
+        Self { discover, ..self }
     }
     /// Check if the client security configuration requires discovery 
     /// (i.e. if TLS is auto or JWT is not provided).
