@@ -297,9 +297,7 @@ impl<'a> TargetPodFinder<'a> {
                 }
             }
         }
-        security.discover = false;
-
-        Ok(security)
+        Ok(security.with_discover(true))
     }
 
     fn tls_key(&self) -> String {
