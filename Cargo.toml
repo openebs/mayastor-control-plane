@@ -33,6 +33,7 @@ members = [
     "utils/hyper-body",
     "tests/io-engine",
     "utils/bundle-sim",
+    "utils/event-consumer",
 ]
 exclude = [
     "utils/dependencies/*",
@@ -52,6 +53,7 @@ weighted-scoring = { path = "./utils/weighted-scoring" }
 deployer-cluster = { path = "./utils/deployer-cluster" }
 platform = { path = "./utils/dependencies/platform" }
 events-api = { path = "./utils/dependencies/apis/events" }
+event-consumer = { path = "./utils/event-consumer" }
 devinfo = { path = "./utils/dependencies/devinfo" }
 nvmeadm = { path = "./utils/dependencies/nvmeadm" }
 sysfs = { path = "./utils/dependencies/sysfs" }
