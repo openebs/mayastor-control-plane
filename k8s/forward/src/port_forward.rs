@@ -203,7 +203,7 @@ impl<'a> TargetPodFinder<'a> {
         let svc_api = self.svc_api;
         let ready_pod = AnyReady {};
 
-        let security = ClientSecurity::default();
+        let security = ClientSecurity::default().with_discover(false);
         let security = client_security.unwrap_or(&security);
         let fetch_sec = async |pod: &Pod| -> Result<ClientSecurity, Error> {
             if client_security.is_none() || !security.discover() {
@@ -297,7 +297,7 @@ impl<'a> TargetPodFinder<'a> {
                 }
             }
         }
-        Ok(security.with_discover(true))
+        Ok(security.with_discover(false))
     }
 
     fn tls_key(&self) -> String {
