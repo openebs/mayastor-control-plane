@@ -203,7 +203,7 @@ impl<'a> TargetPodFinder<'a> {
         let svc_api = self.svc_api;
         let ready_pod = AnyReady {};
 
-        let security = ClientSecurity::default();
+        let security = ClientSecurity::default().with_discover(false);
         let security = client_security.unwrap_or(&security);
         let fetch_sec = async |pod: &Pod| -> Result<ClientSecurity, Error> {
             if client_security.is_none() || !security.discover() {
@@ -297,7 +297,7 @@ impl<'a> TargetPodFinder<'a> {
                 }
             }
         }
-        Ok(security.with_discover(true))
+        Ok(security.with_discover(false))
     }
 
     fn tls_key(&self) -> String {
@@ -313,13 +313,6 @@ impl<'a> TargetPodFinder<'a> {
         pod: &Pod,
         security: &mut ClientSecurity,
     ) -> Vec<crate::SecretRef> {
-        let Some(spec) = pod.spec.as_ref() else {
-            return vec![];
-        };
-        let Some(volumes) = spec.volumes.as_ref() else {
-            return vec![];
-        };
-
         let pod_anno = pod.annotations();
         let binding = String::new();
 
@@ -339,22 +332,12 @@ impl<'a> TargetPodFinder<'a> {
         }
 
         let mut secret_refs = Vec::new();
-        for volume in volumes {
-            let Some(secret) = volume.secret.as_ref() else {
-                continue;
-            };
-            let Some(secret_name) = secret.secret_name.as_ref() else {
-                continue;
-            };
-
-            if !matches!(tls_mode, crate::TlsModeAnno::None) && volume.name == tls_name {
-                secret_refs.push(crate::SecretRef::new_tls(secret_name.clone(), tls_mode));
-            }
-            if !matches!(jwt_mode, crate::AuthModeAnno::None) && volume.name == jwt_name {
-                secret_refs.push(crate::SecretRef::new_jwt(secret_name.clone(), jwt_mode));
-            }
+        if !matches!(tls_mode, crate::TlsModeAnno::None) && !tls_name.is_empty() {
+            secret_refs.push(crate::SecretRef::new_tls(tls_name, tls_mode));
         }
-
+        if !matches!(jwt_mode, crate::AuthModeAnno::None) && !jwt_name.is_empty() {
+            secret_refs.push(crate::SecretRef::new_jwt(jwt_name, jwt_mode));
+        }
         secret_refs
     }
 
