@@ -20,14 +20,14 @@ pub(crate) mod watch;
 use clap::Parser;
 use controller::registry::NumRebuilds;
 use std::{net::SocketAddr, num::ParseIntError};
-use utils::{version_info_str, DEFAULT_GRPC_SERVER_ADDR, ETCD_MAX_PAGE_LIMIT};
+use utils::{version_info_string, DEFAULT_GRPC_SERVER_ADDR, ETCD_MAX_PAGE_LIMIT};
 
 use stor_port::HostAccessControl;
 use utils::tracing_telemetry::{trace::TracerProvider, FmtLayer, FmtStyle, KeyValue};
 
 /// The Cli arguments for this binary.
 #[derive(Debug, Parser)]
-#[structopt(name = utils::package_description!(), version = version_info_str!())]
+#[structopt(name = utils::package_description!(), version = version_info_string!())]
 pub(crate) struct CliArgs {
     /// The period at which the registry updates its cache of all
     /// resources from all nodes.

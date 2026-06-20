@@ -35,7 +35,7 @@ use utils::{
 };
 
 #[derive(Debug, Parser)]
-#[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
+#[structopt(name = utils::package_description!(), version = utils::version_info_string!())]
 pub(crate) struct CliArgs {
     /// The bind address for the REST interface (with HTTPS).
     #[clap(long, default_value = "[::]:8080")]

@@ -17,7 +17,7 @@ use tokio::net::UnixStream;
 use tonic::transport::{Channel, Endpoint};
 use tower::service_fn;
 use utils::{
-    package_description, tracing_telemetry::KeyValue, version_info_str,
+    package_description, tracing_telemetry::KeyValue, version_info_string,
     DEFAULT_CLUSTER_AGENT_CLIENT_ADDR, DEFAULT_NODE_AGENT_SERVER_IP,
     DEFAULT_NODE_AGENT_SERVER_PORT, NVME_PATH_AGGREGATION_PERIOD, NVME_PATH_CHECK_PERIOD,
     NVME_PATH_CONNECTION_PERIOD, NVME_PATH_RETRANSMISSION_PERIOD, NVME_SUBSYS_REFRESH_PERIOD,
@@ -34,7 +34,7 @@ use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
 /// TODO
 #[derive(Debug, Parser)]
-#[structopt(name = package_description!(), version = version_info_str!())]
+#[structopt(name = package_description!(), version = version_info_string!())]
 struct Cli {
     /// HA Cluster Agent URL or address to connect to the services.
     #[clap(long, short, default_value = DEFAULT_CLUSTER_AGENT_CLIENT_ADDR)]

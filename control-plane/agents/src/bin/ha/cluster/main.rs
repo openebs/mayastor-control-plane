@@ -7,7 +7,7 @@ use tracing::info;
 use utils::{
     package_description,
     tracing_telemetry::{FmtLayer, FmtStyle, KeyValue},
-    version_info_str, DEFAULT_CLUSTER_AGENT_SERVER_ADDR, DEFAULT_GRPC_CLIENT_ADDR,
+    version_info_string, DEFAULT_CLUSTER_AGENT_SERVER_ADDR, DEFAULT_GRPC_CLIENT_ADDR,
 };
 
 mod etcd;
@@ -17,7 +17,7 @@ mod switchover;
 mod volume;
 
 #[derive(Debug, Parser)]
-#[structopt(name = package_description!(), version = version_info_str!())]
+#[structopt(name = package_description!(), version = version_info_string!())]
 struct Cli {
     /// IP address and port for the cluster-agent to listen on.
     #[clap(long, short, default_value = DEFAULT_CLUSTER_AGENT_SERVER_ADDR)]

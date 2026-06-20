@@ -281,7 +281,7 @@ fn write_diskpool_crd(output_dir: &str) -> anyhow::Result<()> {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let matches = clap::Command::new(utils::package_description!())
-        .version(utils::version_info_str!())
+        .version(utils::version_info_string!())
         .arg(
             Arg::new("generate-crd")
                 .long("generate-crd")
