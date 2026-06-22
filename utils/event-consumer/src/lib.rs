@@ -1,6 +1,6 @@
 mod consumer;
 
-pub use consumer::{NatsConsumer, UnifiedMessage};
+pub use consumer::{ConsumerError, NatsConsumer, UnifiedMessage};
 
 /// Configuration for the NATS event consumer.
 #[derive(Debug, Clone)]

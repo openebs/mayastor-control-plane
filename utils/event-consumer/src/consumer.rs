@@ -1,11 +1,27 @@
 use crate::ConsumerConfig;
-use anyhow::bail;
 use async_nats::jetstream::consumer::{pull, Consumer};
 use events_api::common::retry::{backoff_with_options, BackoffOptions};
 use futures::StreamExt;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::{error, info, warn};
+
+/// Errors returned by the NATS consumer.
+#[derive(Debug, thiserror::Error)]
+pub enum ConsumerError {
+    #[error("JetStream setup failed after {attempts} attempts: NATS client not connected")]
+    JetStreamClientDisconnected { attempts: u32 },
+    #[error("JetStream setup failed after {attempts} attempts")]
+    JetStreamSetupFailed { attempts: u32 },
+    #[error("JetStream consumer failed to bind after {attempts} attempts")]
+    JetStreamBindFailed { attempts: u32 },
+    #[error("JetStream stream failed after {attempts} recovery attempts")]
+    JetStreamStreamRecoveryExceeded { attempts: u32 },
+    #[error("Core NATS subscribe failed after {attempts} attempts")]
+    CoreNatsSubscribeFailed { attempts: u32 },
+    #[error("Core NATS subscription failed after {attempts} recovery attempts")]
+    CoreNatsSubscriptionRecoveryExceeded { attempts: u32 },
+}
 
 /// A message received from NATS, abstracting over JetStream and Core NATS delivery.
 pub enum UnifiedMessage {
@@ -59,27 +75,33 @@ impl NatsConsumer {
 
     /// Start consuming messages from NATS and forward them to `tx`.
     /// Dispatches to JetStream pull consumer or Core NATS depending on `config.jetstream_enabled`.
-    pub async fn subscribe(self, tx: mpsc::Sender<UnifiedMessage>) -> anyhow::Result<()> {
+    /// Returns a `JoinHandle` for the background consumer task. The handle resolves with the fatal
+    /// error if the consumer gives up after max retries, or `Ok(())` on clean shutdown.
+    pub async fn subscribe(
+        self,
+        tx: mpsc::Sender<UnifiedMessage>,
+    ) -> Result<JoinHandle<Result<(), ConsumerError>>, ConsumerError> {
         if self.config.jetstream_enabled {
             info!("JetStream enabled — starting pull consumer");
             self.setup_jetstream(tx).await
         } else {
             info!("JetStream disabled — using Core NATS subscription");
-            self.setup_core_nats(tx);
-            Ok(())
+            Ok(self.setup_core_nats(tx))
         }
     }
 
     // Wires together consumer acquisition and the message pump.
-    async fn setup_jetstream(self, tx: mpsc::Sender<UnifiedMessage>) -> anyhow::Result<()> {
+    async fn setup_jetstream(
+        self,
+        tx: mpsc::Sender<UnifiedMessage>,
+    ) -> Result<JoinHandle<Result<(), ConsumerError>>, ConsumerError> {
         let consumer = self.create_pull_consumer().await?;
-        tokio::spawn(run_jetstream_loop(consumer, tx));
-        Ok(())
+        Ok(tokio::spawn(run_jetstream_loop(consumer, tx)))
     }
 
     // Connects to the JetStream stream and creates (or attaches to) the durable pull consumer.
     // Retries with backoff; fails after max_retries.
-    async fn create_pull_consumer(&self) -> anyhow::Result<Consumer<pull::Config>> {
+    async fn create_pull_consumer(&self) -> Result<Consumer<pull::Config>, ConsumerError> {
         let js = async_nats::jetstream::new(self.client.clone());
         let stream_name = &self.config.jetstream_stream_name;
         let consumer_name = &self.config.jetstream_consumer_name;
@@ -96,10 +118,9 @@ impl NatsConsumer {
                     "NATS client not connected; retrying"
                 );
                 if tries >= backoff.max_retries {
-                    bail!(
-                        "JetStream setup failed after {} attempts: client disconnected",
-                        tries + 1
-                    );
+                    return Err(ConsumerError::JetStreamClientDisconnected {
+                        attempts: tries + 1,
+                    });
                 }
                 backoff_with_options(&mut tries, &backoff).await;
                 continue;
@@ -138,7 +159,9 @@ impl NatsConsumer {
             }
 
             if tries >= backoff.max_retries {
-                bail!("Unable to set up JetStream after {} attempts", tries + 1);
+                return Err(ConsumerError::JetStreamSetupFailed {
+                    attempts: tries + 1,
+                });
             }
             warn!(
                 tries,
@@ -150,7 +173,10 @@ impl NatsConsumer {
     }
 
     // Core NATS Subscription Setup with Resilient Reconnection Logic.
-    fn setup_core_nats(self, tx: mpsc::Sender<UnifiedMessage>) {
+    fn setup_core_nats(
+        self,
+        tx: mpsc::Sender<UnifiedMessage>,
+    ) -> JoinHandle<Result<(), ConsumerError>> {
         let client = self.client;
         let subject = self.config.subject_filter;
 
@@ -165,16 +191,16 @@ impl NatsConsumer {
                         while let Some(message) = subscription.next().await {
                             if tx.send(UnifiedMessage::Core(message)).await.is_err() {
                                 info!("Consumer channel closed; shutting down Core NATS loop");
-                                return;
+                                return Ok(());
                             }
                         }
 
                         if tries >= backoff.max_retries {
-                            error!(
-                                max = backoff.max_retries,
-                                "Core NATS subscription failed after too many recovery attempts; giving up"
-                            );
-                            return;
+                            let err = ConsumerError::CoreNatsSubscriptionRecoveryExceeded {
+                                attempts: tries,
+                            };
+                            error!(max = backoff.max_retries, "{err}");
+                            return Err(err);
                         }
                         warn!(
                             tries,
@@ -183,25 +209,28 @@ impl NatsConsumer {
                         backoff_with_options(&mut tries, &backoff).await;
                     }
                     Err(e) => {
-                        error!(tries, error = %e, "Core NATS subscribe failed; retrying");
                         if tries >= backoff.max_retries {
-                            error!(
-                                max = backoff.max_retries,
-                                "Core NATS subscription failed; giving up"
-                            );
-                            return;
+                            let err = ConsumerError::CoreNatsSubscribeFailed {
+                                attempts: tries + 1,
+                            };
+                            error!(max = backoff.max_retries, error = %e, "{err}");
+                            return Err(err);
                         }
+                        error!(tries, error = %e, "Core NATS subscribe failed; retrying");
                         backoff_with_options(&mut tries, &backoff).await;
                     }
                 }
             }
-        });
+        })
     }
 }
 
 // Pumps messages from a JetStream pull consumer into `tx`.
 // Rebinds the message iterator on transient errors; gives up after max_retries consecutive failures.
-async fn run_jetstream_loop(consumer: Consumer<pull::Config>, tx: mpsc::Sender<UnifiedMessage>) {
+async fn run_jetstream_loop(
+    consumer: Consumer<pull::Config>,
+    tx: mpsc::Sender<UnifiedMessage>,
+) -> Result<(), ConsumerError> {
     let backoff = consumer_backoff_options();
     let mut recovery_tries = 0u32;
 
@@ -212,14 +241,14 @@ async fn run_jetstream_loop(consumer: Consumer<pull::Config>, tx: mpsc::Sender<U
                 msgs
             }
             Err(e) => {
-                error!(recovery_tries, error = %e, "Failed to get JetStream message iterator; retrying");
                 if recovery_tries >= backoff.max_retries {
-                    error!(
-                        max = backoff.max_retries,
-                        "JetStream consumer failed to bind; giving up"
-                    );
-                    return;
+                    let err = ConsumerError::JetStreamBindFailed {
+                        attempts: recovery_tries + 1,
+                    };
+                    error!(max = backoff.max_retries, error = %e, "{err}");
+                    return Err(err);
                 }
+                error!(recovery_tries, error = %e, "Failed to get JetStream message iterator; retrying");
                 backoff_with_options(&mut recovery_tries, &backoff).await;
                 continue;
             }
@@ -230,7 +259,7 @@ async fn run_jetstream_loop(consumer: Consumer<pull::Config>, tx: mpsc::Sender<U
                 Ok(message) => {
                     if tx.send(UnifiedMessage::JetStream(message)).await.is_err() {
                         info!("Consumer channel closed; shutting down JetStream loop");
-                        return;
+                        return Ok(());
                     }
                 }
                 Err(e) => {
@@ -241,11 +270,11 @@ async fn run_jetstream_loop(consumer: Consumer<pull::Config>, tx: mpsc::Sender<U
         }
 
         if recovery_tries >= backoff.max_retries {
-            error!(
-                max = backoff.max_retries,
-                "JetStream stream failed after too many recovery attempts; giving up"
-            );
-            return;
+            let err = ConsumerError::JetStreamStreamRecoveryExceeded {
+                attempts: recovery_tries,
+            };
+            error!(max = backoff.max_retries, "{err}");
+            return Err(err);
         }
         warn!(
             recovery_tries,
