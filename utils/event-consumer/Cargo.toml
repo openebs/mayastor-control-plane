@@ -15,5 +15,6 @@ tokio = { workspace = true, features = ["time", "macros", "rt"] }
 futures = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
+thiserror = { workspace = true }
 events-api = { path = "../dependencies/apis/events", default-features = false }
 url = { workspace = true }

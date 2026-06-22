@@ -1483,6 +1483,7 @@ dependencies = [
  "async-nats",
  "events-api",
  "futures",
+ "thiserror",
  "tokio",
  "tracing",
  "url",
