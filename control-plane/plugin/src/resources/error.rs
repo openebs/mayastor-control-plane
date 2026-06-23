@@ -270,21 +270,12 @@ impl PurgeReason {
 
     fn loss_details(body: &openapi::models::RestJsonError) -> Option<String> {
         let details = body.details.trim();
-        let message = body.message.trim();
 
         if details.is_empty() {
-            if message.is_empty() {
-                return None;
-            }
-
-            return Some(message.to_string());
+            return None;
         }
 
-        if message.is_empty() || details == message {
-            return Some(details.to_string());
-        }
-
-        Some(format!("{message}\n{details}"))
+        Some(details.to_string())
     }
 
     fn format_loss(
@@ -385,7 +376,7 @@ mod tests {
     }
 
     #[test]
-    fn purge_loss_details_include_message_and_details() {
+    fn purge_loss_details_use_rest_details() {
         let body = RestJsonError::new_all(
             "volume-1",
             "Cannot purge pool pool0",
@@ -395,8 +386,19 @@ mod tests {
 
         let details = PurgeReason::loss_details(&body).expect("loss details");
 
-        assert!(details.contains("Cannot purge pool pool0"));
-        assert!(details.contains("volume-1"));
+        assert_eq!(details, "volume-1");
+    }
+
+    #[test]
+    fn purge_loss_details_skip_rest_message_without_details() {
+        let body = RestJsonError::new_all(
+            "",
+            "Cannot purge pool pool0",
+            Kind::PoolPurgeVolumeLossAcceptRequired,
+            None,
+        );
+
+        assert!(PurgeReason::loss_details(&body).is_none());
     }
 
     #[test]
