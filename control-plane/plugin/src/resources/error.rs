@@ -271,13 +271,16 @@ impl PurgeReason {
     fn loss_details(body: &openapi::models::RestJsonError) -> Option<String> {
         let details = body.details.trim();
         let message = body.message.trim();
-        let text = match (details.is_empty(), message.is_empty(), details == message) {
-            (true, true, _) => return None,
-            (false, true, _) | (false, false, true) => details.to_string(),
-            (true, false, _) => message.to_string(),
-            (false, false, false) => format!("{message}\n{details}"),
-        };
-        Some(text)
+
+        if details.is_empty() {
+            return (!message.is_empty()).then(|| message.to_string());
+        }
+
+        if message.is_empty() || details == message {
+            return Some(details.to_string());
+        }
+
+        Some(format!("{message}\n{details}"))
     }
 
     fn format_loss(
