@@ -427,7 +427,7 @@ impl Delete for Pool {
                 match super::error::PurgeReason::from_api_error(&source) {
                     Some(reason) => Err(Error::Purge { reason }),
                     None => Err(Error::DeletePoolError {
-                        hint: pool_deletion_hint(&id.pool_id).await,
+                        hint: pool_deletion_hint(&id.pool_id, !id.purge).await,
                         id: id.pool_id.to_string(),
                         source,
                     }),
@@ -437,27 +437,128 @@ impl Delete for Pool {
     }
 }
 
-/// GET the pool and, if its spec status is `Deleting` or `Purging`, return a hint
-/// message telling the user that the delete will be retried automatically.
-/// Returns `None` when the pool cannot be fetched or is not in a pending-deletion state.
-async fn pool_deletion_hint(pool_id: &PoolId) -> Option<String> {
+/// GET the pool and return contextual delete hints.
+/// Returns `None` when the pool cannot be fetched or no hint applies.
+async fn pool_deletion_hint(pool_id: &PoolId, suggest_purge: bool) -> Option<String> {
     let pool = RestClient::client()
         .pools_api()
         .get_pool(pool_id)
         .await
         .ok()?
         .into_body();
-    let status = pool.spec?.status;
+    pool_deletion_hint_from_pool(pool_id, &pool, suggest_purge)
+}
+
+fn pool_deletion_hint_from_pool(
+    pool_id: &PoolId,
+    pool: &openapi::models::Pool,
+    suggest_purge: bool,
+) -> Option<String> {
+    let mut hints = Vec::new();
+
+    if let Some(status) = pool.spec.as_ref().map(|spec| spec.status) {
+        if matches!(
+            status,
+            models::SpecStatus::Deleting | models::SpecStatus::Purging
+        ) {
+            hints.push(format!(
+                "Pool '{pool_id}' is currently in '{status}' state. \
+                 This operation will be retried automatically."
+            ));
+        }
+    }
+
+    if suggest_purge && pool_is_offline_or_unknown(pool) && pool_has_resources(pool) {
+        hints.push("did you mean to use --purge".to_string());
+    }
+
+    (!hints.is_empty()).then(|| hints.join("\n"))
+}
+
+fn pool_is_offline_or_unknown(pool: &openapi::models::Pool) -> bool {
+    let status = pool
+        .diag
+        .as_ref()
+        .map(|diag| diag.status)
+        .or_else(|| pool.state.as_ref().map(|state| state.status));
+
     matches!(
         status,
-        models::SpecStatus::Deleting | models::SpecStatus::Purging
+        Some(models::PoolStatus::Offline | models::PoolStatus::Unknown)
     )
-    .then(|| {
-        format!(
-            "Pool '{pool_id}' is currently in '{status}' state. \
-             This operation will be retried automatically."
-        )
-    })
+}
+
+fn pool_has_resources(pool: &openapi::models::Pool) -> bool {
+    let meta_has_resources = pool.meta.as_ref().is_some_and(|meta| {
+        meta.replica_count.unwrap_or_default() > 0 || meta.snapshot_count.unwrap_or_default() > 0
+    });
+    let state_has_resources = pool.state.as_ref().is_some_and(|state| {
+        state.used > 0
+            || state.replica_count.unwrap_or_default() > 0
+            || state.snapshot_count.unwrap_or_default() > 0
+    });
+
+    meta_has_resources || state_has_resources
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pool_with_status(status: models::PoolStatus) -> openapi::models::Pool {
+        let mut pool = openapi::models::Pool::new("pool0");
+        pool.state = Some(models::PoolState {
+            status,
+            ..Default::default()
+        });
+        pool
+    }
+
+    #[test]
+    fn delete_hint_suggests_purge_for_offline_non_empty_pool() {
+        let mut pool = pool_with_status(models::PoolStatus::Offline);
+        pool.meta = Some(models::PoolMeta {
+            replica_count: Some(1),
+            ..Default::default()
+        });
+
+        let hint = pool_deletion_hint_from_pool(&"pool0".to_string(), &pool, true)
+            .expect("purge suggestion");
+
+        assert!(hint.contains("did you mean to use --purge"));
+    }
+
+    #[test]
+    fn delete_hint_does_not_suggest_purge_when_already_purging() {
+        let mut pool = pool_with_status(models::PoolStatus::Unknown);
+        pool.state.as_mut().unwrap().used = 1;
+
+        assert!(pool_deletion_hint_from_pool(&"pool0".to_string(), &pool, false).is_none());
+    }
+
+    #[test]
+    fn delete_hint_does_not_suggest_purge_for_online_pool() {
+        let mut pool = pool_with_status(models::PoolStatus::Online);
+        pool.state.as_mut().unwrap().used = 1;
+
+        assert!(pool_deletion_hint_from_pool(&"pool0".to_string(), &pool, true).is_none());
+    }
+
+    #[test]
+    fn delete_hint_combines_pending_delete_and_purge_suggestion() {
+        let mut pool = pool_with_status(models::PoolStatus::Unknown);
+        pool.state.as_mut().unwrap().snapshot_count = Some(1);
+        pool.spec = Some(models::PoolSpec {
+            status: models::SpecStatus::Deleting,
+            ..Default::default()
+        });
+
+        let hint = pool_deletion_hint_from_pool(&"pool0".to_string(), &pool, true)
+            .expect("combined hints");
+
+        assert!(hint.contains("currently in 'Deleting' state"));
+        assert!(hint.contains("did you mean to use --purge"));
+    }
 }
 
 impl GetHeaderRow for models::PoolDeleteResult {

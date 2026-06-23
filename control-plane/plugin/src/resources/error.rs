@@ -222,48 +222,20 @@ pub enum OpError {
 
 /// Known purge/delete precondition failures, with user-facing messages
 /// that reference the CLI flags needed to resolve the issue.
-#[derive(Debug, strum_macros::Display)]
+#[derive(Debug)]
 pub enum PurgeReason {
-    #[strum(to_string = "Node is online. Only offline nodes can be deleted.")]
     NodeIsOnline,
-    #[strum(to_string = "Node must be cordoned first. Use: cordon node <id> <label>")]
     NodeNotCordoned,
-    #[strum(
-        to_string = "Node has resources. Use --purge to force-remove the node and all its resources."
-    )]
     NodeHasResources,
-    #[strum(to_string = "Node has pools with data. Confirm with --yes to proceed.")]
     NodePurgeAcceptRequired,
-    #[strum(to_string = "Volumes would lose their last healthy replica. \
-                 Use --accept-volume-loss to proceed, or --accept-data-loss \
-                 to also accept snapshot loss in a single flag.")]
-    NodePurgeVolumeLoss,
-    #[strum(to_string = "Snapshots would lose their last replica snapshot. \
-                 Use --accept-snapshot-loss to proceed, or --accept-data-loss \
-                 to also accept volume loss in a single flag.")]
-    NodePurgeSnapshotLoss,
-    #[strum(
-        to_string = "Pool state is not Offline or Unknown. Only pools with Offline or Unknown state can be purged."
-    )]
+    NodePurgeVolumeLoss { details: Option<String> },
+    NodePurgeSnapshotLoss { details: Option<String> },
     PoolNotPurgeable,
-    #[strum(
-        to_string = "Pool must be cordoned first. Use: cordon pool <id> --replicas --snapshots"
-    )]
     PoolNotCordoned,
-    #[strum(
-        to_string = "Pool cordon must block both replicas and snapshots. Use: cordon pool <id> --replicas --snapshots"
-    )]
     PoolCordonInsufficient,
-    #[strum(to_string = "Pool has replicas. Confirm with --yes to proceed.")]
     PoolPurgeAcceptRequired,
-    #[strum(to_string = "Volumes would lose their last healthy replica. \
-                 Use --accept-volume-loss to proceed, or --accept-data-loss \
-                 to also accept snapshot loss in a single flag.")]
-    PoolPurgeVolumeLoss,
-    #[strum(to_string = "Snapshots would lose their last replica snapshot. \
-                 Use --accept-snapshot-loss to proceed, or --accept-data-loss \
-                 to also accept volume loss in a single flag.")]
-    PoolPurgeSnapshotLoss,
+    PoolPurgeVolumeLoss { details: Option<String> },
+    PoolPurgeSnapshotLoss { details: Option<String> },
 }
 
 impl PurgeReason {
@@ -272,21 +244,104 @@ impl PurgeReason {
         source: &openapi::tower::client::Error<openapi::models::RestJsonError>,
     ) -> Option<Self> {
         use openapi::models::rest_json_error::Kind;
-        let kind = source.error_body().map(|b| b.kind)?;
+        let body = source.error_body()?;
+        let kind = body.kind;
+        let details = Self::loss_details(body);
         match kind {
             Kind::NodeIsOnline => Some(Self::NodeIsOnline),
             Kind::NodeNotCordoned => Some(Self::NodeNotCordoned),
             Kind::NodeHasResources => Some(Self::NodeHasResources),
             Kind::NodePurgeAcceptRequired => Some(Self::NodePurgeAcceptRequired),
-            Kind::NodePurgeVolumeLossAcceptRequired => Some(Self::NodePurgeVolumeLoss),
-            Kind::NodePurgeSnapshotLossAcceptRequired => Some(Self::NodePurgeSnapshotLoss),
+            Kind::NodePurgeVolumeLossAcceptRequired => Some(Self::NodePurgeVolumeLoss { details }),
+            Kind::NodePurgeSnapshotLossAcceptRequired => {
+                Some(Self::NodePurgeSnapshotLoss { details })
+            }
             Kind::PoolNotPurgeable => Some(Self::PoolNotPurgeable),
             Kind::PoolNotCordoned => Some(Self::PoolNotCordoned),
             Kind::PoolCordonInsufficient => Some(Self::PoolCordonInsufficient),
             Kind::PoolPurgeAcceptRequired => Some(Self::PoolPurgeAcceptRequired),
-            Kind::PoolPurgeVolumeLossAcceptRequired => Some(Self::PoolPurgeVolumeLoss),
-            Kind::PoolPurgeSnapshotLossAcceptRequired => Some(Self::PoolPurgeSnapshotLoss),
+            Kind::PoolPurgeVolumeLossAcceptRequired => Some(Self::PoolPurgeVolumeLoss { details }),
+            Kind::PoolPurgeSnapshotLossAcceptRequired => {
+                Some(Self::PoolPurgeSnapshotLoss { details })
+            }
             _ => None,
+        }
+    }
+
+    fn loss_details(body: &openapi::models::RestJsonError) -> Option<String> {
+        let details = body.details.trim();
+        let message = body.message.trim();
+        let text = match (details.is_empty(), message.is_empty(), details == message) {
+            (true, true, _) => return None,
+            (false, true, _) | (false, false, true) => details.to_string(),
+            (true, false, _) => message.to_string(),
+            (false, false, false) => format!("{message}\n{details}"),
+        };
+        Some(text)
+    }
+
+    fn format_loss(
+        f: &mut std::fmt::Formatter<'_>,
+        guidance: &str,
+        details: Option<&str>,
+    ) -> std::fmt::Result {
+        write!(f, "{guidance}")?;
+        if let Some(details) = details.filter(|details| !details.trim().is_empty()) {
+            write!(f, "\nAffected resources:\n{details}")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for PurgeReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NodeIsOnline => write!(f, "Node is online. Only offline nodes can be deleted."),
+            Self::NodeNotCordoned => {
+                write!(f, "Node must be cordoned first. Use: cordon node <id> <label>")
+            }
+            Self::NodeHasResources => write!(
+                f,
+                "Node has resources. Use --purge to force-remove the node and all its resources."
+            ),
+            Self::NodePurgeAcceptRequired => {
+                write!(f, "Node has pools with data. Confirm with --yes to proceed.")
+            }
+            Self::NodePurgeVolumeLoss { details } => Self::format_loss(
+                f,
+                "Volumes would lose their last healthy replica. Use --accept-volume-loss to proceed, or --accept-data-loss to also accept snapshot loss in a single flag.",
+                details.as_deref(),
+            ),
+            Self::NodePurgeSnapshotLoss { details } => Self::format_loss(
+                f,
+                "Snapshots would lose their last replica snapshot. Use --accept-snapshot-loss to proceed, or --accept-data-loss to also accept volume loss in a single flag.",
+                details.as_deref(),
+            ),
+            Self::PoolNotPurgeable => write!(
+                f,
+                "Pool state is not Offline or Unknown. Only pools with Offline or Unknown state can be purged."
+            ),
+            Self::PoolNotCordoned => write!(
+                f,
+                "Pool must be cordoned first. Use: cordon pool <id> --replicas --snapshots"
+            ),
+            Self::PoolCordonInsufficient => write!(
+                f,
+                "Pool cordon must block both replicas and snapshots. Use: cordon pool <id> --replicas --snapshots"
+            ),
+            Self::PoolPurgeAcceptRequired => {
+                write!(f, "Pool has replicas. Confirm with --yes to proceed.")
+            }
+            Self::PoolPurgeVolumeLoss { details } => Self::format_loss(
+                f,
+                "Volumes would lose their last healthy replica. Use --accept-volume-loss to proceed, or --accept-data-loss to also accept snapshot loss in a single flag.",
+                details.as_deref(),
+            ),
+            Self::PoolPurgeSnapshotLoss { details } => Self::format_loss(
+                f,
+                "Snapshots would lose their last replica snapshot. Use --accept-snapshot-loss to proceed, or --accept-data-loss to also accept volume loss in a single flag.",
+                details.as_deref(),
+            ),
         }
     }
 }
@@ -299,5 +354,48 @@ impl From<TopologyError> for Error {
 impl From<OpError> for Error {
     fn from(source: OpError) -> Self {
         Self::NodeLabel { source }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PurgeReason;
+    use openapi::models::{rest_json_error::Kind, RestJsonError};
+
+    #[test]
+    fn purge_loss_display_preserves_rest_details() {
+        let reason = PurgeReason::PoolPurgeVolumeLoss {
+            details: Some("volume-1\nvolume-2".to_string()),
+        };
+
+        let output = reason.to_string();
+
+        assert!(output.contains("--accept-volume-loss"));
+        assert!(output.contains("--accept-data-loss"));
+        assert!(output.contains("Affected resources:"));
+        assert!(output.contains("volume-1"));
+        assert!(output.contains("volume-2"));
+    }
+
+    #[test]
+    fn purge_loss_details_include_message_and_details() {
+        let body = RestJsonError::new_all(
+            "volume-1",
+            "Cannot purge pool pool0",
+            Kind::PoolPurgeVolumeLossAcceptRequired,
+            None,
+        );
+
+        let details = PurgeReason::loss_details(&body).expect("loss details");
+
+        assert!(details.contains("Cannot purge pool pool0"));
+        assert!(details.contains("volume-1"));
+    }
+
+    #[test]
+    fn purge_loss_details_skip_empty_rest_text() {
+        let body = RestJsonError::new_all("", "", Kind::PoolPurgeSnapshotLossAcceptRequired, None);
+
+        assert!(PurgeReason::loss_details(&body).is_none());
     }
 }
