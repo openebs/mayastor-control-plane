@@ -273,7 +273,11 @@ impl PurgeReason {
         let message = body.message.trim();
 
         if details.is_empty() {
-            return (!message.is_empty()).then(|| message.to_string());
+            if message.is_empty() {
+                return None;
+            }
+
+            return Some(message.to_string());
         }
 
         if message.is_empty() || details == message {
