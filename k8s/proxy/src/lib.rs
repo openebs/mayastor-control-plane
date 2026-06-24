@@ -28,7 +28,13 @@ pub async fn config_from_kubeconfig(
             kube::Config::from_custom_kubeconfig(kube_config, &options).await?
         }
 
-        None => kube::Config::from_kubeconfig(&options).await?,
+        None => {
+            if std::env::var("KUBERNETES_SERVICE_HOST").is_ok() {
+                kube::Config::incluster()?
+            } else {
+                kube::Config::from_kubeconfig(&options).await?
+            }
+        }
     };
     config.apply_debug_overrides();
     Ok(config)
