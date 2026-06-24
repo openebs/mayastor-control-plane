@@ -270,12 +270,7 @@ impl PurgeReason {
 
     fn loss_details(body: &openapi::models::RestJsonError) -> Option<String> {
         let details = body.details.trim();
-
-        if details.is_empty() {
-            return None;
-        }
-
-        Some(details.to_string())
+        (!details.is_empty()).then(|| details.to_string())
     }
 
     fn format_loss(
