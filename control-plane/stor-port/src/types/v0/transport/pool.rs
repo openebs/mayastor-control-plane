@@ -970,6 +970,30 @@ pub struct VolumeLossDetail {
     pub healthy_after: u32,
 }
 
+impl std::fmt::Display for VolumeLossInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.volumes.is_empty() {
+            return write!(f, "none");
+        }
+
+        for (index, volume) in self.volumes.iter().enumerate() {
+            if index > 0 {
+                writeln!(f)?;
+            }
+            write!(
+                f,
+                "volume {} (replicas_before: {}, healthy_before: {}, lost_on_pool: {}, healthy_after: {})",
+                volume.volume_id,
+                volume.replicas_before,
+                volume.healthy_before,
+                volume.lost_on_pool,
+                volume.healthy_after
+            )?;
+        }
+        Ok(())
+    }
+}
+
 /// Information about snapshot loss caused by a pool deletion.
 ///
 /// Contains a list of snapshots that lost their last healthy replica snapshot as a result
@@ -1001,6 +1025,30 @@ pub struct SnapshotLossDetail {
     /// Number of healthy replica snapshots remaining after the pool deletion.
     /// Zero means no healthy replica snapshots survive — the snapshot is lost.
     pub healthy_after: u32,
+}
+
+impl std::fmt::Display for SnapshotLossInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.snapshots.is_empty() {
+            return write!(f, "none");
+        }
+
+        for (index, snapshot) in self.snapshots.iter().enumerate() {
+            if index > 0 {
+                writeln!(f)?;
+            }
+            write!(
+                f,
+                "snapshot {} (replica_snapshots_before: {}, healthy_before: {}, lost_on_pool: {}, healthy_after: {})",
+                snapshot.snapshot_id,
+                snapshot.replica_snapshots_before,
+                snapshot.healthy_before,
+                snapshot.lost_on_pool,
+                snapshot.healthy_after
+            )?;
+        }
+        Ok(())
+    }
 }
 
 /// Expand Pool Request.

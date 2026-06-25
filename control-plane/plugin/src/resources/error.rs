@@ -269,9 +269,10 @@ impl PurgeReason {
     }
 
     fn loss_details(body: &openapi::models::RestJsonError) -> Option<String> {
-        match body.details.trim() {
-            "" => None,
-            details => Some(details.to_string()),
+        match (body.details.trim(), body.message.trim()) {
+            (details, _) if !details.is_empty() => Some(details.to_string()),
+            ("", message) if !message.is_empty() => Some(message.to_string()),
+            _ => None,
         }
     }
 
@@ -395,7 +396,9 @@ mod tests {
             None,
         );
 
-        assert!(PurgeReason::loss_details(&body).is_none());
+        let details = PurgeReason::loss_details(&body).expect("loss details");
+
+        assert_eq!(details, "Cannot purge pool pool0");
     }
 
     #[test]

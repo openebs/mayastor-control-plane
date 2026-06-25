@@ -473,7 +473,7 @@ pub enum SvcError {
     },
 
     #[snafu(display(
-        "Cannot purge pool {pool_id}: {volume_count} volume(s) would lose their last healthy replica, accept_volume_loss=true required",
+        "Cannot purge pool {pool_id}: {volume_count} volume(s) would lose their last healthy replica, accept_volume_loss=true required. Affected volumes:\n{volume_loss}",
     ))]
     PoolPurgeVolumeLossAcceptRequired {
         pool_id: PoolId,
@@ -482,7 +482,7 @@ pub enum SvcError {
     },
 
     #[snafu(display(
-        "Cannot purge pool {pool_id}: {snapshot_count} snapshot(s) would lose their last replica snapshot, accept_snapshot_loss=true required",
+        "Cannot purge pool {pool_id}: {snapshot_count} snapshot(s) would lose their last replica snapshot, accept_snapshot_loss=true required. Affected snapshots:\n{snapshot_loss}",
     ))]
     PoolPurgeSnapshotLossAcceptRequired {
         pool_id: PoolId,
@@ -507,7 +507,7 @@ pub enum SvcError {
     NodePurgeAcceptRequired { node_id: NodeId, pool_count: usize },
 
     #[snafu(display(
-        "Cannot delete node {node_id}: {volume_count} volume(s) across {pool_count} pool(s) would lose their last healthy replica, accept_volume_loss=true required"
+        "Cannot delete node {node_id}: {volume_count} volume(s) across {pool_count} pool(s) would lose their last healthy replica, accept_volume_loss=true required. Affected volumes:\n{volume_loss}"
     ))]
     NodePurgeVolumeLossAcceptRequired {
         node_id: NodeId,
@@ -517,7 +517,7 @@ pub enum SvcError {
     },
 
     #[snafu(display(
-        "Cannot delete node {node_id}: {snapshot_count} snapshot(s) across {pool_count} pool(s) would lose their last replica snapshot, accept_snapshot_loss=true required"
+        "Cannot delete node {node_id}: {snapshot_count} snapshot(s) across {pool_count} pool(s) would lose their last replica snapshot, accept_snapshot_loss=true required. Affected snapshots:\n{snapshot_loss}"
     ))]
     NodePurgeSnapshotLossAcceptRequired {
         node_id: NodeId,
@@ -1451,4 +1451,55 @@ pub enum NotEnough {
     OfNodes { have: u64, need: u64 },
     #[snafu(display("Not enough free space in the pool"))]
     PoolFree {},
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use stor_port::types::v0::transport::{VolumeId, VolumeLossDetail};
+
+    fn volume_loss_info(volume_id: VolumeId) -> VolumeLossInfo {
+        VolumeLossInfo {
+            volumes: vec![VolumeLossDetail {
+                volume_id,
+                replicas_before: 1,
+                healthy_before: 1,
+                lost_on_pool: 1,
+                healthy_after: 0,
+            }],
+        }
+    }
+
+    #[test]
+    fn pool_purge_volume_loss_error_includes_affected_volume_details() {
+        let volume_id = VolumeId::try_from("456122b1-7e19-4148-a890-579ca785a119").unwrap();
+        let error = SvcError::PoolPurgeVolumeLossAcceptRequired {
+            pool_id: PoolId::from("pool0"),
+            volume_count: 1,
+            volume_loss: volume_loss_info(volume_id.clone()),
+        };
+
+        let reply = ReplyError::from(error);
+
+        assert!(reply.source.contains(volume_id.as_str()));
+        assert!(reply.source.contains("lost_on_pool: 1"));
+        assert!(reply.source.contains("healthy_after: 0"));
+    }
+
+    #[test]
+    fn node_purge_volume_loss_error_includes_affected_volume_details() {
+        let volume_id = VolumeId::try_from("456122b1-7e19-4148-a890-579ca785a119").unwrap();
+        let error = SvcError::NodePurgeVolumeLossAcceptRequired {
+            node_id: NodeId::from("node0"),
+            pool_count: 1,
+            volume_count: 1,
+            volume_loss: volume_loss_info(volume_id.clone()),
+        };
+
+        let reply = ReplyError::from(error);
+
+        assert!(reply.source.contains(volume_id.as_str()));
+        assert!(reply.source.contains("lost_on_pool: 1"));
+        assert!(reply.source.contains("healthy_after: 0"));
+    }
 }
