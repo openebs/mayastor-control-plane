@@ -127,6 +127,8 @@ impl TryFrom<nexus::Nexus> for Nexus {
                 }
             },
             allowed_hosts: vec![],
+            version: todo!("nexus version"),
+            bdev_size: None,
         };
         Ok(nexus)
     }
@@ -555,6 +557,7 @@ impl TryFrom<nexus::NexusSpec> for NexusSpec {
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()?,
+            version: todo!("nexus version"),
         })
     }
 }
@@ -877,6 +880,7 @@ impl From<&dyn CreateNexusInfo> for CreateNexus {
             managed: data.managed(),
             owner: data.owner(),
             config: data.config(),
+            version: todo!("nexus version"),
         }
     }
 }

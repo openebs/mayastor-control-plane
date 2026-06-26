@@ -378,6 +378,18 @@ impl TryIoEngineToAgent for v1::nexus::Nexus {
                 })
                 .sorted()
                 .collect(),
+            version: match self
+                .label_version
+                .map(v1::nexus::NexusLabelVersion::try_from)
+            {
+                None => transport::NexusVersion::V1,
+                Some(Err(_)) | Some(Ok(v1::nexus::NexusLabelVersion::LabelUnknown)) => {
+                    return Err(SvcError::InvalidArguments {})
+                }
+                Some(Ok(v1::nexus::NexusLabelVersion::LabelV1)) => transport::NexusVersion::V1,
+                Some(Ok(v1::nexus::NexusLabelVersion::LabelV2)) => transport::NexusVersion::V2,
+            },
+            bdev_size: self.bdev_size,
         })
     }
 }

@@ -166,6 +166,8 @@ impl TryIoEngineToAgent for v0::NexusV2 {
                         .unwrap_or(transport::HostNqn::Invalid { nqn: n.to_string() })
                 })
                 .collect(),
+            version: transport::NexusVersion::V1,
+            bdev_size: None,
         })
     }
 }
@@ -195,6 +197,8 @@ impl TryIoEngineToAgent for v0::Nexus {
                         .unwrap_or(transport::HostNqn::Invalid { nqn: n.to_string() })
                 })
                 .collect(),
+            version: transport::NexusVersion::V1,
+            bdev_size: None,
         })
     }
 }

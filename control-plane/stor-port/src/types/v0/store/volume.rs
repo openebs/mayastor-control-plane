@@ -321,13 +321,18 @@ pub struct VolumeMetadata {
 }
 impl VolumeMetadata {
     /// Create a new `Self` from the given parameters.
-    pub fn new(as_thin: Option<bool>) -> Self {
+    pub fn new(as_thin: Option<bool>, label_version: transport::NexusVersion) -> Self {
         Self {
             persisted: VolumePersistedMetadata {
                 snapshot_as_thin: as_thin,
+                label_version,
             },
             runtime: Default::default(),
         }
+    }
+    /// Get the label version.
+    pub fn label_version(&self) -> transport::NexusVersion {
+        self.persisted.label_version
     }
     /// Insert snapshot in the list.
     fn insert_snapshot(&mut self, snapshot: SnapshotId) {
@@ -369,6 +374,9 @@ pub struct VolumePersistedMetadata {
     /// Volume becomes thin if a snapshot has been created for it.
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshot_as_thin: Option<bool>,
+    /// Nexus label version for defining the data partition layout.
+    #[serde(default, skip_serializing_if = "super::is_default")]
+    pub label_version: transport::NexusVersion,
 }
 
 /// Runtime volume information.

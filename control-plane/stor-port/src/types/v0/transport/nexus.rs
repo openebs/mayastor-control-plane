@@ -20,6 +20,13 @@ pub struct GetNexuses {
     pub filter: Filter,
 }
 
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Copy, Eq, PartialEq)]
+pub enum NexusVersion {
+    #[default]
+    V1,
+    V2,
+}
+
 /// Nexus information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +52,10 @@ pub struct Nexus {
     pub share: Protocol,
     /// host nqn's allowed to connect to the target.
     pub allowed_hosts: Vec<HostNqn>,
+    /// The version of the nexus label.
+    pub version: NexusVersion,
+    /// Size of the nexus bdev in bytes.
+    pub bdev_size: Option<u64>,
 }
 impl Nexus {
     /// Check if the nexus contains the provided `ChildUri`.
@@ -240,6 +251,8 @@ pub struct CreateNexus {
     pub owner: Option<VolumeId>,
     /// Nexus Nvmf Configuration
     pub config: Option<NexusNvmfConfig>,
+    /// Nexus label version, if any.
+    pub version: Option<NexusVersion>,
 }
 
 /// A request to resize a Nexus.
@@ -525,6 +538,7 @@ impl Default for NexusNvmfConfig {
 
 impl CreateNexus {
     /// Create new `Self` from the given parameters.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         node: &NodeId,
         uuid: &NexusId,
@@ -533,6 +547,7 @@ impl CreateNexus {
         managed: bool,
         owner: Option<&VolumeId>,
         config: Option<NexusNvmfConfig>,
+        version: Option<NexusVersion>,
     ) -> Self {
         Self {
             node: node.clone(),
@@ -542,6 +557,7 @@ impl CreateNexus {
             managed,
             owner: owner.cloned(),
             config,
+            version,
         }
     }
     /// Name of the nexus.

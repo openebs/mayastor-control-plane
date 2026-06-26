@@ -109,6 +109,9 @@ pub struct NexusSpec {
     #[serde(default)]
     /// Hosts allowed to access the nexus.
     pub allowed_hosts: Vec<HostNqn>,
+    /// The version of the nexus label.
+    #[serde(default)]
+    pub version: transport::NexusVersion,
 }
 impl NexusSpec {
     /// Check if the spec contains the provided replica by it's `ReplicaId`.
@@ -184,6 +187,7 @@ impl From<&NexusSpec> for CreateNexus {
             spec.managed,
             spec.owner.as_ref(),
             spec.nvmf_config.clone(),
+            Some(spec.version),
         )
     }
 }
@@ -393,6 +397,7 @@ impl From<&CreateNexus> for NexusSpec {
             nvmf_config: request.config.clone(),
             status_info: NexusStatusInfo::new(false),
             allowed_hosts: vec![],
+            version: request.version.unwrap_or_default(),
         }
     }
 }
@@ -435,6 +440,8 @@ impl From<&NexusSpec> for transport::Nexus {
             rebuilds: 0,
             share: nexus.share,
             allowed_hosts: vec![],
+            version: nexus.version,
+            bdev_size: None,
         }
     }
 }
