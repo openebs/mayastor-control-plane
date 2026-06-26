@@ -23,7 +23,7 @@ use openapi::apis::Url;
 use clap::Parser;
 
 #[derive(Parser, Debug)]
-#[clap(name = utils::package_description!(), version = utils::version_info_str!())]
+#[clap(name = utils::package_description!(), version = utils::version_info_string!())]
 struct CliArgs {
     /// The rest endpoint if reusing a cluster.
     #[clap(short, long)]

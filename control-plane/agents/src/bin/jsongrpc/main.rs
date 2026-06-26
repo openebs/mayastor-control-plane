@@ -11,7 +11,7 @@ use tracing::{error, info};
 use utils::{DEFAULT_GRPC_CLIENT_ADDR, DEFAULT_JSON_GRPC_SERVER_ADDR};
 
 #[derive(Debug, Parser)]
-#[structopt(name = utils::package_description!(), version = utils::version_info_str!())]
+#[structopt(name = utils::package_description!(), version = utils::version_info_string!())]
 struct CliArgs {
     /// The json grpc server URL or address to connect to the its services.
     #[clap(long, short = 'J', default_value = DEFAULT_JSON_GRPC_SERVER_ADDR)]

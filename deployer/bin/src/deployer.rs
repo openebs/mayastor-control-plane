@@ -27,7 +27,7 @@ fn init_tracing() {
 }
 
 #[derive(Debug, Parser)]
-#[clap(name = utils::package_description!(), version = utils::version_info_str!())]
+#[clap(name = utils::package_description!(), version = utils::version_info_string!())]
 struct CliArgs {
     #[clap(subcommand)]
     action: Action,

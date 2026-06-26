@@ -42,7 +42,7 @@ async fn ping_rest_api() {
 #[tokio::main(worker_threads = 2)]
 async fn main() -> anyhow::Result<()> {
     let args = clap::Command::new(utils::package_description!())
-        .version(utils::version_info_str!())
+        .version(utils::version_info_string!())
         .arg(
             Arg::new("endpoint")
                 .long("rest-endpoint")

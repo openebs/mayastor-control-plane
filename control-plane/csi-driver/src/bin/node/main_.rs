@@ -43,7 +43,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
     // Parse command line arguments.
     let matches = clap::Command::new(utils::package_description!())
         .about("k8s sidecar for IoEngine implementing CSI among others")
-        .version(utils::version_info_str!())
+        .version(utils::version_info_string!())
         .subcommand_negates_reqs(true)
         .arg(
             Arg::new("rest-endpoint")
