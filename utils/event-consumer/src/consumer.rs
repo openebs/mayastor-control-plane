@@ -1,6 +1,9 @@
 use crate::ConsumerConfig;
 use async_nats::jetstream::consumer::{pull, Consumer};
-use events_api::common::retry::{backoff_with_options, BackoffOptions};
+use events_api::common::{
+    constants::{MAX_MSGS_PER_SUBJECT, STREAM_SIZE, SUBJECTS},
+    retry::{backoff_with_options, BackoffOptions},
+};
 use futures::StreamExt;
 use std::time::Duration;
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -106,7 +109,7 @@ impl NatsConsumer {
         let stream_name = &self.config.jetstream_stream_name;
         let consumer_name = &self.config.jetstream_consumer_name;
         let subject = &self.config.subject_filter;
-        let request_timeout = self.config.request_timeout;
+        let setup_timeout = self.config.jetstream_setup_timeout;
         let backoff = consumer_backoff_options();
         let mut tries = 0u32;
 
@@ -126,7 +129,17 @@ impl NatsConsumer {
                 continue;
             }
 
-            match tokio::time::timeout(request_timeout, js.get_stream(stream_name)).await {
+            let stream_config = async_nats::jetstream::stream::Config {
+                name: stream_name.to_string(),
+                subjects: vec![SUBJECTS.into()],
+                max_messages_per_subject: MAX_MSGS_PER_SUBJECT,
+                max_bytes: STREAM_SIZE,
+                storage: async_nats::jetstream::stream::StorageType::Memory,
+                num_replicas: self.config.jetstream_stream_replicas,
+                ..Default::default()
+            };
+            match tokio::time::timeout(setup_timeout, js.get_or_create_stream(stream_config)).await
+            {
                 Ok(Ok(stream)) => {
                     match stream
                         .get_or_create_consumer(
@@ -140,17 +153,20 @@ impl NatsConsumer {
                         )
                         .await
                     {
-                        Ok(consumer) => return Ok(consumer),
+                        Ok(consumer) => {
+                            info!(stream = %stream_name, consumer = %consumer_name, "JetStream consumer ready");
+                            return Ok(consumer);
+                        }
                         Err(e) => {
-                            error!(tries, max = backoff.max_retries, error = %e, "JetStream consumer creation failed");
+                            warn!(tries, max = backoff.max_retries, error = %e, "JetStream consumer creation failed");
                         }
                     }
                 }
                 Ok(Err(e)) => {
-                    error!(tries, max = backoff.max_retries, error = %e, "JetStream API error");
+                    warn!(tries, max = backoff.max_retries, error = %e, "JetStream API error");
                 }
                 Err(_) => {
-                    error!(
+                    warn!(
                         tries,
                         max = backoff.max_retries,
                         "JetStream metadata discovery timed out"
@@ -216,7 +232,7 @@ impl NatsConsumer {
                             error!(max = backoff.max_retries, error = %e, "{err}");
                             return Err(err);
                         }
-                        error!(tries, error = %e, "Core NATS subscribe failed; retrying");
+                        warn!(tries, error = %e, "Core NATS subscribe failed; retrying");
                         backoff_with_options(&mut tries, &backoff).await;
                     }
                 }
@@ -248,7 +264,7 @@ async fn run_jetstream_loop(
                     error!(max = backoff.max_retries, error = %e, "{err}");
                     return Err(err);
                 }
-                error!(recovery_tries, error = %e, "Failed to get JetStream message iterator; retrying");
+                warn!(recovery_tries, error = %e, "Failed to get JetStream message iterator; retrying");
                 backoff_with_options(&mut recovery_tries, &backoff).await;
                 continue;
             }
@@ -263,7 +279,7 @@ async fn run_jetstream_loop(
                     }
                 }
                 Err(e) => {
-                    error!(error = %e, "Error reading JetStream message; re-binding consumer");
+                    warn!(error = %e, "Error reading JetStream message; re-binding consumer");
                     break;
                 }
             }
