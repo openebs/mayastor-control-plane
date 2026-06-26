@@ -1,6 +1,7 @@
 pub use super::traits_snapshots::*;
 use crate::{
     common,
+    common::LabelVersion,
     context::Context,
     misc::traits::{StringValue, ValidateRequestTypes},
     nexus,
@@ -152,6 +153,11 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
         let target = volume_spec.active_config().into_opt();
         let target_config = volume_spec.config().clone().into_opt();
         let as_thin = volume_spec.snapshot_as_thin();
+        let label_version = match volume_spec.metadata.label_version() {
+            NexusVersion::V1 => LabelVersion::V1,
+            NexusVersion::V2 => LabelVersion::V2,
+            NexusVersion::Unknown(v) => LabelVersion::Unknown(v),
+        };
         let spec_status: common::SpecStatus = volume_spec.status.into();
 
         Self {
@@ -181,6 +187,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
                     .publish_context
                     .map(|map| common::MapWrapper { map }),
                 as_thin,
+                label_version: Some(label_version.into()),
             }),
         }
     }

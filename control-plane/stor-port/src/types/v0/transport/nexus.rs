@@ -25,6 +25,7 @@ pub enum NexusVersion {
     #[default]
     V1,
     V2,
+    Unknown(u32),
 }
 
 /// Nexus information

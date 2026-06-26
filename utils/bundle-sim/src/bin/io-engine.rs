@@ -210,6 +210,7 @@ impl IoEngine {
                     ana_state: 0,
                     allowed_hosts: state.allowed_hosts.into_iter().map(Into::into).collect(),
                     label_version: Some(match state.version {
+                        transport::NexusVersion::Unknown(v) => v as i32,
                         transport::NexusVersion::V1 => {
                             rpc::v1::nexus::NexusLabelVersion::LabelV1 as i32
                         }

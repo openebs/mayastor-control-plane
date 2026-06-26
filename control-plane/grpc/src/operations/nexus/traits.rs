@@ -24,8 +24,8 @@ use stor_port::{
         transport::{
             AddNexusChild, Child, ChildState, ChildStateReason, ChildUri, CreateNexus,
             DestroyNexus, Filter, GetRebuildRecord, HostNqn, Nexus, NexusId, NexusNvmePreemption,
-            NexusNvmfConfig, NexusShareProtocol, NexusStatus, NodeId, NvmeReservation,
-            NvmfControllerIdRange, RebuildHistory, RebuildJobState, RebuildRecord,
+            NexusNvmfConfig, NexusShareProtocol, NexusStatus, NexusVersion, NodeId,
+            NvmeReservation, NvmfControllerIdRange, RebuildHistory, RebuildJobState, RebuildRecord,
             RemoveNexusChild, ReplicaId, ShareNexus, UnshareNexus, VolumeId,
         },
     },
@@ -127,8 +127,21 @@ impl TryFrom<nexus::Nexus> for Nexus {
                 }
             },
             allowed_hosts: vec![],
-            version: todo!("nexus version"),
-            bdev_size: None,
+            version: match nexus_grpc_type
+                .label_version
+                .map(nexus::NexusLabelVersion::try_from)
+            {
+                Some(Err(_)) | Some(Ok(nexus::NexusLabelVersion::Unknown(_))) => {
+                    return Err(ReplyError::invalid_argument(
+                        ResourceKind::Nexus,
+                        "nexus.label_version",
+                        "Nexus label version is unknown".to_string(),
+                    ))
+                }
+                None | Some(Ok(nexus::NexusLabelVersion::V1)) => NexusVersion::V1,
+                Some(Ok(nexus::NexusLabelVersion::V2)) => NexusVersion::V2,
+            },
+            bdev_size: nexus_grpc_type.bdev_size,
         };
         Ok(nexus)
     }
@@ -152,6 +165,12 @@ impl From<Nexus> for nexus::Nexus {
             rebuilds: nexus.rebuilds,
             share: share as i32,
             status: status as i32,
+            label_version: Some(match nexus.version {
+                NexusVersion::V1 => nexus::NexusLabelVersion::V1.into(),
+                NexusVersion::V2 => nexus::NexusLabelVersion::V2.into(),
+                NexusVersion::Unknown(v) => nexus::NexusLabelVersion::Unknown(v).into(),
+            }),
+            bdev_size: nexus.bdev_size,
         }
     }
 }
@@ -507,6 +526,7 @@ impl TryFrom<nexus::NexusSpec> for NexusSpec {
                 ))
             }
         };
+        let version = nexus::NexusLabelVersion::from(value.label_version);
         Ok(Self {
             uuid: NexusId::try_from(StringValue(value.nexus_id))?,
             name: value.name,
@@ -557,7 +577,11 @@ impl TryFrom<nexus::NexusSpec> for NexusSpec {
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()?,
-            version: todo!("nexus version"),
+            version: match version {
+                nexus::NexusLabelVersion::Unknown(v) => NexusVersion::Unknown(v),
+                nexus::NexusLabelVersion::V1 => NexusVersion::V1,
+                nexus::NexusLabelVersion::V2 => NexusVersion::V2,
+            },
         })
     }
 }
@@ -590,6 +614,11 @@ impl From<NexusSpec> for nexus::NexusSpec {
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()
                 .unwrap_or_default(),
+            label_version: match value.version {
+                NexusVersion::Unknown(v) => nexus::NexusLabelVersion::Unknown(v).into(),
+                NexusVersion::V1 => nexus::NexusLabelVersion::V1.into(),
+                NexusVersion::V2 => nexus::NexusLabelVersion::V2.into(),
+            },
         }
     }
 }
@@ -880,7 +909,7 @@ impl From<&dyn CreateNexusInfo> for CreateNexus {
             managed: data.managed(),
             owner: data.owner(),
             config: data.config(),
-            version: todo!("nexus version"),
+            version: None,
         }
     }
 }
