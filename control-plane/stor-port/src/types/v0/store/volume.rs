@@ -1062,6 +1062,7 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.num_snapshots,
             src.max_snapshots,
             src.encrypted,
+            Some(src.metadata.persisted.label_version.into()),
         )
     }
 }

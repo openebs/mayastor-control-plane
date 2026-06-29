@@ -271,7 +271,8 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             }],
             device_uri: "".to_string(),
             rebuilds: 0,
-            protocol: models::Protocol::None
+            protocol: models::Protocol::None,
+            label_version: nexus.label_version,
         }
     );
 

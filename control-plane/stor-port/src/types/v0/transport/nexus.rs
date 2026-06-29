@@ -27,6 +27,15 @@ pub enum NexusVersion {
     V2,
     Unknown(u32),
 }
+impl From<NexusVersion> for u32 {
+    fn from(src: NexusVersion) -> Self {
+        match src {
+            NexusVersion::V1 => 1,
+            NexusVersion::V2 => 2,
+            NexusVersion::Unknown(v) => v,
+        }
+    }
+}
 
 /// Nexus information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
@@ -80,7 +89,7 @@ impl Nexus {
 
 impl From<Nexus> for models::Nexus {
     fn from(src: Nexus) -> Self {
-        models::Nexus::new(
+        models::Nexus::new_all(
             src.children,
             src.device_uri,
             src.node,
@@ -89,6 +98,7 @@ impl From<Nexus> for models::Nexus {
             src.size,
             src.status,
             src.uuid,
+            Some(src.version.into()),
         )
     }
 }
