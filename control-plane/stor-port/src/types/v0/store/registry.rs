@@ -1,4 +1,7 @@
-use crate::types::v0::store::definitions::{ObjectKey, StorableObject, StorableObjectType};
+use crate::types::v0::{
+    store::definitions::{ObjectKey, StorableObject, StorableObjectType},
+    transport::NexusVersion,
+};
 use pstor::ApiVersion;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -15,6 +18,14 @@ pub struct CoreRegistryConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     mayastor_compat_v1: Option<bool>,
+    /// The version of the volume label.
+    /// Volumes will be created with this version of the label.
+    /// This should only be changed when all nodes support the new version of the label,
+    /// otherwise volumes may not be accessible on all nodes.
+    #[serde(default, rename = "volumeLabelVersion")]
+    volume_label_version: NexusVersion,
+    #[serde(skip)]
+    store_dirty: bool,
 }
 
 impl CoreRegistryConfig {
@@ -24,6 +35,8 @@ impl CoreRegistryConfig {
             id: CoreRegistryConfigKey::default(),
             registration,
             mayastor_compat_v1: None,
+            volume_label_version: NexusVersion::V1,
+            store_dirty: false,
         }
     }
     /// Get the `mayastor_compat_v1`.
@@ -36,11 +49,45 @@ impl CoreRegistryConfig {
             true => Some(true),
             false => None,
         };
-        self.mayastor_compat_v1 = val
+        self.mayastor_compat_v1 = val;
     }
     /// Get a reference to the `NodeRegistration`
     pub fn node_registration(&self) -> &NodeRegistration {
         &self.registration
+    }
+    /// Get the version of the volume label.
+    pub fn volume_version(&self) -> NexusVersion {
+        self.volume_label_version
+    }
+    /// Set the version of the volume label.
+    ///
+    /// Returns:
+    /// * `Ok(None)` if the version is already set
+    /// * `Ok(Some(existing))` if the existing version is lower than the provided version
+    /// * `Err(existing)` if the existing version is greater than the provided version  \
+    ///   This should not happen, but we want to be safe.
+    pub fn set_volume_version(
+        &mut self,
+        version: NexusVersion,
+    ) -> Result<Option<NexusVersion>, NexusVersion> {
+        if version > self.volume_label_version {
+            let old = self.volume_label_version;
+            self.volume_label_version = version;
+            Ok(Some(old))
+        } else if version < self.volume_label_version {
+            Err(self.volume_label_version)
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Is the configuration dirty and needs to be stored in the persistent store?
+    pub fn is_dirty(&self) -> bool {
+        self.store_dirty
+    }
+    /// Set the dirty flag to indicate that the configuration needs to be stored in the persistent store
+    pub fn set_dirty(&mut self, dirty: bool) {
+        self.store_dirty = dirty;
     }
 }
 

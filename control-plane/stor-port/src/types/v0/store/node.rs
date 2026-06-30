@@ -6,7 +6,9 @@ use crate::{
             definitions::{ObjectKey, StorableObject, StorableObjectType},
             AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
         },
-        transport::{self, HostNqn, NodeBugFix, NodeBugFixes, NodeFeatures, NodeId, VolumeId},
+        transport::{
+            self, HostNqn, NexusVersion, NodeBugFix, NodeBugFixes, NodeFeatures, NodeId, VolumeId,
+        },
     },
     IntoOption,
 };
@@ -308,6 +310,12 @@ impl NodeSpec {
     /// Node version.
     pub fn version(&self) -> &Option<String> {
         &self.version
+    }
+    /// Node version.
+    pub fn label_version(&self) -> NexusVersion {
+        self.features
+            .as_ref()
+            .map_or(NexusVersion::V1, |f| f.nexus_label_version)
     }
 
     /// Node gRPC endpoint.

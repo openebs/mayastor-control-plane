@@ -20,7 +20,7 @@ pub struct GetNexuses {
     pub filter: Filter,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
 pub enum NexusVersion {
     #[default]
     V1,

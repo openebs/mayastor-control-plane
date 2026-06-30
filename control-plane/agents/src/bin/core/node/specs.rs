@@ -27,7 +27,7 @@ impl ResourceSpecsLocked {
         &self,
         registry: &Registry,
         node: &Register,
-    ) -> Result<NodeSpec, SvcError> {
+    ) -> Result<bool, SvcError> {
         let (changed, node) = {
             let mut specs = self.write();
             match specs.nodes.get(&node.id) {
@@ -72,7 +72,7 @@ impl ResourceSpecsLocked {
         if changed {
             registry.store_obj(&node).await?;
         }
-        Ok(node)
+        Ok(changed)
     }
 
     /// Deregister the node by marking it as shutdown.
@@ -125,7 +125,7 @@ impl ResourceSpecsLocked {
     }
 
     /// Get all locked node specs
-    fn nodes_rsc(&self) -> Vec<ResourceMutex<NodeSpec>> {
+    pub(crate) fn nodes_rsc(&self) -> Vec<ResourceMutex<NodeSpec>> {
         self.read().nodes.to_vec()
     }
 
