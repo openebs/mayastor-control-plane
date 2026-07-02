@@ -627,6 +627,7 @@ def expected_volume_spec(replica, toplogy):
         num_snapshots=0,
         encrypted=False,
         topology=toplogy,
+        labelVersion=2,
     )
 
 

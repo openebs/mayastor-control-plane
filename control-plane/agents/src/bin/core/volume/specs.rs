@@ -905,6 +905,7 @@ impl ResourceSpecsLocked {
     pub(crate) fn get_or_create_volume(
         &self,
         request: &CreateVolumeSource,
+        registry: &Registry,
     ) -> Result<ResourceMutex<VolumeSpec>, SvcError> {
         let mut specs = self.write();
         if let Some(volume) = specs.volumes.get(&request.source().uuid) {
@@ -925,15 +926,13 @@ impl ResourceSpecsLocked {
                     }
                 }
             }
+            let volume = VolumeSpec::from(request.source())
+                .with_label_version(registry.config().volume_version());
             Ok(match request {
-                CreateVolumeSource::None(_) => {
-                    specs.volumes.insert(VolumeSpec::from(request.source()))
-                }
-                CreateVolumeSource::Snapshot(create_from_snap) => {
-                    let mut spec = VolumeSpec::from(request.source());
-                    spec.set_content_source(Some(create_from_snap.to_snapshot_source()));
-                    specs.volumes.insert(spec)
-                }
+                CreateVolumeSource::None(_) => specs.volumes.insert(volume),
+                CreateVolumeSource::Snapshot(create_from_snap) => specs.volumes.insert(
+                    volume.with_content_source(Some(create_from_snap.to_snapshot_source())),
+                ),
             })
         }
     }

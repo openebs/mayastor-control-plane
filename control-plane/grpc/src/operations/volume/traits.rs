@@ -303,6 +303,11 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
                 ))
             }
         };
+        let label_version = match volume_meta.label_version() {
+            0 | 1 => NexusVersion::V1,
+            2 => NexusVersion::V2,
+            v => NexusVersion::Unknown(v),
+        };
 
         let volume_spec_status = match common::SpecStatus::try_from(volume_meta.spec_status) {
             Ok(status) => status.into(),
@@ -387,7 +392,7 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
                 .publish_context
                 .map(|map_wrapper| map_wrapper.map),
             affinity_group: volume_spec.affinity_group.into_opt(),
-            metadata: VolumeMetadata::new(volume_meta.as_thin, NexusVersion::V1),
+            metadata: VolumeMetadata::new(volume_meta.as_thin, label_version),
             content_source: volume_spec.content_source.try_into_opt()?,
             num_snapshots: volume_spec.num_snapshots,
             max_snapshots: volume_spec.max_snapshots,

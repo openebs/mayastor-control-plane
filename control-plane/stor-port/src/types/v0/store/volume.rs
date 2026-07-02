@@ -641,8 +641,16 @@ impl VolumeSpec {
             .map(|target| VolumeHealthKey::new(self.uuid.clone(), target.clone()))
     }
     /// Set the content source.
-    pub fn set_content_source(&mut self, content_source: Option<VolumeContentSource>) {
+    pub fn with_content_source(mut self, content_source: Option<VolumeContentSource>) -> Self {
         self.content_source = content_source;
+        self
+    }
+    /// Set the label version.
+    /// # Warning
+    /// This must only be set during creation time!
+    pub fn with_label_version(mut self, label_version: transport::NexusVersion) -> Self {
+        self.metadata.persisted.label_version = label_version;
+        self
     }
 }
 
@@ -1013,6 +1021,7 @@ impl PartialEq<CreateVolume> for VolumeSpec {
         other.status = self.status.clone();
         other.sequencer = self.sequencer.clone();
         other.content_source = self.content_source.clone();
+        other.metadata.persisted.label_version = self.metadata.persisted.label_version;
         &other == self
     }
 }
