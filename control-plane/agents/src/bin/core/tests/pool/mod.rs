@@ -237,7 +237,7 @@ async fn pool() {
         .expect_err("Should fail to destroy a pool that is in use.");
 
     assert!(matches!(
-        error,
+        error.error,
         ReplyError {
             kind: ReplyErrorKind::InUse,
             resource: ResourceKind::Pool,

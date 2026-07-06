@@ -234,6 +234,10 @@ async fn purge_rejected_volume_loss_without_accept(pool_client: &dyn PoolOperati
 
     assert_eq!(err.kind, ReplyErrorKind::PoolPurgeVolumeLossAcceptRequired);
     assert_eq!(err.resource, ResourceKind::Pool);
+    assert!(
+        !err.volume_loss.volumes.is_empty(),
+        "Error should carry the volume loss details"
+    );
 }
 
 /// Purge succeeds when all confirmations are provided, reports data loss.

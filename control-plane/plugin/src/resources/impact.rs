@@ -341,3 +341,81 @@ pub async fn show_node_impact(node_id: &NodeId, output: &OutputFormat) -> Result
 
     Ok(())
 }
+
+impl GetHeaderRow for models::VolumeLossDetail {
+    fn get_header_row(&self) -> Row {
+        row![
+            "VOLUME",
+            "REPLICAS-BEFORE",
+            "HEALTHY-BEFORE",
+            "LOST-ON-POOL",
+            "HEALTHY-AFTER"
+        ]
+    }
+}
+
+impl CreateRow for models::VolumeLossDetail {
+    fn row(&self) -> Row {
+        row![
+            self.volume_id,
+            self.replicas_before,
+            self.healthy_before,
+            self.lost_on_pool,
+            self.healthy_after,
+        ]
+    }
+}
+
+impl GetHeaderRow for models::SnapshotLossDetail {
+    fn get_header_row(&self) -> Row {
+        row![
+            "SNAPSHOT",
+            "REPLICA-SNAPSHOTS-BEFORE",
+            "HEALTHY-BEFORE",
+            "LOST-ON-POOL",
+            "HEALTHY-AFTER"
+        ]
+    }
+}
+
+impl CreateRow for models::SnapshotLossDetail {
+    fn row(&self) -> Row {
+        row![
+            self.snapshot_id,
+            self.replica_snapshots_before,
+            self.healthy_before,
+            self.lost_on_pool,
+            self.healthy_after,
+        ]
+    }
+}
+
+/// Print the volume/snapshot loss details carried by a purge-rejected API error, if any.
+///
+/// The agent-core computes the loss impact as part of the purge pre-flight check, and
+/// shares it back through the error response's `customInfo` when the purge is rejected
+/// because `accept_volume_loss`/`accept_snapshot_loss` was required. This lets the plugin
+/// show exactly what would be lost, without the user having to separately run `--show-impact`.
+pub fn print_purge_loss_from_error(
+    source: &openapi::tower::client::Error<models::RestJsonError>,
+    output: &OutputFormat,
+) {
+    let Some(custom) = source.error_body().and_then(|body| body.custom_info.clone()) else {
+        return;
+    };
+
+    if let Some(volume_loss) = custom.pool.volume_loss {
+        if !volume_loss.volumes.is_empty() {
+            println!("Volumes that would lose their last healthy replica:");
+            print_table(output, volume_loss.volumes);
+            println!();
+        }
+    }
+    if let Some(snapshot_loss) = custom.pool.snapshot_loss {
+        if !snapshot_loss.snapshots.is_empty() {
+            println!("Snapshots that would lose their last replica snapshot:");
+            print_table(output, snapshot_loss.snapshots);
+            println!();
+        }
+    }
+}

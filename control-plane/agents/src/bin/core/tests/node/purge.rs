@@ -193,6 +193,10 @@ async fn purge_rejected_volume_loss_without_accept(
 
     assert_eq!(err.kind, ReplyErrorKind::NodePurgeVolumeLossAcceptRequired);
     assert_eq!(err.resource, ResourceKind::Node);
+    assert!(
+        !err.volume_loss.volumes.is_empty(),
+        "Error should carry the volume loss details"
+    );
 }
 
 /// Purge succeeds when all flags are provided, reports volume loss.
