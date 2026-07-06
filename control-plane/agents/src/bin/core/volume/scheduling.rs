@@ -63,6 +63,9 @@ pub(crate) async fn nexus_child_remove_candidates(
 }
 
 /// Return healthy replicas for volume nexus creation.
+///
+/// Mirrors the same gate as `nexus::scheduling::healthy_children`; see `NexusInfo::clean_state`
+/// for the trust-all rule.
 pub(crate) async fn healthy_volume_replicas(
     request: &GetPersistedNexusChildren,
     registry: &Registry,
@@ -70,7 +73,7 @@ pub(crate) async fn healthy_volume_replicas(
     let builder = nexus::CreateVolumeNexus::builder_with_defaults(request, registry).await?;
     let info = builder.context().nexus_info().clone();
     if let Some(info_inner) = &builder.context().nexus_info() {
-        if !info_inner.clean_shutdown {
+        if !info_inner.clean_state() {
             return Ok(HealthyChildItems::One(info, builder.collect()));
         }
     }
@@ -91,9 +94,10 @@ pub(crate) async fn snapshoteable_replica(
     let info = builder.context().nexus_info().clone();
 
     if let Some(info_inner) = &builder.context().nexus_info() {
-        // if it's published then we of course we don't have a clean shutdown if the target
-        // is still up..
-        if !published && !info_inner.clean_shutdown {
+        // If it's published then we of course we don't have a clean shutdown if the target
+        // is still up. For an unpublished volume, defer to `NexusInfo::clean_state` for the
+        // trust-all rule.
+        if !published && !info_inner.clean_state() {
             return Ok(HealthyChildItems::One(info, builder.collect()));
         }
     }

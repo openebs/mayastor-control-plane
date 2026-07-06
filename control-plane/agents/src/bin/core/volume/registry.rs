@@ -134,16 +134,17 @@ impl Registry {
                     .any(|(r, t)| r == &c.uuid && t.status().online())
             });
             let online_healthy_replicas = online_healthy.count() as u8;
+            let all_healthy_replicas_clean = info.clean_state();
             VolumeHealth {
                 clean_shutdown: info.clean_shutdown,
                 healthy_replicas: info.nr_healthy_replicas(),
-                clean_replicas: if info.clean_shutdown {
+                clean_replicas: if all_healthy_replicas_clean {
                     info.nr_healthy_replicas()
                 } else {
                     info.nr_healthy_replicas().min(1)
                 },
                 online_healthy_replicas,
-                online_clean_replicas: if info.clean_shutdown {
+                online_clean_replicas: if all_healthy_replicas_clean {
                     online_healthy_replicas
                 } else {
                     online_healthy_replicas.min(1)
@@ -155,6 +156,7 @@ impl Registry {
                         })
                     })
                     .count() as u8,
+                all_healthy_replicas_clean,
             }
         });
 

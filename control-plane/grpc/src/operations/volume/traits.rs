@@ -223,6 +223,7 @@ impl From<volume::VolumeHealth> for VolumeHealth {
             online_healthy_replicas: value.online_healthy_replicas as u8,
             online_clean_replicas: value.online_clean_replicas as u8,
             live_healthy_replicas: value.live_healthy_replicas as u8,
+            all_healthy_replicas_clean: value.all_healthy_replicas_clean,
         }
     }
 }
@@ -235,6 +236,7 @@ impl From<VolumeHealth> for volume::VolumeHealth {
             online_healthy_replicas: value.online_healthy_replicas as u32,
             online_clean_replicas: value.online_clean_replicas as u32,
             live_healthy_replicas: value.live_healthy_replicas as u32,
+            all_healthy_replicas_clean: value.all_healthy_replicas_clean,
         }
     }
 }

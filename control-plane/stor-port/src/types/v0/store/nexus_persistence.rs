@@ -23,6 +23,13 @@ pub struct NexusInfo {
     /// Nexus need to be self shutdown by io-engine.
     #[serde(default)]
     pub do_self_shutdown: bool,
+    /// Whether the nexus target was persisted as shared. When true, front-end
+    /// I/O may have been in flight; when false, the nexus was quiet and its
+    /// children can be trusted as in-sync. `None` means the entry was written
+    /// by an io-engine version that predates this field, or by a mixed-version
+    /// rollout, and must be treated conservatively (assume shared).
+    #[serde(default)]
+    pub shared: Option<bool>,
     /// Information about children.
     pub children: Vec<ChildInfo>,
 }
@@ -44,6 +51,17 @@ impl NexusInfo {
     /// Get number of healthy replicas.
     pub fn nr_healthy_replicas(&self) -> u8 {
         self.children.iter().filter(|c| c.healthy).count() as u8
+    }
+
+    /// Whether no in-flight front-end I/O could have dirtied the children.
+    /// True when either the nexus shut down cleanly (`clean_shutdown`), or when it was
+    /// persisted as not-shared (front-end I/O was impossible while the target was down).
+    ///
+    /// Missing `shared` (an entry written by an io-engine version that predates the field,
+    /// or by a mixed-version rollout) is treated as shared: we cannot prove the nexus was
+    /// quiet, so we fall back to the conservative pre-existing behaviour.
+    pub fn clean_state(&self) -> bool {
+        self.clean_shutdown || !self.shared.unwrap_or(true)
     }
 
     /// Modify the self with the given key information.
@@ -304,4 +322,59 @@ pub async fn delete_all_v1_nexus_info<S: Store>(
     }
     info!("v1.0.x nexus_info cleaned up successfully");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NexusInfo;
+
+    /// Entries persisted by an io-engine version that predates the `shared` field must still
+    /// deserialize cleanly, with `shared` filled in as `None`, and must be treated conservatively
+    /// as if the nexus was shared so old / mixed-version-rollout entries never get promoted to
+    /// "trust all children" incorrectly. This is the load-bearing upgrade-window property.
+    #[test]
+    fn deserialize_without_shared_field() {
+        let json = r#"{"clean_shutdown":false,"children":[]}"#;
+        let info: NexusInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(info.shared, None);
+        assert!(!info.clean_shutdown);
+        assert!(!info.clean_state());
+    }
+
+    /// A cleanly-shut-down nexus is always in a clean state, regardless of the persisted
+    /// `shared` value at the time of shutdown.
+    #[test]
+    fn clean_state_when_clean_shutdown() {
+        for shared in [None, Some(true), Some(false)] {
+            let info = NexusInfo {
+                clean_shutdown: true,
+                shared,
+                ..Default::default()
+            };
+            assert!(info.clean_state(), "clean_shutdown=true, shared={shared:?}");
+        }
+    }
+
+    /// An unclean shutdown while the nexus was persisted as not-shared is still clean:
+    /// no front-end I/O could have been in flight to dirty the children.
+    #[test]
+    fn clean_state_when_unclean_but_unshared() {
+        let info = NexusInfo {
+            clean_shutdown: false,
+            shared: Some(false),
+            ..Default::default()
+        };
+        assert!(info.clean_state());
+    }
+
+    /// An unclean shutdown while the nexus was actively shared is not clean.
+    #[test]
+    fn dirty_state_when_unclean_and_shared() {
+        let info = NexusInfo {
+            clean_shutdown: false,
+            shared: Some(true),
+            ..Default::default()
+        };
+        assert!(!info.clean_state());
+    }
 }

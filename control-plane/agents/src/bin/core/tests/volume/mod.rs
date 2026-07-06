@@ -133,9 +133,17 @@ async fn nexus_persistence_test_iteration(
                 uuid: volume.spec().uuid.clone(),
                 // publish it on the remote first, to complicate things
                 target_node: Some(remote.clone()),
-                share: None,
+                // Publish shared over Nvmf so io-engine records `shared: Some(true)`
+                // on the nexus. Destroy on unpublish preserves the last-persisted
+                // shared value, so the fault mutations below run against a shared
+                // nexus — matching the "trust one child" scenario the assertions
+                // encode. Under `clean_state()`, an unshared nexus would count as
+                // clean and the "trust one" path would be unreachable.
+                share: Some(VolumeShareProtocol::Nvmf),
                 publish_context: HashMap::new(),
-                frontend_nodes: vec![],
+                // SingleNodeWriter + Nvmf share requires at least one frontend
+                // node when the cluster runs with `no_deprecated_access_mode(true)`.
+                frontend_nodes: vec!["a".into()],
                 access_mode: VolumeAccessMode::SingleNodeWriter,
             },
             None,
@@ -1453,9 +1461,13 @@ async fn health() {
             &PublishVolume::new(
                 volume.spec().uuid.clone(),
                 Some(cluster.node(0)),
-                None,
+                // Publish shared over Nvmf. Under the `clean_state()` rule an
+                // unshared nexus is considered clean (no possible in-flight I/O)
+                // and its children are all trusted, which would make the initial
+                // "one clean replica" assertion below unreachable.
+                Some(VolumeShareProtocol::Nvmf),
                 HashMap::new(),
-                vec![],
+                vec!["a".into()],
                 VolumeAccessMode::SingleNodeWriter,
             ),
             None,
@@ -1553,9 +1565,13 @@ async fn health() {
             &PublishVolume::new(
                 volume.spec().uuid.clone(),
                 Some(cluster.node(1)),
-                None,
+                // Match the earlier publish: shared over Nvmf keeps the health
+                // assertions below on the "trust one child" branch. The
+                // unshared/`clean_state() == true` path is exercised further
+                // down in this same test.
+                Some(VolumeShareProtocol::Nvmf),
                 HashMap::new(),
-                vec![],
+                vec!["a".into()],
                 VolumeAccessMode::SingleNodeWriter,
             ),
             None,
@@ -1614,6 +1630,66 @@ async fn health() {
                 && h.clean_replicas == 2
                 && h.live_healthy_replicas == 0
                 && h.online_healthy_replicas == 1
+        },
+    )
+    .await
+    .unwrap();
+
+    // "Trust all when unshared" branch of `NexusInfo::clean_state()`: with no
+    // share, no front-end I/O can be in flight, so all healthy replicas are
+    // safe as rebuild sources even if `clean_shutdown` is false.
+    // Bring the two stopped nodes back so we have a live target to publish on,
+    // then republish the same volume without a share protocol.
+    cluster.composer().start(&cluster.node(0)).await.unwrap();
+    cluster.composer().start(&cluster.node(1)).await.unwrap();
+    cluster
+        .wait_node_status(cluster.node(0), transport::NodeStatus::Online)
+        .await
+        .unwrap();
+    cluster
+        .wait_node_status(cluster.node(1), transport::NodeStatus::Online)
+        .await
+        .unwrap();
+    cluster.wait_pool_online(cluster.pool(0, 0)).await.unwrap();
+    cluster.wait_pool_online(cluster.pool(1, 0)).await.unwrap();
+
+    let volume = volume_client
+        .unpublish(
+            &UnpublishVolume::new(&volume.spec().uuid, false, vec![]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    let volume = volume_client
+        .publish(
+            &PublishVolume::new(
+                volume.spec().uuid.clone(),
+                Some(cluster.node(0)),
+                None,
+                HashMap::new(),
+                vec![],
+                VolumeAccessMode::SingleNodeWriter,
+            ),
+            None,
+        )
+        .await
+        .unwrap();
+
+    cluster.composer().kill(&cluster.node(2)).await.unwrap();
+
+    wait_for_health(
+        &volume.state(),
+        &volume_client,
+        Duration::from_secs(2),
+        |h| {
+            h.healthy_replicas == 2
+                && !h.clean_shutdown
+                && h.all_healthy_replicas_clean
+                && h.clean_replicas == h.healthy_replicas
+                && h.online_clean_replicas == h.online_healthy_replicas
+                && h.live_healthy_replicas == 2
+                && h.online_healthy_replicas == 2
         },
     )
     .await
