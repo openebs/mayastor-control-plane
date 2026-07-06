@@ -102,6 +102,75 @@ impl From<crate::common::ReplyError> for PoolCreateError {
     }
 }
 
+/// Error type which is returned over the transport for the pool destroy operation.
+///
+/// Unlike the generic `ReplyError`, this also carries the volume/snapshot loss
+/// information computed during a purge pre-flight check, so that callers can
+/// report which volumes/snapshots would lose data even when the purge itself
+/// is rejected (e.g. because `accept_volume_loss`/`accept_snapshot_loss` was not set).
+#[derive(Clone, Debug)]
+pub struct PoolDestroyError {
+    /// The generic ReplyError.
+    pub error: ReplyError,
+    /// Volumes that would lose their last healthy replica because of the purge.
+    pub volume_loss: VolumeLossInfo,
+    /// Snapshots that would lose their last replica snapshot because of the purge.
+    pub snapshot_loss: SnapshotLossInfo,
+}
+
+impl Deref for PoolDestroyError {
+    type Target = ReplyError;
+    fn deref(&self) -> &Self::Target {
+        &self.error
+    }
+}
+
+impl std::fmt::Display for PoolDestroyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.error)
+    }
+}
+
+impl From<tokio::task::JoinError> for PoolDestroyError {
+    fn from(error: tokio::task::JoinError) -> Self {
+        Self {
+            error: ReplyError::aborted_error(error),
+            volume_loss: VolumeLossInfo::default(),
+            snapshot_loss: SnapshotLossInfo::default(),
+        }
+    }
+}
+
+impl From<tonic::Status> for PoolDestroyError {
+    fn from(status: tonic::Status) -> Self {
+        Self {
+            error: status.into(),
+            volume_loss: VolumeLossInfo::default(),
+            snapshot_loss: SnapshotLossInfo::default(),
+        }
+    }
+}
+
+impl From<ReplyError> for PoolDestroyError {
+    fn from(error: ReplyError) -> Self {
+        Self {
+            error,
+            volume_loss: VolumeLossInfo::default(),
+            snapshot_loss: SnapshotLossInfo::default(),
+        }
+    }
+}
+
+impl From<crate::common::ReplyError> for PoolDestroyError {
+    fn from(error: crate::common::ReplyError) -> Self {
+        Self {
+            error: error.into(),
+            volume_loss: VolumeLossInfo::default(),
+            snapshot_loss: SnapshotLossInfo::default(),
+        }
+    }
+}
+
 /// Trait implemented by services which support pool operations.
 #[tonic::async_trait]
 pub trait PoolOperations: Send + Sync {
@@ -118,7 +187,7 @@ pub trait PoolOperations: Send + Sync {
         &self,
         pool: &dyn DestroyPoolInfo,
         ctx: Option<Context>,
-    ) -> Result<Option<PoolDeleteResult>, ReplyError>;
+    ) -> Result<Option<PoolDeleteResult>, PoolDestroyError>;
     /// Get pools based on the filters
     async fn get(&self, filter: Filter, ctx: Option<Context>) -> Result<Pools, ReplyError>;
     /// Associate the labels with the given pool.
@@ -1264,55 +1333,63 @@ impl From<SnapshotLossDetail> for pool::SnapshotLossDetail {
     }
 }
 
+impl TryFrom<pool::VolumeLossInfo> for VolumeLossInfo {
+    type Error = ReplyError;
+
+    fn try_from(volume_loss: pool::VolumeLossInfo) -> Result<Self, Self::Error> {
+        let mut volumes = Vec::new();
+        for v in volume_loss.volumes {
+            let volume_id = uuid::Uuid::parse_str(&v.volume_id).map_err(|_| {
+                ReplyError::invalid_argument(ResourceKind::Volume, "volume_id", v.volume_id.clone())
+            })?;
+            volumes.push(VolumeLossDetail {
+                volume_id: volume_id.into(),
+                replicas_before: v.replicas_before,
+                healthy_before: v.healthy_before,
+                lost_on_pool: v.lost_on_pool,
+                healthy_after: v.healthy_after,
+            });
+        }
+        Ok(VolumeLossInfo { volumes })
+    }
+}
+
+impl TryFrom<pool::SnapshotLossInfo> for SnapshotLossInfo {
+    type Error = ReplyError;
+
+    fn try_from(snapshot_loss: pool::SnapshotLossInfo) -> Result<Self, Self::Error> {
+        let mut snapshots = Vec::new();
+        for s in snapshot_loss.snapshots {
+            let snapshot_id = uuid::Uuid::parse_str(&s.snapshot_id).map_err(|_| {
+                ReplyError::invalid_argument(
+                    ResourceKind::VolumeSnapshot,
+                    "snapshot_id",
+                    s.snapshot_id.clone(),
+                )
+            })?;
+            snapshots.push(SnapshotLossDetail {
+                snapshot_id: snapshot_id.into(),
+                replica_snapshots_before: s.replica_snapshots_before,
+                healthy_before: s.healthy_before,
+                lost_on_pool: s.lost_on_pool,
+                healthy_after: s.healthy_after,
+            });
+        }
+        Ok(SnapshotLossInfo { snapshots })
+    }
+}
+
 impl TryFrom<pool::PoolDeleteResult> for PoolDeleteResult {
     type Error = ReplyError;
 
     fn try_from(result: pool::PoolDeleteResult) -> Result<Self, Self::Error> {
         let volume_loss = match result.volume_loss {
-            Some(volume_loss) => {
-                let mut volumes = Vec::new();
-                for v in volume_loss.volumes {
-                    let volume_id = uuid::Uuid::parse_str(&v.volume_id).map_err(|_| {
-                        ReplyError::invalid_argument(
-                            ResourceKind::Volume,
-                            "volume_id",
-                            v.volume_id.clone(),
-                        )
-                    })?;
-                    volumes.push(VolumeLossDetail {
-                        volume_id: volume_id.into(),
-                        replicas_before: v.replicas_before,
-                        healthy_before: v.healthy_before,
-                        lost_on_pool: v.lost_on_pool,
-                        healthy_after: v.healthy_after,
-                    });
-                }
-                VolumeLossInfo { volumes }
-            }
+            Some(volume_loss) => VolumeLossInfo::try_from(volume_loss)?,
             None => VolumeLossInfo::default(),
         };
 
         let snapshot_loss = match result.snapshot_loss {
-            Some(snapshot_loss) => {
-                let mut snapshots = Vec::new();
-                for s in snapshot_loss.snapshots {
-                    let snapshot_id = uuid::Uuid::parse_str(&s.snapshot_id).map_err(|_| {
-                        ReplyError::invalid_argument(
-                            ResourceKind::VolumeSnapshot,
-                            "snapshot_id",
-                            s.snapshot_id.clone(),
-                        )
-                    })?;
-                    snapshots.push(SnapshotLossDetail {
-                        snapshot_id: snapshot_id.into(),
-                        replica_snapshots_before: s.replica_snapshots_before,
-                        healthy_before: s.healthy_before,
-                        lost_on_pool: s.lost_on_pool,
-                        healthy_after: s.healthy_after,
-                    });
-                }
-                SnapshotLossInfo { snapshots }
-            }
+            Some(snapshot_loss) => SnapshotLossInfo::try_from(snapshot_loss)?,
             None => SnapshotLossInfo::default(),
         };
 

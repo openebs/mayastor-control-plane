@@ -20,7 +20,7 @@ use crate::controller::{
 use grpc::{
     context::Context,
     operations::{
-        node::traits::{GetBlockDeviceInfo, NodeOperations},
+        node::traits::{GetBlockDeviceInfo, NodeDeleteError, NodeOperations},
         registration::traits::{DeregisterInfo, RegisterInfo, RegistrationOperations},
     },
 };
@@ -158,7 +158,7 @@ impl NodeOperations for Service {
     }
 
     /// Delete a node and all its resources (purge).
-    async fn delete(&self, request: &DestroyNode) -> Result<NodeDeleteResult, ReplyError> {
+    async fn delete(&self, request: &DestroyNode) -> Result<NodeDeleteResult, NodeDeleteError> {
         let result = self.delete_node(request).await?;
         Ok(result)
     }

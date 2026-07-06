@@ -231,6 +231,12 @@ message DeleteNodeReply {
     NodeDeleteResult result = 1;
     common.ReplyError error = 2;
   }
+  // Volumes that would lose their last healthy replica, populated even when the
+  // purge is rejected because accept_volume_loss was required.
+  repeated pool.VolumeLossDetail volume_loss = 3;
+  // Snapshots that would lose their last replica snapshot, populated even when
+  // the purge is rejected because accept_snapshot_loss was required.
+  repeated pool.SnapshotLossDetail snapshot_loss = 4;
 }
 
 service NodeGrpc {

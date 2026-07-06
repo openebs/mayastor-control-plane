@@ -1392,6 +1392,50 @@ impl From<SvcError> for grpc::operations::pool::traits::PoolCreateError {
     }
 }
 
+impl From<SvcError> for grpc::operations::pool::traits::PoolDestroyError {
+    fn from(error: SvcError) -> Self {
+        match &error {
+            SvcError::PoolPurgeVolumeLossAcceptRequired { volume_loss, .. } => Self {
+                volume_loss: volume_loss.clone(),
+                snapshot_loss: SnapshotLossInfo::default(),
+                error: error.into(),
+            },
+            SvcError::PoolPurgeSnapshotLossAcceptRequired { snapshot_loss, .. } => Self {
+                volume_loss: VolumeLossInfo::default(),
+                snapshot_loss: snapshot_loss.clone(),
+                error: error.into(),
+            },
+            _error => Self {
+                volume_loss: VolumeLossInfo::default(),
+                snapshot_loss: SnapshotLossInfo::default(),
+                error: error.into(),
+            },
+        }
+    }
+}
+
+impl From<SvcError> for grpc::operations::node::traits::NodeDeleteError {
+    fn from(error: SvcError) -> Self {
+        match &error {
+            SvcError::NodePurgeVolumeLossAcceptRequired { volume_loss, .. } => Self {
+                volume_loss: volume_loss.clone(),
+                snapshot_loss: SnapshotLossInfo::default(),
+                error: error.into(),
+            },
+            SvcError::NodePurgeSnapshotLossAcceptRequired { snapshot_loss, .. } => Self {
+                volume_loss: VolumeLossInfo::default(),
+                snapshot_loss: snapshot_loss.clone(),
+                error: error.into(),
+            },
+            _error => Self {
+                volume_loss: VolumeLossInfo::default(),
+                snapshot_loss: SnapshotLossInfo::default(),
+                error: error.into(),
+            },
+        }
+    }
+}
+
 fn tonic_to_kind(code: tonic::Code) -> ReplyErrorKind {
     use tonic::Code;
     match code {

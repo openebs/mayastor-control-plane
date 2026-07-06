@@ -60,10 +60,19 @@ impl PoolGrpc for PoolServer {
         match self.service.destroy(&req, None).await {
             Ok(Some(result)) => Ok(Response::new(DestroyPoolReply {
                 reply: Some(pool::destroy_pool_reply::Reply::Result(result.into())),
+                volume_loss: None,
+                snapshot_loss: None,
             })),
-            Ok(None) => Ok(Response::new(DestroyPoolReply { reply: None })),
+            Ok(None) => Ok(Response::new(DestroyPoolReply {
+                reply: None,
+                volume_loss: None,
+                snapshot_loss: None,
+            })),
             Err(e) => Ok(Response::new(DestroyPoolReply {
-                reply: Some(pool::destroy_pool_reply::Reply::Error(e.into())),
+                reply: Some(pool::destroy_pool_reply::Reply::Error(e.error.into())),
+                volume_loss: (!e.volume_loss.volumes.is_empty()).then(|| e.volume_loss.into()),
+                snapshot_loss: (!e.snapshot_loss.snapshots.is_empty())
+                    .then(|| e.snapshot_loss.into()),
             })),
         }
     }

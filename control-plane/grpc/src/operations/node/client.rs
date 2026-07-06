@@ -8,7 +8,9 @@ use crate::{
         CordonNodeRequest, DrainNodeRequest, GetNodesRequest, LabelNodeRequest, ProbeRequest,
         UncordonNodeRequest, UnlabelNodeRequest,
     },
-    operations::node::traits::{GetBlockDeviceInfo, NodeOperations},
+    operations::node::traits::{
+        GetBlockDeviceInfo, NodeDeleteError, NodeOperations,
+    },
 };
 use std::{collections::HashMap, convert::TryFrom, ops::Deref};
 use stor_port::{
@@ -182,15 +184,29 @@ impl NodeOperations for NodeClient {
     }
 
     #[tracing::instrument(name = "NodeClient::delete", level = "debug", skip(self), err)]
-    async fn delete(&self, request: &DestroyNode) -> Result<NodeDeleteResult, ReplyError> {
+    async fn delete(&self, request: &DestroyNode) -> Result<NodeDeleteResult, NodeDeleteError> {
         let req = crate::node::DeleteNodeRequest::from(request.clone());
         let response = self.client().delete_node(req).await?.into_inner();
         match response.reply {
             Some(crate::node::delete_node_reply::Reply::Result(result)) => {
                 Ok(NodeDeleteResult::try_from(result)?)
             }
-            Some(crate::node::delete_node_reply::Reply::Error(err)) => Err(err.into()),
-            None => Err(ReplyError::invalid_response(ResourceKind::Node)),
+            Some(crate::node::delete_node_reply::Reply::Error(err)) => {
+                let volume_loss =
+                    crate::operations::node::traits::try_volume_loss_from_vec(
+                        response.volume_loss,
+                    )?;
+                let snapshot_loss =
+                    crate::operations::node::traits::try_snapshot_loss_from_vec(
+                        response.snapshot_loss,
+                    )?;
+                Err(NodeDeleteError {
+                    error: err.into(),
+                    volume_loss,
+                    snapshot_loss,
+                })
+            }
+            None => Err(ReplyError::invalid_response(ResourceKind::Node).into()),
         }
     }
 }

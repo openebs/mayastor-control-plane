@@ -2,7 +2,7 @@ use crate::{
     blockdevice, blockdevice::GetBlockDevicesRequest, context::Context, node,
     node::get_nodes_request, pool,
 };
-use std::{collections::HashMap, convert::TryFrom, str::FromStr};
+use std::{collections::HashMap, convert::TryFrom, ops::Deref, str::FromStr};
 use stor_port::{
     transport_api::{
         v0::{BlockDevices, Nodes},
@@ -18,6 +18,75 @@ use stor_port::{
     },
     IntoOption, TryIntoOption,
 };
+
+/// Error type which is returned over the transport for the node delete operation.
+///
+/// Unlike the generic `ReplyError`, this also carries the volume/snapshot loss
+/// information computed during a purge pre-flight check, so that callers can
+/// report which volumes/snapshots would lose data even when the purge itself
+/// is rejected (e.g. because `accept_volume_loss`/`accept_snapshot_loss` was not set).
+#[derive(Clone, Debug)]
+pub struct NodeDeleteError {
+    /// The generic ReplyError.
+    pub error: ReplyError,
+    /// Volumes that would lose their last healthy replica because of the purge.
+    pub volume_loss: VolumeLossInfo,
+    /// Snapshots that would lose their last replica snapshot because of the purge.
+    pub snapshot_loss: SnapshotLossInfo,
+}
+
+impl Deref for NodeDeleteError {
+    type Target = ReplyError;
+    fn deref(&self) -> &Self::Target {
+        &self.error
+    }
+}
+
+impl std::fmt::Display for NodeDeleteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.error)
+    }
+}
+
+impl From<tokio::task::JoinError> for NodeDeleteError {
+    fn from(error: tokio::task::JoinError) -> Self {
+        Self {
+            error: ReplyError::aborted_error(error),
+            volume_loss: VolumeLossInfo::default(),
+            snapshot_loss: SnapshotLossInfo::default(),
+        }
+    }
+}
+
+impl From<tonic::Status> for NodeDeleteError {
+    fn from(status: tonic::Status) -> Self {
+        Self {
+            error: status.into(),
+            volume_loss: VolumeLossInfo::default(),
+            snapshot_loss: SnapshotLossInfo::default(),
+        }
+    }
+}
+
+impl From<ReplyError> for NodeDeleteError {
+    fn from(error: ReplyError) -> Self {
+        Self {
+            error,
+            volume_loss: VolumeLossInfo::default(),
+            snapshot_loss: SnapshotLossInfo::default(),
+        }
+    }
+}
+
+impl From<crate::common::ReplyError> for NodeDeleteError {
+    fn from(error: crate::common::ReplyError) -> Self {
+        Self {
+            error: error.into(),
+            volume_loss: VolumeLossInfo::default(),
+            snapshot_loss: SnapshotLossInfo::default(),
+        }
+    }
+}
 
 /// Trait implemented by services which support node operations.
 #[tonic::async_trait]
@@ -53,7 +122,7 @@ pub trait NodeOperations: Send + Sync {
     /// Remove label from the a given node.
     async fn unlabel(&self, id: NodeId, label: String) -> Result<Node, ReplyError>;
     /// Delete a node and all its resources (purge). Always returns `NodeDeleteResult`.
-    async fn delete(&self, request: &DestroyNode) -> Result<NodeDeleteResult, ReplyError>;
+    async fn delete(&self, request: &DestroyNode) -> Result<NodeDeleteResult, NodeDeleteError>;
 }
 
 impl TryFrom<node::Node> for Node {
@@ -480,46 +549,59 @@ impl From<NodeDeleteResult> for node::NodeDeleteResult {
     }
 }
 
+pub(crate) fn try_volume_loss_from_vec(
+    volume_loss: Vec<pool::VolumeLossDetail>,
+) -> Result<VolumeLossInfo, ReplyError> {
+    let mut volumes = Vec::new();
+    for v in volume_loss {
+        let volume_id = uuid::Uuid::parse_str(&v.volume_id).map_err(|_| {
+            ReplyError::invalid_argument(ResourceKind::Volume, "volume_id", v.volume_id.clone())
+        })?;
+        volumes.push(VolumeLossDetail {
+            volume_id: volume_id.into(),
+            replicas_before: v.replicas_before,
+            healthy_before: v.healthy_before,
+            lost_on_pool: v.lost_on_pool,
+            healthy_after: v.healthy_after,
+        });
+    }
+    Ok(VolumeLossInfo { volumes })
+}
+
+pub(crate) fn try_snapshot_loss_from_vec(
+    snapshot_loss: Vec<pool::SnapshotLossDetail>,
+) -> Result<SnapshotLossInfo, ReplyError> {
+    let mut snapshots = Vec::new();
+    for s in snapshot_loss {
+        let snapshot_id = uuid::Uuid::parse_str(&s.snapshot_id).map_err(|_| {
+            ReplyError::invalid_argument(
+                ResourceKind::VolumeSnapshot,
+                "snapshot_id",
+                s.snapshot_id.clone(),
+            )
+        })?;
+        snapshots.push(SnapshotLossDetail {
+            snapshot_id: snapshot_id.into(),
+            replica_snapshots_before: s.replica_snapshots_before,
+            healthy_before: s.healthy_before,
+            lost_on_pool: s.lost_on_pool,
+            healthy_after: s.healthy_after,
+        });
+    }
+    Ok(SnapshotLossInfo { snapshots })
+}
+
 impl TryFrom<node::NodeDeleteResult> for NodeDeleteResult {
     type Error = ReplyError;
 
     fn try_from(result: node::NodeDeleteResult) -> Result<Self, Self::Error> {
-        let mut volumes = Vec::new();
-        for v in result.volume_loss {
-            let volume_id = uuid::Uuid::parse_str(&v.volume_id).map_err(|_| {
-                ReplyError::invalid_argument(ResourceKind::Volume, "volume_id", v.volume_id.clone())
-            })?;
-            volumes.push(VolumeLossDetail {
-                volume_id: volume_id.into(),
-                replicas_before: v.replicas_before,
-                healthy_before: v.healthy_before,
-                lost_on_pool: v.lost_on_pool,
-                healthy_after: v.healthy_after,
-            });
-        }
-
-        let mut snapshots = Vec::new();
-        for s in result.snapshot_loss {
-            let snapshot_id = uuid::Uuid::parse_str(&s.snapshot_id).map_err(|_| {
-                ReplyError::invalid_argument(
-                    ResourceKind::VolumeSnapshot,
-                    "snapshot_id",
-                    s.snapshot_id.clone(),
-                )
-            })?;
-            snapshots.push(SnapshotLossDetail {
-                snapshot_id: snapshot_id.into(),
-                replica_snapshots_before: s.replica_snapshots_before,
-                healthy_before: s.healthy_before,
-                lost_on_pool: s.lost_on_pool,
-                healthy_after: s.healthy_after,
-            });
-        }
+        let volume_loss = try_volume_loss_from_vec(result.volume_loss)?;
+        let snapshot_loss = try_snapshot_loss_from_vec(result.snapshot_loss)?;
 
         Ok(NodeDeleteResult {
             node_id: result.node_id.into(),
-            volume_loss: VolumeLossInfo { volumes },
-            snapshot_loss: SnapshotLossInfo { snapshots },
+            volume_loss,
+            snapshot_loss,
         })
     }
 }

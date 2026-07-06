@@ -102,8 +102,8 @@ mod test {
                 test::TimeoutTester,
                 traits::{
                     ClearErrorsRequest, CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo,
-                    LabelPoolInfo, PoolCordonRequest, PoolCreateError, PoolOperations,
-                    UnlabelPoolInfo,
+                    LabelPoolInfo, PoolCordonRequest, PoolCreateError, PoolDestroyError,
+                    PoolOperations, UnlabelPoolInfo,
                 },
             },
         };
@@ -127,7 +127,7 @@ mod test {
                 &self,
                 _pool: &dyn DestroyPoolInfo,
                 _ctx: Option<Context>,
-            ) -> Result<Option<PoolDeleteResult>, ReplyError> {
+            ) -> Result<Option<PoolDeleteResult>, PoolDestroyError> {
                 todo!()
             }
             async fn get(

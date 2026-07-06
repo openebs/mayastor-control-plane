@@ -301,6 +301,12 @@ message DestroyPoolReply {
     PoolDeleteResult result = 1;
     common.ReplyError error = 2;
   }
+  // Volume loss information, populated even when the purge is rejected because
+  // accept_volume_loss was required (error is PoolPurgeVolumeLossAcceptRequired).
+  optional VolumeLossInfo volume_loss = 3;
+  // Snapshot loss information, populated even when the purge is rejected because
+  // accept_snapshot_loss was required (error is PoolPurgeSnapshotLossAcceptRequired).
+  optional SnapshotLossInfo snapshot_loss = 4;
 }
 
 // Reply type for a GetPools request

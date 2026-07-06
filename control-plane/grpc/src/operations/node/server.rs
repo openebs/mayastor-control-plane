@@ -172,9 +172,23 @@ impl NodeGrpc for NodeServer {
         match self.service.delete(&destroy).await {
             Ok(result) => Ok(Response::new(DeleteNodeReply {
                 reply: Some(delete_node_reply::Reply::Result(result.into())),
+                volume_loss: Vec::new(),
+                snapshot_loss: Vec::new(),
             })),
             Err(err) => Ok(Response::new(DeleteNodeReply {
-                reply: Some(delete_node_reply::Reply::Error(err.into())),
+                reply: Some(delete_node_reply::Reply::Error(err.error.into())),
+                volume_loss: err
+                    .volume_loss
+                    .volumes
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+                snapshot_loss: err
+                    .snapshot_loss
+                    .snapshots
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
             })),
         }
     }

@@ -4,7 +4,7 @@ use crate::{
     context::{Client, Context, TracedChannel},
     operations::pool::traits::{
         CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo, PoolCreateError,
-        PoolOperations,
+        PoolDestroyError, PoolOperations,
     },
     pool::{
         self, clear_errors_reply, cordon_pool_reply, create_pool_reply, destroy_pool_reply,
@@ -16,7 +16,9 @@ use crate::{
 use std::{convert::TryFrom, ops::Deref};
 use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind, TimeoutOptions},
-    types::v0::transport::{Filter, MessageIdVs, Pool, PoolDeleteResult},
+    types::v0::transport::{
+        Filter, MessageIdVs, Pool, PoolDeleteResult, SnapshotLossInfo, VolumeLossInfo,
+    },
 };
 use tonic::transport::Uri;
 
@@ -69,7 +71,7 @@ impl PoolOperations for PoolClient {
         &self,
         request: &dyn DestroyPoolInfo,
         ctx: Option<Context>,
-    ) -> Result<Option<PoolDeleteResult>, ReplyError> {
+    ) -> Result<Option<PoolDeleteResult>, PoolDestroyError> {
         let req = self.request(request, ctx, MessageIdVs::DestroyPool);
         let response = self.client().destroy_pool(req).await?.into_inner();
         match response.reply {
@@ -77,7 +79,23 @@ impl PoolOperations for PoolClient {
                 destroy_pool_reply::Reply::Result(result) => {
                     Ok(Some(PoolDeleteResult::try_from(result)?))
                 }
-                destroy_pool_reply::Reply::Error(err) => Err(err.into()),
+                destroy_pool_reply::Reply::Error(err) => {
+                    let volume_loss = response
+                        .volume_loss
+                        .map(VolumeLossInfo::try_from)
+                        .transpose()?
+                        .unwrap_or_default();
+                    let snapshot_loss = response
+                        .snapshot_loss
+                        .map(SnapshotLossInfo::try_from)
+                        .transpose()?
+                        .unwrap_or_default();
+                    Err(PoolDestroyError {
+                        error: err.into(),
+                        volume_loss,
+                        snapshot_loss,
+                    })
+                }
             },
             None => Ok(None),
         }
