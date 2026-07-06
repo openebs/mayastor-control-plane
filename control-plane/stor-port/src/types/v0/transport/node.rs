@@ -465,34 +465,8 @@ impl From<NodeDeleteResult> for models::NodeDeleteResult {
     fn from(src: NodeDeleteResult) -> Self {
         models::NodeDeleteResult {
             node_id: src.node_id.to_string(),
-            volume_loss: models::VolumeLossInfo {
-                volumes: src
-                    .volume_loss
-                    .volumes
-                    .into_iter()
-                    .map(|v| models::VolumeLossDetail {
-                        volume_id: v.volume_id.to_string(),
-                        replicas_before: v.replicas_before,
-                        healthy_before: v.healthy_before,
-                        lost_on_pool: v.lost_on_pool,
-                        healthy_after: v.healthy_after,
-                    })
-                    .collect(),
-            },
-            snapshot_loss: models::SnapshotLossInfo {
-                snapshots: src
-                    .snapshot_loss
-                    .snapshots
-                    .into_iter()
-                    .map(|s| models::SnapshotLossDetail {
-                        snapshot_id: s.snapshot_id.to_string(),
-                        replica_snapshots_before: s.replica_snapshots_before,
-                        healthy_before: s.healthy_before,
-                        lost_on_pool: s.lost_on_pool,
-                        healthy_after: s.healthy_after,
-                    })
-                    .collect(),
-            },
+            volume_loss: src.volume_loss.into(),
+            snapshot_loss: src.snapshot_loss.into(),
         }
     }
 }

@@ -3983,6 +3983,10 @@ components:
       properties:
         diag:
           $ref: '#/components/schemas/PoolDiag'
+        volumeLoss:
+          $ref: '#/components/schemas/VolumeLossInfo'
+        snapshotLoss:
+          $ref: '#/components/schemas/SnapshotLossInfo'
     RestWatch:
       example:
         callback: 'https://api.myserver.com/volume/e2fc5ce8-a56e-47a1-94e9-04dd2f73b88f/callback'

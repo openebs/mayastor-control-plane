@@ -19,7 +19,16 @@ impl apis::actix_server::Nodes for RestApi {
             .with_accept_volume_loss(body.accept_volume_loss.unwrap_or(false))
             .with_accept_snapshot_loss(body.accept_snapshot_loss.unwrap_or(false));
 
-        let result = client().delete(&request).await?;
+        let result = match client().delete(&request).await {
+            Ok(result) => result,
+            Err(delete_err) => {
+                return Err(stor_port::types::rest_error_from_loss(
+                    delete_err.error,
+                    delete_err.volume_loss,
+                    delete_err.snapshot_loss,
+                ));
+            }
+        };
         Ok(result.into())
     }
 

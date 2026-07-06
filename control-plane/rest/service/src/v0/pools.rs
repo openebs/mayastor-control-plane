@@ -50,7 +50,16 @@ async fn destroy_pool(
             }))
         }
     };
-    let result = client().destroy(&destroy, None).await?;
+    let result = match client().destroy(&destroy, None).await {
+        Ok(result) => result,
+        Err(destroy_err) => {
+            return Err(stor_port::types::rest_error_from_loss(
+                destroy_err.error,
+                destroy_err.volume_loss,
+                destroy_err.snapshot_loss,
+            ));
+        }
+    };
 
     Ok(result.map(Into::into))
 }

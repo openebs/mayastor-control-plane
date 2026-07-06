@@ -6,7 +6,7 @@ use crate::{
             apis::actix_server::StatusCode,
             models::{rest_json_error::Kind, CustomErrorInfo, CustomErrorPool, RestJsonError},
         },
-        transport::PoolDiag,
+        transport::{PoolDiag, SnapshotLossInfo, VolumeLossInfo},
     },
 };
 
@@ -20,7 +20,29 @@ impl From<ReplyError> for RestError<RestJsonError> {
 
 /// Convert reply and diag information into a rest error.
 pub fn rest_error_from(src: ReplyError, diag: Option<PoolDiag>) -> RestError<RestJsonError> {
-    let custom = rest_custom(diag);
+    rest_error_from_ex(src, diag, None, None)
+}
+
+/// Convert a reply error together with volume/snapshot loss information (computed
+/// during a purge pre-flight check) into a rest error. Only non-empty loss info is
+/// included in the response.
+pub fn rest_error_from_loss(
+    src: ReplyError,
+    volume_loss: VolumeLossInfo,
+    snapshot_loss: SnapshotLossInfo,
+) -> RestError<RestJsonError> {
+    let volume_loss = (!volume_loss.volumes.is_empty()).then_some(volume_loss);
+    let snapshot_loss = (!snapshot_loss.snapshots.is_empty()).then_some(snapshot_loss);
+    rest_error_from_ex(src, None, volume_loss, snapshot_loss)
+}
+
+fn rest_error_from_ex(
+    src: ReplyError,
+    diag: Option<PoolDiag>,
+    volume_loss: Option<VolumeLossInfo>,
+    snapshot_loss: Option<SnapshotLossInfo>,
+) -> RestError<RestJsonError> {
+    let custom = rest_custom(diag, volume_loss, snapshot_loss);
 
     let (status, kind) = kind_to_rest(&src);
 
@@ -136,12 +158,20 @@ fn kind_to_rest(src: &ReplyError) -> (StatusCode, Kind) {
     }
 }
 
-fn rest_custom(diag: Option<PoolDiag>) -> Option<CustomErrorInfo> {
-    let diag = diag?;
+fn rest_custom(
+    diag: Option<PoolDiag>,
+    volume_loss: Option<VolumeLossInfo>,
+    snapshot_loss: Option<SnapshotLossInfo>,
+) -> Option<CustomErrorInfo> {
+    if diag.is_none() && volume_loss.is_none() && snapshot_loss.is_none() {
+        return None;
+    }
 
     Some(CustomErrorInfo {
         pool: CustomErrorPool {
-            diag: Some(diag.into()),
+            diag: diag.map(Into::into),
+            volume_loss: volume_loss.map(Into::into),
+            snapshot_loss: snapshot_loss.map(Into::into),
         },
     })
 }

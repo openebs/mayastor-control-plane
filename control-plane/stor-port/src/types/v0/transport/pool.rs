@@ -905,34 +905,8 @@ impl From<PoolDeleteResult> for models::PoolDeleteResult {
     fn from(src: PoolDeleteResult) -> Self {
         models::PoolDeleteResult {
             pool_id: src.pool_id.to_string(),
-            volume_loss: models::VolumeLossInfo {
-                volumes: src
-                    .volume_loss
-                    .volumes
-                    .into_iter()
-                    .map(|v| models::VolumeLossDetail {
-                        volume_id: v.volume_id.to_string(),
-                        replicas_before: v.replicas_before,
-                        healthy_before: v.healthy_before,
-                        lost_on_pool: v.lost_on_pool,
-                        healthy_after: v.healthy_after,
-                    })
-                    .collect(),
-            },
-            snapshot_loss: models::SnapshotLossInfo {
-                snapshots: src
-                    .snapshot_loss
-                    .snapshots
-                    .into_iter()
-                    .map(|s| models::SnapshotLossDetail {
-                        snapshot_id: s.snapshot_id.to_string(),
-                        replica_snapshots_before: s.replica_snapshots_before,
-                        healthy_before: s.healthy_before,
-                        lost_on_pool: s.lost_on_pool,
-                        healthy_after: s.healthy_after,
-                    })
-                    .collect(),
-            },
+            volume_loss: src.volume_loss.into(),
+            snapshot_loss: src.snapshot_loss.into(),
         }
     }
 }
@@ -945,6 +919,14 @@ impl From<PoolDeleteResult> for models::PoolDeleteResult {
 pub struct VolumeLossInfo {
     /// List of volumes that lost their last healthy replica.
     pub volumes: Vec<VolumeLossDetail>,
+}
+
+impl From<VolumeLossInfo> for models::VolumeLossInfo {
+    fn from(src: VolumeLossInfo) -> Self {
+        models::VolumeLossInfo {
+            volumes: src.volumes.into_iter().map(Into::into).collect(),
+        }
+    }
 }
 
 /// Details about a volume affected by pool deletion.
@@ -970,6 +952,18 @@ pub struct VolumeLossDetail {
     pub healthy_after: u32,
 }
 
+impl From<VolumeLossDetail> for models::VolumeLossDetail {
+    fn from(v: VolumeLossDetail) -> Self {
+        models::VolumeLossDetail {
+            volume_id: v.volume_id.to_string(),
+            replicas_before: v.replicas_before,
+            healthy_before: v.healthy_before,
+            lost_on_pool: v.lost_on_pool,
+            healthy_after: v.healthy_after,
+        }
+    }
+}
+
 /// Information about snapshot loss caused by a pool deletion.
 ///
 /// Contains a list of snapshots that lost their last healthy replica snapshot as a result
@@ -978,6 +972,14 @@ pub struct VolumeLossDetail {
 pub struct SnapshotLossInfo {
     /// List of snapshots that lost their last replica snapshot.
     pub snapshots: Vec<SnapshotLossDetail>,
+}
+
+impl From<SnapshotLossInfo> for models::SnapshotLossInfo {
+    fn from(src: SnapshotLossInfo) -> Self {
+        models::SnapshotLossInfo {
+            snapshots: src.snapshots.into_iter().map(Into::into).collect(),
+        }
+    }
 }
 
 /// Details about a snapshot affected by pool deletion.
@@ -1001,6 +1003,18 @@ pub struct SnapshotLossDetail {
     /// Number of healthy replica snapshots remaining after the pool deletion.
     /// Zero means no healthy replica snapshots survive — the snapshot is lost.
     pub healthy_after: u32,
+}
+
+impl From<SnapshotLossDetail> for models::SnapshotLossDetail {
+    fn from(s: SnapshotLossDetail) -> Self {
+        models::SnapshotLossDetail {
+            snapshot_id: s.snapshot_id.to_string(),
+            replica_snapshots_before: s.replica_snapshots_before,
+            healthy_before: s.healthy_before,
+            lost_on_pool: s.lost_on_pool,
+            healthy_after: s.healthy_after,
+        }
+    }
 }
 
 /// Expand Pool Request.
