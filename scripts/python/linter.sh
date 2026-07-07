@@ -53,7 +53,7 @@ fmt_check() {
 CHECK=
 DIFF=
 PATHS_GLOB=
-DEFAULT_PATHS_GLOB=$(realpath "$TEST_ROOT_DIR"/tests/bdd)/{common,features}
+DEFAULT_PATHS_GLOB=$(realpath "$TEST_ROOT_DIR"/tests/bdd)/{common,features,conftest.py}
 
 # Print usage options for this script.
 print_help() {

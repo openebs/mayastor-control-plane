@@ -1,6 +1,5 @@
 import os
 import subprocess
-import sys
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -200,8 +199,10 @@ class Deployer(object):
     @staticmethod
     def stop(disconnect_nvme=False):
         print(f"DeployerStop: {datetime.now()}")
-        if hasattr(sys, "last_traceback") or sys.exc_info()[0] is not None:
-            Docker.log_containers()
+        # trialling the new conftest approach
+        # if hasattr(sys, "last_traceback") or sys.exc_info()[0] is not None:
+        #     Docker.log_containers()
+
         clean = os.getenv("CLEAN")
         if clean is not None and clean.lower() in ("no", "false", "f", "0"):
             return
