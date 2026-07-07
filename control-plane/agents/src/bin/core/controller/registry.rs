@@ -43,7 +43,7 @@ use stor_port::{
             registry::{ControlPlaneService, CoreRegistryConfig, NodeRegistration},
             volume::InitiatorAC,
         },
-        transport::{DeregisterAppNode, HostNqn, NodeId, RegisterAppNode},
+        transport::{DeregisterAppNode, HostNqn, NexusVersion, NodeId, RegisterAppNode},
     },
     HostAccessControl,
 };
@@ -253,7 +253,42 @@ impl Registry {
                 })?;
         }
 
+        registry.update_label_version_(&mut store).await?;
+
         Ok(registry)
+    }
+
+    /// Reconcile the configuration if it is dirty.
+    pub(crate) async fn reconcile_dirty_config(&self) -> bool {
+        let config = {
+            let config = self.config();
+            if !config.is_dirty() {
+                return false;
+            }
+            config.clone()
+        };
+        let store = self.store.clone();
+        let mut store = store.lock().await;
+        self.update_config(config, store.deref_mut()).await.is_err()
+    }
+
+    /// Probe all nodes and update the label version to the minimum version of all nodes.
+    pub(crate) async fn update_label_version(&self) -> Result<(), SvcError> {
+        let store = self.store.clone();
+        let mut store = store.lock().await;
+        self.update_label_version_(store.deref_mut()).await
+    }
+    async fn update_label_version_<S: Store>(&self, store: &mut S) -> Result<(), SvcError> {
+        if let Some(version) = self
+            .specs()
+            .nodes_rsc()
+            .into_iter()
+            .map(|n| n.lock().label_version())
+            .min()
+        {
+            self.set_label_version(version, store).await?;
+        }
+        Ok(())
     }
 
     // Check if we allow single access mode for an empty list of hostnqn (any access).
@@ -337,6 +372,29 @@ impl Registry {
         Ok(())
     }
 
+    /// Set the maximum label version.
+    pub(crate) async fn set_label_version<S: Store>(
+        &self,
+        version: NexusVersion,
+        store: &mut S,
+    ) -> Result<(), StoreError> {
+        let mut config = self.config().deref().clone();
+        match config.set_volume_version(version) {
+            Ok(None) => return Ok(()),
+            Ok(Some(old)) => {
+                tracing::info!("Updating label version from {old:?} to {version:?}")
+            }
+            Err(existing) => {
+                tracing::error!(
+                    "Attempted to set label version to {version:?}, but existing version {existing:?} is greater!"
+                );
+                // should we error out or just log?
+                return Ok(());
+            }
+        }
+        self.update_config(config, store).await
+    }
+
     /// Get the thin provisioning configuration parameters.
     pub(crate) fn thin_args(&self) -> &ThinArgs {
         &self.thin_args
@@ -345,6 +403,27 @@ impl Registry {
     /// Get the `CoreRegistryConfig`.
     pub(crate) fn config(&self) -> parking_lot::RwLockReadGuard<'_, CoreRegistryConfig> {
         self.config.read()
+    }
+
+    /// Set the `CoreRegistryConfig`.
+    /// # Consistency
+    /// When using immutable references to the registry, must use the store taken from the registry itself.
+    pub(crate) async fn update_config<S: Store>(
+        &self,
+        mut new_config: CoreRegistryConfig,
+        store: &mut S,
+    ) -> Result<(), StoreError> {
+        // stores config as not dirty, but if the store fails to update, we set it back to dirty.
+        new_config.set_dirty(false);
+
+        if let Err(error) = store.put_obj(&new_config).await {
+            let mut config = self.config.write();
+            config.set_dirty(true);
+            return Err(error);
+        }
+        let mut config = self.config.write();
+        *config = new_config;
+        Ok(())
     }
 
     /// Set the `CoreRegistryConfig`.

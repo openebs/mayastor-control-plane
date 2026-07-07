@@ -264,8 +264,7 @@ async fn unused_nexus_reconcile(cluster: &Cluster) {
             "malloc:///test?size_mb=10&uuid=b9558b8c-cb22-47f3-b33b-583db25b5a8c".into(),
         ],
         managed: true,
-        owner: None,
-        config: None,
+        ..Default::default()
     };
     let nexus = nexus_client.create(&create_nexus, None).await.unwrap();
     let nexus = wait_till_nexus_state(cluster, &nexus.uuid, None).await;

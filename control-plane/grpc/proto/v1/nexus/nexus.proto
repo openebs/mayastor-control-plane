@@ -27,6 +27,10 @@ message Nexus {
   uint32 rebuilds = 8;
   // protocol used for exposing the nexus
   common.Protocol share = 9;
+  // version of the nexus label layout
+  optional uint32 label_version = 10;
+  // the actual size of the nexus block device
+  optional uint64 bdev_size = 11;
 }
 
 // Multiple nexus
@@ -113,6 +117,8 @@ message NexusSpec {
   optional NexusNvmfConfig nvmf_config = 11;
   // Hosts allowed to access nexus
   repeated string allowed_hosts = 12;
+  // version of the nexus label layout
+  uint32 label_version = 13;
 }
 
 // Nexus children (replica or "raw" URI)

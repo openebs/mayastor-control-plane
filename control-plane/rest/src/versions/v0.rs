@@ -190,9 +190,7 @@ impl CreateNexusBody {
             uuid: nexus_id,
             size: self.size,
             children: self.children.clone().into_vec(),
-            managed: false,
-            owner: None,
-            config: None,
+            ..Default::default()
         }
     }
 }

@@ -65,7 +65,10 @@ impl Registry {
     pub(super) async fn register_node_spec(&self, request: &Register) {
         let automatic = self.config().node_registration().automatic();
         if automatic {
-            self.specs().register_node(self, request).await.ok();
+            let changed = self.specs().register_node(self, request).await;
+            if changed.unwrap_or(true) {
+                self.update_label_version().await.ok();
+            }
         }
     }
 

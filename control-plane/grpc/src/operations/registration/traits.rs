@@ -8,7 +8,7 @@ use std::str::FromStr;
 use stor_port::{
     transport_api::{ReplyError, ResourceKind},
     types::v0::transport::{
-        node, Deregister, HostNqn, NodeBugFixes, NodeFeatures, NodeId, Register,
+        node, Deregister, HostNqn, NexusVersion, NodeBugFixes, NodeFeatures, NodeId, Register,
     },
 };
 
@@ -123,6 +123,12 @@ impl RegisterInfo for RegisterRequest {
             snapshot_rebuild: features.snapshot_rebuild,
             rdma_capable_io_engine: features.rdma_capable_io_engine,
             diskpool_encryption: features.diskpool_encryption,
+            nexus_label_version: match features.nexus_label_version {
+                0 | 1 => NexusVersion::V1,
+                2 => NexusVersion::V2,
+                // if it's greater, then assume it's the latest version we support, which is V2.
+                _ => NexusVersion::V2,
+            },
         })
     }
 

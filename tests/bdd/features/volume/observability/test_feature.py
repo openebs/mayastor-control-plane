@@ -87,6 +87,7 @@ def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
         thin=False,
         num_snapshots=0,
         encrypted=False,
+        labelVersion=2,
     )
 
     volume = volume_ctx[VOLUME_CTX_KEY]

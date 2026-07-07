@@ -979,7 +979,7 @@ impl ResourceLifecycleExt<CreateVolumeSource<'_>> for OperationGuardArc<VolumeSp
         request_src.pre_flight_check()?;
         let specs = registry.specs();
         let mut volume = specs
-            .get_or_create_volume(request_src)?
+            .get_or_create_volume(request_src, registry)?
             .operation_guard_wait()
             .await?;
         let volume_clone = volume

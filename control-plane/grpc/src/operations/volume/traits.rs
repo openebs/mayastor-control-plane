@@ -1,6 +1,7 @@
 pub use super::traits_snapshots::*;
 use crate::{
     common,
+    common::LabelVersion,
     context::Context,
     misc::traits::{StringValue, ValidateRequestTypes},
     nexus,
@@ -28,12 +29,12 @@ use stor_port::{
         transport::{
             AffinityGroup, CreateSnapshotVolume, CreateVolume, DestroyShutdownTargets,
             DestroyVolume, ExplicitNodeTopology, Filter, LabelledTopology, Nexus, NexusId,
-            NexusNvmfConfig, NodeId, NodeTopology, NvmeNqn, PoolTopology, PublishVolume, ReplicaId,
-            ReplicaStatus, ReplicaTopology, ReplicaUsage, RepublishVolume, ResizeVolume,
-            SetVolumeProperty, SetVolumeReplica, ShareVolume, SnapshotId, SnapshotRestorePolicy,
-            Topology, UnpublishVolume, UnshareVolume, Volume, VolumeAccessMode, VolumeHealth,
-            VolumeId, VolumeLabels, VolumePolicy, VolumeProperty, VolumeShareProtocol, VolumeState,
-            VolumeUsage,
+            NexusNvmfConfig, NexusVersion, NodeId, NodeTopology, NvmeNqn, PoolTopology,
+            PublishVolume, ReplicaId, ReplicaStatus, ReplicaTopology, ReplicaUsage,
+            RepublishVolume, ResizeVolume, SetVolumeProperty, SetVolumeReplica, ShareVolume,
+            SnapshotId, SnapshotRestorePolicy, Topology, UnpublishVolume, UnshareVolume, Volume,
+            VolumeAccessMode, VolumeHealth, VolumeId, VolumeLabels, VolumePolicy, VolumeProperty,
+            VolumeShareProtocol, VolumeState, VolumeUsage,
         },
     },
     IntoOption, IntoVec, TryIntoOption,
@@ -152,6 +153,11 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
         let target = volume_spec.active_config().into_opt();
         let target_config = volume_spec.config().clone().into_opt();
         let as_thin = volume_spec.snapshot_as_thin();
+        let label_version = match volume_spec.metadata.label_version() {
+            NexusVersion::V1 => LabelVersion::V1,
+            NexusVersion::V2 => LabelVersion::V2,
+            NexusVersion::Unknown(v) => LabelVersion::Unknown(v),
+        };
         let spec_status: common::SpecStatus = volume_spec.status.into();
 
         Self {
@@ -181,6 +187,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
                     .publish_context
                     .map(|map| common::MapWrapper { map }),
                 as_thin,
+                label_version: Some(label_version.into()),
             }),
         }
     }
@@ -296,6 +303,11 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
                 ))
             }
         };
+        let label_version = match volume_meta.label_version() {
+            0 | 1 => NexusVersion::V1,
+            2 => NexusVersion::V2,
+            v => NexusVersion::Unknown(v),
+        };
 
         let volume_spec_status = match common::SpecStatus::try_from(volume_meta.spec_status) {
             Ok(status) => status.into(),
@@ -380,7 +392,7 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
                 .publish_context
                 .map(|map_wrapper| map_wrapper.map),
             affinity_group: volume_spec.affinity_group.into_opt(),
-            metadata: VolumeMetadata::new(volume_meta.as_thin),
+            metadata: VolumeMetadata::new(volume_meta.as_thin, label_version),
             content_source: volume_spec.content_source.try_into_opt()?,
             num_snapshots: volume_spec.num_snapshots,
             max_snapshots: volume_spec.max_snapshots,

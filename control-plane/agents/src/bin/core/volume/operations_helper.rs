@@ -726,6 +726,7 @@ impl OperationGuardArc<VolumeSpec> {
                 true,
                 Some(&vol_spec.uuid),
                 Some(target_config.config().clone()),
+                Some(vol_spec.metadata.label_version()),
             ),
         )
         .await?;

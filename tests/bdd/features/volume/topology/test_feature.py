@@ -483,6 +483,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object_with_topology(
                 )
             )
         ),
+        labelVersion=2,
     )
 
     # Check the volume object returned is as expected
@@ -508,6 +509,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object_without_pool_to
         thin=False,
         num_snapshots=0,
         encrypted=False,
+        labelVersion=2,
     )
 
     # Check the volume object returned is as expected

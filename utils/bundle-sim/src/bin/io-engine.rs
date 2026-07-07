@@ -209,6 +209,16 @@ impl IoEngine {
                     rebuilds: state.rebuilds,
                     ana_state: 0,
                     allowed_hosts: state.allowed_hosts.into_iter().map(Into::into).collect(),
+                    label_version: Some(match state.version {
+                        transport::NexusVersion::Unknown(v) => v as i32,
+                        transport::NexusVersion::V1 => {
+                            rpc::v1::nexus::NexusLabelVersion::LabelV1 as i32
+                        }
+                        transport::NexusVersion::V2 => {
+                            rpc::v1::nexus::NexusLabelVersion::LabelV2 as i32
+                        }
+                    }),
+                    bdev_size: state.bdev_size,
                 };
                 if let Some(node) = io_engine.sims.get_mut(state.node.as_str()) {
                     node.nexuses.push(nexus);
@@ -382,6 +392,13 @@ impl rpc::v1::pb::pool_rpc_server::PoolRpc for IoEngine {
 
 #[tonic::async_trait]
 impl rpc::v1::pb::nexus_rpc_server::NexusRpc for IoEngine {
+    #[tracing::instrument(skip(self), err, level = "info")]
+    async fn create_nexus_v2(
+        &self,
+        _request: tonic::Request<CreateNexusV2Request>,
+    ) -> Result<tonic::Response<CreateNexusResponse>, tonic::Status> {
+        Err(tonic::Status::unimplemented(""))
+    }
     #[tracing::instrument(skip(self), err, level = "info")]
     async fn create_nexus(
         &self,

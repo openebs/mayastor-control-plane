@@ -3041,7 +3041,7 @@ components:
         topology: null
         affinity_group: null
         max_snapshots: 10
-        cluster_size: 33554432
+        cluster_size: 4194304
       description: Create Volume Body
       type: object
       properties:
@@ -3382,6 +3382,11 @@ components:
           description: uuid of the nexus
           type: string
           format: uuid
+        labelVersion:
+          description: version of the label layout
+          type: integer
+          format: int32
+          minimum: 0
       required:
         - children
         - deviceUri
@@ -4341,6 +4346,11 @@ components:
         encrypted:
           description: Data Encryption.
           type: boolean
+        labelVersion:
+          description: version of the label layout
+          type: integer
+          format: int32
+          minimum: 0
       required:
         - num_paths
         - num_replicas

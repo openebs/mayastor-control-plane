@@ -321,13 +321,18 @@ pub struct VolumeMetadata {
 }
 impl VolumeMetadata {
     /// Create a new `Self` from the given parameters.
-    pub fn new(as_thin: Option<bool>) -> Self {
+    pub fn new(as_thin: Option<bool>, label_version: transport::NexusVersion) -> Self {
         Self {
             persisted: VolumePersistedMetadata {
                 snapshot_as_thin: as_thin,
+                label_version,
             },
             runtime: Default::default(),
         }
+    }
+    /// Get the label version.
+    pub fn label_version(&self) -> transport::NexusVersion {
+        self.persisted.label_version
     }
     /// Insert snapshot in the list.
     fn insert_snapshot(&mut self, snapshot: SnapshotId) {
@@ -369,6 +374,9 @@ pub struct VolumePersistedMetadata {
     /// Volume becomes thin if a snapshot has been created for it.
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshot_as_thin: Option<bool>,
+    /// Nexus label version for defining the data partition layout.
+    #[serde(default, skip_serializing_if = "super::is_default")]
+    pub label_version: transport::NexusVersion,
 }
 
 /// Runtime volume information.
@@ -633,8 +641,16 @@ impl VolumeSpec {
             .map(|target| VolumeHealthKey::new(self.uuid.clone(), target.clone()))
     }
     /// Set the content source.
-    pub fn set_content_source(&mut self, content_source: Option<VolumeContentSource>) {
+    pub fn with_content_source(mut self, content_source: Option<VolumeContentSource>) -> Self {
         self.content_source = content_source;
+        self
+    }
+    /// Set the label version.
+    /// # Warning
+    /// This must only be set during creation time!
+    pub fn with_label_version(mut self, label_version: transport::NexusVersion) -> Self {
+        self.metadata.persisted.label_version = label_version;
+        self
     }
 }
 
@@ -1005,6 +1021,7 @@ impl PartialEq<CreateVolume> for VolumeSpec {
         other.status = self.status.clone();
         other.sequencer = self.sequencer.clone();
         other.content_source = self.content_source.clone();
+        other.metadata.persisted.label_version = self.metadata.persisted.label_version;
         &other == self
     }
 }
@@ -1054,6 +1071,7 @@ impl From<VolumeSpec> for models::VolumeSpec {
             src.num_snapshots,
             src.max_snapshots,
             src.encrypted,
+            Some(src.metadata.persisted.label_version.into()),
         )
     }
 }

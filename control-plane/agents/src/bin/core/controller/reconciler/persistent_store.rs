@@ -19,26 +19,35 @@ impl PersistentStoreReconciler {
 #[async_trait::async_trait]
 impl TaskPoller for PersistentStoreReconciler {
     async fn poll(&mut self, context: &PollContext) -> PollResult {
-        let specs = context.specs();
-        if context.registry().store_online().await {
-            let dirty_pools = specs.reconcile_dirty_pools(context.registry()).await;
-            let dirty_replicas = specs.reconcile_dirty_replicas(context.registry()).await;
-            let dirty_nexuses = specs.reconcile_dirty_nexuses(context.registry()).await;
-            let dirty_volumes = specs.reconcile_dirty_volumes(context.registry()).await;
-            let dirty_snapshots = specs
-                .reconcile_dirty_volume_snapshots(context.registry())
-                .await;
-            let dirty_nodes = specs.reconcile_dirty_nodes(context.registry()).await;
+        if !context.registry().store_online().await {
+            // if the persistent store is not online, we can't do anything,
+            // so we just return busy to try again later.
+            return PollResult::Ok(PollerState::Busy);
+        }
 
-            if dirty_nexuses
-                || dirty_replicas
-                || dirty_volumes
-                || dirty_pools
-                || dirty_snapshots
-                || dirty_nodes
-            {
-                return PollResult::Ok(PollerState::Busy);
-            }
+        // no point trying the rest if we can't even flush the config to the persistent store.
+        if context.registry().reconcile_dirty_config().await {
+            return PollResult::Ok(PollerState::Busy);
+        }
+
+        let specs = context.specs();
+        let dirty_pools = specs.reconcile_dirty_pools(context.registry()).await;
+        let dirty_replicas = specs.reconcile_dirty_replicas(context.registry()).await;
+        let dirty_nexuses = specs.reconcile_dirty_nexuses(context.registry()).await;
+        let dirty_volumes = specs.reconcile_dirty_volumes(context.registry()).await;
+        let dirty_snapshots = specs
+            .reconcile_dirty_volume_snapshots(context.registry())
+            .await;
+        let dirty_nodes = specs.reconcile_dirty_nodes(context.registry()).await;
+
+        if dirty_nexuses
+            || dirty_replicas
+            || dirty_volumes
+            || dirty_pools
+            || dirty_snapshots
+            || dirty_nodes
+        {
+            return PollResult::Ok(PollerState::Busy);
         }
 
         PollResult::Ok(PollerState::Idle)
