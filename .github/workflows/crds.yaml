@@ -18,7 +18,30 @@ env:
   CTY_VERSION: 1.1.3
 
 jobs:
+  relevant-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: Detect relevant changes
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            relevant:
+              - 'k8s/operators/**'
+              - 'k8s/crd_test/**'
+
   diskpool-crds:
+    needs: ["relevant-changes"]
+    if: |
+      github.event_name != 'pull_request' ||
+      needs.relevant-changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +55,11 @@ jobs:
           export NIX_PATH=nixpkgs=$(jq '.nixpkgs.url' nix/sources.json -r)
           echo "NIX_PATH=$NIX_PATH" >> $GITHUB_ENV
           nix-shell --run "echo" shell.nix
+
+      - name: Rustc for Rust dependencies caching
+        run: |
+          nix-shell --pure --run 'dirname "$(command -v rustc)" > rustc' shell.nix
+          echo "PATH=$(cat rustc):$PATH" >> $GITHUB_ENV
 
       - name: Handle Rust dependencies caching
         uses: Swatinem/rust-cache@v2
@@ -67,17 +95,8 @@ jobs:
           }
           echo "Validation successful: No breaking changes detected."
 
-      - name: Check changed files before commenting
-        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false }}
-        id: changes
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            crd:
-              - 'k8s/**'
-
       - name: Add PR comment to update snapshot if required
-        if: ${{ success() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false && steps.changes.outputs.crd == 'true' }}
+        if: ${{ success() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false }}
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

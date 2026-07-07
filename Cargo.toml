@@ -139,6 +139,8 @@ tonic-build = "0.12.3"
 prost-types = "0.13.3"
 prost = "0.13.2"
 prost-derive = "0.13.3"
+pbjson = "0.7.0"
+pbjson-build = "0.7.0"
 bytes = "1.8.0"
 tower = { version = "=0.5.1", default-features = false, features = ["timeout", "util"] }
 tower-http = { version = "0.5.2", features = ["trace", "map-response-body", "auth"] }
