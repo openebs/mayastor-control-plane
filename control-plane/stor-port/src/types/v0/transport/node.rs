@@ -239,6 +239,7 @@ pub struct NodeFeatures {
     /// Mayastor supports diskpool encryption.
     pub diskpool_encryption: Option<bool>,
     /// Max version of the nexus label supported by the node.
+    #[serde(default)]
     pub nexus_label_version: NexusVersion,
 }
 

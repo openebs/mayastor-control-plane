@@ -13,9 +13,10 @@ use stor_port::types::v0::{
         },
     },
     transport::{
-        ChildUri, ExplicitNodeTopology, LabelledTopology, NexusId, NexusStatus, NodeTopology,
-        PoolStatus, PoolTopology, Protocol, ReplicaId, ReplicaOwners, ReplicaStatus, Topology,
-        VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol, VolumeStatus,
+        ChildUri, ExplicitNodeTopology, LabelledTopology, NexusId, NexusStatus, NexusVersion,
+        NodeFeatures, NodeTopology, PoolStatus, PoolTopology, Protocol, ReplicaId, ReplicaOwners,
+        ReplicaStatus, Topology, VolumeId, VolumeLabels, VolumePolicy, VolumeShareProtocol,
+        VolumeStatus,
     },
 };
 
@@ -212,6 +213,27 @@ fn test_deserialization_v1_to_v2() {
                 None,
                 None,
                 None,
+                None,
+                None,
+                false
+            )),
+        },
+        TestEntry {
+            json_str: r#"{"id":"mayastor-node1","endpoint":"136.144.51.107:10124","labels":{}, "features":{"asymmetricNamespaceAccess":true,"logicalVolumeManager":false,"snapshotRebuild":false,"rdmaCapableIoEngine":true}}"#,
+            expected: Expected::NodeSpec(NodeSpec::new(
+                "mayastor-node1".into(),
+                "136.144.51.107:10124".parse().unwrap(),
+                Default::default(),
+                None,
+                None,
+                Some(NodeFeatures {
+                    asymmetric_namespace_access: Some(true),
+                    logical_volume_manager: Some(false),
+                    snapshot_rebuild: Some(false),
+                    rdma_capable_io_engine: Some(true),
+                    diskpool_encryption: None,
+                    nexus_label_version: NexusVersion::V1,
+                }),
                 None,
                 None,
                 false
