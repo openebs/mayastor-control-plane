@@ -7,14 +7,14 @@ jobs:
   prepareReleaseBranch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         env:
           checkout_token: ${{ secrets.ORG_CI_GITHUB }}
         if: ${{ env.checkout_token == '' }}
         with:
           fetch-depth: 0
           submodules: recursive
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         env:
           checkout_token: ${{ secrets.ORG_CI_GITHUB }}
         if: ${{ env.checkout_token != '' }}
@@ -29,7 +29,7 @@ jobs:
           ./scripts/rust/branch_ancestor.sh
       - name: Create Pull Request
         id: cpr
-        uses: peter-evans/create-pull-request@v5
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "chore(ci): update git submodules"
           committer: GitHub <noreply@github.com>
