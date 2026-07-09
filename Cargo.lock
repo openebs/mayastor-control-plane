@@ -3820,6 +3820,7 @@ dependencies = [
  "grpc",
  "http 1.1.0",
  "humantime",
+ "inotify",
  "jsonwebtoken",
  "num_cpus",
  "once_cell",
