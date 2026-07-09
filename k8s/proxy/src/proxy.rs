@@ -321,9 +321,8 @@ impl ConfigBuilder<ApiRest> {
 
         Configuration::builder()
             .with_timeout(timeout)
-            .with_bearer_token(client_security.jwt)
             .with_tracing(true)
-            .with_tls(client_security.tls)
+            .with_client_security(Some(client_security))
             .build_url(url)
             .map_err(|e| anyhow!("Failed to Create OpenApi config: {:?}", e).into())
     }

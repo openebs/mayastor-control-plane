@@ -64,3 +64,7 @@ opentelemetry = { workspace = true, optional = true }
 opentelemetry-http = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"], optional = true }
+
+# certificate file watching for TLS auto-reload (tower client); Linux/inotify only
+[target.'cfg(target_os = "linux")'.dependencies]
+inotify = { workspace = true }

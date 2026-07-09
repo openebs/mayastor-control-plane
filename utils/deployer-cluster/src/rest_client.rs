@@ -53,6 +53,7 @@ impl RestClient {
             bearer_token,
             TlsMode::ServerVerify {
                 ca_certificate: cert_file.to_vec(),
+                ca_certificate_path: None,
             },
         );
 

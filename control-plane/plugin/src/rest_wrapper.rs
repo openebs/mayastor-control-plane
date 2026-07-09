@@ -40,8 +40,7 @@ impl RestClient {
         let builder = Configuration::builder()
             .with_timeout(timeout)
             .with_tracing(tracing)
-            .with_tls(security.tls)
-            .with_bearer_token(security.jwt);
+            .with_client_security(Some(security));
 
         let cfg = builder.build_url(url).map_err(|error| {
             anyhow::anyhow!("Failed to create openapi configuration, Error: '{error:?}'")
