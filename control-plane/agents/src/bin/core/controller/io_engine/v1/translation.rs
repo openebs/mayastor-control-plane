@@ -532,6 +532,8 @@ impl AgentToIoEngine for transport::ShareNexus {
             key: self.key.clone().unwrap_or_default(),
             share: self.protocol as i32,
             allowed_hosts: self.allowed_hosts.clone().into_vec(),
+            // publish always requests RWO until the consumer PR lands.
+            read_only: None,
         }
     }
 }
