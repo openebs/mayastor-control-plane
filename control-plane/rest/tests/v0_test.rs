@@ -34,6 +34,11 @@ fn jwk_file() -> String {
 
 // Setup the infrastructure ready for the tests.
 async fn test_setup(auth: &bool) -> Cluster {
+    test_setup_(auth, false).await
+}
+
+// Setup the infrastructure ready for the tests.
+async fn test_setup_(auth: &bool, http_restrict: bool) -> Cluster {
     let rest_jwk = match auth {
         true => Some(jwk_file()),
         false => None,
@@ -41,6 +46,7 @@ async fn test_setup(auth: &bool) -> Cluster {
 
     ClusterBuilder::builder()
         .with_rest_auth(true, rest_jwk)
+        .with_http_restrict(http_restrict)
         .with_options(|o| o.with_jaeger(true))
         .with_agents(vec!["core", "jsongrpc"])
         .with_io_engines(2)
@@ -65,7 +71,7 @@ async fn client() {
     // Run the client test both with and without authentication.
     for auth in &[false, true] {
         {
-            let cluster = test_setup(auth).await;
+            let cluster = test_setup_(auth, true).await;
             client_test(&cluster, auth).await;
         }
         // Seems that with otlp we can't simply reinstall a new tracer if running on the same
@@ -476,6 +482,51 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             .unwrap(),
         node
     );
+
+    let http_client = RestClient::new(
+        "http://localhost:8081",
+        true,
+        match auth {
+            true => Some(bearer_token()),
+            false => None,
+        },
+    )
+    .unwrap()
+    .v00();
+
+    // HTTP is restricted to the liveness/ready probes
+    let nodes = http_client.nodes_api().get_nodes(None).await.unwrap_err();
+    assert!(nodes.status() == Some(apis::StatusCode::MISDIRECTED_REQUEST));
+
+    // The liveness probe is served over plain HTTP.
+    let live_status = http_probe_status("localhost:8081", "/live").await;
+    assert!(
+        live_status.starts_with("HTTP/1.1 200"),
+        "unexpected liveness probe status line: {}",
+        live_status
+    );
+}
+
+/// Issue a raw HTTP/1.1 GET request and return the response status line.
+async fn http_probe_status(addr: &str, path: &str) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let mut stream = tokio::net::TcpStream::connect(addr)
+        .await
+        .expect("Failed to connect to the HTTP probes port");
+    let request = format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n");
+    stream
+        .write_all(request.as_bytes())
+        .await
+        .expect("Failed to send the HTTP probe request");
+
+    let mut response = Vec::new();
+    stream
+        .read_to_end(&mut response)
+        .await
+        .expect("Failed to read the HTTP probe response");
+    let response = String::from_utf8_lossy(&response);
+    response.lines().next().unwrap_or_default().to_string()
 }
 
 async fn wait_until_node_not_online(client: &ApiClient, node: &NodeId, timeout: Duration) {

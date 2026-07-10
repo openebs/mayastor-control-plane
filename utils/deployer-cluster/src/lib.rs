@@ -1086,6 +1086,12 @@ impl ClusterBuilder {
         self.opts = self.opts.with_rest(enabled, jwk);
         self
     }
+    /// Specify whether HTTP requests are restricted to the liveness/ready probes.
+    #[must_use]
+    pub fn with_http_restrict(mut self, enabled: bool) -> Self {
+        self.opts = self.opts.with_http_restrict(enabled);
+        self
+    }
     /// Specify whether the components should be cargo built or not.
     #[must_use]
     pub fn with_build(mut self, enabled: bool) -> Self {

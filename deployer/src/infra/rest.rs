@@ -16,10 +16,15 @@ impl ComponentAction for Rest {
                     .args(["build", "-p", "rest", "--bin", "rest"])
                     .status()?;
             }
+            let http = if options.http_restrict {
+                "--http-probes"
+            } else {
+                "--http"
+            };
             let binary = Binary::from_dbg("rest")
                 .with_arg("--auto-tls")
                 .with_args(vec!["--https", "rest:8080"])
-                .with_args(vec!["--http", "rest:8081"])
+                .with_args(vec![http, "rest:8081"])
                 .with_arg("--workers=1");
             let binary = if let Some(jwk) = &options.rest_jwk {
                 binary.with_arg("--jwk").with_arg(jwk)

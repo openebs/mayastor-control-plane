@@ -129,6 +129,10 @@ pub struct StartOptions {
     #[clap(long, conflicts_with = "no_rest")]
     pub rest_jwk: Option<String>,
 
+    /// Restrict HTTP to the liveness/ready probes.
+    #[clap(long, env = "HTTP_PROBES")]
+    pub http_restrict: bool,
+
     /// Set the rest-to-core health probe frequency on the rest.
     #[arg(long)]
     pub rest_core_health_freq: Option<String>,
@@ -485,6 +489,11 @@ impl StartOptions {
     pub fn with_rest(mut self, enabled: bool, jwk: Option<String>) -> Self {
         self.no_rest = !enabled;
         self.rest_jwk = jwk;
+        self
+    }
+    #[must_use]
+    pub fn with_http_restrict(mut self, enabled: bool) -> Self {
+        self.http_restrict = enabled;
         self
     }
     #[must_use]
