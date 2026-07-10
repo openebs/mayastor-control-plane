@@ -219,6 +219,7 @@ impl IoEngine {
                         }
                     }),
                     bdev_size: state.bdev_size,
+                    read_only: None,
                 };
                 if let Some(node) = io_engine.sims.get_mut(state.node.as_str()) {
                     node.nexuses.push(nexus);
