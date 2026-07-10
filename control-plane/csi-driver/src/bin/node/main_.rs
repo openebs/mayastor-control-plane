@@ -35,7 +35,7 @@ use std::{
 use tokio::net::UnixListener;
 use tokio_stream::wrappers::UnixListenerStream;
 use tonic::transport::Server;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 const GRPC_PORT: u16 = 50051;
 
@@ -349,10 +349,26 @@ pub(super) async fn main() -> anyhow::Result<()> {
             // In an unlikely case string from utf8 fails, err towards incapability.
             let outstr = String::from_utf8(okstdout.stdout).unwrap_or("0 HCA".to_string());
             if !outstr.starts_with("0 HCA") {
-                info!("host node rdma capable. conn_fallback({conn_fallback:?}), {outstr:?}");
-                // todo: check for the presence of nvme_rdma too. But don't bail out as we do for
-                // nvme_tcp.
-                true
+                // RDMA hardware is present, but the transport still requires the `nvme_rdma`
+                // kernel module to be loaded on this node. If it is missing, treat the node as
+                // RDMA-incapable so `transport_from_url` can fall back to TCP (when the operator
+                // enabled fallback) rather than fail the connect with a hard error.
+                match crate::dev::nvmf::check_nvme_rdma_module() {
+                    Ok(()) => {
+                        info!(
+                            "host node rdma capable. conn_fallback({conn_fallback:?}), {outstr:?}"
+                        );
+                        true
+                    }
+                    Err(error) => {
+                        warn!(
+                            "host node has rdma hardware but nvme_rdma kernel module is not \
+                            loaded, treating as rdma incapable. \
+                            conn_fallback({conn_fallback:?}), {outstr:?}, error: {error}"
+                        );
+                        false
+                    }
+                }
             } else {
                 info!(
                     "host node is not rdma capable. conn_fallback({conn_fallback:?}), {outstr:?}"
