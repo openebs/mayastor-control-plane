@@ -289,6 +289,18 @@ impl PurgeReason {
             _ => None,
         }
     }
+
+    /// Whether this purge reason indicates that volume or snapshot data
+    /// would be lost, and so the impact should be shown to the user.
+    pub fn is_data_loss(&self) -> bool {
+        matches!(
+            self,
+            Self::NodePurgeVolumeLoss
+                | Self::NodePurgeSnapshotLoss
+                | Self::PoolPurgeVolumeLoss
+                | Self::PoolPurgeSnapshotLoss
+        )
+    }
 }
 
 impl From<TopologyError> for Error {

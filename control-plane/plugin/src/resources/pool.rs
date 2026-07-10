@@ -425,7 +425,14 @@ impl Delete for Pool {
                     return Ok(());
                 }
                 match super::error::PurgeReason::from_api_error(&source) {
-                    Some(reason) => Err(Error::Purge { reason }),
+                    Some(reason) => {
+                        if reason.is_data_loss() {
+                            let (volume_loss, snapshot_loss) =
+                                super::impact::compute_pool_purge_loss(&id.pool_id).await;
+                            super::impact::print_purge_loss(&volume_loss, &snapshot_loss, output);
+                        }
+                        Err(Error::Purge { reason })
+                    }
                     None => Err(Error::DeletePoolError {
                         hint: pool_deletion_hint(&id.pool_id).await,
                         id: id.pool_id.to_string(),
