@@ -13,9 +13,9 @@ use actix_service::ServiceFactory;
 use actix_web::{
     body::MessageBody,
     dev::{ServiceRequest, ServiceResponse},
-    middleware,
+    middleware::{self, from_fn, Condition, Next},
     web::Data,
-    HttpServer,
+    HttpResponse, HttpServer,
 };
 use clap::Parser;
 use grpc::{client::CoreClient, operations::jsongrpc::client::JsonGrpcClient};
@@ -43,6 +43,10 @@ pub(crate) struct CliArgs {
     /// The bind address for the REST interface (with HTTP).
     #[clap(long)]
     http: Option<String>,
+
+    /// The bind address for the HTTP liveness and readiness probes interface (with HTTP).
+    #[clap(long, conflicts_with = "http")]
+    http_probes: Option<String>,
 
     /// The CORE gRPC Server URL or address to connect to the services.
     #[clap(long, short = 'z', default_value = DEFAULT_GRPC_CLIENT_ADDR)]
@@ -296,6 +300,23 @@ fn get_jwk_path() -> Option<PathBuf> {
     }
 }
 
+/// Only the liveness (`/live`) and readiness (`/ready`) probes are served over an
+/// insecure (plain HTTP) connection.
+/// Every other route is rejected with `421 Misdirected Request`, since the full API
+/// is only served on the separate HTTPS port.
+async fn probes_only_on_insecure(
+    req: ServiceRequest,
+    next: Next<impl MessageBody + 'static>,
+) -> Result<ServiceResponse, actix_web::Error> {
+    let is_probe = matches!(req.path(), "/live" | "/ready");
+    if req.app_config().secure() || is_probe {
+        Ok(next.call(req).await?.map_into_boxed_body())
+    } else {
+        let response = HttpResponse::MisdirectedRequest().finish();
+        Ok(req.into_response(response))
+    }
+}
+
 fn workers(args: &CliArgs) -> usize {
     let max_workers = match args.max_workers {
         0 => num_cpus::get_physical(),
@@ -332,11 +353,18 @@ async fn main() -> anyhow::Result<()> {
 
     let cached_core_state = Data::new(CachedCoreState::new(cli_args.core_liveness_check_frequency));
 
+    let restrict_http_to_probes = cli_args.http_probes.is_some();
+
     let app = move || {
         actix_web::App::new()
             .app_data(cached_core_state.clone())
             .service(liveness)
             .service(readiness)
+            // Restrict everything except the liveness/readiness probes to secure (HTTPS) connections
+            .wrap(Condition::new(
+                restrict_http_to_probes,
+                from_fn(probes_only_on_insecure),
+            ))
             .wrap(tracing_actix_web::TracingLogger::default())
             .wrap(middleware::Logger::default())
             .app_data(authentication::init(get_jwk_path()))
@@ -355,6 +383,8 @@ async fn main() -> anyhow::Result<()> {
         HttpServer::new(app).bind_rustls_0_23(CliArgs::args().https, get_certificates()?)?;
     let result = if let Some(http) = CliArgs::args().http {
         server.bind(http).map_err(anyhow::Error::from)?
+    } else if let Some(http_probes) = CliArgs::args().http_probes {
+        server.bind(http_probes).map_err(anyhow::Error::from)?
     } else {
         server
     }
