@@ -454,9 +454,14 @@ message ClearErrorsRequest {
 }
 
 enum ClearErrors {
-  // Clears all counted errors and related alerts
-  // Example, it clears the io stall transitions, but doesn't clear an io stall
+  // Clears all counted errors and stall transitions.
+  // Note: It doesn't clear an io stall state if the pool is currently in a stalled state.
+  // The stall state will be cleared when the pool is no longer stalled.
   ClearAll = 0;
+  // Clears only the counted I/O errors.
+  ClearIoErrors = 1;
+  // Clears only the I/O stall transition count.
+  ClearIoStallTransitions = 2;
 }
 
 message ClearErrorsReply {

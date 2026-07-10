@@ -212,6 +212,8 @@ impl apis::actix_server::Pools for RestApi {
         let request = if let Some(body) = body {
             let clear = match body.clear {
                 PoolClearErr::All => ClearErrors::All,
+                PoolClearErr::IoErrors => ClearErrors::IoErrors,
+                PoolClearErr::IoStallTransitions => ClearErrors::IoStallTransitions,
             };
             ClearErrorsRequest::new_ext(pool_id.into(), body.disks, clear)
         } else {
