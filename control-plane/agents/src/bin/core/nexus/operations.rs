@@ -197,7 +197,11 @@ impl ResourceSharing for Option<&mut OperationGuardArc<NexusSpec>> {
                 .start_update(
                     registry,
                     &status,
-                    NexusOperation::new_share(request.protocol, request.allowed_hosts.clone()),
+                    NexusOperation::new_share(
+                        request.protocol,
+                        request.allowed_hosts.clone(),
+                        request.read_only,
+                    ),
                 )
                 .await?;
             let result = node.share_nexus(request).await;

@@ -9,6 +9,7 @@ mod helpers;
 mod hotspare;
 mod offline_rebuild;
 mod resize;
+mod rox;
 mod rwx;
 mod snapshot;
 mod snapshot_clone;

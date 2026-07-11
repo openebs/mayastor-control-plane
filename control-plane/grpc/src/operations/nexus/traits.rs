@@ -582,6 +582,7 @@ impl TryFrom<nexus::NexusSpec> for NexusSpec {
                 nexus::NexusLabelVersion::V1 => NexusVersion::V1,
                 nexus::NexusLabelVersion::V2 => NexusVersion::V2,
             },
+            read_only: value.read_only.unwrap_or_default(),
         })
     }
 }
@@ -619,6 +620,7 @@ impl From<NexusSpec> for nexus::NexusSpec {
                 NexusVersion::V1 => nexus::NexusLabelVersion::V1.into(),
                 NexusVersion::V2 => nexus::NexusLabelVersion::V2.into(),
             },
+            read_only: Some(value.read_only),
         }
     }
 }
@@ -1042,6 +1044,8 @@ pub trait ShareNexusInfo: Send + Sync + std::fmt::Debug {
     fn protocol(&self) -> NexusShareProtocol;
     /// Allowed hosts to access nexus.
     fn allowed_hosts(&self) -> Vec<HostNqn>;
+    /// Publish the nexus read-only (ROX).
+    fn read_only(&self) -> bool;
 }
 
 impl ShareNexusInfo for ShareNexus {
@@ -1063,6 +1067,10 @@ impl ShareNexusInfo for ShareNexus {
 
     fn allowed_hosts(&self) -> Vec<HostNqn> {
         self.allowed_hosts.clone()
+    }
+
+    fn read_only(&self) -> bool {
+        self.read_only
     }
 }
 
@@ -1113,6 +1121,10 @@ impl ShareNexusInfo for ValidatedShareNexusRequest {
     fn allowed_hosts(&self) -> Vec<HostNqn> {
         self.allowed_hosts.clone()
     }
+
+    fn read_only(&self) -> bool {
+        self.inner.read_only.unwrap_or_default()
+    }
 }
 
 impl ValidateRequestTypes for ShareNexusRequest {
@@ -1153,6 +1165,7 @@ impl From<&dyn ShareNexusInfo> for ShareNexusRequest {
                 .into_iter()
                 .map(|nqn| nqn.to_string())
                 .collect(),
+            read_only: Some(data.read_only()),
         }
     }
 }
@@ -1165,6 +1178,7 @@ impl From<&dyn ShareNexusInfo> for ShareNexus {
             key: data.key(),
             protocol: data.protocol(),
             allowed_hosts: data.allowed_hosts(),
+            read_only: data.read_only(),
         }
     }
 }

@@ -476,6 +476,11 @@ pub struct TargetConfig {
     /// Config of frontend-nodes where IO will be sent from.
     #[serde(default)]
     frontend: FrontendConfig,
+    /// Whether the target should be published read-only. Set on ROX publishes so
+    /// the nexus rejects writes at the data plane regardless of what the mount
+    /// layer above requests.
+    #[serde(default)]
+    read_only: bool,
 }
 
 /// Default value for the active field in TargetConfig.
@@ -491,7 +496,20 @@ impl TargetConfig {
             active: true,
             config,
             frontend,
+            read_only: false,
         }
+    }
+
+    /// Builder: set the target's read-only flag. Set on ROX publishes so the
+    /// nexus enforces write rejection at the data plane.
+    pub fn with_read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
+        self
+    }
+
+    /// Whether the target should be published read-only (ROX).
+    pub fn read_only(&self) -> bool {
+        self.read_only
     }
 
     /// Republishing the volume for the given node.

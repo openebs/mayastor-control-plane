@@ -119,6 +119,9 @@ message NexusSpec {
   repeated string allowed_hosts = 12;
   // version of the nexus label layout
   uint32 label_version = 13;
+  // Whether the nexus is currently published read-only (ROX). Populated on
+  // share; cleared on unshare.
+  optional bool read_only = 14;
 }
 
 // Nexus children (replica or "raw" URI)
@@ -248,6 +251,9 @@ message ShareNexusRequest {
   NexusShareProtocol protocol = 4;
   // Allowed hosts to access nexus
   repeated string allowed_hosts = 5;
+  // Publish read-only (ROX). When true the io-engine rejects write I/O at the
+  // nexus. Optional for back-compat: absent = false.
+  optional bool read_only = 6;
 }
 
 // Reply type for a ShareNexusRequest

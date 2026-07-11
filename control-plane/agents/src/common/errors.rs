@@ -176,6 +176,15 @@ pub enum SvcError {
         node: String,
         protocol: String,
     },
+    #[snafu(display(
+        "Volume '{vol_id}' is already published as {current} but a {requested} publish was requested; \
+         unpublish first before switching access mode"
+    ))]
+    VolumeAccessModeConflict {
+        vol_id: String,
+        current: String,
+        requested: String,
+    },
     #[snafu(display("Volume '{vol_id}' is already published with current context ({current:?}) != requested ({requested:?})"))]
     VolumePublishCtxDiffer {
         vol_id: String,
@@ -907,6 +916,12 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::VolumeAlreadyPublished { .. } => ReplyError {
                 kind: ReplyErrorKind::AlreadyPublished,
+                resource: ResourceKind::Volume,
+                source,
+                extra,
+            },
+            SvcError::VolumeAccessModeConflict { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::Volume,
                 source,
                 extra,

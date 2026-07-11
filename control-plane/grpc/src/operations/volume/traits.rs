@@ -340,16 +340,23 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
                             err.to_string(),
                         )
                     })?;
-                    let frontend = volume_meta
-                        .target_config
-                        .and_then(|c| c.frontend)
+                    let meta_cfg = volume_meta.target_config;
+                    let frontend = meta_cfg
+                        .as_ref()
+                        .and_then(|c| c.frontend.clone())
+                        .unwrap_or_default();
+                    // `read_only` is carried on the metadata's target_config, not the
+                    // top-level VolumeTarget. Without pulling it back here, ROX publishes
+                    // would appear as RWO to any client reading the volume via gRPC.
+                    let read_only = meta_cfg
+                        .as_ref()
+                        .and_then(|c| c.read_only)
                         .unwrap_or_default();
 
-                    Some(TargetConfig::new(
-                        target,
-                        NexusNvmfConfig::default(),
-                        frontend.into(),
-                    ))
+                    Some(
+                        TargetConfig::new(target, NexusNvmfConfig::default(), frontend.into())
+                            .with_read_only(read_only),
+                    )
                 }
                 None => None,
             },
@@ -814,6 +821,7 @@ impl From<&TargetConfig> for volume::VolumeTarget {
 impl TryFrom<volume::TargetConfig> for TargetConfig {
     type Error = ReplyError;
     fn try_from(src: volume::TargetConfig) -> Result<Self, Self::Error> {
+        let read_only = src.read_only.unwrap_or_default();
         Ok(Self::new(
             match src.target {
                 Some(t) => t.try_into(),
@@ -830,7 +838,8 @@ impl TryFrom<volume::TargetConfig> for TargetConfig {
                 )),
             }?,
             FrontendConfig::default(),
-        ))
+        )
+        .with_read_only(read_only))
     }
 }
 impl From<TargetConfig> for volume::TargetConfig {
@@ -839,6 +848,7 @@ impl From<TargetConfig> for volume::TargetConfig {
             target: Some((&src).into()),
             config: Some(src.config().clone().into()),
             frontend: Some(src.frontend().into()),
+            read_only: Some(src.read_only()),
         }
     }
 }
@@ -1646,6 +1656,7 @@ impl From<VolumeAccessMode> for AccessMode {
         match value {
             VolumeAccessMode::SingleNodeWriter => Self::SingleNodeWriter,
             VolumeAccessMode::MultiNodeMultiWriter => Self::MultiNodeMultiWriter,
+            VolumeAccessMode::MultiNodeReaderOnly => Self::MultiNodeReaderOnly,
         }
     }
 }
@@ -1654,6 +1665,7 @@ impl From<AccessMode> for VolumeAccessMode {
         match value {
             AccessMode::SingleNodeWriter => VolumeAccessMode::SingleNodeWriter,
             AccessMode::MultiNodeMultiWriter => VolumeAccessMode::MultiNodeMultiWriter,
+            AccessMode::MultiNodeReaderOnly => VolumeAccessMode::MultiNodeReaderOnly,
         }
     }
 }

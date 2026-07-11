@@ -742,6 +742,9 @@ pub struct ShareNexus {
     pub protocol: NexusShareProtocol,
     /// host nqn's allowed to connect to the target.
     pub allowed_hosts: Vec<HostNqn>,
+    /// Publish read-only. When true, the io-engine rejects write I/O at the
+    /// nexus so a misconfigured mount above cannot mutate the replicas.
+    pub read_only: bool,
 }
 impl ShareNexus {
     /// Return new `Self` from the given parameters.
@@ -753,6 +756,13 @@ impl ShareNexus {
             allowed_hosts: nqns.into_vec(),
             ..Default::default()
         }
+    }
+
+    /// Builder: publish the nexus read-only. Used by ROX publishes so writes are
+    /// rejected at the data plane regardless of the mount layer above.
+    pub fn with_read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
+        self
     }
 }
 impl From<&Nexus> for UnshareNexus {

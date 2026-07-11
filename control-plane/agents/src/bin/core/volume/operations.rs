@@ -42,7 +42,7 @@ use stor_port::{
             DestroyVolume, NexusVersion, NodeTopology, Protocol, PublishVolume, Replica, ReplicaId,
             ReplicaOwners, RepublishVolume, ResizeVolume, SetVolumeProperty, SetVolumeReplica,
             ShareNexus, ShareVolume, ShutdownNexus, UnpublishVolume, UnshareNexus, UnshareVolume,
-            Volume, VolumeShareProtocol, VolumeTargetMode,
+            Volume, VolumeAccessMode, VolumeShareProtocol, VolumeTargetMode,
         },
     },
     HostAccessControl,
@@ -267,6 +267,11 @@ impl ResourceSharing for OperationGuardArc<VolumeSpec> {
             .await?;
 
         let target = state.target.expect("already validated");
+        let read_only = self
+            .as_ref()
+            .active_config()
+            .map(|c| c.read_only())
+            .unwrap_or_default();
         let result = match specs.nexus(&target.uuid).await {
             Ok(mut nexus) => {
                 nexus
@@ -281,7 +286,8 @@ impl ResourceSharing for OperationGuardArc<VolumeSpec> {
                                 .into_iter()
                                 .map(TryInto::try_into)
                                 .collect::<Result<_, _>>()?,
-                        ),
+                        )
+                        .with_read_only(read_only),
                     )
                     .await
             }
@@ -414,7 +420,13 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
                             .iter()
                             .map(|n| n.node_nqn().clone())
                             .collect::<Vec<_>>();
-                        let share = ShareNexus::new(state, VolumeShareProtocol::Nvmf, nqns);
+                        let read_only = self
+                            .as_ref()
+                            .active_config()
+                            .map(|c| c.read_only())
+                            .unwrap_or_default();
+                        let share = ShareNexus::new(state, VolumeShareProtocol::Nvmf, nqns)
+                            .with_read_only(read_only);
                         nexus.share(registry, &share).await.map(|_| ())
                     } else {
                         Ok(())
@@ -519,6 +531,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             Some(result) => result,
             None => self.next_target_node(registry, request, &state, true).await,
         }?;
+        let read_only = target_cfg.read_only();
         let nodes = target_cfg.frontend().node_names();
         let target_cfg = self
             .next_target_config(
@@ -528,6 +541,7 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
                 &nodes,
             )
             .await
+            .with_read_only(read_only)
             .republish(frontend);
         let operation = VolumeOperation::Republish(RepublishOperation::new(target_cfg.clone()));
 
@@ -593,7 +607,8 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let result = match nexus
             .share(
                 registry,
-                &ShareNexus::new(&nexus_state, request.share, allowed_host),
+                &ShareNexus::new(&nexus_state, request.share, allowed_host)
+                    .with_read_only(target_cfg.read_only()),
             )
             .await
         {
@@ -639,6 +654,30 @@ impl OperationGuardArc<VolumeSpec> {
         // a target already exists), and the only other caller today is the test
         // suite. Defensive guard so any internal caller added later inherits the
         // same protection without each having to re-implement it.
+        // Reject RWO⇄ROX mode switches on an already-published volume. Same nexus
+        // cannot be served as both writer and reader-only concurrently; the caller
+        // must unpublish before switching access mode. An offline-rebuild target is
+        // unshared scratch state and doesn't serve frontend I/O, so a CSI publish
+        // arriving mid-rebuild is a promotion, not a switch — skip the guard for
+        // that case and let the promotion path below reconcile the mode.
+        if let Some(current_cfg) = self.as_ref().target_cfg() {
+            if !self.as_ref().is_offline_rebuild_target() {
+                let requested_ro =
+                    matches!(request.access_mode, VolumeAccessMode::MultiNodeReaderOnly);
+                if current_cfg.read_only() != requested_ro {
+                    return Err(SvcError::VolumeAccessModeConflict {
+                        vol_id: request.uuid.to_string(),
+                        current: if current_cfg.read_only() {
+                            "ROX"
+                        } else {
+                            "RWO"
+                        }
+                        .into(),
+                        requested: if requested_ro { "ROX" } else { "RWO" }.into(),
+                    });
+                }
+            }
+        }
         if matches!(target_mode, VolumeTargetMode::OfflineRebuild)
             && self.as_ref().is_offline_rebuild_target()
         {
@@ -667,6 +706,14 @@ impl OperationGuardArc<VolumeSpec> {
                 if let Some(share) = request.share {
                     target_cfg.target_mut().set_protocol(Some(share));
                 }
+                // The offline-rebuild target defaults to RWO; the CSI publish
+                // now dictates the access mode, so promote read_only accordingly.
+                // Without this the ROX flag would be silently dropped when a
+                // MultiNodeReaderOnly publish arrives mid-rebuild.
+                target_cfg = target_cfg.with_read_only(matches!(
+                    request.access_mode,
+                    VolumeAccessMode::MultiNodeReaderOnly
+                ));
             }
             // Whatever mode the caller asked for now applies to the target. For
             // an offline-rebuild promotion the CSI publish path passes
@@ -698,7 +745,8 @@ impl OperationGuardArc<VolumeSpec> {
                         &nexus_state,
                         share_protocol,
                         target_cfg.frontend().node_nqns(),
-                    ),
+                    )
+                    .with_read_only(target_cfg.read_only()),
                 )
                 .await;
 
@@ -717,6 +765,7 @@ impl OperationGuardArc<VolumeSpec> {
 
         let last_target = self.as_ref().health_info_id().cloned();
         let frontend_nodes = &request.frontend_nodes;
+        let read_only = matches!(request.access_mode, VolumeAccessMode::MultiNodeReaderOnly);
         let target_cfg = self
             .next_target_config(
                 registry,
@@ -725,6 +774,7 @@ impl OperationGuardArc<VolumeSpec> {
                 frontend_nodes,
             )
             .await
+            .with_read_only(read_only)
             .with_target_mode(target_mode);
 
         let operation =
@@ -745,7 +795,8 @@ impl OperationGuardArc<VolumeSpec> {
             result = match nexus
                 .share(
                     registry,
-                    &ShareNexus::new(&nexus_state, share, allowed_hosts),
+                    &ShareNexus::new(&nexus_state, share, allowed_hosts)
+                        .with_read_only(target_cfg.read_only()),
                 )
                 .await
             {
