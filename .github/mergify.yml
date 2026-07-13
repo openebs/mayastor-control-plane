@@ -11,8 +11,8 @@ queue_rules:
     batch_size: 3
     merge_conditions:
       - check-success = bors-ci
-      - check-success = submodule-branch
       - check-success = commitlint
+      - check-success = submodule-branch
       - -label ~= do-not-merge
     queue_conditions:
       - check-success = commitlint
