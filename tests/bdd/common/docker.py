@@ -1,5 +1,6 @@
 import os
 import re
+import subprocess
 from datetime import datetime
 
 import docker
@@ -99,16 +100,16 @@ class Docker(object):
             print(f"No match for test file and name in current_test: {current_test}")
             return
 
-        print(f"Dumping container logs for test: {current_test}")
+        # print(f"Dumping container logs for test: {current_test}")
 
         if failed_logs_var in os.environ and os.environ[failed_logs_var]:
             logs = os.environ.get(failed_logs_var)
-            print(f"Dumping container logs to: {logs}")
+            # print(f"Dumping container logs to: {logs}")
         elif ci in os.environ and os.environ[ci] in ["1", "True", "true"]:
             logs = os.path.join(
                 os.environ.get("ROOT_DIR"), "ci-report", "docker-logs.txt"
             )
-            print(f"Dumping container logs to: {logs}")
+            # print(f"Dumping container logs to: {logs}")
 
         if logs is None:
             print("No log file specified for docker logs. Skipping log dump.")
@@ -130,6 +131,8 @@ class Docker(object):
         docker_client = docker.from_env()
 
         for container in docker_client.containers.list():
+            if container.labels.get("io.composer.test.name") != "cluster":
+                continue
             file = os.path.join(
                 dump_path, f"{test_file}/{test_name}/{action}/{container.name}.txt"
             )
@@ -137,6 +140,27 @@ class Docker(object):
             with open(file, "w") as log_file:
                 container_logs = container.logs().decode("utf-8")
                 log_file.write(container_logs)
+
+        file = os.path.join(
+            dump_path, f"{test_file}/{test_name}/{action}/etcd-data.txt"
+        )
+        Docker.dump_etcd(file)
+
+    @staticmethod
+    def dump_etcd(file: str):
+        os.makedirs(os.path.dirname(file), exist_ok=True)
+        try:
+            with open(file, "w") as log_file:
+                subprocess.run(
+                    'etcdctl get --prefix ""',
+                    check=True,
+                    shell=True,
+                    stdout=log_file,
+                    stderr=subprocess.PIPE,
+                )
+        except subprocess.CalledProcessError as e:
+            current_test = os.environ.get("PYTEST_CURRENT_TEST")
+            print(f"Failed to collect etcd logs for {current_test}: {e.stderr}")
 
     @staticmethod
     def dump_logs_single(dump_path: str, current_test: str):
