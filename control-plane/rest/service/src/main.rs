@@ -1,5 +1,6 @@
 mod authentication;
 mod health;
+mod tls;
 mod v0;
 
 use crate::{
@@ -27,7 +28,7 @@ use rustls::{
     RootCertStore, ServerConfig,
 };
 use rustls_pemfile::{certs, private_key};
-use std::{fs::File, io::BufReader, path::PathBuf, sync::Arc, time::Duration};
+use std::{io::BufReader, path::PathBuf, sync::Arc, time::Duration};
 use stor_port::transport_api::{RequestMinTimeout, TimeoutOptions};
 use utils::{
     tracing_telemetry::{FmtLayer, FmtStyle, KeyValue},
@@ -72,7 +73,7 @@ pub(crate) struct CliArgs {
     dummy_certificates: bool,
 
     /// Auto-generate an ephemeral self-signed server certificate for HTTPS.
-    #[clap(long, conflicts_with_all = ["dummy_certificates", "cert_file", "key_file"])]
+    #[clap(long, conflicts_with_all = ["dummy_certificates", "cert_file", "key_file", "client_ca_file"])]
     auto_tls: bool,
 
     /// Path to the certificate authority (CA) bundle used to authenticate TLS clients.
@@ -126,17 +127,53 @@ impl CliArgs {
     fn args() -> Self {
         CliArgs::parse()
     }
-}
+    /// default timeout options for every bus request
+    fn timeout_opts(&self) -> TimeoutOptions {
+        let timeout_opts =
+            TimeoutOptions::new_no_retries().with_req_timeout(self.request_timeout.into());
 
-/// default timeout options for every bus request
-fn timeout_opts() -> TimeoutOptions {
-    let timeout_opts =
-        TimeoutOptions::new_no_retries().with_req_timeout(CliArgs::args().request_timeout.into());
+        if self.no_min_timeouts {
+            timeout_opts.with_min_req_timeout(None)
+        } else {
+            timeout_opts.with_min_req_timeout(RequestMinTimeout::default())
+        }
+    }
+    fn certificates(&self) -> anyhow::Result<ServerConfig> {
+        let client_ca_file = self.client_ca_file.clone();
 
-    if CliArgs::args().no_min_timeouts {
-        timeout_opts.with_min_req_timeout(None)
-    } else {
-        timeout_opts.with_min_req_timeout(RequestMinTimeout::default())
+        if self.auto_tls {
+            auto_certificates()
+        } else if self.dummy_certificates {
+            dummy_certificates()
+        } else {
+            // guaranteed to be `Some` by the require_unless attribute
+            let cert_file = self.cert_file.clone().expect("cert_file is required");
+            let key_file = self.key_file.clone().expect("key_file is required");
+            reloadable_certificates(cert_file, key_file, client_ca_file)
+        }
+    }
+    fn jwk_path(&self) -> Option<PathBuf> {
+        match self.jwk.clone() {
+            Some(path) => Some(path),
+            None => match self.no_auth {
+                true => None,
+                false => panic!("Cannot authenticate without a JWK file"),
+            },
+        }
+    }
+
+    fn workers(&self) -> usize {
+        let max_workers = match self.max_workers {
+            0 => num_cpus::get_physical(),
+            max => max,
+        };
+
+        let workers = match self.workers {
+            0 => num_cpus::get_physical(),
+            workers => workers,
+        };
+
+        workers.clamp(1, max_workers)
     }
 }
 
@@ -168,35 +205,29 @@ where
     }
 }
 
-fn get_certificates() -> anyhow::Result<ServerConfig> {
-    let client_ca_file = CliArgs::args().client_ca_file;
+/// Server config whose certificate is served through a resolver that a background watcher swaps
+/// when the certificate files change on disk, so renewals apply without a restart.
+///
+/// When mTLS is enabled, the client CA verifier is likewise reloaded so a rotated or fully
+///  recreated client CA bundle is honoured.
+fn reloadable_certificates(
+    cert_file: PathBuf,
+    key_file: PathBuf,
+    client_ca_file: Option<PathBuf>,
+) -> anyhow::Result<ServerConfig> {
+    let builder = ServerConfig::builder();
+    let provider = builder.crypto_provider().clone();
 
-    if CliArgs::args().auto_tls {
-        get_auto_certificates(client_ca_file)
-    } else if CliArgs::args().dummy_certificates {
-        get_dummy_certificates()
-    } else {
-        // guaranteed to be `Some` by the require_unless attribute
-        let cert_file = CliArgs::args().cert_file.expect("cert_file is required");
-        let key_file = CliArgs::args().key_file.expect("key_file is required");
-        let cert_file = &mut BufReader::new(File::open(cert_file)?);
-        let key_file = &mut BufReader::new(File::open(key_file)?);
-        let mut client_ca = match client_ca_file {
-            Some(path) => Some(BufReader::new(File::open(path)?)),
-            None => None,
-        };
+    let (resolver, verifier) = tls::reloadable_tls(cert_file, key_file, client_ca_file, provider)?;
 
-        load_certificates(
-            cert_file,
-            key_file,
-            client_ca
-                .as_mut()
-                .map(|file| file as &mut dyn std::io::BufRead),
-        )
-    }
+    let config = builder
+        .with_client_cert_verifier(verifier)
+        .with_cert_resolver(resolver);
+
+    Ok(config)
 }
 
-fn get_dummy_certificates() -> anyhow::Result<ServerConfig> {
+fn dummy_certificates() -> anyhow::Result<ServerConfig> {
     let cert_file = &mut BufReader::new(&std::include_bytes!("../../certs/rsa/user.chain")[..]);
     let key_file = &mut BufReader::new(&std::include_bytes!("../../certs/rsa/user.rsa")[..]);
     let mut client_ca = BufReader::new(&std::include_bytes!("../../certs/rsa/ca.cert")[..]);
@@ -208,7 +239,7 @@ fn get_dummy_certificates() -> anyhow::Result<ServerConfig> {
     )
 }
 
-fn get_auto_certificates(client_ca_file: Option<PathBuf>) -> anyhow::Result<ServerConfig> {
+fn auto_certificates() -> anyhow::Result<ServerConfig> {
     let cert_material = generate_simple_self_signed(vec!["localhost".to_string()])
         .map_err(|error| anyhow::anyhow!("Failed to generate self-signed certificate: {error}"))?;
 
@@ -217,18 +248,8 @@ fn get_auto_certificates(client_ca_file: Option<PathBuf>) -> anyhow::Result<Serv
 
     let cert_file = &mut BufReader::new(cert_pem.as_bytes());
     let key_file = &mut BufReader::new(key_pem.as_bytes());
-    let mut client_ca = match client_ca_file {
-        Some(path) => Some(BufReader::new(File::open(path)?)),
-        None => None,
-    };
 
-    load_certificates(
-        cert_file,
-        key_file,
-        client_ca
-            .as_mut()
-            .map(|file| file as &mut dyn std::io::BufRead),
-    )
+    load_certificates(cert_file, key_file, None)
 }
 
 fn load_certificates(
@@ -290,16 +311,6 @@ fn client_cert_verifier(
         })
 }
 
-fn get_jwk_path() -> Option<PathBuf> {
-    match CliArgs::args().jwk {
-        Some(path) => Some(path),
-        None => match CliArgs::args().no_auth {
-            true => None,
-            false => panic!("Cannot authenticate without a JWK file"),
-        },
-    }
-}
-
 /// Only the liveness (`/live`) and readiness (`/ready`) probes are served over an
 /// insecure (plain HTTP) connection.
 /// Every other route is rejected with `421 Misdirected Request`, since the full API
@@ -315,20 +326,6 @@ async fn probes_only_on_insecure(
         let response = HttpResponse::MisdirectedRequest().finish();
         Ok(req.into_response(response))
     }
-}
-
-fn workers(args: &CliArgs) -> usize {
-    let max_workers = match args.max_workers {
-        0 => num_cpus::get_physical(),
-        max => max,
-    };
-
-    let workers = match args.workers {
-        0 => num_cpus::get_physical(),
-        workers => workers,
-    };
-
-    workers.clamp(1, max_workers)
 }
 
 #[actix_web::main]
@@ -347,14 +344,13 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize the core client to be used in rest
     CORE_CLIENT
-        .set(CoreClient::new(cli_args.core_grpc, timeout_opts()).await)
+        .set(CoreClient::new(cli_args.core_grpc.clone(), cli_args.timeout_opts()).await)
         .ok()
         .expect("Expect to be initialised only once");
 
     let cached_core_state = Data::new(CachedCoreState::new(cli_args.core_liveness_check_frequency));
-
     let restrict_http_to_probes = cli_args.http_probes.is_some();
-
+    let jwk_path = cli_args.jwk_path();
     let app = move || {
         actix_web::App::new()
             .app_data(cached_core_state.clone())
@@ -367,28 +363,28 @@ async fn main() -> anyhow::Result<()> {
             ))
             .wrap(tracing_actix_web::TracingLogger::default())
             .wrap(middleware::Logger::default())
-            .app_data(authentication::init(get_jwk_path()))
+            .app_data(authentication::init(jwk_path.clone()))
             .configure_api(&v0::configure_api)
     };
 
     // Initialize the json grpc client to be used in rest
-    if let Some(json_grpc) = CliArgs::args().json_grpc {
+    if let Some(json_grpc) = cli_args.json_grpc.clone() {
         JSON_GRPC_CLIENT
-            .set(JsonGrpcClient::new(json_grpc, timeout_opts()).await)
+            .set(JsonGrpcClient::new(json_grpc, cli_args.timeout_opts()).await)
             .ok()
             .expect("Expect to be initialised only once");
     }
 
     let server =
-        HttpServer::new(app).bind_rustls_0_23(CliArgs::args().https, get_certificates()?)?;
-    let result = if let Some(http) = CliArgs::args().http {
+        HttpServer::new(app).bind_rustls_0_23(&cli_args.https, cli_args.certificates()?)?;
+    let result = if let Some(http) = &cli_args.http {
         server.bind(http).map_err(anyhow::Error::from)?
     } else if let Some(http_probes) = CliArgs::args().http_probes {
         server.bind(http_probes).map_err(anyhow::Error::from)?
     } else {
         server
     }
-    .workers(workers(&CliArgs::args()))
+    .workers(cli_args.workers())
     .run()
     .await;
 

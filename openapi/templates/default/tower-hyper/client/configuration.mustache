@@ -4,8 +4,16 @@ pub type ReqBody = hyper_body::Body;
 
 pub use hyper::{body, Request, Response, Uri};
 
+#[cfg(all(not(feature = "tower-client-tls"), feature = "tower-client-rls"))]
 use hyper_rustls::ConfigBuilderExt;
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    future::Future,
+    path::PathBuf,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+    time::Duration,
+};
 use tokio::sync::Mutex;
 use tower::{util::BoxCloneService, Layer, Service, ServiceExt};
 
@@ -50,9 +58,29 @@ pub enum Error {
     UriToUrl(url::ParseError),
     AddingVersionPath(hyper::http::uri::InvalidUri),
 }
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NativeRootCerts(error) => write!(f, "failed to load native root certificates: {error}"),
+            Self::Certificate => write!(f, "failed to parse TLS certificate"),
+            Self::ClientKey => write!(f, "failed to parse TLS client key"),
+            Self::ClientIdentity => write!(f, "failed to configure TLS client identity"),
+            Self::ClientAuth(error) => write!(f, "failed to configure TLS client authentication: {error}"),
+            Self::TlsConnector => write!(f, "failed to create TLS connector"),
+            Self::NoTracingFeature => write!(f, "tower tracing feature is not enabled"),
+            Self::UrlToUri(error) => write!(f, "failed to convert URL to URI: {error}"),
+            Self::UriToUrl(error) => write!(f, "failed to convert URI to URL: {error}"),
+            Self::AddingVersionPath(error) => write!(f, "failed to add API version path: {error}"),
+        }
+    }
+}
+impl std::error::Error for Error {}
 
-/// The TLS configuration for HTTPS connections.
-#[derive(Debug, Clone, Default)]
+/// TLS configuration for HTTPS connections.
+///
+/// Certificate bytes are loaded up front. File-based modes also keep source paths,
+/// allowing reload to re-read renewed certificates without rebuilding the configuration.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum TlsMode {
     /// No TLS, plain HTTP. This is not recommended for production use.
     None,
@@ -63,12 +91,15 @@ pub enum TlsMode {
     /// but no client TLS certificate.
     ServerVerify {
         ca_certificate: Vec<u8>,
+        ca_certificate_path: Option<PathBuf>,
     },
     /// No verification of the server's TLS certificate, 
     /// but use the provided client TLS certificate for authentication.
     ClientVerify {
         client_certificate: Vec<u8>,
         client_key: Vec<u8>,
+        client_certificate_path: Option<PathBuf>,
+        client_key_path: Option<PathBuf>,
     },
     /// Verification of the server's TLS certificate using the provided CA certificate,
     /// and use the provided client TLS certificate for authentication.
@@ -77,8 +108,30 @@ pub enum TlsMode {
         ca_certificate: Vec<u8>,
         client_certificate: Vec<u8>,
         client_key: Vec<u8>,
+        ca_certificate_path: Option<PathBuf>,
+        client_certificate_path: Option<PathBuf>,
+        client_key_path: Option<PathBuf>,
     },
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TlsFingerprint {
+    None,
+    Auto,
+    ServerVerify {
+        ca_certificate: std::time::SystemTime,
+    },
+    ClientVerify {
+        client_certificate: std::time::SystemTime,
+        client_key: std::time::SystemTime,
+    },
+    Mtls {
+        ca_certificate: std::time::SystemTime,
+        client_certificate: std::time::SystemTime,
+        client_key: std::time::SystemTime,
+    },
+}
+
 impl TlsMode {
     /// Check if tls mode is auto.
     pub fn is_auto(&self) -> bool {
@@ -97,6 +150,8 @@ pub struct ClientSecurity {
     pub jwt: Option<String>,
     /// TLS mode for HTTPS connections.
     pub tls: TlsMode,
+    /// Watches file-based TLS certs and rebuilds the connector on renewal.
+    pub tls_reload: bool,
     /// Discovery of properties. 
     /// If true, the client will attempt to discover the required TLS and Auth configuration
     pub discover: bool,
@@ -106,31 +161,47 @@ impl Default for ClientSecurity {
         Self {
             jwt: None,
             tls: TlsMode::default(),
+            tls_reload: false,
             discover: true,
         }
     }
 }
 impl ClientSecurity {
     /// Creates a new client security configuration.
-    pub fn try_new(jwt: &Option<PathBuf>, tls: TlsMode) -> Result<Self, std::io::Error> {
+    pub fn try_new(
+        jwt: &Option<PathBuf>,
+        tls: impl Into<TlsMode>,
+    ) -> Result<Self, std::io::Error> {
+        let tls = tls.into();
         let jwt = jwt.as_ref().map(std::fs::read_to_string).transpose()?;
         Ok(Self {
             discover: tls.is_auto() || jwt.is_none(),
             jwt: jwt.map(|jwt| jwt.trim().to_string()),
+            tls_reload: tls.is_reloadable(),
             tls,
         })
     }
     /// Creates a new client security configuration.
-    pub fn new(jwt: Option<String>, tls: TlsMode) -> Self {
+    pub fn new(jwt: Option<String>, tls: impl Into<TlsMode>) -> Self {
+        let tls = tls.into();
         Self {
             discover: tls.is_auto() || jwt.is_none(),
             jwt,
+            tls_reload: tls.is_reloadable(),
             tls,
         }
     }
     /// Update self with the discover field.
     pub fn with_discover(self, discover: bool) -> Self {
         Self { discover, ..self }
+    }
+    /// Enable automatic reload for file-based TLS certificates.
+    ///
+    /// Automatically enabled when the TLS mode carries certificate paths. This watches
+    /// certificate paths retained by [`TlsMode::new`]. Byte-only TLS modes and non-Linux
+    /// platforms keep the existing static connector.
+    pub fn with_tls_reload(self, tls_reload: bool) -> Self {
+        Self { tls_reload, ..self }
     }
     /// Check if the client security configuration requires discovery 
     /// (i.e. if TLS is auto or JWT is not provided).
@@ -140,54 +211,593 @@ impl ClientSecurity {
 }
 
 impl TlsMode {
-    /// Creates a new TLS mode configuration from the given certificate and client key paths.
+    /// Creates TLS mode from optional certificate file paths.
+    ///
+    /// The files are read immediately, and their paths are retained for runtime reload.
     pub fn new(
         certificate: Option<&PathBuf>,
         client_cert: Option<&PathBuf>,
         client_key: Option<&PathBuf>,
     ) -> Result<Self, std::io::Error> {
-        let ca = certificate.map(std::fs::read).transpose()?;
-        let cl = client_cert
-            .zip(client_key)
-            .map(|(cert_path, key_path)| {
-                Ok::<_, std::io::Error>((std::fs::read(cert_path)?, std::fs::read(key_path)?))
-            })
-            .transpose()?;
-
-        Ok(match (ca, cl) {
-            (None, None) => TlsMode::Auto,
-            (Some(ca_certificate), None) => TlsMode::ServerVerify {
-                ca_certificate
+        Ok(match (certificate, client_cert.zip(client_key)) {
+            (None, None) => Self::Auto,
+            (Some(ca_certificate), None) => Self::ServerVerify {
+                ca_certificate: std::fs::read(ca_certificate)?,
+                ca_certificate_path: Some(ca_certificate.clone()),
             },
             (None, Some((client_certificate, client_key))) => Self::ClientVerify {
-                client_certificate,
-                client_key,
+                client_certificate: std::fs::read(client_certificate)?,
+                client_key: std::fs::read(client_key)?,
+                client_certificate_path: Some(client_certificate.clone()),
+                client_key_path: Some(client_key.clone()),
             },
             (Some(ca_certificate), Some((client_certificate, client_key))) => Self::Mtls {
-                ca_certificate,
-                client_certificate,
-                client_key,
-            }
+                ca_certificate: std::fs::read(ca_certificate)?,
+                client_certificate: std::fs::read(client_certificate)?,
+                client_key: std::fs::read(client_key)?,
+                ca_certificate_path: Some(ca_certificate.clone()),
+                client_certificate_path: Some(client_certificate.clone()),
+                client_key_path: Some(client_key.clone()),
+            },
         })
     }
     fn certificate(&self) -> Option<&[u8]> {
         match &self {
-            Self::ServerVerify { ca_certificate } | Self::Mtls { ca_certificate, .. } => Some(&ca_certificate[..]),
+            Self::ServerVerify { ca_certificate, .. } | Self::Mtls { ca_certificate, .. } => {
+                Some(&ca_certificate[..])
+            }
             _ => None,
         }
     }
     fn client_cert(&self) -> Option<&[u8]> {
         match &self {
-            Self::ClientVerify { client_certificate, .. } | Self::Mtls { client_certificate, .. } => Some(&client_certificate[..]),
+            Self::ClientVerify {
+                client_certificate, ..
+            }
+            | Self::Mtls {
+                client_certificate, ..
+            } => Some(&client_certificate[..]),
             _ => None,
         }
     }
     fn client_key(&self) -> Option<&[u8]> {
         match &self {
-            Self::ClientVerify { client_key, .. } | Self::Mtls { client_key, .. } => Some(&client_key[..]),
+            Self::ClientVerify { client_key, .. } | Self::Mtls { client_key, .. } => {
+                Some(&client_key[..])
+            }
             _ => None,
         }
     }
+    /// True when all certificate paths needed for reload are present.
+    fn is_reloadable(&self) -> bool {
+        match self {
+            Self::None | Self::Auto => false,
+            Self::ServerVerify { ca_certificate_path, .. } => ca_certificate_path.is_some(),
+            Self::ClientVerify {
+                client_certificate_path,
+                client_key_path,
+                ..
+            } => client_certificate_path.is_some() && client_key_path.is_some(),
+            Self::Mtls {
+                ca_certificate_path,
+                client_certificate_path,
+                client_key_path,
+                ..
+            } => ca_certificate_path.is_some()
+                && client_certificate_path.is_some()
+                && client_key_path.is_some(),
+        }
+    }
+
+    /// Certificate paths to watch for reload.
+    fn paths(&self) -> Vec<PathBuf> {
+        match self {
+            Self::None | Self::Auto => Vec::new(),
+            Self::ServerVerify { ca_certificate_path, .. } => {
+                vec![ca_certificate_path.clone()]
+            }
+            Self::ClientVerify {
+                client_certificate_path,
+                client_key_path,
+                ..
+            } => vec![client_certificate_path.clone(), client_key_path.clone()],
+            Self::Mtls {
+                ca_certificate_path,
+                client_certificate_path,
+                client_key_path,
+                ..
+            } => vec![
+                ca_certificate_path.clone(),
+                client_certificate_path.clone(),
+                client_key_path.clone(),
+            ],
+        }
+        .into_iter()
+        .flatten()
+        .collect()
+    }
+
+    /// Re-read certificate files from their stored paths.
+    fn reload_from_paths(&self) -> Result<Self, std::io::Error> {
+        Ok(match self {
+            Self::None => Self::None,
+            Self::Auto => Self::Auto,
+            Self::ServerVerify {
+                ca_certificate_path: Some(ca_certificate),
+                ..
+            } => Self::ServerVerify {
+                ca_certificate: std::fs::read(ca_certificate)?,
+                ca_certificate_path: Some(ca_certificate.clone()),
+            },
+            Self::ClientVerify {
+                client_certificate_path: Some(client_certificate),
+                client_key_path: Some(client_key),
+                ..
+            } => Self::ClientVerify {
+                client_certificate: std::fs::read(client_certificate)?,
+                client_key: std::fs::read(client_key)?,
+                client_certificate_path: Some(client_certificate.clone()),
+                client_key_path: Some(client_key.clone()),
+            },
+            Self::Mtls {
+                ca_certificate_path: Some(ca_certificate),
+                client_certificate_path: Some(client_certificate),
+                client_key_path: Some(client_key),
+                ..
+            } => Self::Mtls {
+                ca_certificate: std::fs::read(ca_certificate)?,
+                client_certificate: std::fs::read(client_certificate)?,
+                client_key: std::fs::read(client_key)?,
+                ca_certificate_path: Some(ca_certificate.clone()),
+                client_certificate_path: Some(client_certificate.clone()),
+                client_key_path: Some(client_key.clone()),
+            },
+            mode => mode.clone(),
+        })
+    }
+
+    /// Last-modified fingerprint used to skip duplicate reload events.
+    fn fingerprint(&self) -> Result<TlsFingerprint, std::io::Error> {
+        fn modified(path: &PathBuf) -> Result<std::time::SystemTime, std::io::Error> {
+            std::fs::metadata(path)?.modified()
+        }
+        Ok(match self {
+            Self::None => TlsFingerprint::None,
+            Self::Auto => TlsFingerprint::Auto,
+            Self::ServerVerify {
+                ca_certificate_path: Some(ca_certificate),
+                ..
+            } => TlsFingerprint::ServerVerify {
+                ca_certificate: modified(ca_certificate)?,
+            },
+            Self::ClientVerify {
+                client_certificate_path: Some(client_certificate),
+                client_key_path: Some(client_key),
+                ..
+            } => TlsFingerprint::ClientVerify {
+                client_certificate: modified(client_certificate)?,
+                client_key: modified(client_key)?,
+            },
+            Self::Mtls {
+                ca_certificate_path: Some(ca_certificate),
+                client_certificate_path: Some(client_certificate),
+                client_key_path: Some(client_key),
+                ..
+            } => TlsFingerprint::Mtls {
+                ca_certificate: modified(ca_certificate)?,
+                client_certificate: modified(client_certificate)?,
+                client_key: modified(client_key)?,
+            },
+            _ => TlsFingerprint::None,
+        })
+    }
+    /// Filesystem paths to watch for certificate changes.
+    ///
+    /// If all certs share a parent, watch that directory. This catches atomic
+    /// symlink-swap rotations where individual file symlinks may not emit events.
+    fn watch_targets(&self) -> Vec<PathBuf> {
+        let paths = self.paths();
+        if paths.is_empty() || std::env::var("KUBERNETES_SERVICE_HOST").is_err() {
+            return paths;
+        }
+        let mut parents = paths.iter().map(|path| path.parent().map(PathBuf::from));
+        if let Some(Some(first)) = parents.next() {
+            if parents.all(|parent| parent.as_ref() == Some(&first)) {
+                return vec![first];
+            }
+        }
+        paths
+    }
+}
+
+type HttpClientService = BoxCloneService<Request<ReqBody>, Response<ReqBody>, BoxedError>;
+
+/// Tower service that swaps its inner TLS client after certificate reloads.
+///
+/// Requests clone the current inner client; reload work stays in the background watcher.
+#[derive(Clone)]
+struct TlsReloadService {
+    state: Arc<std::sync::Mutex<TlsReloadState>>,
+}
+
+struct TlsReloadState {
+    url: url::Url,
+    tls: TlsMode,
+    fingerprint: TlsFingerprint,
+    client: HttpClientService,
+}
+
+impl TlsReloadService {
+    /// Build the initial client and start the background certificate watcher.
+    fn new(mut url: url::Url, tls: TlsMode) -> Result<(Self, url::Url), Error> {
+        let fingerprint = tls.fingerprint().map_err(Error::NativeRootCerts)?;
+        let client = build_http_client(&mut url, &tls)?;
+
+        let watch_paths = tls.watch_targets();
+        let state = Arc::new(std::sync::Mutex::new(TlsReloadState {
+            url: url.clone(),
+            tls,
+            fingerprint,
+            client,
+        }));
+
+        Self::spawn_watcher(watch_paths, state.clone());
+
+        Ok((Self { state }, url))
+    }
+
+    /// The current inner client.
+    fn client(&self) -> HttpClientService {
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .client
+            .clone()
+    }
+
+    fn reload_(state: &Arc<std::sync::Mutex<TlsReloadState>>) -> Result<bool, Error> {
+        let mut state = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let fingerprint = state.tls.fingerprint().map_err(Error::NativeRootCerts)?;
+        if fingerprint == state.fingerprint {
+            return Ok(false);
+        }
+        let tls = state.tls.reload_from_paths().map_err(Error::NativeRootCerts)?;
+        let mut url = state.url.clone();
+        let client = build_http_client(&mut url, &tls)?;
+        state.client = client;
+        state.url = url;
+        state.tls = tls;
+        state.fingerprint = fingerprint;
+        Ok(true)
+    }
+    /// Re-read the certificate files and rebuild the TLS client, but only when the
+    /// fingerprint changed, so duplicate or spurious watch events are no-ops.
+    ///
+    /// Returns `true` when the client was rebuilt.
+    fn reload(state: &Arc<std::sync::Mutex<TlsReloadState>>, paths: &[PathBuf]) {
+        // Catch up on any change that happened before the watches were (re-)armed, since
+        // such changes emit no events; the fingerprint guard makes this a no-op otherwise.
+        match Self::reload_(state) {
+            Ok(true) => {
+                #[cfg(feature = "tower-trace")]
+                tracing::info!(?paths, "Reloaded TLS certificates");
+            }
+            Ok(false) => {}
+            Err(_error) => {
+                #[cfg(feature = "tower-trace")]
+                tracing::warn!(?paths, error = %_error, "Failed to reload TLS certificates");
+            }
+        }
+    }
+
+    /// Spawn the certificate watch loop on a background OS thread.
+    ///
+    /// A plain OS thread is used rather than a Tokio task because the watch blocks in
+    /// `inotify` reads and the reload path is fully synchronous/blocking.
+    #[cfg(target_os = "linux")]
+    fn spawn_watcher(watch_paths: Vec<PathBuf>, state: Arc<std::sync::Mutex<TlsReloadState>>) {
+        if watch_paths.is_empty() {
+            return;
+        }
+        std::thread::Builder::new()
+            .name("tls-cert-watch".into())
+            .spawn(move || Self::watch(watch_paths, state))
+            .ok();
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn spawn_watcher(watch_paths: Vec<PathBuf>, _state: Arc<std::sync::Mutex<TlsReloadState>>) {
+        #[cfg(feature = "tower-trace")]
+        tracing::warn!(
+            "TLS certificate watch is only supported on Linux; automatic reload is disabled"
+        );
+        let _ = watch_paths;
+    }
+
+    /// Watch certificate paths and reload after changes.
+    ///
+    /// Watch targets come from [`TlsMode::watch_targets`]: either the shared parent
+    /// directory of the certificate files, or the individual files as a fallback. A
+    /// single inotify instance reacts to `MODIFY` (in-place writes) and `MOVED_TO` (an
+    /// entry moved into the watched directory, i.e. an atomic-rename rotation).
+    ///
+    /// A renewal usually touches several files at once; each blocking read drains the
+    /// whole batch of queued events, which collapses into a single reload, and the
+    /// fingerprint guard in [`TlsReloadService::reload`] ensures the client is rebuilt
+    /// only once per actual change. Watches are re-armed only if the watched inode is
+    /// removed (`IGNORED`); the common Kubernetes symlink swap keeps the directory inode.
+    ///
+    /// inotify can fail at runtime: `init` when `fs.inotify.max_user_instances` is
+    /// exhausted, and `add` when a path is briefly missing mid-rotation or
+    /// `fs.inotify.max_user_watches` is exhausted. Whenever a watch cannot be (re)armed,
+    /// this falls back to a fingerprint-guarded reload on a timer until it recovers.
+    #[cfg(target_os = "linux")]
+    fn watch(watch_paths: Vec<PathBuf>, state: Arc<std::sync::Mutex<TlsReloadState>>) {
+        use inotify::{EventMask, Inotify, WatchMask};
+
+        /// The polling interval used whenever the inotify watch is unavailable.
+        const POLL_INTERVAL: Duration = Duration::from_secs(60);
+
+        /// A fingerprint-guarded reload, used when polling for changes.
+        fn poll_reload(state: &Arc<std::sync::Mutex<TlsReloadState>>) {
+            match TlsReloadService::reload_(state) {
+                Ok(true) => {
+                    #[cfg(feature = "tower-trace")]
+                    tracing::info!("Reloaded TLS certificates after change (polled)");
+                }
+                Ok(false) => {}
+                Err(_error) => {
+                    #[cfg(feature = "tower-trace")]
+                    tracing::warn!(error = %_error, "Failed to reload TLS certificates");
+                }
+            }
+        }
+
+        tracing::debug!(?watch_paths, "TLS watch requested");
+
+        // Keep one inotify instance for the watcher's lifetime: the kernel only drops the
+        // watch descriptors when their inodes are deleted, the instance stays usable.
+        let mut inotify = loop {
+            match Inotify::init() {
+                Ok(inotify) => break inotify,
+                Err(_error) => {
+                    #[cfg(feature = "tower-trace")]
+                    tracing::warn!(
+                        error = %_error,
+                        "Failed to initialise inotify for TLS watch; polling for changes"
+                    );
+                    std::thread::sleep(POLL_INTERVAL);
+                    poll_reload(&state);
+                }
+            }
+        };
+
+        let mask = WatchMask::MODIFY | WatchMask::MOVED_TO;
+        let mut buffer = [0u8; 4096];
+        'outer: loop {
+            for path in &watch_paths {
+                if let Err(_error) = inotify.watches().add(path, mask) {
+                    #[cfg(feature = "tower-trace")]
+                    tracing::warn!(
+                        error = %_error,
+                        path = %path.display(),
+                        "Failed to watch TLS path; will retry"
+                    );
+                    // Fall back to polling until the full set can be re-armed
+                    std::thread::sleep(POLL_INTERVAL);
+                    poll_reload(&state);
+                    continue 'outer;
+                }
+            }
+
+            // Catch up on any change that happened before the watches were (re-)armed, since
+            // such changes emit no events; the fingerprint guard makes this a no-op otherwise.
+            Self::reload(&state, &watch_paths);
+
+            loop {
+                // Blocks until an event is available, then returns the whole batch of
+                // currently-queued events in one read.
+                let events = match inotify.read_events_blocking(&mut buffer) {
+                    Ok(events) => events,
+                    Err(_error) => {
+                        #[cfg(feature = "tower-trace")]
+                        tracing::warn!(error = %_error, "TLS watch read error; re-arming");
+                        break;
+                    }
+                };
+
+                #[cfg(feature = "tower-trace")]
+                tracing::debug!(?watch_paths, "TLS watch events received");
+
+                // The watch descriptor is only dropped when the watched inode itself is
+                // removed (delivered as `IGNORED`); in-directory rotations keep the inode
+                // and the watch keeps reporting `MOVED_TO`/`MODIFY`.
+                let ignored = events
+                    .into_iter()
+                    .any(|event| event.mask.contains(EventMask::IGNORED));
+
+                Self::reload(&state, &watch_paths);
+
+                if ignored {
+                    break;
+                }
+            }
+            // Brief settle time before re-arming.
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+}
+
+impl Service<Request<ReqBody>> for TlsReloadService {
+    type Response = Response<ReqBody>;
+    type Error = BoxedError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, request: Request<ReqBody>) -> Self::Future {
+        let mut client = self.client();
+        Box::pin(async move {
+            client
+                .ready()
+                .await?
+                .call(request)
+                .await
+        })
+    }
+}
+
+fn build_http_client(url: &mut url::Url, tls: &TlsMode) -> Result<HttpClientService, Error> {
+    let insecure_skip_verify = url.scheme() == "https" && tls.certificate().is_none();
+    #[cfg(all(not(feature = "tower-client-tls"), feature = "tower-client-rls"))]
+    let client = {
+        match tls.certificate() {
+            None => {
+                let mut http = hyper_util::client::legacy::connect::HttpConnector::new();
+
+                let tls = match url.scheme() == "https" {
+                    true => {
+                        http.enforce_http(false);
+                        let builder = rustls::ClientConfig::builder()
+                            .with_native_roots()
+                            .map_err(Error::NativeRootCerts)?;
+                        let mut config = match (tls.client_cert(), tls.client_key()) {
+                            (Some(cert_bytes), Some(key_bytes)) => {
+                                let cert_chain = rustls_pemfile::certs(&mut std::io::BufReader::new(cert_bytes))
+                                    .collect::<Result<Vec<_>, _>>()
+                                    .map_err(|_| Error::Certificate)?;
+                                let key = rustls_pemfile::private_key(&mut std::io::BufReader::new(key_bytes))
+                                    .map_err(|_| Error::ClientKey)?
+                                    .ok_or(Error::ClientKey)?;
+                                builder
+                                    .with_client_auth_cert(cert_chain, key)
+                                    .map_err(Error::ClientAuth)?
+                            }
+                            (None, None) => builder.with_no_client_auth(),
+                            _ => return Err(Error::ClientIdentity),
+                        };
+                        if insecure_skip_verify {
+                            config
+                                .dangerous()
+                                .set_certificate_verifier(Arc::new(NoCertificateVerification {}));
+                        }
+                        config
+                    }
+                    false => rustls::ClientConfig::builder()
+                        .with_root_certificates(rustls::RootCertStore::empty())
+                        .with_no_client_auth(),
+                };
+
+                let connector =
+                    hyper_rustls::HttpsConnector::from((http, std::sync::Arc::new(tls)));
+                hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+                    .build(connector)
+            }
+            Some(bytes) => {
+                let mut cert_file = std::io::BufReader::new(bytes);
+                let mut root_store = rustls::RootCertStore::empty();
+                root_store.add_parsable_certificates(
+                    rustls_pemfile::certs(&mut cert_file)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|_| Error::Certificate)?,
+                );
+                let builder = rustls::ClientConfig::builder()
+                    .with_root_certificates(root_store);
+                let config = match (tls.client_cert(), tls.client_key()) {
+                    (Some(cert_bytes), Some(key_bytes)) => {
+                        let cert_chain = rustls_pemfile::certs(&mut std::io::BufReader::new(cert_bytes))
+                            .collect::<Result<Vec<_>, _>>()
+                            .map_err(|_| Error::Certificate)?;
+                        let key = rustls_pemfile::private_key(&mut std::io::BufReader::new(key_bytes))
+                            .map_err(|_| Error::ClientKey)?
+                            .ok_or(Error::ClientKey)?;
+                        builder
+                            .with_client_auth_cert(cert_chain, key)
+                            .map_err(Error::ClientAuth)?
+                    }
+                    (None, None) => builder.with_no_client_auth(),
+                    _ => return Err(Error::ClientIdentity),
+                };
+
+                let mut http = hyper_util::client::legacy::connect::HttpConnector::new();
+                http.enforce_http(false);
+                let connector =
+                    hyper_rustls::HttpsConnector::from((http, std::sync::Arc::new(config)));
+                url.set_scheme("https").ok();
+                hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+                    .build(connector)
+            }
+        }
+    };
+    #[cfg(feature = "tower-client-tls")]
+    let client = {
+        match tls.certificate() {
+            None => {
+                let mut http = hyper_tls::HttpsConnector::new();
+                if url.scheme() == "https" {
+                    http.https_only(true);
+                }
+
+                let mut tls_builder = hyper_tls::native_tls::TlsConnector::builder();
+                tls_builder
+                    .danger_accept_invalid_certs(insecure_skip_verify)
+                    .danger_accept_invalid_hostnames(insecure_skip_verify);
+                match (tls.client_cert(), tls.client_key()) {
+                    (Some(cert_bytes), Some(key_bytes)) => {
+                        let identity =
+                            hyper_tls::native_tls::Identity::from_pkcs8(cert_bytes, key_bytes)
+                                .map_err(|_| Error::ClientIdentity)?;
+                        tls_builder.identity(identity);
+                    }
+                    (None, None) => {}
+                    _ => return Err(Error::ClientIdentity),
+                }
+                let tls = tls_builder.build().map_err(|_| Error::TlsConnector)?;
+                let tls = tokio_native_tls::TlsConnector::from(tls);
+
+                let connector = hyper_tls::HttpsConnector::from((http, tls));
+                hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+                    .build(connector)
+            }
+            Some(bytes) => {
+                let certificate = hyper_tls::native_tls::Certificate::from_pem(bytes)
+                    .map_err(|_| Error::Certificate)?;
+
+                let mut tls_builder = hyper_tls::native_tls::TlsConnector::builder();
+                tls_builder
+                    .add_root_certificate(certificate)
+                    .danger_accept_invalid_hostnames(insecure_skip_verify)
+                    .disable_built_in_roots(true);
+                match (tls.client_cert(), tls.client_key()) {
+                    (Some(cert_bytes), Some(key_bytes)) => {
+                        let identity =
+                            hyper_tls::native_tls::Identity::from_pkcs8(cert_bytes, key_bytes)
+                                .map_err(|_| Error::ClientIdentity)?;
+                        tls_builder.identity(identity);
+                    }
+                    (None, None) => {}
+                    _ => return Err(Error::ClientIdentity),
+                }
+                let tls = tls_builder.build().map_err(|_| Error::TlsConnector)?;
+                let tls = tokio_native_tls::TlsConnector::from(tls);
+
+                let mut http = hyper_tls::HttpsConnector::new();
+                http.https_only(true);
+                let connector = hyper_tls::HttpsConnector::from((http, tls));
+                url.set_scheme("https").ok();
+                hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+                    .build(connector)
+            }
+        }
+    };
+
+    Ok(BoxCloneService::new(
+        client
+            .map_response(|r| r.map(ReqBody::wrap_body))
+            .map_err(Into::<BoxedError>::into),
+    ))
 }
 
 /// `ConfigurationBuilder` that can be used to build a `Configuration`.
@@ -247,9 +857,10 @@ impl ConfigurationBuilder {
         self
     }
     /// TLS.
-    pub fn with_tls(mut self, tls: TlsMode) -> Self {
+    pub fn with_tls(mut self, tls: TlsMode, reload: bool) -> Self {
         let mut client_security = self.client_security.unwrap_or_default();
         client_security.tls = tls;
+        client_security.tls_reload = reload;
         self.client_security = Some(client_security);
         self
     }
@@ -434,154 +1045,22 @@ impl Configuration {
         concurrency_limit: Option<usize>,
     ) -> Result<Self, Error> {
         let client_security = client_security.unwrap_or_default();
+        let tls_reload = client_security.tls_reload;
         let bearer_access_token = client_security.jwt;
         let tls = client_security.tls;
-        let insecure_skip_verify = url.scheme() == "https" && tls.certificate().is_none();
-        #[cfg(all(not(feature = "tower-client-tls"), feature = "tower-client-rls"))]
-        let client = {
-            match tls.certificate() {
-                None => {
-                    let mut http = hyper_util::client::legacy::connect::HttpConnector::new();
-
-                    let tls = match url.scheme() == "https" {
-                        true => {
-                            http.enforce_http(false);
-                            let builder = rustls::ClientConfig::builder()
-                                .with_native_roots()
-                                .map_err(Error::NativeRootCerts)?;
-                            let mut config = match (tls.client_cert(), tls.client_key()) {
-                                (Some(cert_bytes), Some(key_bytes)) => {
-                                    let cert_chain = rustls_pemfile::certs(&mut std::io::BufReader::new(cert_bytes))
-                                        .collect::<Result<Vec<_>, _>>()
-                                        .map_err(|_| Error::Certificate)?;
-                                    let key = rustls_pemfile::private_key(&mut std::io::BufReader::new(key_bytes))
-                                        .map_err(|_| Error::ClientKey)?
-                                        .ok_or(Error::ClientKey)?;
-                                    builder
-                                        .with_client_auth_cert(cert_chain, key)
-                                        .map_err(Error::ClientAuth)?
-                                }
-                                (None, None) => builder.with_no_client_auth(),
-                                _ => return Err(Error::ClientIdentity),
-                            };
-                            if insecure_skip_verify {
-                                config
-                                    .dangerous()
-                                    .set_certificate_verifier(Arc::new(NoCertificateVerification {}));
-                            }
-                            config
-                        }
-                        false => rustls::ClientConfig::builder()
-                            .with_root_certificates(rustls::RootCertStore::empty())
-                            .with_no_client_auth(),
-                    };
-
-                    let connector =
-                        hyper_rustls::HttpsConnector::from((http, std::sync::Arc::new(tls)));
-                    hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-                        .build(connector)
-                }
-                Some(bytes) => {
-                    let mut cert_file = std::io::BufReader::new(bytes);
-                    let mut root_store = rustls::RootCertStore::empty();
-                    root_store.add_parsable_certificates(
-                        rustls_pemfile::certs(&mut cert_file)
-                            .collect::<Result<Vec<_>, _>>()
-                            .map_err(|_| Error::Certificate)?,
-                    );
-                    let builder = rustls::ClientConfig::builder()
-                        .with_root_certificates(root_store);
-                    let config = match (tls.client_cert(), tls.client_key()) {
-                        (Some(cert_bytes), Some(key_bytes)) => {
-                            let cert_chain = rustls_pemfile::certs(&mut std::io::BufReader::new(cert_bytes))
-                                .collect::<Result<Vec<_>, _>>()
-                                .map_err(|_| Error::Certificate)?;
-                            let key = rustls_pemfile::private_key(&mut std::io::BufReader::new(key_bytes))
-                                .map_err(|_| Error::ClientKey)?
-                                .ok_or(Error::ClientKey)?;
-                            builder.with_client_auth_cert(cert_chain, key)
-                                .map_err(Error::ClientAuth)?
-                        }
-                        (None, None) => builder.with_no_client_auth(),
-                        _ => return Err(Error::ClientIdentity),
-                    };
-
-                    let mut http = hyper_util::client::legacy::connect::HttpConnector::new();
-                    http.enforce_http(false);
-                    let connector =
-                        hyper_rustls::HttpsConnector::from((http, std::sync::Arc::new(config)));
-                    url.set_scheme("https").ok();
-                    hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-                        .build(connector)
-                }
+        let client = match (tls_reload, tls.is_reloadable()) {
+            (true, true) => {
+                let (client, reloaded_url) = TlsReloadService::new(url.clone(), tls)?;
+                url = reloaded_url;
+                BoxCloneService::new(client)
             }
-        };
-        #[cfg(feature = "tower-client-tls")]
-        let client = {
-            match tls.certificate() {
-                None => {
-                    let mut http = hyper_tls::HttpsConnector::new();
-                    if url.scheme() == "https" {
-                        http.https_only(true);
-                    }
-
-                    let mut tls_builder = hyper_tls::native_tls::TlsConnector::builder();
-                    tls_builder
-                        .danger_accept_invalid_certs(insecure_skip_verify)
-                        .danger_accept_invalid_hostnames(insecure_skip_verify);
-                    match (tls.client_cert(), tls.client_key()) {
-                        (Some(cert_bytes), Some(key_bytes)) => {
-                            let identity =
-                                hyper_tls::native_tls::Identity::from_pkcs8(cert_bytes, key_bytes)
-                                    .map_err(|_| Error::ClientIdentity)?;
-                            tls_builder.identity(identity);
-                        }
-                        (None, None) => {}
-                        _ => return Err(Error::ClientIdentity),
-                    }
-                    let tls = tls_builder.build().map_err(|_| Error::TlsConnector)?;
-                    let tls = tokio_native_tls::TlsConnector::from(tls);
-
-                    let connector = hyper_tls::HttpsConnector::from((http, tls));
-                    hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-                        .build(connector)
-                }
-                Some(bytes) => {
-                    let certificate = hyper_tls::native_tls::Certificate::from_pem(bytes)
-                        .map_err(|_| Error::Certificate)?;
-
-                    let mut tls_builder = hyper_tls::native_tls::TlsConnector::builder();
-                    tls_builder
-                        .add_root_certificate(certificate)
-                        .danger_accept_invalid_hostnames(insecure_skip_verify)
-                        .disable_built_in_roots(true);
-                    match (tls.client_cert(), tls.client_key()) {
-                        (Some(cert_bytes), Some(key_bytes)) => {
-                            let identity =
-                                hyper_tls::native_tls::Identity::from_pkcs8(cert_bytes, key_bytes)
-                                    .map_err(|_| Error::ClientIdentity)?;
-                            tls_builder.identity(identity);
-                        }
-                        (None, None) => {}
-                        _ => return Err(Error::ClientIdentity),
-                    }
-                    let tls = tls_builder.build().map_err(|_| Error::TlsConnector)?;
-                    let tls = tokio_native_tls::TlsConnector::from(tls);
-
-                    let mut http = hyper_tls::HttpsConnector::new();
-                    http.https_only(true);
-                    let connector = hyper_tls::HttpsConnector::from((http, tls));
-                    url.set_scheme("https").ok();
-                    hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-                        .build(connector)
-                }
-            }
+            _ => build_http_client(&mut url, &tls)?,
         };
 
         let uri = url.to_string().parse().map_err(Error::UrlToUri)?;
         Self::new_with_client(
             uri,
-            client.map_response(|r| r.map(ReqBody::wrap_body)),
+            client,
             Some(timeout),
             bearer_access_token,
             trace_requests,

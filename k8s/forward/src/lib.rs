@@ -132,15 +132,23 @@ impl From<SecretData> for TlsMode {
             data.client_certificate,
             data.client_key,
         ) {
-            (Some(ca_certificate), None, None) => TlsMode::ServerVerify { ca_certificate },
+            (Some(ca_certificate), None, None) => TlsMode::ServerVerify {
+                ca_certificate,
+                ca_certificate_path: None,
+            },
             (None, Some(client_certificate), Some(client_key)) => TlsMode::ClientVerify {
                 client_certificate,
                 client_key,
+                client_certificate_path: None,
+                client_key_path: None,
             },
             (Some(ca_certificate), Some(client_certificate), Some(client_key)) => TlsMode::Mtls {
                 ca_certificate,
                 client_certificate,
                 client_key,
+                ca_certificate_path: None,
+                client_certificate_path: None,
+                client_key_path: None,
             },
             _ => TlsMode::Auto,
         }

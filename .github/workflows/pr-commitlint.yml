@@ -5,10 +5,12 @@ on:
   push:
     branches:
       - staging
+  merge_group:
 
 jobs:
   commitlint:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'merge_group' && !startsWith(github.head_ref, 'mergify/merge-queue/') }}
     steps:
       - uses: actions/checkout@v7
         with:
