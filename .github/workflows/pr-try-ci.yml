@@ -7,6 +7,8 @@ jobs:
   ci-try:
     if: contains(github.event.pull_request.labels.*.name, 'ci/test')
     uses: ./.github/workflows/pr-ci.yml
+    with:
+      trigger: "try"
 
   remove-label:
     if: ${{ always() && contains(github.event.pull_request.labels.*.name, 'ci/test') }}

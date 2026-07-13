@@ -1,23 +1,34 @@
 name: Bors CI
 on:
   workflow_call:
+    inputs:
+      trigger:
+        required: false
+        type: string
+        default: "merge_group"
   push:
     branches:
       - staging
       - trying
   merge_group:
+  pull_request:
+    types: ['opened', 'reopened', 'synchronize']
 
 jobs:
   lint-ci:
+    if: github.event_name != 'pull_request' || inputs.trigger == 'try' || startsWith(github.head_ref, 'mergify/merge-queue/')
     uses: ./.github/workflows/lint.yml
   int-ci:
+    if: github.event_name != 'pull_request' || inputs.trigger == 'try' || startsWith(github.head_ref, 'mergify/merge-queue/')
     uses: ./.github/workflows/unit-int.yml
   bdd-ci:
+    if: github.event_name != 'pull_request' || inputs.trigger == 'try' || startsWith(github.head_ref, 'mergify/merge-queue/')
     uses: ./.github/workflows/bdd.yml
   image-ci:
+    if: github.event_name != 'pull_request' || inputs.trigger == 'try' || startsWith(github.head_ref, 'mergify/merge-queue/')
     uses: ./.github/workflows/image-pr.yml
   bors-ci:
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || inputs.trigger == 'try' || startsWith(github.head_ref, 'mergify/merge-queue/')) }}
     needs:
       - lint-ci
       - int-ci
