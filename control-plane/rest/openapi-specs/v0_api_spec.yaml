@@ -3187,6 +3187,7 @@ components:
           ctrl_loss_timeout: "1980"
         republish: false
         reuse_existing: true
+        frontend_node: "csi-node-1"
       description: Publish Volume Body
       type: object
       properties:
