@@ -34,7 +34,7 @@ NODE_NAME = "io-engine-1"
 
 @pytest.fixture(scope="module")
 def init():
-    Deployer.start(1)
+    Deployer.start(io_engines=1, cache_period="1s", reconcile_period="100ms")
     yield
     Deployer.stop()
 
