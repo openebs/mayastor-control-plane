@@ -839,7 +839,14 @@ impl Delete for Node {
                     return Ok(());
                 }
                 match super::error::PurgeReason::from_api_error(&source) {
-                    Some(reason) => Err(Error::Purge { reason }),
+                    Some(reason) => {
+                        if reason.is_data_loss() {
+                            let (volume_loss, snapshot_loss) =
+                                super::impact::compute_node_purge_loss(&id.node_id).await;
+                            super::impact::print_purge_loss(&volume_loss, &snapshot_loss, output);
+                        }
+                        Err(Error::Purge { reason })
+                    }
                     None => Err(Error::DeleteNodeError {
                         id: id.node_id.clone(),
                         source,
