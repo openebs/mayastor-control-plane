@@ -5,6 +5,7 @@ on:
     branches:
       - staging
       - trying
+  merge_group:
 
 jobs:
   lint-ci:
@@ -16,7 +17,7 @@ jobs:
   image-ci:
     uses: ./.github/workflows/image-pr.yml
   bors-ci:
-    if: ${{ success() }}
+    if: ${{ !cancelled() }}
     needs:
       - lint-ci
       - int-ci
@@ -25,4 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: CI succeeded
-        run: exit 0
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            exit 1
+          fi
+          exit 0

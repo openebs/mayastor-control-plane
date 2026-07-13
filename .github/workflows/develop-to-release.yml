@@ -53,9 +53,9 @@ jobs:
           gh pr review ${{ steps.cpr.outputs.pull-request-number }} --approve
         env:
           GH_TOKEN: ${{ secrets.ORG_CI_GITHUB_2 }}
-      - name: Bors Merge Pull Request
+      - name: Merge Pull Request
         if: ${{ steps.cpr.outputs.pull-request-number }}
         run: |
-          gh pr comment ${{ steps.cpr.outputs.pull-request-number }} --body "bors merge"
+          gh pr comment ${{ steps.cpr.outputs.pull-request-number }} --body "@mergify queue"
         env:
           GH_TOKEN: ${{ secrets.ORG_CI_GITHUB }}
