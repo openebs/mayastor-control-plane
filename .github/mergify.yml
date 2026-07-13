@@ -12,7 +12,6 @@ queue_rules:
     merge_conditions:
       - check-success = bors-ci
       - check-success = submodule-branch
-      - check-success = commitlint
       - -label ~= do-not-merge
     queue_conditions:
       - check-success = commitlint
