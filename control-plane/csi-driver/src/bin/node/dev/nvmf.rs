@@ -500,10 +500,12 @@ pub(crate) fn check_nvme_tcp_module() -> Result<(), std::io::Error> {
     Ok(())
 }
 
-/// Check for the presence of nvme tcp kernel module.
-/// TODO: Handle the case where this(and for that matter nvme_tcp too)
-/// could be builtin module.
-#[allow(unused)]
+/// Check for the presence of the `nvme_rdma` kernel module by looking at
+/// `/sys/module/nvme_rdma`. Used by the CSI node startup to decide whether
+/// this node is RDMA-capable even when `ibv_devinfo` reports HCAs.
+///
+/// TODO: Handle the case where this (and for that matter nvme_tcp too) could
+/// be a builtin module.
 pub(crate) fn check_nvme_rdma_module() -> Result<(), std::io::Error> {
     let path = "/sys/module/nvme_rdma";
     std::fs::metadata(path)?;
