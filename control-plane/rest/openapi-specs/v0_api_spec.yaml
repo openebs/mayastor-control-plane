@@ -4531,6 +4531,7 @@ components:
         onlineHealthyReplicas: 2
         onlineCleanReplicas: 0
         liveHealthyReplicas: 0
+        allHealthyReplicasClean: false
       properties:
         cleanShutdown:
           description: Indicates if the volume target was cleanly shutdown.
@@ -4558,6 +4559,9 @@ components:
           description: Indicates how many volume replicas are currently online in the volume target.
           type: integer
           format: uint8
+        allHealthyReplicasClean:
+          description: Whether all healthy replicas can be trusted as in-sync for a rebuild source.
+          type: boolean
       required:
         - cleanShutdown
         - healthyReplicas
@@ -4565,6 +4569,7 @@ components:
         - onlineHealthyReplicas
         - onlineCleanReplicas
         - liveHealthyReplicas
+        - allHealthyReplicasClean
     VolumeUsage:
       example:
       description: Volume space usage

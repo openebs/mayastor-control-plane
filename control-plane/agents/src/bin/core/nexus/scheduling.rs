@@ -12,9 +12,12 @@ use crate::controller::{
 use agents::errors::SvcError;
 use stor_port::types::v0::{store::nexus::NexusSpec, transport::NodeId};
 
-/// Return healthy replicas for volume/nexus
+/// Return healthy replicas for volume/nexus.
 /// The persistent store has the latest information from io-engine, which tells us if any replica
 /// has been faulted and therefore cannot be used by the nexus.
+///
+/// A nexus in a persisted clean state (see `NexusInfo::clean_state`) means no in-flight
+/// front-end I/O could have dirtied the children, so they are safe to trust as in-sync.
 async fn healthy_children(
     request: &GetPersistedNexusChildren,
     registry: &Registry,
@@ -22,7 +25,7 @@ async fn healthy_children(
     let builder = nexus::CreateVolumeNexus::builder_with_defaults(request, registry).await?;
     let info = builder.context().nexus_info().clone();
     if let Some(info_inner) = &builder.context().nexus_info() {
-        if !info_inner.clean_shutdown {
+        if !info_inner.clean_state() {
             return Ok(HealthyChildItems::One(info, builder.collect()));
         }
     }

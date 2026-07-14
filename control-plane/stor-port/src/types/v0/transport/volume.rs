@@ -96,6 +96,9 @@ pub struct VolumeHealth {
     pub online_clean_replicas: u8,
     /// Indicates how many volume replicas are currently online in the volume target.
     pub live_healthy_replicas: u8,
+    /// Whether all healthy replicas can be trusted as in-sync for a rebuild
+    /// source (i.e. the nexus was quiescent).
+    pub all_healthy_replicas_clean: bool,
 }
 impl From<VolumeHealth> for models::VolumeHealth {
     fn from(volume: VolumeHealth) -> Self {
@@ -106,6 +109,7 @@ impl From<VolumeHealth> for models::VolumeHealth {
             online_healthy_replicas: volume.online_healthy_replicas,
             online_clean_replicas: volume.online_clean_replicas,
             live_healthy_replicas: volume.live_healthy_replicas,
+            all_healthy_replicas_clean: volume.all_healthy_replicas_clean,
         }
     }
 }

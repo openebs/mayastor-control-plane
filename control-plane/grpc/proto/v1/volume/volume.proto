@@ -206,6 +206,8 @@ message VolumeHealth {
   uint32 onlineCleanReplicas = 5;
   // Indicates how many volume replicas are currently online in the volume target.
   uint32 liveHealthyReplicas = 6;
+  // Whether all healthy replicas can be trusted as in-sync for a rebuild source.
+  bool allHealthyReplicasClean = 7;
 }
 
 // Volume usage information
