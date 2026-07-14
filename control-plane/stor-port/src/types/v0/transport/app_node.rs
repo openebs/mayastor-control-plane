@@ -1,7 +1,7 @@
 use crate::{
     rpc_impl_string_id, rpc_impl_string_id_inner,
     types::v0::{
-        store::app_node::{AppNodeLabels, AppNodeSpec, AppNodeSpecKey},
+        store::app_node::{AppNodeLabels, AppNodeSpec, AppNodeSpecKey, TransportCaps},
         transport::Filter,
     },
 };
@@ -19,6 +19,8 @@ pub struct RegisterAppNode {
     pub endpoint: std::net::SocketAddr,
     /// App Node labels.
     pub labels: Option<AppNodeLabels>,
+    /// Transport capabilities reported by the csi-node at registration.
+    pub transport_caps: Option<TransportCaps>,
 }
 
 impl RegisterAppNode {
@@ -26,11 +28,13 @@ impl RegisterAppNode {
         id: AppNodeId,
         endpoint: std::net::SocketAddr,
         labels: Option<AppNodeLabels>,
+        transport_caps: Option<TransportCaps>,
     ) -> Self {
         Self {
             id,
             endpoint,
             labels,
+            transport_caps,
         }
     }
 }

@@ -1,5 +1,6 @@
 use crate::{client::AppNodesClientWrapper, shutdown_event::Shutdown};
 use std::{collections::HashMap, time::Duration};
+use stor_port::types::v0::openapi::models::TransportCaps;
 use tracing::error;
 
 /// Default registration interval.
@@ -11,6 +12,7 @@ pub(crate) async fn run_registration_loop(
     id: String,
     endpoint: String,
     labels: Option<HashMap<String, String>>,
+    transport_caps: Option<TransportCaps>,
     client: &Option<AppNodesClientWrapper>,
     registration_enabled: bool,
 ) -> anyhow::Result<()> {
@@ -26,7 +28,10 @@ pub(crate) async fn run_registration_loop(
 
     let mut logged_error = false;
     loop {
-        let interval_duration = match client.register_app_node(&id, &endpoint, &labels).await {
+        let interval_duration = match client
+            .register_app_node(&id, &endpoint, &labels, transport_caps.clone())
+            .await
+        {
             Ok(_) => {
                 if logged_error {
                     tracing::info!("Successfully re-registered the app node");

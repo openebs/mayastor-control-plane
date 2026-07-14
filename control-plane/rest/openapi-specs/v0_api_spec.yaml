@@ -5116,6 +5116,10 @@ components:
         labels:
           org.io/csi-node.nvme-ana: true,
           org.io/zone: us-east-1a
+        transportCaps:
+          rdmaHcaPresent: true
+          nvmeRdmaModuleLoaded: true
+          anaCapable: true
       type: object
       properties:
         endpoint:
@@ -5129,6 +5133,8 @@ components:
           type: object
           additionalProperties:
             type: string
+        transportCaps:
+          $ref: '#/components/schemas/TransportCaps'
       required:
         - id
         - endpoint
@@ -5164,9 +5170,36 @@ components:
           type: object
           additionalProperties:
             type: string
+        transportCaps:
+          $ref: '#/components/schemas/TransportCaps'
       required:
         - id
         - endpoint
+    TransportCaps:
+      description: |-
+        Transport-layer capabilities reported by the csi-node at registration time.
+      type: object
+      example:
+        rdmaHcaPresent: true
+        nvmeRdmaModuleLoaded: true
+        anaCapable: true
+      properties:
+        rdmaHcaPresent:
+          description: |-
+            RDMA HCA hardware is present on this node (reported by ibv_devinfo).
+          type: boolean
+        nvmeRdmaModuleLoaded:
+          description: |-
+            The nvme_rdma kernel module is loaded on this node. Both this and rdmaHcaPresent are required for NVMe-oF RDMA to actually be usable.
+          type: boolean
+        anaCapable:
+          description: |-
+            NVMe ANA multipath is enabled on this node.
+          type: boolean
+      required:
+        - rdmaHcaPresent
+        - nvmeRdmaModuleLoaded
+        - anaCapable
     AppNodeState:
       description: |-
         Deemed state of the app node.

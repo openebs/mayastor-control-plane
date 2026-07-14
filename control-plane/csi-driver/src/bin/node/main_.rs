@@ -344,44 +344,58 @@ pub(super) async fn main() -> anyhow::Result<()> {
         .output()
         .await;
 
-    let cap = match ibv_output {
+    let hca_present = match &ibv_output {
         Ok(okstdout) if okstdout.status.success() => {
             // In an unlikely case string from utf8 fails, err towards incapability.
-            let outstr = String::from_utf8(okstdout.stdout).unwrap_or("0 HCA".to_string());
-            if !outstr.starts_with("0 HCA") {
-                // RDMA hardware is present, but the transport still requires the `nvme_rdma`
-                // kernel module to be loaded on this node. If it is missing, treat the node as
-                // RDMA-incapable so `transport_from_url` can fall back to TCP (when the operator
-                // enabled fallback) rather than fail the connect with a hard error.
-                match crate::dev::nvmf::check_nvme_rdma_module() {
-                    Ok(()) => {
-                        info!(
-                            "host node rdma capable. conn_fallback({conn_fallback:?}), {outstr:?}"
-                        );
-                        true
-                    }
-                    Err(error) => {
-                        warn!(
-                            "host node has rdma hardware but nvme_rdma kernel module is not \
-                            loaded, treating as rdma incapable. \
-                            conn_fallback({conn_fallback:?}), {outstr:?}, error: {error}"
-                        );
-                        false
-                    }
-                }
-            } else {
-                info!(
-                    "host node is not rdma capable. conn_fallback({conn_fallback:?}), {outstr:?}"
-                );
-                false
-            }
+            let outstr =
+                String::from_utf8(okstdout.stdout.clone()).unwrap_or_else(|_| "0 HCA".into());
+            !outstr.starts_with("0 HCA")
         }
         Ok(_) | Err(_) => {
             error!("Error executing ibv_devinfo, or invalid command output. conn_fallback({conn_fallback:?}), {ibv_output:?}");
             false
         }
     };
+
+    // The `nvme_rdma` kernel module has to be loaded for the initiator to
+    // negotiate an RDMA transport at connect time; report both signals
+    // independently to the control-plane so it can differentiate hardware
+    // vs. software readiness when scheduling.
+    let nvme_rdma_module_loaded = match crate::dev::nvmf::check_nvme_rdma_module() {
+        Ok(()) => true,
+        Err(error) => {
+            if hca_present {
+                warn!(
+                    "host node has rdma hardware but nvme_rdma kernel module is not \
+                    loaded, treating as rdma incapable. \
+                    conn_fallback({conn_fallback:?}), error: {error}"
+                );
+            }
+            false
+        }
+    };
+
+    // Existing initiator-side RDMA gate: only attempt RDMA connect when both
+    // hardware and kernel module are ready.
+    let cap = hca_present && nvme_rdma_module_loaded;
+    if cap {
+        info!("host node rdma capable. conn_fallback({conn_fallback:?})");
+    } else if !hca_present {
+        info!("host node is not rdma capable (no HCA). conn_fallback({conn_fallback:?})");
+    }
     let _ = RDMA_CONNECT_CHECK.set((conn_fallback, cap));
+
+    // Transport capabilities forwarded to the control-plane at registration so
+    // volume placement / mount decisions can take them into account. Reports
+    // hardware and kernel-module readiness independently so the CP can
+    // differentiate them.
+    let transport_caps = Some(
+        stor_port::types::v0::openapi::models::TransportCaps::new_all(
+            hca_present,
+            nvme_rdma_module_loaded,
+            nvme_enabled,
+        ),
+    );
 
     // Parse the CSI socket file name from the command line arguments.
     let csi_socket = matches
@@ -453,6 +467,7 @@ pub(super) async fn main() -> anyhow::Result<()> {
             node_name.clone(),
             grpc_sock_addr.to_string(),
             Some(csi_labels),
+            transport_caps,
             &client,
             registration_enabled
         )

@@ -75,6 +75,7 @@ impl apis::actix_server::AppNodes for RestApi {
                         },
                     )?,
                     labels: register_app_node.labels,
+                    transport_caps: register_app_node.transport_caps.map(Into::into),
                 },
                 None,
             )

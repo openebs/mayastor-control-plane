@@ -78,9 +78,11 @@ impl ResourceSpecsLocked {
                 Some(app_node_rsc) => {
                     let mut app_node_spec = app_node_rsc.lock();
                     let changed = app_node_spec.endpoint != req.grpc_endpoint()
-                        || app_node_spec.labels != req.labels();
+                        || app_node_spec.labels != req.labels()
+                        || app_node_spec.transport_caps != req.transport_caps;
 
                     app_node_spec.endpoint = req.grpc_endpoint();
+                    app_node_spec.transport_caps = req.transport_caps.clone();
                     (changed, app_node_spec.clone())
                 }
                 None => {
@@ -88,6 +90,7 @@ impl ResourceSpecsLocked {
                         req.app_node_id().clone(),
                         req.grpc_endpoint(),
                         req.labels.clone(),
+                        req.transport_caps.clone(),
                     );
                     specs.app_nodes.insert(app_node.clone());
                     (true, app_node)

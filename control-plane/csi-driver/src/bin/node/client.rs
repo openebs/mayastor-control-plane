@@ -7,7 +7,7 @@ use stor_port::types::v0::openapi::{
         self,
         tower::{configuration::Configuration, StatusCode},
     },
-    models::{NexusState, RegisterAppNode, RestJsonError},
+    models::{NexusState, RegisterAppNode, RestJsonError, TransportCaps},
 };
 
 use std::sync::Arc;
@@ -113,11 +113,12 @@ impl AppNodesClientWrapper {
         app_node_id: &str,
         endpoint: &str,
         labels: &Option<std::collections::HashMap<String, String>>,
+        transport_caps: Option<TransportCaps>,
     ) -> Result<(), ApiClientError> {
         self.client
             .register_app_node(
                 app_node_id,
-                RegisterAppNode::new_all(endpoint, labels.clone()),
+                RegisterAppNode::new_all(endpoint, labels.clone(), transport_caps),
             )
             .await?;
 
