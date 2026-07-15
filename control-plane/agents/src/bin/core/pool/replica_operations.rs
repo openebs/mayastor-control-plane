@@ -14,7 +14,7 @@ use agents::errors::{SvcError, SvcError::CordonedNode};
 use stor_port::types::v0::{
     store::{
         nexus::NexusSpec,
-        replica::{PoolRef, ReplicaOperation, ReplicaSpec},
+        replica::{PoolRef, ReplicaOperation, ReplicaRsz, ReplicaSpec},
     },
     transport::{
         CreateReplica, DestroyReplica, NodeId, RemoveNexusChild, Replica, ReplicaOwners,
@@ -52,6 +52,9 @@ impl ResourceLifecycle for OperationGuardArc<ReplicaSpec> {
         let result = node.create_replica(request).await;
         let on_fail = OnCreateFail::eeinval_delete(&result);
 
+        if let Ok(ref state) = result {
+            replica.lock().actual_size = Some(state.size);
+        }
         let replica = replica.complete_create(result, registry, on_fail).await?;
         specs.on_repl_create(&replica.pool_id);
         Ok(replica)
@@ -123,11 +126,17 @@ impl ResourceResize for OperationGuardArc<ReplicaSpec> {
             .start_update(
                 registry,
                 &repl,
-                ReplicaOperation::Resize(request.requested_size),
+                ReplicaOperation::ResizeExt(ReplicaRsz {
+                    vol_size: request.requested_vol_size,
+                    repl_size: request.requested_size,
+                }),
             )
             .await?;
 
         let result = node.resize_replica(request).await;
+        if let Ok(ref state) = result {
+            self.lock().actual_size = Some(state.size);
+        }
         self.complete_update(registry, result, spec_clone).await
     }
 }
@@ -343,6 +352,9 @@ impl ResourceLifecycleExt<SnapshotCloneSpecParams> for OperationGuardArc<Replica
         let result = node.create_snapshot_clone(request.params()).await;
         let on_fail = OnCreateFail::eeinval_delete(&result);
 
+        if let Ok(ref state) = result {
+            replica.lock().actual_size = Some(state.size);
+        }
         let replica = replica.complete_create(result, registry, on_fail).await?;
         specs.on_repl_create(&replica.pool_id);
         Ok(replica)

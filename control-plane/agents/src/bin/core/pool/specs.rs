@@ -186,6 +186,9 @@ impl SpecOperationsHelper for ReplicaSpec {
         op: Self::UpdateOp,
     ) -> Result<(), SvcError> {
         match op {
+            ReplicaOperation::Create | ReplicaOperation::Destroy => {
+                unimplemented!("they don't travel here")
+            }
             ReplicaOperation::Share(proto, _) if proto != self.share && self.share.shared() => {
                 Err(SvcError::AlreadyShared {
                     kind: self.kind(),
@@ -215,8 +218,7 @@ impl SpecOperationsHelper for ReplicaSpec {
             ReplicaOperation::Unshare => Ok(()),
             ReplicaOperation::OwnerUpdate(_) => Ok(()),
             // TODO: Shall we do something here with input size?
-            ReplicaOperation::Resize(_) => Ok(()),
-            _ => unreachable!(),
+            ReplicaOperation::Resize(_) | ReplicaOperation::ResizeExt(_) => Ok(()),
         }?;
         self.start_op(op);
         Ok(())

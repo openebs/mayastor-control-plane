@@ -60,6 +60,7 @@ impl ReplicaSnapshot {
         size: u64,
         allocated_size: u64,
         source_spec_size: u64,
+        source_spec_vol_size: u64,
     ) -> Self {
         Self {
             status: ReplicaSnapshotSpecStatus::Creating,
@@ -68,6 +69,7 @@ impl ReplicaSnapshot {
                 vol_params.txn_id(),
                 size,
                 source_spec_size,
+                source_spec_vol_size,
                 allocated_size,
             ),
             spec,
@@ -110,8 +112,11 @@ pub struct ReplicaSnapshotMeta {
 
     /// Creation timestamp of the snapshot (set after creation time).
     timestamp: Option<DateTime<Utc>>,
-    /// User specified size of the source of snapshot.
+    /// Full size of the source replica, containing both data and metadata.
     source_spec_size: u64,
+    /// Volume size of the source replica.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_spec_vol_size: Option<u64>,
     /// Actual size of the source of snapshot.
     size: u64,
     /// The amount of bytes allocated to the snapshot.
@@ -127,6 +132,7 @@ impl ReplicaSnapshotMeta {
         txn_id: &SnapshotTxId,
         size: u64,
         source_spec_size: u64,
+        source_spec_vol_size: u64,
         allocated_size: u64,
     ) -> Self {
         Self {
@@ -137,6 +143,7 @@ impl ReplicaSnapshotMeta {
             }),
             timestamp: None,
             source_spec_size,
+            source_spec_vol_size: Some(source_spec_vol_size),
             size,
             allocated_size,
             meta: SnapshotMeta::Volume {
@@ -145,7 +152,10 @@ impl ReplicaSnapshotMeta {
             },
         }
     }
-    /// Get the snapshot size.
+    /// Get the snapshot real size.
+    /// This is the actual size of the snapshot, which is created from the source replica
+    /// actual size, which may be different from the source replica spec size.
+    /// The difference may be present due to the cluster allocation.
     pub fn size(&self) -> u64 {
         self.size
     }
@@ -153,9 +163,14 @@ impl ReplicaSnapshotMeta {
     pub fn allocated_size(&self) -> u64 {
         self.allocated_size
     }
-    /// Get the snapshot source spec size.
-    pub fn source_spec_size(&self) -> u64 {
+    /// Get the full source replica size.
+    pub fn source_spec_repl_size(&self) -> u64 {
         self.source_spec_size
+    }
+    /// Get the size of the source volume.
+    pub fn source_spec_vol_size(&self) -> u64 {
+        // On previous versions the replica and snapshot spec size was the same.
+        self.source_spec_vol_size.unwrap_or(self.source_spec_size)
     }
     /// Get the snapshot timestamp reference.
     pub fn timestamp(&self) -> Option<&DateTime<Utc>> {

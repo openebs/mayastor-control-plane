@@ -39,7 +39,7 @@ use stor_port::{
         },
         transport::{
             CreateReplica, CreateVolume, DestroyNexus, DestroyReplica, DestroyShutdownTargets,
-            DestroyVolume, NodeTopology, Protocol, PublishVolume, Replica, ReplicaId,
+            DestroyVolume, NexusVersion, NodeTopology, Protocol, PublishVolume, Replica, ReplicaId,
             ReplicaOwners, RepublishVolume, ResizeVolume, SetVolumeProperty, SetVolumeReplica,
             ShareNexus, ShareVolume, ShutdownNexus, UnpublishVolume, UnshareNexus, UnshareVolume,
             Volume, VolumeShareProtocol, VolumeTargetMode,
@@ -199,10 +199,11 @@ impl ResourceResize for OperationGuardArc<VolumeSpec> {
             None
         };
 
+        let size_1m = self.as_ref().calc_resize(request.requested_size);
+
         // Pre-check - Ensure pools that host replicas have enough space to resize the replicas,
         // and also ensure that the replicas are Online.
-        let resizeable_replicas =
-            resizeable_replicas(&spec, registry, request.requested_size).await?;
+        let resizeable_replicas = resizeable_replicas(&spec, registry, size_1m).await?;
 
         let spec_clone = self
             .start_update(
@@ -214,15 +215,14 @@ impl ResourceResize for OperationGuardArc<VolumeSpec> {
         // Resize each replica of the volume. If any replica fails to be resized then the
         // volume resize operation is deemed as a failure.
         let result_repl = self
-            .resize_volume_replicas(registry, &resizeable_replicas, request.requested_size)
+            .resize_volume_replicas(registry, &resizeable_replicas, size_1m)
             .await;
 
         // If we had found a nexus, i.e. the volume is published, we need to go ahead with
         // nexus resize now, but only if replicas have also resized successfully.
         let result_nx = match (result_repl, nexus) {
             (Ok(_), Some(mut nexus_grd)) => {
-                self.resize_target(registry, &mut nexus_grd, request.requested_size)
-                    .await
+                self.resize_target(registry, &mut nexus_grd, size_1m).await
             }
             (Err(e), Some(_)) | (Err(e), None) => Err(e),
             (Ok(_), None) => Ok(()),
@@ -1021,6 +1021,13 @@ impl CreateVolumeSource<'_> {
         match self {
             Self::None(param) => param,
             Self::Snapshot(param) => param.0.params(),
+        }
+    }
+    /// Get the label version of the source volume if it is a snapshot clone operation.
+    pub(crate) fn label_version(&self) -> Option<NexusVersion> {
+        match self {
+            Self::None(_) => None,
+            Self::Snapshot(param) => Some(param.1.as_ref().metadata().label_version()),
         }
     }
 }

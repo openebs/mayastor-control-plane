@@ -260,7 +260,8 @@ impl SnapshotCloneOp<'_> {
 
             let clone_spec_param = SnapshotCloneSpecParams::new(
                 repl_params,
-                snapshot.meta().source_spec_size(),
+                snapshot.meta().source_spec_repl_size(),
+                snapshot.meta().source_spec_vol_size(),
                 pool.pool().pool_ref(),
                 pool.pool.node.clone(),
                 new_volume.uuid.clone(),

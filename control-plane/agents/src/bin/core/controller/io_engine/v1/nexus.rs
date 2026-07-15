@@ -88,14 +88,28 @@ impl crate::controller::io_engine::NexusListApi for super::RpcClient {
 impl crate::controller::io_engine::NexusApi<()> for super::RpcClient {
     #[tracing::instrument(name = "rpc::v1::nexus::create", level = "info", skip(self), err)]
     async fn create_nexus(&self, request: &CreateNexus) -> Result<Nexus, SvcError> {
-        let response =
-            self.nexus()
-                .create_nexus(request.to_rpc())
-                .await
-                .context(GrpcRequestError {
-                    resource: ResourceKind::Nexus,
-                    request: "create_nexus",
-                })?;
+        let response = match request.version.unwrap_or_default() {
+            stor_port::types::v0::transport::NexusVersion::V1 => {
+                self.nexus().create_nexus(request.to_rpc()).await
+            }
+            stor_port::types::v0::transport::NexusVersion::V2 => {
+                self.nexus()
+                    .create_nexus_v2(rpc::v1::nexus::CreateNexusV2Request {
+                        v1: Some(request.to_rpc()),
+                        label_version: 2,
+                        required_size: true,
+                    })
+                    .await
+            }
+            stor_port::types::v0::transport::NexusVersion::Unknown(_) => {
+                return Err(SvcError::InvalidArguments {})
+            }
+        }
+        .context(GrpcRequestError {
+            resource: ResourceKind::Nexus,
+            request: "create_nexus",
+        })?;
+
         Self::nexus_opt(response.into_inner().nexus, &request.node, "create_nexus")
     }
 

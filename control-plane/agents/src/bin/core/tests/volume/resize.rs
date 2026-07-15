@@ -522,7 +522,8 @@ async fn resize_replica_space_reclaim() {
                 pool_id: replica.pool_id.clone(),
                 uuid: replica.uuid.clone(),
                 name: None,
-                requested_size: EXPANDED_SIZE,
+                requested_size: EXPANDED_SIZE + 3 * 1024 * 1024,
+                requested_vol_size: Some(EXPANDED_SIZE),
             },
             None,
         )
@@ -561,7 +562,8 @@ async fn resize_replica_space_reclaim() {
                 pool_id: replica.pool_id.clone(),
                 uuid: replica.uuid.clone(),
                 name: None,
-                requested_size: EXPANDED_SIZE,
+                requested_vol_size: Some(EXPANDED_SIZE),
+                requested_size: EXPANDED_SIZE + 3 * 1024 * 1024,
             },
             None,
         )

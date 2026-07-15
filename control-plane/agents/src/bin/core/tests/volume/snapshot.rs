@@ -24,7 +24,7 @@ async fn snapshot() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_io_engines(1)
-        .with_pools(1)
+        .with_pools_size(1, 108 * 1024 * 1024)
         .with_cache_period("1s")
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
         .build()
@@ -198,7 +198,7 @@ async fn thin_provisioning(cluster: &Cluster, volume: Volume) {
         .unwrap();
     let pool = pools.0.first().unwrap();
     let pool_state = pool.state().unwrap();
-    let watermark = 16 * 1024 * 1024;
+    let watermark = 4 * 1024 * 1024;
     let free_space = pool_state.capacity - pool_state.used - watermark;
 
     // Take up the entire pool free space

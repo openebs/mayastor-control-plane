@@ -188,6 +188,7 @@ impl From<VolumeSpec> for volume::VolumeDefinition {
                     .map(|map| common::MapWrapper { map }),
                 as_thin,
                 label_version: Some(label_version.into()),
+                requested_size: volume_spec.metadata.requested_size(),
             }),
         }
     }
@@ -394,7 +395,11 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
                 .publish_context
                 .map(|map_wrapper| map_wrapper.map),
             affinity_group: volume_spec.affinity_group.into_opt(),
-            metadata: VolumeMetadata::new(volume_meta.as_thin, label_version),
+            metadata: VolumeMetadata::new(
+                volume_meta.as_thin,
+                label_version,
+                volume_meta.requested_size,
+            ),
             content_source: volume_spec.content_source.try_into_opt()?,
             num_snapshots: volume_spec.num_snapshots,
             max_snapshots: volume_spec.max_snapshots,

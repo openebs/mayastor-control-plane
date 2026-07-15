@@ -219,7 +219,8 @@ def the_replicas_capacity_will_be_same_as_the_snapshot(restored_volume, repl_cou
     replicas = list(restored_volume.state.replica_topology.values())
     assert len(replicas) == repl_count
     for replica in replicas:
-        assert replica.usage.capacity == restored_volume.spec.size
+        # only valid because we have a volume size multiple of the cluster size.
+        assert replica.usage.capacity == restored_volume.state.usage.capacity
         assert replica.usage.allocated == 0
         assert replica.usage.allocated_snapshots == 0
 

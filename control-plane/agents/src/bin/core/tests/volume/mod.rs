@@ -68,9 +68,76 @@ async fn volume() {
 #[tracing::instrument(skip(cluster))]
 async fn test_volume(cluster: &Cluster) {
     smoke_test(cluster).await;
+    volume_size_test(cluster).await;
     publishing_test(cluster).await;
     replica_count_test(cluster).await;
     nexus_persistence_test(cluster).await;
+}
+
+async fn volume_size_test(cluster: &Cluster) {
+    let volume_client = cluster.grpc_client().volume();
+    let create_volume = CreateVolume {
+        uuid: VolumeId::try_from("359b7e1a-b724-443b-98b4-e6d97fabbb40").unwrap(),
+        size: 10 * 1024 * 1024 + 512,
+        replicas: 2,
+        ..Default::default()
+    };
+
+    let volume = volume_client.create(&create_volume, None).await.unwrap();
+    let volumes = volume_client
+        .get(GetVolumes::default().filter, false, None, None)
+        .await
+        .unwrap()
+        .entries;
+    tracing::info!("Volumes: {volumes:?}");
+
+    assert_eq!(Some(&volume), volumes.first());
+
+    let volume = volume_client
+        .publish(
+            &PublishVolume {
+                uuid: volume.spec().uuid.clone(),
+                target_node: None,
+                share: None,
+                publish_context: HashMap::new(),
+                frontend_nodes: vec![],
+                access_mode: VolumeAccessMode::SingleNodeWriter,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    tracing::info!("volume: {volume:?}");
+
+    let usage = volume.state().usage.unwrap_or_default();
+    // The volume size is 10MiB, but the allocated size is 20MiB because of the metadata overhead.
+    assert_eq!(usage.capacity(), 20 * 1024 * 1024);
+    for (_, replica) in volume.state().replica_topology {
+        let usage = replica.usage().unwrap();
+        assert_eq!(usage.capacity(), 20 * 1024 * 1024);
+    }
+
+    // Here the bdev size now matches the volume size (as long as aligned 1 MiB)
+    assert_eq!(
+        volume.state().target.unwrap().bdev_size,
+        Some(11 * 1024 * 1024)
+    );
+    assert_eq!(volume.spec().size, 11 * 1024 * 1024);
+    assert_eq!(
+        volume.spec().metadata.requested_size(),
+        Some(10 * 1024 * 1024 + 512)
+    );
+
+    volume_client
+        .destroy(
+            &DestroyVolume {
+                uuid: volume.spec().uuid,
+            },
+            None,
+        )
+        .await
+        .expect("Should be able to destroy the volume");
 }
 
 const RECONCILE_TIMEOUT_SECS: u64 = 7;

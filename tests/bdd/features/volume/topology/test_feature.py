@@ -26,7 +26,7 @@ from pytest_bdd import (
 )
 
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
-VOLUME_SIZE = 10485761
+VOLUME_SIZE = 10485760
 NUM_VOLUME_REPLICAS = 1
 CREATE_REQUEST_KEY = "create_request"
 POOL_1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
@@ -484,6 +484,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object_with_topology(
             )
         ),
         labelVersion=2,
+        size_bdev=VOLUME_SIZE,
     )
 
     # Check the volume object returned is as expected
@@ -510,6 +511,7 @@ def volume_creation_should_succeed_with_a_returned_volume_object_without_pool_to
         num_snapshots=0,
         encrypted=False,
         labelVersion=2,
+        size_bdev=VOLUME_SIZE,
     )
 
     # Check the volume object returned is as expected

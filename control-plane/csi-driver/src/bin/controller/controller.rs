@@ -421,7 +421,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
         let mut volume_context = args.parameters.clone();
 
         // First check if the volume already exists.
-        match RestApiClient::get_client()
+        let volume = match RestApiClient::get_client()
             .get_volume_for_create(&parsed_vol_uuid)
             .await
         {
@@ -438,6 +438,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                         "Volume successfully patched with affinity group annotation"
                     );
                 }
+                volume
             }
             // If the volume doesn't exist, create it.
             Err(ApiClientError::ResourceNotExists(_)) => {
@@ -509,12 +510,13 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
                 } else {
                     debug!(volume.uuid = volume_uuid, "Volume successfully created");
                 }
+                volume
             }
             Err(e) => return Err(e.into()),
-        }
+        };
 
         let volume = rpc::csi::Volume {
-            capacity_bytes: size as i64,
+            capacity_bytes: volume.spec.size as i64,
             volume_id: volume_uuid,
             volume_context,
             content_source: args.volume_content_source,

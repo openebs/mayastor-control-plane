@@ -17,7 +17,7 @@ message Replica {
   string pool_id = 4;
   // thin provisioning
   bool thin = 5;
-  // size of the replica in bytes
+  // Volume size of the replica in bytes
   uint64 size = 6;
   // protocol used for exposing the replica
   common.Protocol share = 7;
@@ -90,8 +90,10 @@ message CreateReplicaRequest {
   string pool_id = 4;
   // thin provisioning
   bool thin = 5;
-  // size of the replica in bytes
+  // Required size of the replica in bytes.
   uint64 size = 6;
+  // Size of the volume owning the replica in bytes, if any.
+  optional uint64 vol_size = 14;
   // protocol to expose the replica over
   common.Protocol share = 7;
   // Managed by our control plane
@@ -242,8 +244,12 @@ message ReplicaSpec {
   string name = 1;
   // uuid of the replica
   google.protobuf.StringValue replica_id = 2;
-  // size of the replica in bytes
+  // Size of the replica in bytes, including metadata overhead.
   uint64 size = 3;
+  // Size of the volume owning the replica in bytes.
+  optional uint64 vol_size = 14;
+  // Actual replica size on disk, including cluster-sized adjustments.
+  optional uint64 actual_size = 15;
   // id of the pool
   string pool_id = 4;
   // Protocol used for exposing the replica.

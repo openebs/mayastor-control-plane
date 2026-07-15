@@ -7,7 +7,7 @@ use strum_macros::{Display, EnumString};
 
 /// Get all the replicas from specific node and pool
 /// or None for all nodes or all pools.
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct GetReplicas {
     /// Filter request.
     pub filter: Filter,
@@ -415,8 +415,7 @@ impl From<Replica> for DestroyReplica {
 }
 
 /// Create Replica Request.
-#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct CreateReplica {
     /// Id of the io-engine instance.
     pub node: NodeId,
@@ -430,8 +429,10 @@ pub struct CreateReplica {
     pub pool_id: PoolId,
     /// UUID of the pool.
     pub pool_uuid: Option<PoolUuid>,
-    /// Size of the replica in bytes.
+    /// Size of the replica including metadata.
     pub size: u64,
+    /// Size of the volume owning the replica, if any.
+    pub vol_size: Option<u64>,
     /// Thin provisioning.
     pub thin: bool,
     /// Protocol to expose the replica over.
@@ -562,7 +563,7 @@ impl From<ReplicaOwners> for models::ReplicaSpecOwners {
 }
 
 /// Request struct to set replica entity id.
-#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct SetReplicaEntityId {
     uuid: ReplicaId,
     entity_id: VolumeId,
@@ -596,8 +597,7 @@ impl SetReplicaEntityId {
 }
 
 /// Destroy Replica Request.
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default, Debug, Clone)]
 pub struct DestroyReplica {
     /// Id of the io-engine instance.
     pub node: NodeId,
@@ -639,8 +639,7 @@ impl DestroyReplica {
 }
 
 /// Resize Replica Request.
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default, Debug, Clone)]
 pub struct ResizeReplica {
     /// Id of the io-engine instance.
     pub node: NodeId,
@@ -650,8 +649,10 @@ pub struct ResizeReplica {
     pub uuid: ReplicaId,
     /// Name of the replica.
     pub name: Option<ReplicaName>,
-    /// Requested size of replica for resize.
+    /// Required size of replica for resize.
     pub requested_size: u64,
+    /// Size of the volume owning the replica.
+    pub requested_vol_size: Option<u64>,
 }
 impl ResizeReplica {
     /// Return a new `Self` from the provided arguments.
@@ -661,6 +662,7 @@ impl ResizeReplica {
         name: Option<&ReplicaName>,
         uuid: &ReplicaId,
         requested_size: u64,
+        requested_vol_size: u64,
     ) -> Self {
         Self {
             node: node.clone(),
@@ -668,13 +670,13 @@ impl ResizeReplica {
             uuid: uuid.clone(),
             name: name.cloned(),
             requested_size,
+            requested_vol_size: Some(requested_vol_size),
         }
     }
 }
 
 /// Share Replica Request.
-#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct ShareReplica {
     /// Id of the io-engine instance.
     pub node: NodeId,
@@ -751,8 +753,7 @@ impl From<UnshareReplica> for ShareReplica {
 }
 
 /// Unshare Replica Request
-#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct UnshareReplica {
     /// Id of the io-engine instance.
     pub node: NodeId,
@@ -904,8 +905,7 @@ impl From<&AddNexusReplica> for AddNexusChild {
 }
 
 /// Remove Replica from Nexus Request.
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct RemoveNexusReplica {
     /// Id of the io-engine instance.
     pub node: NodeId,

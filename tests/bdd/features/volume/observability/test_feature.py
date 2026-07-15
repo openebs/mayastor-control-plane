@@ -23,7 +23,7 @@ POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1449"
 NODE_NAME = "io-engine-1"
 VOLUME_CTX_KEY = "volume"
-VOLUME_SIZE = 10485761
+VOLUME_SIZE = 10485760
 
 
 # This fixture will be automatically used by all tests.
@@ -88,6 +88,7 @@ def a_volume_object_representing_the_volume_should_be_returned(volume_ctx):
         num_snapshots=0,
         encrypted=False,
         labelVersion=2,
+        size_bdev=VOLUME_SIZE,
     )
 
     volume = volume_ctx[VOLUME_CTX_KEY]

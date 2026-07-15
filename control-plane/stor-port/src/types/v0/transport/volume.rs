@@ -1098,7 +1098,7 @@ impl From<&ReplicaTopology> for models::ReplicaTopology {
 }
 impl From<&ReplicaUsage> for models::ReplicaUsage {
     fn from(value: &ReplicaUsage) -> Self {
-        Self::new(
+        Self::new_all(
             value.capacity,
             value.allocated,
             value.allocated_snaps,

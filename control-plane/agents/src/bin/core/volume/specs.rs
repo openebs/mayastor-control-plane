@@ -33,7 +33,7 @@ use stor_port::{
             nexus::NexusSpec,
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
-            snapshots::volume::{VolumeSnapshot, VolumeSnapshotUserSpec},
+            snapshots::volume::VolumeSnapshot,
             volume::{
                 AffinityGroupId, AffinityGroupSpec, PublishOperation, VolumeOperation, VolumeSpec,
             },
@@ -209,7 +209,8 @@ pub(crate) async fn volume_replica_candidates(
                 entity_id: Some(volume_spec.uuid.clone()),
                 pool_id: p.id.clone(),
                 pool_uuid: None,
-                size: request.size,
+                size: request.repl_size(),
+                vol_size: Some(request.size),
                 thin: request.as_thin(),
                 share: Protocol::None,
                 managed: true,
@@ -258,7 +259,8 @@ pub(crate) async fn volume_move_replica_candidates(
                 entity_id: Some(volume_spec.uuid.clone()),
                 pool_id: p.id.clone(),
                 pool_uuid: None,
-                size: request.size,
+                size: request.repl_size(),
+                vol_size: Some(request.size),
                 thin: request.as_thin(),
                 share: Protocol::None,
                 managed: true,
@@ -911,13 +913,20 @@ impl ResourceSpecsLocked {
         if let Some(volume) = specs.volumes.get(&request.source().uuid) {
             Ok(volume.clone())
         } else {
+            let label_version = request
+                .label_version()
+                .unwrap_or(registry.config().volume_version());
+            let label_version = TryFrom::try_from(label_version)
+                .map_err(|details| SvcError::Internal { details })?;
+            let volume = VolumeSpec::new(request.source(), label_version);
+
             // if request has a capacity limit, add up the volumes and reject
             // if the capacity limit would be exceeded
             match request.source().cluster_capacity_limit {
                 None => {} // no limit, no check needed
                 Some(limit) => {
                     let mut total: u64 = specs.volumes.values().map(|v| v.lock().size).sum();
-                    total += request.source().size;
+                    total += volume.size;
                     if total > limit {
                         return Err(SvcError::CapacityLimitExceeded {
                             cluster_capacity_limit: limit,
@@ -926,8 +935,7 @@ impl ResourceSpecsLocked {
                     }
                 }
             }
-            let volume = VolumeSpec::from(request.source())
-                .with_label_version(registry.config().volume_version());
+
             Ok(match request {
                 CreateVolumeSource::None(_) => specs.volumes.insert(volume),
                 CreateVolumeSource::Snapshot(create_from_snap) => specs.volumes.insert(
@@ -1020,13 +1028,18 @@ impl ResourceSpecsLocked {
     /// Get or Create the resourced VolumeSnapshot for the given request.
     pub(crate) fn get_or_create_snapshot(
         &self,
-        request: &VolumeSnapshotUserSpec,
+        request: &super::snapshot_operations::CreateVolumeSnapshotRequest,
     ) -> ResourceMutex<VolumeSnapshot> {
+        let volume = &request.volume;
+        let request = &request.request;
         let mut specs = self.write();
         if let Some(snapshot) = specs.volume_snapshots.get(request.uuid()) {
             snapshot.clone()
         } else {
-            specs.volume_snapshots.insert(VolumeSnapshot::from(request))
+            specs.volume_snapshots.insert(
+                VolumeSnapshot::from(request)
+                    .with_label_version(volume.as_ref().metadata.label_version()),
+            )
         }
     }
 }

@@ -40,7 +40,7 @@ RESTORE_VOLUME_UUID = "6cd5378e-3f05-47f1-a830-a0f5873a1449"
 SNAP_UUID_1 = "7cd5378e-3f05-47f1-a830-a0f5873a1449"
 SNAP_UUID_2 = "8cd5378e-3f05-47f1-a830-a0f5873a1449"
 DEFAULT_REPLICA_CNT = 3
-DEFAULT_POOL_SIZE = 419430400  # 400MiB
+DEFAULT_POOL_SIZE = 500 * 1024 * 1024
 NODE1_NAME = "io-engine-1"
 NODE2_NAME = "io-engine-2"
 NODE3_NAME = "io-engine-3"
@@ -492,7 +492,8 @@ def the_replicas_capacity_will_be_same_as_the_snapshot(test_volume_factory):
     test_volume = test_volume_factory()
     replicas = list(test_volume.state.replica_topology.values())
     assert len(replicas) == 1
-    assert replicas[0].usage.capacity == test_volume.spec.size
+    # Actual capacity might vary due to cluster size
+    assert replicas[0].usage.capacity == test_volume.state.usage.capacity
     assert replicas[0].usage.allocated == 0
     assert replicas[0].usage.allocated_snapshots == 0
 

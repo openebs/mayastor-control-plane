@@ -296,6 +296,32 @@ pub struct VolumeSpec {
     pub cluster_size: u32,
 }
 
+/// Supported volume label versions.
+#[derive(Clone, Copy)]
+pub enum LabelVersion {
+    V1,
+    V2,
+}
+impl From<LabelVersion> for transport::NexusVersion {
+    fn from(value: LabelVersion) -> Self {
+        match value {
+            LabelVersion::V1 => transport::NexusVersion::V1,
+            LabelVersion::V2 => transport::NexusVersion::V2,
+        }
+    }
+}
+impl TryFrom<transport::NexusVersion> for LabelVersion {
+    type Error = String;
+
+    fn try_from(value: transport::NexusVersion) -> Result<Self, Self::Error> {
+        match u32::from(value) {
+            1 => Ok(LabelVersion::V1),
+            2 => Ok(LabelVersion::V2),
+            v => Err(format!("Unsupported label version: {v}")),
+        }
+    }
+}
+
 /// Volume Content Source i.e the snapshot or a volume.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum VolumeContentSource {
@@ -321,11 +347,16 @@ pub struct VolumeMetadata {
 }
 impl VolumeMetadata {
     /// Create a new `Self` from the given parameters.
-    pub fn new(as_thin: Option<bool>, label_version: transport::NexusVersion) -> Self {
+    pub fn new(
+        as_thin: Option<bool>,
+        label_version: transport::NexusVersion,
+        req_size: Option<u64>,
+    ) -> Self {
         Self {
             persisted: VolumePersistedMetadata {
                 snapshot_as_thin: as_thin,
                 label_version,
+                requested_size: req_size,
             },
             runtime: Default::default(),
         }
@@ -366,6 +397,9 @@ impl VolumeMetadata {
     pub fn clear_offline_rebuild_degraded(&mut self) {
         self.runtime.clear_offline_rebuild_degraded();
     }
+    pub fn requested_size(&self) -> Option<u64> {
+        self.persisted.requested_size
+    }
 }
 
 /// Volume meta information.
@@ -377,6 +411,10 @@ pub struct VolumePersistedMetadata {
     /// Nexus label version for defining the data partition layout.
     #[serde(default, skip_serializing_if = "super::is_default")]
     pub label_version: transport::NexusVersion,
+    /// The user requested size, which may differ from the actual size we create
+    /// since we align to 1MiB boundaries.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requested_size: Option<u64>,
 }
 
 /// Runtime volume information.
@@ -530,6 +568,29 @@ impl AsOperationSequencer for AffinityGroupSpec {
 }
 
 impl VolumeSpec {
+    pub fn new(request: &CreateVolume, label: LabelVersion) -> Self {
+        Self {
+            uuid: request.uuid.clone(),
+            size: request.size,
+            labels: request.labels.clone(),
+            num_replicas: request.replicas as u8,
+            status: VolumeSpecStatus::Creating,
+            policy: request.policy.clone(),
+            topology: request.topology.clone(),
+            sequencer: OperationSequence::new(),
+            last_nexus_id: None,
+            operation: None,
+            thin: request.thin,
+            target_config: None,
+            publish_context: None,
+            affinity_group: request.affinity_group.clone(),
+            max_snapshots: request.max_snapshots,
+            encrypted: request.encrypted,
+            cluster_size: request.cluster_size.unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
+            ..Default::default()
+        }
+        .with_label_version(label)
+    }
     /// Insert snapshot in the list.
     pub fn insert_snapshot(&mut self, snapshot: &SnapshotId) {
         self.metadata.insert_snapshot(snapshot.clone());
@@ -648,9 +709,194 @@ impl VolumeSpec {
     /// Set the label version.
     /// # Warning
     /// This must only be set during creation time!
-    pub fn with_label_version(mut self, label_version: transport::NexusVersion) -> Self {
-        self.metadata.persisted.label_version = label_version;
+    fn with_label_version(mut self, label_version: LabelVersion) -> Self {
+        let requested_size = self.size;
+        let size = Self::calc_size(requested_size, label_version);
+
+        self.metadata.persisted.label_version = label_version.into();
+        self.size = size;
+        self.metadata.persisted.requested_size = Some(requested_size);
         self
+    }
+
+    fn calc_size(requested_size: u64, label: LabelVersion) -> u64 {
+        match label {
+            LabelVersion::V1 => requested_size,
+            LabelVersion::V2 => Self::align_up(requested_size, MIB),
+        }
+    }
+    /// Calculate the size of the volume based on the requested size and the label version.
+    pub fn calc_resize(&self, requested_size: u64) -> u64 {
+        Self::calc_size(requested_size, self.label_version())
+    }
+
+    /// Set the volume size.
+    #[cfg(test)]
+    fn with_size(mut self, size: u64) -> Self {
+        self.size = size;
+        self
+    }
+
+    /// Set the pool's cluster size.
+    pub fn with_cluster_size(mut self, cluster_size: u32) -> Self {
+        self.cluster_size = cluster_size;
+        self
+    }
+
+    fn align_up(value: u64, align: u64) -> u64 {
+        match value % align {
+            0 => value,
+            rem => value + align - rem,
+        }
+    }
+
+    /// Minimum size required for the replica to be created.
+    /// This is the size of the volume plus the overhead for the label version.
+    pub fn repl_size(&self) -> u64 {
+        Self::repl_size_(self.label_version(), self.size, self.cluster_size())
+    }
+
+    /// Equivalent of the `repl_size` function but for a new size.
+    /// This is used when resizing a volume to calculate the new replica size.
+    pub fn resize_repl_size(&self, new_size: u64) -> u64 {
+        Self::repl_size_(self.label_version(), new_size, self.cluster_size())
+    }
+
+    fn repl_size_(label: LabelVersion, size: u64, cluster_size: u64) -> u64 {
+        const V2_OVERHEAD: u64 = 8 * MIB;
+        match label {
+            LabelVersion::V1 => size,
+            LabelVersion::V2 => Self::align_up(size + V2_OVERHEAD, cluster_size),
+        }
+    }
+
+    fn cluster_size(&self) -> u64 {
+        if self.cluster_size == 0 {
+            POOL_BS_CLUSTER_SIZE_DEFAULT as u64
+        } else {
+            self.cluster_size as u64
+        }
+    }
+
+    /// Size of the underlying block device.
+    /// This is the size of the volume for V2 labels and None for V1 labels.
+    #[cfg(test)]
+    fn bdev_size(&self) -> Option<u64> {
+        match self.label_version() {
+            LabelVersion::V1 => None,
+            LabelVersion::V2 => Some(self.size),
+        }
+    }
+
+    fn label_version(&self) -> LabelVersion {
+        match self.metadata.persisted.label_version {
+            transport::NexusVersion::V1 => LabelVersion::V1,
+            transport::NexusVersion::V2 => LabelVersion::V2,
+            // We should never reach here
+            transport::NexusVersion::Unknown(_) => panic!("Unknown label version"),
+        }
+    }
+}
+
+const MIB: u64 = 1024 * 1024;
+#[cfg(test)]
+const MB: u64 = 1000 * 1000;
+
+#[cfg(test)]
+fn check_sizes<const N: u32>(size: u64, repl_size: u64, bdev_size: u64) {
+    let spec = VolumeSpec::default()
+        .with_size(size)
+        .with_cluster_size(N * MIB as u32)
+        .with_label_version(LabelVersion::V2);
+
+    let repl_size_ = spec.repl_size();
+    assert_eq!(
+        repl_size_, repl_size,
+        "size: {size} expected repl size: {repl_size} but got {repl_size_}"
+    );
+
+    let bdev_size_ = spec.bdev_size().unwrap();
+    assert_eq!(
+        bdev_size_, bdev_size,
+        "size: {size} expected bdev size: {bdev_size} but got {bdev_size_}"
+    );
+}
+
+#[test]
+fn volume_v2_sizes() {
+    for (size, repl_size, bdev_size) in [
+        (MIB, 12 * MIB, MIB),
+        (2 * MIB, 12 * MIB, 2 * MIB),
+        (3 * MIB, 12 * MIB, 3 * MIB),
+        (3 * MB, 12 * MIB, 3 * MIB),
+        (3 * MIB + 512, 12 * MIB, 4 * MIB),
+        (4 * MIB, 12 * MIB, 4 * MIB),
+        (4 * MB, 12 * MIB, 4 * MIB),
+        (4 * MIB + 512, 16 * MIB, 5 * MIB),
+        (5 * MIB, 16 * MIB, 5 * MIB),
+        (6 * MIB, 16 * MIB, 6 * MIB),
+        (7 * MIB, 16 * MIB, 7 * MIB),
+        (8 * MIB, 16 * MIB, 8 * MIB),
+        (9 * MIB, 20 * MIB, 9 * MIB),
+    ] {
+        check_sizes::<4>(size, repl_size, bdev_size);
+    }
+}
+
+#[test]
+fn volume_v2_sizes_32m_cluster() {
+    for (size, repl_size, bdev_size) in [
+        (MIB, 32 * MIB, MIB),
+        (2 * MIB, 32 * MIB, 2 * MIB),
+        (3 * MIB, 32 * MIB, 3 * MIB),
+        (3 * MB, 32 * MIB, 3 * MIB),
+        (3 * MIB + 512, 32 * MIB, 4 * MIB),
+        (4 * MIB, 32 * MIB, 4 * MIB),
+        (4 * MB, 32 * MIB, 4 * MIB),
+        (4 * MIB + 512, 32 * MIB, 5 * MIB),
+        (5 * MIB, 32 * MIB, 5 * MIB),
+        (6 * MIB, 32 * MIB, 6 * MIB),
+        (7 * MIB, 32 * MIB, 7 * MIB),
+        (8 * MIB, 32 * MIB, 8 * MIB),
+        (9 * MIB, 32 * MIB, 9 * MIB),
+        (32 * MIB, 64 * MIB, 32 * MIB),
+        // notice here, 31MiB is the MiB aligned size of 32MB, which is 30.5MiB
+        (32 * MB, 64 * MIB, 31 * MIB),
+        (32 * MIB + 512, 64 * MIB, 33 * MIB),
+        (1024 * MIB, 1056 * MIB, 1024 * MIB),
+        (1048 * MIB, 1056 * MIB, 1048 * MIB),
+        (1049 * MIB, 1088 * MIB, 1049 * MIB),
+        (1049 * MIB - 512, 1088 * MIB, 1049 * MIB),
+        (1048 * MIB + 512, 1088 * MIB, 1049 * MIB),
+    ] {
+        check_sizes::<32>(size, repl_size, bdev_size);
+    }
+}
+
+#[test]
+fn volume_v2_sizes_1m_cluster() {
+    for (size, repl_size, bdev_size) in [
+        (MIB, 9 * MIB, MIB),
+        (2 * MIB, 10 * MIB, 2 * MIB),
+        (2 * MIB + 512, 11 * MIB, 3 * MIB),
+        (6 * MIB, 14 * MIB, 6 * MIB),
+        (7 * MIB, 15 * MIB, 7 * MIB),
+    ] {
+        check_sizes::<1>(size, repl_size, bdev_size);
+    }
+}
+
+#[test]
+fn volume_v2_sizes_5m_cluster() {
+    for (size, repl_size, bdev_size) in [
+        (MIB, 10 * MIB, MIB),
+        (2 * MIB, 10 * MIB, 2 * MIB),
+        (7 * MIB, 15 * MIB, 7 * MIB),
+        (7 * MB, 15 * MIB, 7 * MIB),
+        (7 * MIB + 512, 20 * MIB, 8 * MIB),
+        (8 * MIB, 20 * MIB, 8 * MIB),
+    ] {
+        check_sizes::<5>(size, repl_size, bdev_size);
     }
 }
 
@@ -734,7 +980,9 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                     self.metadata.runtime.snapshots.remove(&snapshot);
                 }
                 VolumeOperation::Resize(size) => {
-                    self.size = size;
+                    let size_1m = self.calc_resize(size);
+                    self.size = size_1m;
+                    self.metadata.persisted.requested_size = Some(size);
                 }
                 VolumeOperation::SetVolumeProperty(property) => match property {
                     VolumeProperty::MaxSnapshots(max_snapshots) => {
@@ -991,37 +1239,12 @@ impl StorableObject for VolumeSpec {
 /// State of the Volume Spec.
 pub type VolumeSpecStatus = SpecStatus<transport::VolumeStatus>;
 
-impl From<&CreateVolume> for VolumeSpec {
-    fn from(request: &CreateVolume) -> Self {
-        Self {
-            uuid: request.uuid.clone(),
-            size: request.size,
-            labels: request.labels.clone(),
-            num_replicas: request.replicas as u8,
-            status: VolumeSpecStatus::Creating,
-            policy: request.policy.clone(),
-            topology: request.topology.clone(),
-            sequencer: OperationSequence::new(),
-            last_nexus_id: None,
-            operation: None,
-            thin: request.thin,
-            target_config: None,
-            publish_context: None,
-            affinity_group: request.affinity_group.clone(),
-            max_snapshots: request.max_snapshots,
-            encrypted: request.encrypted,
-            cluster_size: request.cluster_size.unwrap_or(POOL_BS_CLUSTER_SIZE_DEFAULT),
-            ..Default::default()
-        }
-    }
-}
 impl PartialEq<CreateVolume> for VolumeSpec {
     fn eq(&self, other: &CreateVolume) -> bool {
-        let mut other = VolumeSpec::from(other);
+        let mut other = VolumeSpec::new(other, self.label_version());
         other.status = self.status.clone();
         other.sequencer = self.sequencer.clone();
         other.content_source = self.content_source.clone();
-        other.metadata.persisted.label_version = self.metadata.persisted.label_version;
         &other == self
     }
 }
@@ -1054,11 +1277,16 @@ impl PartialEq<transport::VolumeState> for VolumeSpec {
 impl From<VolumeSpec> for models::VolumeSpec {
     fn from(src: VolumeSpec) -> Self {
         let target_cfg = src.active_config().into_opt();
+        let (size, size_bdev) = match src.metadata.persisted.requested_size {
+            Some(requested_size) => (requested_size, Some(src.size)),
+            None => (src.size, None),
+        };
         Self::new_all(
             src.labels,
             src.num_replicas,
             src.operation.into_opt(),
-            src.size,
+            size,
+            size_bdev,
             src.status,
             target_cfg,
             src.uuid,

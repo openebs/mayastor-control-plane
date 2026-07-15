@@ -172,6 +172,8 @@ fn to_models_volume_snapshot(snap: &VolumeSnapshot) -> models::VolumeSnapshot {
                 snap.meta().timestamp().map(|t| t.to_string()),
                 snap.meta().size(),
                 snap.meta().spec_size(),
+                snap.meta().spec_repl_size(),
+                Some(snap.meta().label_version()),
                 snap.meta().total_allocated_size(),
                 snap.meta().txn_id(),
                 snap.meta()

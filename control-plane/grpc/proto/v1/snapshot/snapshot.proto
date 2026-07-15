@@ -41,7 +41,7 @@ message ReplicaSnapshotState {
   SnapshotStatus                status = 5;
   // Creation timestamp of the snapshot.
   google.protobuf.Timestamp  timestamp = 6;
-  // Size of the snapshot (typically follows source size).
+  // Size of the source replica, including metadata overhead.
   uint64                  replica_size = 7;
   // Size allocated to the snapshot.
   uint64                allocated_size = 8;

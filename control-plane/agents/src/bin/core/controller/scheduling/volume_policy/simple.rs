@@ -215,18 +215,18 @@ impl SimplePolicy {
     /// slack.
     fn min_free_space(&self, request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         if !request.as_thin() {
-            return item.pool.free_space() > request.size;
+            return item.pool.free_space() > request.repl_size();
         }
         if request.snap_repl() {
             return item.pool.free_space() > {
-                (self.cli_args.snapshot_commitment * request.size) / 100
+                (self.cli_args.snapshot_commitment * request.repl_size()) / 100
             };
         }
 
         self.min_free_space_util(
             item.pool.free_space(),
             request.allocated_bytes(),
-            request.size,
+            request.repl_size(),
         )
     }
 

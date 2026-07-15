@@ -93,15 +93,6 @@ class Docker(object):
         logs = None
         current_test = os.environ.get("PYTEST_CURRENT_TEST")
 
-        match_logs = re.match(
-            r"^(.*?)\.py::([^\s]+)(?:\s+\((setup|call|teardown)\))?$", current_test
-        )
-        if not match_logs:
-            print(f"No match for test file and name in current_test: {current_test}")
-            return
-
-        # print(f"Dumping container logs for test: {current_test}")
-
         if failed_logs_var in os.environ and os.environ[failed_logs_var]:
             logs = os.environ.get(failed_logs_var)
             # print(f"Dumping container logs to: {logs}")
@@ -109,14 +100,12 @@ class Docker(object):
             logs = os.path.join(
                 os.environ.get("ROOT_DIR"), "ci-report", "docker-logs.txt"
             )
-            # print(f"Dumping container logs to: {logs}")
 
         if logs is None:
-            print("No log file specified for docker logs. Skipping log dump.")
             return
 
         match_logs = re.match(
-            r"^(.*?)\.py::([^\s]+)(?:\s+\((setup|call|teardown)\))?$", current_test
+            r"^(.*?)\.py::(.+?)(?:\s+\((setup|call|teardown)\))?$", current_test
         )
         if match_logs:
             test_file, test_name, action = match_logs.groups()
@@ -160,7 +149,8 @@ class Docker(object):
                 )
         except subprocess.CalledProcessError as e:
             current_test = os.environ.get("PYTEST_CURRENT_TEST")
-            print(f"Failed to collect etcd logs for {current_test}: {e.stderr}")
+            if os.environ.get("CI") in ["1", "True", "true"]:
+                print(f"Failed to collect etcd logs for {current_test}: {e.stderr}")
 
     @staticmethod
     def dump_logs_single(dump_path: str, current_test: str):

@@ -94,6 +94,8 @@ message Metadata {
   optional bool as_thin = 4;
   // version of the label layout
   optional uint32 label_version = 5;
+  // original requested size for the volume (no alignment changes)
+  optional uint64 requested_size = 6;
 }
 
 // Affinity Group related information.
@@ -212,7 +214,8 @@ message VolumeHealth {
 
 // Volume usage information
 message VolumeUsage {
-  // Capacity of the volume in bytes.
+  // Required capacity of the volume replicas in bytes.
+  // Includes the space used by the data and metadata.
   uint64 capacity = 1;
   // Allocated size in bytes, related the largest healthy replica, including snapshots.
   // For example, if a volume has 2 replicas, each with 1MiB allocated space, then
@@ -640,6 +643,10 @@ message VolumeSnapshotMeta {
   uint64                                  size = 5;
   // Spec size of the snapshot in bytes.
   uint64                             spec_size = 6;
+  // Spec required size of the snapshot in bytes.
+  optional uint64                 spec_rq_size = 9;
+  // version of the label layout
+  optional                uint32 label_version = 10;
   // Size taken by the snapshot and its predecessors.
   uint64                  total_allocated_size = 7;
   // Number of restores done from this snapshot.

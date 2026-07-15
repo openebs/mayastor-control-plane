@@ -281,9 +281,9 @@ async fn revert_expanded_replicas(
             Err(_) => continue,
         };
 
-        if replica.as_ref().size > volume.as_ref().size {
+        if replica.as_ref().size() > volume.as_ref().repl_size() {
             let replica_state = context.registry().replica(replica.uuid()).await?;
-            volume.info_span(|| tracing::info!(replica = %replica.as_ref().uuid, replica_size = %replica.as_ref().size, "Reclaiming space from replica. Volume size {}", volume.as_ref().size));
+            volume.info_span(|| tracing::info!(replica = %replica.as_ref().uuid, replica_size = %replica.as_ref().size(), "Reclaiming space from replica. Volume size {}", volume.as_ref().size));
             // Resize replica back to volume spec size.
             replica
                 .resize(
@@ -293,6 +293,7 @@ async fn revert_expanded_replicas(
                         replica.as_ref().pool_name(),
                         None,
                         replica.uuid(),
+                        volume.as_ref().repl_size(),
                         volume.as_ref().size,
                     ),
                 )

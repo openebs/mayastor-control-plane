@@ -9,7 +9,7 @@ from common.apiclient import ApiClient
 from common.deployer import Deployer
 from common.docker import Docker
 from common.fio import Fio
-from common.nvme import nvme_connect, nvme_disconnect
+from common.nvme import nvme_connect, nvme_disconnect, nvme_set_reconnect_delay
 from common.operations import Cluster
 from openapi.models.child_state import ChildState
 from openapi.models.create_pool_body import CreatePoolBody
@@ -36,8 +36,8 @@ POOL_1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL_2_UUID = "91a60318-bcfe-4e36-92cb-ddc7abf212ea"
 POOL_3_UUID = "4d471e62-ca17-44d1-a6d3-8820f6156c1a"
 POOL_4_UUID = "d5c5e3de-d77b-11ed-afa1-0242ac120002"
-VOLUME_SIZE = 524288000
-POOL_SIZE = 734003200
+VOLUME_SIZE = 494 * 1024 * 1024
+POOL_SIZE = 800 * 1024 * 1024
 NUM_VOLUME_REPLICAS = 3
 FAULTED_CHILD_WAIT_SECS = 2
 FIO_RUN = 7
@@ -153,11 +153,12 @@ def a_volume_with_three_replicas_filled_with_user_data(disks):
     # Launch fio in background and let it run along with the test.
     uri = volume.state.target.device_uri
     disk = nvme_connect(uri)
+    nvme_set_reconnect_delay(uri, delay=1)
     fio = Fio(name="job", rw="randwrite", device=disk, runtime=FIO_RUN)
     fio = fio.open()
     yield
     try:
-        code = fio.wait(timeout=FIO_RUN)
+        code = fio.wait(timeout=FIO_RUN + 5)
         assert code == 0, "FIO failed, exit code: %d" % code
     except subprocess.TimeoutExpired:
         assert False, "FIO timed out"
