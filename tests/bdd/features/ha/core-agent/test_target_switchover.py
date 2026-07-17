@@ -39,7 +39,7 @@ RULE_REMOVE = "sudo iptables -t filter -D OUTPUT -o {} -d {} -p tcp --dport {} -
 
 @pytest.fixture
 def disks():
-    yield Deployer.create_disks(2, size=100 * 1024 * 1024)
+    yield Deployer.create_disks(2, size=140 * 1024 * 1024)
     Deployer.cleanup_disks(2)
 
 

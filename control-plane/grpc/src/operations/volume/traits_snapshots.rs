@@ -104,9 +104,11 @@ impl From<&stor_port::types::v0::store::snapshots::volume::VolumeSnapshot> for V
                     .map(|t| std::time::SystemTime::from(t).into()),
                 size: value.metadata().size(),
                 spec_size: value.metadata().spec_size(),
+                spec_repl_size: value.metadata().spec_repl_size(),
                 total_allocated_size: value.metadata().total_allocated_size(),
                 txn_id: value.metadata().txn_id().clone(),
                 transactions,
+                label_version: value.metadata().label_version().into(),
                 num_restores: value.num_restores(),
             },
         }
@@ -127,8 +129,12 @@ pub struct VolumeSnapshotMeta {
     timestamp: Option<prost_types::Timestamp>,
     /// Size of the snapshot (typically follows source size).
     size: u64,
-    /// Spec size of the snapshot (typically follows source spec size).
+    /// Spec size of the snapshot (typically follows source volume spec size).
     spec_size: u64,
+    /// Spec required size of the snapshot (typically follows source spec replica size).
+    spec_repl_size: u64,
+    /// Label version of the snapshot.
+    label_version: u32,
     /// Total allocated size of the snapshot and its predecessors.
     total_allocated_size: u64,
     /// Transaction Id that defines this snapshot when it is created.
@@ -167,6 +173,10 @@ impl VolumeSnapshotMeta {
     pub fn spec_size(&self) -> u64 {
         self.spec_size
     }
+    /// Get the snapshot spec replica size in bytes.
+    pub fn spec_repl_size(&self) -> u64 {
+        self.spec_repl_size
+    }
     /// Get the snapshot total allocated size in bytes.
     pub fn total_allocated_size(&self) -> u64 {
         self.total_allocated_size
@@ -182,6 +192,10 @@ impl VolumeSnapshotMeta {
         } else {
             0
         }
+    }
+    /// Label version.
+    pub fn label_version(&self) -> u32 {
+        self.label_version
     }
 }
 
@@ -467,9 +481,11 @@ impl TryFrom<volume::VolumeSnapshot> for VolumeSnapshot {
                 status: common::SpecStatus::try_from(meta.spec_status)
                     .unwrap_or_default()
                     .into(),
+                label_version: meta.label_version.unwrap_or(1),
                 timestamp: meta.timestamp,
                 size: meta.size,
                 spec_size: meta.spec_size,
+                spec_repl_size: meta.spec_rq_size.unwrap_or(meta.spec_size),
                 total_allocated_size: meta.total_allocated_size,
                 txn_id: meta.txn_id,
                 transactions: meta
@@ -640,6 +656,8 @@ impl TryFrom<VolumeSnapshot> for volume::VolumeSnapshot {
                     .collect::<HashMap<_, _>>(),
                 size: value.meta.size,
                 spec_size: value.meta.spec_size,
+                spec_rq_size: Some(value.meta.spec_repl_size),
+                label_version: Some(value.meta.label_version),
                 total_allocated_size: value.meta.total_allocated_size,
                 num_restores: value.meta.num_restores,
             }),

@@ -37,7 +37,7 @@ PAGINATED_STARTING_TOKEN = "starting_token"
 def init(num_volumes):
     Deployer.start(1)
     ApiClient.pools_api().put_node_pool(
-        NODE_NAME, POOL_UUID, CreatePoolBody(disks=["malloc:///disk?size_mb=100"])
+        NODE_NAME, POOL_UUID, CreatePoolBody(disks=["malloc:///disk?size_mb=150"])
     )
 
     # Create the desired number of volumes

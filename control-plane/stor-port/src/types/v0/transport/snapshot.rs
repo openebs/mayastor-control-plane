@@ -184,8 +184,10 @@ impl ListSnapshotClones {
 pub struct SnapshotCloneSpecParams {
     /// Parameters for creation of the snapshot clone from.
     repl_params: SnapshotCloneParameters,
+    /// Size of the replica clone.
+    repl_size: u64,
     /// Size of the volume clone.
-    size: u64,
+    vol_size: u64,
     /// Reference of a pool that the clone should live on.
     pool: PoolRef,
     /// Node where the snapshot pool lives on.
@@ -196,14 +198,16 @@ pub struct SnapshotCloneSpecParams {
 impl SnapshotCloneSpecParams {
     pub fn new(
         repl_params: SnapshotCloneParameters,
-        size: u64,
+        repl_size: u64,
+        vol_size: u64,
         pool: PoolRef,
         node: NodeId,
         uuid: VolSnapshotCloneId,
     ) -> Self {
         Self {
             repl_params,
-            size,
+            repl_size,
+            vol_size,
             pool,
             node,
             uuid,
@@ -213,9 +217,13 @@ impl SnapshotCloneSpecParams {
     pub fn params(&self) -> &SnapshotCloneParameters {
         &self.repl_params
     }
-    /// Get a reference to the clone name.
-    pub fn size(&self) -> u64 {
-        self.size
+    /// Get the size of the replica clone.
+    pub fn repl_size(&self) -> u64 {
+        self.repl_size
+    }
+    /// Get the size of the volume clone.
+    pub fn vol_size(&self) -> u64 {
+        self.vol_size
     }
     /// Get a reference to the clone name.
     pub fn pool(&self) -> &PoolRef {

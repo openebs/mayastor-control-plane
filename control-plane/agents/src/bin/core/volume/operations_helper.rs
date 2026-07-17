@@ -598,6 +598,7 @@ impl OperationGuardArc<VolumeSpec> {
                         replica_grd.as_ref().pool_name(),
                         None,
                         replica_grd.uuid(),
+                        self.as_ref().resize_repl_size(requested_size),
                         requested_size,
                     ),
                 )

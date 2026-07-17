@@ -101,7 +101,7 @@ POOL_UUID = "4cc6ee64-7232-497d-a26f-38284a444990"
 
 @pytest.fixture(scope="function")
 def create_pool_disk_images():
-    pools = Deployer.create_disks(1, size=20 * 1024 * 1024)
+    pools = Deployer.create_disks(1, size=50 * 1024 * 1024)
     yield pools
     Deployer.cleanup_disks(len(pools))
 

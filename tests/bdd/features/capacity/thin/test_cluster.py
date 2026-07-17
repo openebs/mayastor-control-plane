@@ -205,7 +205,7 @@ def if_other_pools_with_sufficient_free_space_exist_on_the_cluster():
     ApiClient.pools_api().put_node_pool(
         NODE_NAME_1,
         POOL_UUID_3,
-        CreatePoolBody(disks=[f"malloc:///disk11?size_mb={LARGE_VOLUME_SIZE + 8}"]),
+        CreatePoolBody(disks=[f"malloc:///disk11?size_mb={LARGE_VOLUME_SIZE + 16}"]),
     )
 
 
@@ -325,7 +325,9 @@ def all_volumes_online():
 @retry(wait_fixed=100, stop_max_attempt_number=5)
 def no_free_space(pool_id):
     pool = ApiClient.pools_api().get_pool(pool_id)
-    assert pool.state.capacity - pool.state.used == 0
+    assert (
+        pool.state.capacity - pool.state.used == 0
+    ), f"Pool {pool_id} has free space: {pool.state.capacity - pool.state.used}"
 
 
 @retry(wait_fixed=200, stop_max_attempt_number=40)

@@ -919,6 +919,20 @@ impl ClusterBuilder {
         }
         self
     }
+    /// Add `count` malloc pools with given size to each node.
+    #[must_use]
+    pub fn with_pools_size(mut self, count: u32, size: u64) -> Self {
+        for _ in 0..count {
+            for node in 0..self.opts.io_engines {
+                if let Some(pools) = self.pools.get_mut(&node) {
+                    pools.push(PoolDisk::Malloc(size));
+                } else {
+                    self.pools.insert(node, vec![PoolDisk::Malloc(size)]);
+                }
+            }
+        }
+        self
+    }
     /// Add pool URI with `disk` to the node `index`.
     #[must_use]
     pub fn with_pool(mut self, index: u32, disk: &str) -> Self {

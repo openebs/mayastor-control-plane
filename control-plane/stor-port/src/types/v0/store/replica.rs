@@ -74,8 +74,17 @@ pub struct ReplicaSpec {
     pub name: ReplicaName,
     /// uuid of the replica
     pub uuid: ReplicaId,
-    /// The size that the replica should be.
+    /// Actual size of the replica, containing both data and metadata.
+    /// This is the size of the replica on disk, barring any cluster-sized adjustments.
     pub size: u64,
+    /// Size of the volume owning the replica, if any. This is the user/data size of the replica.
+    /// On previous versions the replica and snapshot spec size was the same.
+    #[serde(default, skip_serializing_if = "super::is_opt_default")]
+    pub vol_size: Option<u64>,
+    /// The actual replica size may differ from the replica size due to cluster size adjustements.
+    /// This is the actual size of the replica on disk, including any cluster-sized adjustments.
+    #[serde(default, skip_serializing_if = "super::is_opt_default")]
+    pub actual_size: Option<u64>,
     /// Reference of a pool that the replica should live on.
     pub pool: PoolRef,
     /// Protocol used for exposing the replica.
@@ -118,6 +127,19 @@ impl ReplicaSpec {
             .nexuses()
             .iter()
             .any(|owner| nexus_id.contains(&owner))
+    }
+    /// Total size of the replica, which may be larger than the volume's requested size
+    /// since it will contain both data+metadata.
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+    /// Actual size of the replica on disk, including cluster-sized adjustments.
+    pub fn actual_size(&self) -> Option<u64> {
+        self.actual_size
+    }
+    /// Size of the volume owning the replica.
+    pub fn vol_size(&self) -> u64 {
+        self.vol_size.unwrap_or(self.size)
     }
 }
 
@@ -173,6 +195,8 @@ mod tests_deserializer {
                     name: "30b1a62e-4301-445b-88af-125eca1dcc6d".into(),
                     uuid: ReplicaId::try_from("30b1a62e-4301-445b-88af-125eca1dcc6d").unwrap(),
                     size: 10485761,
+                    vol_size: None,
+                    actual_size: None,
                     pool: PoolRef::Named("pool-1".into()),
                     share: Protocol::None,
                     thin: false,
@@ -195,6 +219,8 @@ mod tests_deserializer {
                     name: "30b1a62e-4301-445b-88af-125eca1dcc6d".into(),
                     uuid: ReplicaId::try_from("30b1a62e-4301-445b-88af-125eca1dcc6d").unwrap(),
                     size: 10485761,
+                    vol_size: None,
+                    actual_size: None,
                     pool: PoolRef::Uuid(
                         "pool-1".into(),
                         PoolUuid::try_from("22ca10d3-4f2b-4b95-9814-9181c025cc1a").unwrap(),
@@ -243,6 +269,8 @@ impl From<ReplicaSpec> for models::ReplicaSpec {
             src.pool.pool_uuid().into_opt(),
             src.share,
             src.size,
+            src.vol_size,
+            src.actual_size,
             src.status,
             src.thin,
             openapi::apis::Uuid::from(src.uuid),
@@ -286,6 +314,11 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
                 }
                 ReplicaOperation::Resize(size) => {
                     self.size = size;
+                    self.vol_size = Some(size);
+                }
+                ReplicaOperation::ResizeExt(replica_rsz) => {
+                    self.vol_size = replica_rsz.vol_size;
+                    self.size = replica_rsz.repl_size;
                 }
             }
         }
@@ -320,7 +353,7 @@ impl SpecTransaction<ReplicaOperation> for ReplicaSpec {
             ReplicaOperation::Share(_, _) => (true, true),
             ReplicaOperation::Unshare => (true, true),
             ReplicaOperation::OwnerUpdate(_) => (false, true),
-            ReplicaOperation::Resize(_) => (true, true),
+            ReplicaOperation::Resize(_) | ReplicaOperation::ResizeExt(_) => (true, true),
         }
     }
 
@@ -338,6 +371,16 @@ pub enum ReplicaOperation {
     Unshare,
     OwnerUpdate(ReplicaOwners),
     Resize(u64),
+    ResizeExt(ReplicaRsz),
+}
+
+/// Replica Resize Operation.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+pub struct ReplicaRsz {
+    /// Requested size of the volume of the replica for resize..
+    pub vol_size: Option<u64>,
+    /// Required size of the replica for resize.
+    pub repl_size: u64,
 }
 
 /// Key used by the store to uniquely identify a ReplicaSpec structure.
@@ -382,6 +425,9 @@ impl From<&CreateReplica> for ReplicaSpec {
             name: ReplicaName::from_opt_uuid(request.name.as_ref(), &request.uuid),
             uuid: request.uuid.clone(),
             size: request.size,
+            vol_size: request.vol_size,
+            // filled up after replica is created and the actual size is known!
+            actual_size: None,
             pool: match request.pool_uuid.clone() {
                 Some(uuid) => PoolRef::Uuid(request.pool_id.clone(), uuid),
                 None => PoolRef::Named(request.pool_id.clone()),
@@ -427,7 +473,8 @@ impl From<&SnapshotCloneSpecParams> for CreateReplica {
             entity_id: Some(value.uuid().clone()),
             pool_id: value.pool().pool_name().clone(),
             pool_uuid: value.pool().pool_uuid(),
-            size: value.size(),
+            size: value.repl_size(),
+            vol_size: Some(value.vol_size()),
             thin: true,
             share: Default::default(),
             managed: true,
@@ -444,7 +491,11 @@ impl From<&SnapshotCloneSpecParams> for ReplicaSpec {
         Self {
             name: ReplicaName::from_string(request.name().to_string()),
             uuid: request.uuid().into(),
-            size: value.size(),
+            size: value.repl_size(),
+            vol_size: Some(value.vol_size()),
+            // filled up after replica is created and the actual size is known!
+            // todo: we know actually, it's the same as the replica state size!
+            actual_size: None,
             pool: value.pool().clone(),
             share: Protocol::None,
             thin: true,

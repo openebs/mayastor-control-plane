@@ -1,7 +1,9 @@
 use super::{replica::ReplicaSnapshot, SnapshotId, SnapshotSpec};
 use crate::types::v0::{
     store::{AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction},
-    transport::{GenericSnapshotParameters, SnapshotParameters, SnapshotTxId, VolumeId},
+    transport::{
+        GenericSnapshotParameters, NexusVersion, SnapshotParameters, SnapshotTxId, VolumeId,
+    },
 };
 use chrono::{DateTime, Utc};
 use pstor::{ApiVersion, ObjectKey, StorableObject, StorableObjectType};
@@ -97,6 +99,11 @@ impl VolumeSnapshot {
     pub fn num_restores(&self) -> u32 {
         self.metadata.runtime_meta.restores.len()
     }
+    /// With the specified label version taken from the parent volume.
+    pub fn with_label_version(mut self, label_version: NexusVersion) -> Self {
+        self.metadata.label_version = label_version;
+        self
+    }
 }
 impl From<&VolumeSnapshotUserSpec> for VolumeSnapshot {
     fn from(value: &VolumeSnapshotUserSpec) -> Self {
@@ -117,8 +124,14 @@ pub struct VolumeSnapshotMeta {
 
     /// Creation timestamp of the snapshot (set after creation time).
     timestamp: Option<DateTime<Utc>>,
-    /// User specified size of the source of snapshot.
+    /// Volume size of the source of snapshot.
     spec_size: u64,
+    /// Replica size of the source of snapshot.
+    /// This may differ from spec_size since we require metadata space.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    spec_repl_size: Option<u64>,
+    #[serde(default, skip_serializing_if = "crate::types::v0::store::is_default")]
+    label_version: NexusVersion,
     /// Actual size of the source of snapshot.
     size: u64,
     /// The amount of bytes allocated by the snapshot and its successors.
@@ -151,9 +164,14 @@ impl VolumeSnapshotMeta {
     pub fn size(&self) -> u64 {
         self.size
     }
-    /// Get the snapshot spec size.
+    /// Get the snapshot spec volume size.
     pub fn spec_size(&self) -> u64 {
         self.spec_size
+    }
+    /// Get the snapshot spec replica size.
+    pub fn spec_repl_size(&self) -> u64 {
+        // On previous versions, the replica size was equal to the volume size.
+        self.spec_repl_size.unwrap_or(self.spec_size)
     }
     /// The amount of bytes allocated to the snapshot and its successors.
     pub fn total_allocated_size(&self) -> u64 {
@@ -185,6 +203,10 @@ impl VolumeSnapshotMeta {
     /// Get the current replica snapshots.
     pub fn replica_snapshots(&self) -> Option<&Vec<ReplicaSnapshot>> {
         self.transactions.get(&self.txn_id)
+    }
+    // Label version of the volume where the snapshot was taken.
+    pub fn label_version(&self) -> NexusVersion {
+        self.label_version
     }
 }
 
@@ -344,6 +366,8 @@ impl VolumeSnapshotCreateResult {
         }
     }
     /// The the size of the replica snapshots.
+    /// todo: this is a bit of a hack, but we assume that all replicas have the same size
+    ///   this won't hold true if we ever allow mixing multi-cluster pools
     pub fn size(&self) -> u64 {
         let first = self.replicas.first();
         first.map(|r| r.meta().size()).unwrap_or_default()
@@ -354,11 +378,19 @@ impl VolumeSnapshotCreateResult {
         let first = self.replicas.first();
         first.map(|r| r.meta().allocated_size()).unwrap_or_default()
     }
-    /// The snapshot source spec size.
-    pub fn source_spec_size(&self) -> u64 {
+    /// The full snapshot source volume size.
+    pub fn source_spec_vol_size(&self) -> u64 {
         let first = self.replicas.first();
         first
-            .map(|r| r.meta().source_spec_size())
+            .map(|r| r.meta().source_spec_vol_size())
+            .unwrap_or_default()
+    }
+
+    /// The snapshot source replica user/data size.
+    pub fn source_spec_repl_size(&self) -> u64 {
+        let first = self.replicas.first();
+        first
+            .map(|r| r.meta().source_spec_repl_size())
             .unwrap_or_default()
     }
 }
@@ -389,7 +421,8 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
                 if let Some(result) = info.complete.lock().unwrap().as_ref() {
                     self.metadata.size = result.size();
                     self.metadata.total_allocated_size = result.allocated_size();
-                    self.metadata.spec_size = result.source_spec_size();
+                    self.metadata.spec_size = result.source_spec_vol_size();
+                    self.metadata.spec_repl_size = Some(result.source_spec_repl_size());
                     self.metadata.timestamp = Some(result.timestamp);
                     // replace-in-place the logged replica specs.
                     self.metadata

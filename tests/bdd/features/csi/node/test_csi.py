@@ -20,7 +20,7 @@ from openapi.models.volume_share_protocol import VolumeShareProtocol
 
 POOL1_UUID = "ec176677-8202-4199-b461-2b68e53a055f"
 NODE1 = "io-engine-1"
-VOLUME_SIZE = 32 * 1024 * 1024
+VOLUME_SIZE = 20 * 1024 * 1024
 
 
 def get_uuid(n):

@@ -643,13 +643,14 @@ pub mod v1 {
         pub use super::pb::{
             nexus_rpc_client, AddChildNexusRequest, AddChildNexusResponse, Child, ChildAction,
             ChildOperationRequest, ChildState, ChildStateReason, CreateNexusRequest,
-            CreateNexusResponse, DestroyNexusRequest, FaultNexusChildRequest, ListNexusOptions,
-            ListNexusResponse, ListRebuildHistoryRequest, ListRebuildHistoryResponse, Nexus,
-            NexusLabelVersion, NexusNvmePreemption, NexusState, NvmeAnaState, NvmeReservation,
-            PublishNexusRequest, PublishNexusResponse, RebuildHistoryRecord, RebuildHistoryRequest,
-            RebuildHistoryResponse, RebuildJobState, RemoveChildNexusRequest,
-            RemoveChildNexusResponse, ResizeNexusRequest, ResizeNexusResponse,
-            ShutdownNexusRequest, UnpublishNexusRequest, UnpublishNexusResponse,
+            CreateNexusResponse, CreateNexusV2Request, DestroyNexusRequest, FaultNexusChildRequest,
+            ListNexusOptions, ListNexusResponse, ListRebuildHistoryRequest,
+            ListRebuildHistoryResponse, Nexus, NexusLabelVersion, NexusNvmePreemption, NexusState,
+            NvmeAnaState, NvmeReservation, PublishNexusRequest, PublishNexusResponse,
+            RebuildHistoryRecord, RebuildHistoryRequest, RebuildHistoryResponse, RebuildJobState,
+            RemoveChildNexusRequest, RemoveChildNexusResponse, ResizeNexusRequest,
+            ResizeNexusResponse, ShutdownNexusRequest, UnpublishNexusRequest,
+            UnpublishNexusResponse,
         };
     }
 

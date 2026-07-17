@@ -116,7 +116,7 @@ impl Registry {
         }
 
         let usage = Some(VolumeUsage::new(
-            volume_spec.size,
+            volume_spec.repl_size(),
             largest_replica + largest_snapshot,
             largest_replica,
             largest_snapshot,

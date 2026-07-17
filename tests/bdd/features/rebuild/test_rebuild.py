@@ -33,7 +33,7 @@ POOL_1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL_2_UUID = "91a60318-bcfe-4e36-92cb-ddc7abf212ea"
 POOL_3_UUID = "4d471e62-ca17-44d1-a6d3-8820f6156c1a"
 MAX_REBUILDS = 0  # Prevent all rebuilds
-RECONCILE_PERIOD_MSECS = 250
+RECONCILE_PERIOD_MSECS = 200
 WAIT_FIXED = RECONCILE_PERIOD_MSECS / 2
 POOL_DISK_COUNT = 3
 
@@ -51,8 +51,8 @@ def init():
         io_engines="3",
         wait="10s",
         reconcile_period=f"{RECONCILE_PERIOD_MSECS}ms",
-        cache_period="200ms",
-        faulted_child_wait_period="200ms",
+        cache_period="100ms",
+        faulted_child_wait_period="220ms",
         max_rebuilds=f"{MAX_REBUILDS}",
     )
     yield

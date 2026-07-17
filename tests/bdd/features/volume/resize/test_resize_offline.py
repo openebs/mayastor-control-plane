@@ -397,9 +397,8 @@ def the_replicas_capacity_will_be_same_as_the_snapshot():
     test_volume = pytest.volume
     replicas = list(test_volume.state.replica_topology.values())
     assert len(replicas) == 1
-    # Can't compare these size as the state and spec differ by about 2MiB additional
-    # padded by spdk.
-    # assert replicas[0].usage.capacity == test_volume.spec.size
+    # Actual capacity might vary due to cluster size
+    assert replicas[0].usage.capacity == test_volume.state.usage.capacity
     assert replicas[0].usage.allocated == 0
     assert replicas[0].usage.allocated_snapshots == 0
 

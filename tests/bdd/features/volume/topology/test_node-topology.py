@@ -40,7 +40,7 @@ NODE_5_POOL_1_UUID = "node5pool1"
 NODE_5_POOL_2_UUID = "node5pool2"
 NODE_5_POOL_3_UUID = "node5pool3"
 CREATE_REQUEST_KEY = "create_request"
-VOLUME_SIZE = 10485761
+VOLUME_SIZE = 10485760
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1441"
 
 
@@ -628,6 +628,7 @@ def expected_volume_spec(replica, toplogy):
         encrypted=False,
         topology=toplogy,
         labelVersion=2,
+        size_bdev=VOLUME_SIZE,
     )
 
 

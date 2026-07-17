@@ -22,7 +22,7 @@ impl PoolBaseFilters {
     }
     /// Should only attempt to use pools with capacity bigger than the requested replica size.
     pub(crate) fn capacity(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
-        item.pool.capacity > request.size
+        item.pool.capacity > request.repl_size()
     }
     /// Should only attempt to use pools with capacity bigger than the requested replica size.
     pub(crate) fn overcommit(
@@ -51,7 +51,7 @@ impl PoolBaseFilters {
     pub(crate) fn min_free_space(request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
         match request.as_thin() {
             true => item.pool.free_space() > Self::free_space_watermark(),
-            false => item.pool.free_space() > request.size,
+            false => item.pool.free_space() > request.repl_size(),
         }
     }
     /// Should only attempt to use encrypted pools.
@@ -87,7 +87,7 @@ impl PoolBaseFilters {
     ) -> bool {
         match request.as_thin() && request.config().is_none() {
             true => item.pool.free_space() > Self::free_space_watermark(),
-            false => item.pool.free_space() > request.size,
+            false => item.pool.free_space() > request.repl_size(),
         }
     }
     /// Should only attempt to use usable (not faulted) pools, and with no critical alerts.

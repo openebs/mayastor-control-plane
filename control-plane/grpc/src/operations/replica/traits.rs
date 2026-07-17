@@ -318,6 +318,8 @@ pub trait CreateReplicaInfo: Send + Sync + std::fmt::Debug {
     fn pool_uuid(&self) -> Option<PoolUuid>;
     /// Size of the replica in bytes
     fn size(&self) -> u64;
+    /// Size of the volume owning the replica in bytes, if any.
+    fn volume_size(&self) -> Option<u64>;
     /// Thin provisioning
     fn thin(&self) -> bool;
     /// Protocol to expose the replica over
@@ -359,6 +361,10 @@ impl CreateReplicaInfo for CreateReplica {
 
     fn size(&self) -> u64 {
         self.size
+    }
+
+    fn volume_size(&self) -> Option<u64> {
+        self.vol_size
     }
 
     fn thin(&self) -> bool {
@@ -425,6 +431,10 @@ impl CreateReplicaInfo for ValidatedCreateReplicaRequest {
 
     fn size(&self) -> u64 {
         self.inner.size
+    }
+
+    fn volume_size(&self) -> Option<u64> {
+        self.inner.vol_size
     }
 
     fn thin(&self) -> bool {
@@ -931,6 +941,7 @@ impl From<&dyn CreateReplicaInfo> for CreateReplicaRequest {
             replica_id: Some(data.uuid().to_string()),
             thin: data.thin(),
             size: data.size(),
+            vol_size: data.volume_size(),
             share: share as i32,
             managed: data.managed(),
             owners: Some(data.owners().into()),
@@ -950,6 +961,7 @@ impl From<&dyn CreateReplicaInfo> for CreateReplica {
             pool_id: data.pool_id(),
             pool_uuid: data.pool_uuid(),
             size: data.size(),
+            vol_size: data.volume_size(),
             thin: data.thin(),
             share: data.share(),
             managed: data.managed(),
@@ -1059,6 +1071,7 @@ impl From<&dyn ResizeReplicaInfo> for ResizeReplica {
             uuid: data.uuid(),
             name: data.name(),
             requested_size: data.req_size(),
+            requested_vol_size: None,
         }
     }
 }
@@ -1204,6 +1217,8 @@ impl TryFrom<replica::ReplicaSpec> for ReplicaSpec {
             name: ReplicaName::from_string(value.name),
             uuid: ReplicaId::try_from(StringValue(value.replica_id))?,
             size: value.size,
+            vol_size: value.vol_size,
+            actual_size: value.actual_size,
             pool: match value.pool_uuid {
                 Some(uuid) => PoolRef::Uuid(
                     value.pool_id.into(),
@@ -1265,6 +1280,8 @@ impl From<ReplicaSpec> for replica::ReplicaSpec {
             name: value.name.to_string(),
             replica_id: Some(value.uuid.to_string()),
             size: value.size,
+            vol_size: value.vol_size,
+            actual_size: value.actual_size,
             pool_id: match value.pool.clone() {
                 PoolRef::Named(id) => id.into(),
                 PoolRef::Uuid(id, _) => id.into(),

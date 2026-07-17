@@ -31,7 +31,7 @@ import openapi
 
 POOL1_UUID = "ec176677-8202-4199-b461-2b68e53a055f"
 NODE1 = "io-engine-1"
-VOLUME_SIZE = 32 * 1024 * 1024
+VOLUME_SIZE = 20 * 1024 * 1024
 FS_TYPE = "ext4"
 
 
@@ -111,7 +111,7 @@ def setup():
     pool_api.put_node_pool(
         NODE1,
         POOL1_UUID,
-        CreatePoolBody(disks=["malloc:///disk?size_mb=200"], labels=pool_labels),
+        CreatePoolBody(disks=["malloc:///disk?size_mb=300"], labels=pool_labels),
     )
     yield
     PoolOps.delete_all()

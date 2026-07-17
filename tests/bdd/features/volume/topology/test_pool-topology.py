@@ -32,7 +32,7 @@ NODE_3_POOL_1_UUID = "node3pool1"
 NODE_3_POOL_2_UUID = "node3pool2"
 NODE_3_POOL_3_UUID = "node3pool3"
 CREATE_REQUEST_KEY = "create_request"
-VOLUME_SIZE = 10485761
+VOLUME_SIZE = 10485760
 VOLUME_UUID = "5cd5378e-3f05-47f1-a830-a0f5873a1441"
 DISKPOOL_LABEL_KEY = disk_pool_label_key
 DISKPOOL_LABEL_VAL = disk_pool_label_val
@@ -399,6 +399,7 @@ def expected_volume_spec(replica, topology):
         encrypted=False,
         topology=topology,
         labelVersion=2,
+        size_bdev=VOLUME_SIZE,
     )
 
 

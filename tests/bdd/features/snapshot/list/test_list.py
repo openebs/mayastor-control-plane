@@ -299,7 +299,7 @@ def validate_snapshots(listed_snapshots, ref_snaps_list, state, volume):
             if idx == 0:
                 assert (
                     snapshot.definition.metadata.total_allocated_size
-                    == volume.spec.size
+                    == volume.state.usage.capacity
                 )
             assert snapshot.state.ready_as_source is False
             timestamp_within(snapshot.state.timestamp)

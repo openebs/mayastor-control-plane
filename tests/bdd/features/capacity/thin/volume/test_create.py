@@ -192,7 +192,9 @@ def the_pools_usage_increases_by_volume_size(vol_request):
 
     assert (
         pool.state.used
-        == vol_request.additional_properties["previous_pool_usage"] + vol_request.size
+        == vol_request.additional_properties["previous_pool_usage"]
+        + vol_request.size
+        + 8 * 1024 * 1024
     )
 
 

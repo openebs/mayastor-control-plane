@@ -687,15 +687,15 @@ pub(super) async fn fixup_nexus_size(
         let Some(rsc) = registry.specs().replica_rsc(child.uuid()) else {
             continue;
         };
-        if rsc.lock().size >= required_size {
+        if rsc.lock().size() >= volume.as_ref().repl_size() {
             continue;
         }
-        let mut replica = registry.specs().replica(child.uuid()).await?;
+        let mut replica = rsc.operation_guard_wait().await?;
         let state = registry.replica(child.uuid()).await?;
         nexus.info(&format!(
             "Child replica {} is undersized (spec {}B < {}B), resizing before nexus resize",
             child.uuid(),
-            replica.as_ref().size,
+            replica.as_ref().size(),
             required_size
         ));
         replica
@@ -706,6 +706,7 @@ pub(super) async fn fixup_nexus_size(
                     replica.as_ref().pool_name(),
                     None,
                     child.uuid(),
+                    volume.as_ref().resize_repl_size(required_size),
                     required_size,
                 ),
             )

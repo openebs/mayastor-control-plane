@@ -25,7 +25,7 @@ from retrying import retry
 
 VOLUME_UUID = "ec4e66fd-3b33-4439-b504-d49aba53da26"
 VOLUME_SIZE = 20 * 1024 * 1024
-POOL_SIZE = VOLUME_SIZE + 8 * 1024 * 1024
+POOL_SIZE = VOLUME_SIZE + 16 * 1024 * 1024
 NUM_VOLUME_REPLICAS = 1
 CREATE_REQUEST_KEY = "create_request"
 POOL_UUID_1 = "4cc6ee64-7232-497d-a26f-38284a444980"
@@ -322,6 +322,7 @@ def wait_volume_replica_allocated(volume):
     volume = ApiClient.volumes_api().get_volume(volume.spec.uuid)
     total_allocated = 0
     for replica in volume.state.replica_topology.values():
+        # only valid because we have a volume size multiple of the cluster size.
         assert replica.usage.capacity == volume.state.usage.capacity
         assert replica.usage.allocated == volume.state.usage.allocated
         total_allocated += replica.usage.allocated

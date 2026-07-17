@@ -70,7 +70,7 @@ def a_single_replica_volume_from_the_snapshot(original_snapshot, volume_uuids):
         CreateVolumeBody(
             policy=VolumePolicy(self_heal=True),
             replicas=1,
-            size=original_snapshot.definition.metadata.size,
+            size=original_snapshot.definition.metadata.spec_size,
             thin=True,
             encrypted=False,
         ),
@@ -111,9 +111,9 @@ def a_single_replica_volume_with_8mib_allocated(volume_uuids):
 @given("we allocate 4MiB of the original volume")
 def we_allocate_4mib_of_the_original_volume_1(original_volume):
     """we allocate 4MiB of the original volume."""
-    # Why 3M you ask? Well because we know that we have 5M of unused partition at the start of the replica
+    # Why 4M you ask? Well because we know that we have 4M of unused partition at the start of the replica
     # so if we write before, we might span 2 clusters instead of 1, which could be confusing
-    volume = Volume.fio(original_volume, offset="3M", size="4096B")
+    volume = Volume.fio(original_volume, offset="4M", size="4096B")
     Volume.update(volume, cached=False)
 
 
@@ -139,8 +139,8 @@ def the_pool_space_usage_should_be_zero():
 @then("the pool space usage should reflect the original volume")
 def the_pool_space_usage_should_reflect_the_original_volume(original_volume):
     """the pool space usage should reflect the original volume."""
-    pool = ApiClient.pools_api().get_pool(POOL)
     volume = Volume.update(original_volume, cached=False)
+    pool = ApiClient.pools_api().get_pool(POOL)
     assert pool.state.used == volume.state.usage.allocated
 
 
@@ -211,9 +211,9 @@ def the_restored_volume_1_allocated_snapshot_size_should_be_8mib(restored_volume
 @then("we allocate 4MiB of the restored volume 1")
 def we_allocate_4mib_of_the_restored_volume_1(restored_volume):
     """we allocate 4MiB of the restored volume 1."""
-    # Why 3M you ask? Well because we know that we have 5M of unused partition at the start of the replica
+    # Why 4M you ask? Well because we know that we have 4M of unused partition at the start of the replica
     # so if we write before, we might span 2 clusters instead of 1, which could be confusing
-    volume = Volume.fio(restored_volume, offset="3M", size="4096B")
+    volume = Volume.fio(restored_volume, offset="4M", size="4096B")
     Volume.update(volume, cached=False)
 
 
@@ -322,7 +322,7 @@ def we_restore_volume_1_snapshot_2_into_restored_volume_2(
         CreateVolumeBody(
             policy=VolumePolicy(self_heal=True),
             replicas=1,
-            size=restored_1_snapshot_2.definition.metadata.size,
+            size=restored_1_snapshot_2.definition.metadata.spec_size,
             thin=True,
             encrypted=False,
         ),
@@ -333,7 +333,7 @@ def we_restore_volume_1_snapshot_2_into_restored_volume_2(
 @then("we allocate 4MiB of the restored volume 2")
 def we_allocate_4mib_of_the_restored_volume_2(volume_2_from_snapshot_2):
     """we allocate 4MiB of the restored volume 2."""
-    volume = Volume.fio(volume_2_from_snapshot_2, offset="3M", size="4096B")
+    volume = Volume.fio(volume_2_from_snapshot_2, offset="4M", size="4096B")
     Volume.update(volume, cached=False)
 
 

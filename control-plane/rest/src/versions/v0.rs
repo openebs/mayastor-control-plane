@@ -144,6 +144,7 @@ impl CreateReplicaBody {
             pool_id,
             pool_uuid: None,
             size: self.size,
+            vol_size: None,
             thin: self.thin,
             share: self.share,
             managed: false,

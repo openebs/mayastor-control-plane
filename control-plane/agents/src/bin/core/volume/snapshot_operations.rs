@@ -119,9 +119,9 @@ pub(crate) struct CreateVolumeSnapshotRequest<'a> {
     /// A mutable reference to the volume which will own this snapshot.
     /// This helps us mutate it if necessary but most of all ensure nothing else is modifying
     /// the volume.
-    volume: &'a mut OperationGuardArc<VolumeSpec>,
+    pub(crate) volume: &'a mut OperationGuardArc<VolumeSpec>,
     /// Any request specific info - TBD.
-    request: VolumeSnapshotUserSpec,
+    pub(crate) request: VolumeSnapshotUserSpec,
 }
 
 /// Local delete a volume snapshot request.
@@ -161,7 +161,6 @@ impl ResourceLifecycleWithLifetime for OperationGuardArc<VolumeSnapshot> {
         request: &Self::Create<'_>,
     ) -> Result<Self::CreateOutput, SvcError> {
         let volume = &request.volume;
-        let request = &request.request;
 
         let replicas = snapshoteable_replica(volume.as_ref(), registry).await?;
         let target_node = if let Some(target) = volume.as_ref().target() {
@@ -321,7 +320,8 @@ impl OperationGuardArc<VolumeSnapshot> {
                 SnapshotParameters::new(volume, generic_params.clone()),
                 replica.state().size,
                 0,
-                replica.spec().size,
+                replica.spec().size(),
+                replica.spec().vol_size(),
             );
             let replica = replica.state().clone();
             replica_snapshots.push((replica, replica_snapshot));

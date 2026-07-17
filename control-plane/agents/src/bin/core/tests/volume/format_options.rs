@@ -113,10 +113,7 @@ async fn filesystem_volume_format_options() {
     let tune2fs_args: Vec<&str> = vec!["tune2fs", "-l", device.trim()];
     let (_, tune2fs) = composer.exec("csi-node-1", tune2fs_args).await.unwrap();
 
-    // We expect actual inode count to be lesser as we don't get the actual device size of the
-    // created volume. Its almost 4 to 5 Mb lesser. This affects the number of inode count
-    // when we use -i as it creates inode for each block (65k in this test).
-    let mut inode_count: u64 = 1000;
+    let mut inode_count: u64 = 0;
     for line in tune2fs.trim().lines() {
         if line.starts_with("Inode count:") {
             let i_count = line.split_whitespace().nth(2).unwrap_or("Unknown");
@@ -128,8 +125,8 @@ async fn filesystem_volume_format_options() {
     }
 
     assert!(
-        inode_count < expected_inodes,
-        "inode count was greater then expected"
+        inode_count == expected_inodes,
+        "inode count was greater then expected {inode_count} >= {expected_inodes}"
     );
 
     node.node_unpublish_volume(&volume)
