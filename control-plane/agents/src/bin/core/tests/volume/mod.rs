@@ -1702,37 +1702,31 @@ async fn health() {
     .await
     .unwrap();
 
-    // "Trust all when unshared" branch of `NexusInfo::clean_state()`: with no
-    // share, no front-end I/O can be in flight, so all healthy replicas are
-    // safe as rebuild sources even if `clean_shutdown` is false.
-    // Bring the two stopped nodes back so we have a live target to publish on,
-    // then republish the same volume without a share protocol.
-    cluster.composer().start(&cluster.node(0)).await.unwrap();
-    cluster.composer().start(&cluster.node(1)).await.unwrap();
-    cluster
-        .wait_node_status(cluster.node(0), transport::NodeStatus::Online)
-        .await
-        .unwrap();
-    cluster
-        .wait_node_status(cluster.node(1), transport::NodeStatus::Online)
-        .await
-        .unwrap();
-    cluster.wait_pool_online(cluster.pool(0, 0)).await.unwrap();
-    cluster.wait_pool_online(cluster.pool(1, 0)).await.unwrap();
-
     let volume = volume_client
         .unpublish(
-            &UnpublishVolume::new(&volume.spec().uuid, false, vec![]),
+            &UnpublishVolume::new(&volume.spec().uuid, true, vec![]),
             None,
         )
         .await
         .unwrap();
 
+    // "Trust all when unshared" branch of `NexusInfo::clean_state()`: with no
+    // share, no front-end I/O can be in flight, so all healthy replicas are
+    // safe as rebuild sources even if `clean_shutdown` is false.
+    // Bring the two stopped nodes back so we have a live target to publish on,
+    // then republish the same volume without a share protocol.
+    cluster.composer().start(&cluster.node(1)).await.unwrap();
+    cluster
+        .wait_node_status(cluster.node(1), transport::NodeStatus::Online)
+        .await
+        .unwrap();
+    cluster.wait_pool_online(cluster.pool(1, 0)).await.unwrap();
+
     let volume = volume_client
         .publish(
             &PublishVolume::new(
                 volume.spec().uuid.clone(),
-                Some(cluster.node(0)),
+                Some(cluster.node(1)),
                 None,
                 HashMap::new(),
                 vec![],
@@ -1742,8 +1736,7 @@ async fn health() {
         )
         .await
         .unwrap();
-
-    cluster.composer().kill(&cluster.node(2)).await.unwrap();
+    cluster.composer().kill(&cluster.node(1)).await.unwrap();
 
     wait_for_health(
         &volume.state(),
