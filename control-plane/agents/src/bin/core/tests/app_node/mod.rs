@@ -1,6 +1,9 @@
 use deployer_cluster::ClusterBuilder;
 use grpc::operations::{app_node::traits::AppNodeOperations, Pagination};
-use stor_port::types::v0::transport::{DeregisterAppNode, Filter, RegisterAppNode};
+use stor_port::types::v0::{
+    store::app_node::TransportCaps,
+    transport::{DeregisterAppNode, Filter, RegisterAppNode},
+};
 
 /// Test for registration, listing, retrieval, and deregistration of app nodes in a cluster.
 ///
@@ -27,25 +30,34 @@ async fn app_node_registration() {
 
     let node_client = cluster.grpc_client().app_node();
 
-    // Register 2 app nodes.
+    // Register 2 app nodes. csi-node-1 mimics an older csi-node that has no
+    // transport_caps field on the wire; csi-node-2 populates it. Both should
+    // persist and round-trip cleanly.
     node_client
         .register_app_node(
             &RegisterAppNode {
                 id: "csi-node-1".into(),
                 endpoint: "10.0.0.1:50052".parse().unwrap(),
                 labels: None,
+                transport_caps: None,
             },
             None,
         )
         .await
         .expect("Failed to register app node");
 
+    let node_2_caps = TransportCaps {
+        rdma_hca_present: true,
+        nvme_rdma_module_loaded: true,
+        ana_capable: true,
+    };
     node_client
         .register_app_node(
             &RegisterAppNode {
                 id: "csi-node-2".into(),
                 endpoint: "10.0.0.1:50052".parse().unwrap(),
                 labels: None,
+                transport_caps: Some(node_2_caps.clone()),
             },
             None,
         )
@@ -81,6 +93,14 @@ async fn app_node_registration() {
         .await
         .expect("Failed to get app node by id");
     assert_eq!(app_node.id, "csi-node-1".into());
+    assert!(app_node.spec.transport_caps.is_none());
+
+    // csi-node-2 should carry back the caps it registered with.
+    let app_node_2 = node_client
+        .get(Filter::AppNode("csi-node-2".into()), None)
+        .await
+        .expect("Failed to get csi-node-2");
+    assert_eq!(app_node_2.spec.transport_caps.as_ref(), Some(&node_2_caps));
 
     // Now restart core, to check if the app nodes are loaded from the database.
     cluster.restart_core().await;
@@ -95,6 +115,13 @@ async fn app_node_registration() {
         .await
         .expect("Failed to list app nodes after core restart with no pagination");
     assert_eq!(app_nodes.entries.len(), 2);
+
+    // Caps survive an etcd round-trip.
+    let app_node_2 = node_client
+        .get(Filter::AppNode("csi-node-2".into()), None)
+        .await
+        .expect("Failed to get csi-node-2 after restart");
+    assert_eq!(app_node_2.spec.transport_caps.as_ref(), Some(&node_2_caps));
 
     // Deregister one app node.
     node_client

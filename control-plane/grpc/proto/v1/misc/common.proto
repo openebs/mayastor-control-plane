@@ -240,3 +240,15 @@ message MapWrapper {
 message EncryptionSecret {
   string name = 1;
 }
+
+// Transport-layer capabilities reported by the csi-node at registration time.
+message TransportCaps {
+  // RDMA HCA hardware is present on this node (reported by `ibv_devinfo`).
+  bool rdma_hca_present = 1;
+  // The `nvme_rdma` kernel module is loaded on this node. Both this and
+  // `rdma_hca_present` are required for NVMe-oF RDMA to actually be usable.
+  bool nvme_rdma_module_loaded = 2;
+  // NVMe ANA multipath is enabled on this node
+  // (/sys/module/nvme_core/parameters/multipath = Y).
+  bool ana_capable = 3;
+}

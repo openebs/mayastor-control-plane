@@ -13,7 +13,7 @@ use std::net::{AddrParseError, SocketAddr};
 use stor_port::{
     transport_api::{v0::AppNodes, ReplyError, ResourceKind},
     types::v0::{
-        store::app_node::{AppNodeLabels, AppNodeSpec},
+        store::app_node::{AppNodeLabels, AppNodeSpec, TransportCaps},
         transport::{
             AppNode, AppNodeId, AppNodeState, AppNodeStatus, DeregisterAppNode, Filter,
             RegisterAppNode,
@@ -54,6 +54,8 @@ pub trait AppNodeRegisterInfo: Send + Sync {
     fn grpc_endpoint(&self) -> SocketAddr;
     /// Labels to be set on the app node.
     fn labels(&self) -> Option<AppNodeLabels>;
+    /// Transport capabilities reported by the csi-node.
+    fn transport_caps(&self) -> Option<TransportCaps>;
 }
 
 /// Trait to be implemented for Deregister operation.
@@ -73,6 +75,10 @@ impl AppNodeRegisterInfo for RegisterAppNode {
 
     fn labels(&self) -> Option<AppNodeLabels> {
         self.labels.clone()
+    }
+
+    fn transport_caps(&self) -> Option<TransportCaps> {
+        self.transport_caps.clone()
     }
 }
 
@@ -94,6 +100,10 @@ impl AppNodeRegisterInfo for ValidatedRegisterAppNodeRequest {
 
     fn labels(&self) -> Option<AppNodeLabels> {
         self.inner.labels.clone().map(|l| l.value)
+    }
+
+    fn transport_caps(&self) -> Option<TransportCaps> {
+        self.inner.transport_caps.map(Into::into)
     }
 }
 
@@ -151,6 +161,7 @@ impl From<&dyn AppNodeRegisterInfo> for RegisterRequest {
             labels: value
                 .labels()
                 .map(|labels| StringMapValue { value: labels }),
+            transport_caps: value.transport_caps().map(Into::into),
         }
     }
 }
@@ -161,6 +172,7 @@ impl From<&dyn AppNodeRegisterInfo> for RegisterAppNode {
             id: value.app_node_id(),
             endpoint: value.grpc_endpoint(),
             labels: value.labels(),
+            transport_caps: value.transport_caps(),
         }
     }
 }
@@ -182,6 +194,7 @@ impl TryFrom<crate::app_node::AppNodeSpec> for AppNodeSpec {
                     )
                 })?,
             labels: value.labels.map(|l| l.value),
+            transport_caps: value.transport_caps.map(Into::into),
         })
     }
 }
@@ -194,6 +207,27 @@ impl From<AppNodeSpec> for crate::app_node::AppNodeSpec {
                 .labels
                 .map(|labels| crate::common::StringMapValue { value: labels }),
             grpc_endpoint: value.endpoint.to_string(),
+            transport_caps: value.transport_caps.map(Into::into),
+        }
+    }
+}
+
+impl From<crate::common::TransportCaps> for TransportCaps {
+    fn from(value: crate::common::TransportCaps) -> Self {
+        Self {
+            rdma_hca_present: value.rdma_hca_present,
+            nvme_rdma_module_loaded: value.nvme_rdma_module_loaded,
+            ana_capable: value.ana_capable,
+        }
+    }
+}
+
+impl From<TransportCaps> for crate::common::TransportCaps {
+    fn from(value: TransportCaps) -> Self {
+        Self {
+            rdma_hca_present: value.rdma_hca_present,
+            nvme_rdma_module_loaded: value.nvme_rdma_module_loaded,
+            ana_capable: value.ana_capable,
         }
     }
 }
@@ -332,5 +366,22 @@ impl TryFrom<Filter> for GetAppNodeRequest {
                 "invalid filter for get app node request",
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transport_caps_round_trip_proto() {
+        let store = TransportCaps {
+            rdma_hca_present: true,
+            nvme_rdma_module_loaded: false,
+            ana_capable: false,
+        };
+        let proto: crate::common::TransportCaps = store.clone().into();
+        let back: TransportCaps = proto.into();
+        assert_eq!(store, back);
     }
 }

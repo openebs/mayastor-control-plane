@@ -14,6 +14,9 @@ message RegisterRequest {
   string grpc_endpoint = 2;
   // App node labels.
   optional common.StringMapValue labels = 3;
+  // Transport capabilities reported by the csi-node.
+  // Optional for back-compat with older csi-nodes.
+  optional common.TransportCaps transport_caps = 4;
 }
 
 // Deregister a app node from the control-plane.
