@@ -13,7 +13,7 @@ const RECONCILE_PERIOD_MS: u64 = 250;
 const GRACE_PERIOD_SECS: u64 = 2;
 const REBUILD_TIMEOUT_SECS: u64 = 30;
 
-/// End-to-end coverage for the offline-rebuild reconciler. Drives three
+/// End-to-end coverage for the offline-rebuild reconciler. Drives four
 /// scenarios sequentially on a single shared cluster (each scenario takes a
 /// node down and brings it back up before handing off), which avoids the
 /// per-test cluster spin-up cost while still exercising each path on a clean
@@ -30,6 +30,10 @@ const REBUILD_TIMEOUT_SECS: u64 = 30;
 /// 3. **GC safety**: during an active offline rebuild, the GarbageCollector
 ///    must not strip ownership from the surviving healthy replicas of the
 ///    volume being rebuilt.
+/// 4. **No pool candidate defers rebuild**: when the volume is degraded but
+///    no candidate pool can host the replacement replica, the reconciler
+///    must not stand up a temp nexus. Returning the victim node brings the
+///    volume back to Online without a rebuild ever firing.
 #[tokio::test]
 async fn offline_rebuild_e2e() {
     let reconcile = Duration::from_millis(RECONCILE_PERIOD_MS);
@@ -54,6 +58,7 @@ async fn offline_rebuild_e2e() {
     happy_path(&cluster).await;
     promote_on_publish(&cluster).await;
     gc_safety(&cluster).await;
+    no_pool_candidate_defers_rebuild(&cluster).await;
 }
 
 /// Happy path scenario, see [`offline_rebuild_e2e`] doc.
@@ -327,6 +332,109 @@ async fn gc_safety(cluster: &deployer_cluster::Cluster) {
 
     volume_api.del_volume(&uid).await.unwrap();
     restart_node(cluster, &victim_node).await;
+}
+
+/// No-pool-candidate scenario, see [`offline_rebuild_e2e`] doc.
+///
+/// Exercises the pre-flight viability check in `initiate_offline_rebuild`:
+/// when no candidate pool exists for the replacement replica, the reconciler
+/// must defer (no temp nexus created) rather than stand up a nexus that has
+/// nowhere to rebuild to. A 3-replica volume on a 3-node cluster occupies all
+/// pools, so a victim node going down leaves no spare pool that can host the
+/// replacement.
+///
+/// The Faulted-teardown branch (source replica lost mid-rebuild while the
+/// temp nexus host stays up) is not exercised here — auto-selected nexus
+/// placement co-locates the nexus with the source on a 3-node cluster, so
+/// killing the source also kills the host and the volume status falls to
+/// Degraded/Unknown instead of Faulted. Coverage for that branch needs a
+/// topology-controlled cluster and is left as a follow-up.
+async fn no_pool_candidate_defers_rebuild(cluster: &deployer_cluster::Cluster) {
+    let api_client = cluster.rest_v00();
+    let volume_api = api_client.volumes_api();
+
+    let volid = VolumeId::new();
+    // 3 replicas on a 3-node cluster pins each replica to one pool, leaving
+    // no spare pool for the offline-rebuild reconciler to place a
+    // replacement on.
+    let body = models::CreateVolumeBody::new(VolumePolicy::new(true), 3, 10485760u64, false, false);
+    let volume = volume_api.put_volume(&volid, body).await.unwrap();
+    let uid = volume.spec.uuid;
+
+    // Publish + unpublish to establish health_info_id (so the volume is a
+    // candidate for offline rebuild on the next degradation).
+    volume_api
+        .put_volume_target(
+            &uid,
+            models::PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                cluster.node(0).to_string(),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+                cluster.csi_node(0),
+                None,
+            ),
+        )
+        .await
+        .expect("Should publish volume");
+    volume_api
+        .del_volume_target(&uid, None, None)
+        .await
+        .expect("Should unpublish volume");
+
+    let victim_node = pick_victim_node(&api_client, &cluster.node(0).to_string(), uid).await;
+    cluster
+        .composer()
+        .stop(&victim_node)
+        .await
+        .expect("Should stop io-engine node");
+
+    wait_till_volume_status(
+        cluster,
+        &uid,
+        VolumeStatus::Degraded,
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("Volume should become Degraded");
+
+    // Wait past the grace period plus a few reconcile cycles, then assert
+    // that no temp nexus was created — the precondition check should have
+    // deferred. Without the check, the reconciler would have created a
+    // nexus and the underlying publish would fail at scheduling time, churning
+    // each reconcile cycle.
+    tokio::time::sleep(Duration::from_secs(GRACE_PERIOD_SECS + 3)).await;
+
+    let vol = volume_api.get_volume(&uid).await.unwrap();
+    assert!(
+        vol.state.target.is_none(),
+        "Temp nexus must not be created when no candidate pool exists for the \
+        replacement replica; got target={:?}",
+        vol.state.target
+    );
+    assert_eq!(
+        vol.state.status,
+        VolumeStatus::Degraded,
+        "Volume should stay Degraded while no rebuild is viable"
+    );
+
+    // Bring the victim back. The original replica recovers and the volume
+    // returns to Online without any temp nexus involvement.
+    restart_node(cluster, &victim_node).await;
+    wait_till_volume_status(cluster, &uid, VolumeStatus::Online, Duration::from_secs(30))
+        .await
+        .expect("Volume should return to Online after victim node restart");
+
+    let vol = volume_api.get_volume(&uid).await.unwrap();
+    assert!(
+        vol.state.target.is_none(),
+        "No temp nexus should have been created during the deferred window; \
+        got target={:?}",
+        vol.state.target
+    );
+
+    volume_api.del_volume(&uid).await.unwrap();
 }
 
 /// Pick a node that hosts a replica of the given volume, excluding the publish

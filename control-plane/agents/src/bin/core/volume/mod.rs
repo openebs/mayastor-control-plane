@@ -13,6 +13,7 @@ mod snapshot_operations;
 mod specs;
 
 pub(crate) use operations::MoveReplicaRequest;
+pub(crate) use scheduling::volume_pool_candidates;
 pub(crate) use snapshot_operations::DestroyVolumeSnapshotRequest;
 
 /// Configure the Service and return the builder.

@@ -1,10 +1,14 @@
-use crate::controller::{
-    reconciler::{PollContext, TaskPoller},
-    resources::{
-        operations::ResourcePublishing, operations_helper::OperationSequenceGuard,
-        OperationGuardArc, ResourceMutex,
+use crate::{
+    controller::{
+        reconciler::{PollContext, TaskPoller},
+        resources::{
+            operations::ResourcePublishing, operations_helper::OperationSequenceGuard,
+            OperationGuardArc, ResourceMutex,
+        },
+        scheduling::volume::GetSuitablePools,
+        task_poller::{PollResult, PollerState},
     },
-    task_poller::{PollResult, PollerState},
+    volume::volume_pool_candidates,
 };
 
 use stor_port::types::v0::{
@@ -116,13 +120,14 @@ async fn offline_rebuild_reconcile(
         return PollResult::Ok(PollerState::Busy);
     }
 
-    initiate_offline_rebuild(&mut volume, context).await
+    initiate_offline_rebuild(&mut volume, &volume_state, context).await
 }
 
 /// Creates a non-shared nexus for the volume so the existing rebuild engine
 /// (HotSpareReconciler) can restore faulted replicas.
 async fn initiate_offline_rebuild(
     volume: &mut OperationGuardArc<VolumeSpec>,
+    volume_state: &VolumeState,
     context: &PollContext,
 ) -> PollResult {
     let registry = context.registry();
@@ -134,6 +139,43 @@ async fn initiate_offline_rebuild(
             "Offline rebuild deferred: max concurrent rebuilds reached"
         );
         return PollResult::Ok(PollerState::Busy);
+    }
+
+    // Pre-flight viability: only stand up the temp nexus if the rebuild can
+    // actually make progress. Needs both a source (a healthy replica to copy
+    // from) and a target (a candidate pool with room for the replacement
+    // replica).
+    //
+    // Prefer the strict health signal — `online_clean_replicas > 0` — when
+    // available; that's the CP's own trust decision and already accounts for
+    // NexusInfo state. Volume health is optional (can be disabled via
+    // `--no-volume-health`), so fall back to a plain online-status check on
+    // the replica topology when it's missing rather than deferring the
+    // rebuild indefinitely.
+    let source_viable = volume_state
+        .health
+        .as_ref()
+        .map(|h| h.online_clean_replicas > 0)
+        .unwrap_or_else(|| {
+            volume_state
+                .replica_topology
+                .values()
+                .any(|r| r.status().online())
+        });
+    let target_viable = || async {
+        !volume_pool_candidates(GetSuitablePools::new(volume.as_ref(), None), registry)
+            .await
+            .is_empty()
+    };
+
+    if !source_viable || !target_viable().await {
+        tracing::debug!(
+            volume.uuid = %volume.uuid(),
+            source_viable,
+            "Offline rebuild deferred: rebuild not viable \
+            (no healthy source replica and/or no candidate pool)"
+        );
+        return PollResult::Ok(PollerState::Idle);
     }
 
     tracing::info!(
@@ -207,7 +249,30 @@ async fn teardown_if_rebuilt(
         return PollResult::Ok(PollerState::Idle);
     }
 
-    // Only `Online` is a clean enough signal to tear the nexus down. Anything
+    // Safe teardown when the rebuild has no chance of progressing: nexus is up
+    // but `Faulted` means no healthy source children remain (e.g. the source
+    // node went offline mid-rebuild).
+    if volume_state.status == VolumeStatus::Faulted {
+        let request = UnpublishVolume::new(volume.uuid(), false, vec![]);
+        if let Err(error) = volume.unpublish(context.registry(), &request).await {
+            tracing::warn!(
+                volume.uuid = %volume.uuid(),
+                %error,
+                "Failed to tear down stuck offline rebuild nexus"
+            );
+        } else {
+            tracing::warn!(
+                volume.uuid = %volume.uuid(),
+                "Offline rebuild source no longer available; tore down temporary nexus"
+            );
+        }
+        // Restart the grace timer from scratch when viability returns, so a
+        // recovering node has to clear the same wait window a fresh degradation would.
+        volume.lock().metadata.clear_offline_rebuild_degraded();
+        return PollResult::Ok(PollerState::Idle);
+    }
+
+    // Only `Online` and `Faulted` are clean enough signals to act on. Anything
     // else (Degraded mid-rebuild, transient state during a node blip, etc.)
     // we wait on — tearing down would either churn against the grace timer
     // or kill a healthy in-progress rebuild during a brief hiccup.
