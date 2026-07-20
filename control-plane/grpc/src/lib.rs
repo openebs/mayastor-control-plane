@@ -39,6 +39,7 @@ pub mod common {
 pub(crate) mod pool {
     #![allow(clippy::derive_partial_eq_without_eq)]
     #![allow(clippy::large_enum_variant)]
+    #![allow(clippy::enum_variant_names)]
     tonic::include_proto!("v1.pool");
 }
 

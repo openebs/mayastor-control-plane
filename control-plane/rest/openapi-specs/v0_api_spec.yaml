@@ -5064,6 +5064,8 @@ components:
       type: string
       enum:
         - All
+        - IoErrors
+        - IoStallTransitions
     CordonDrainState:
       description: The cordon and drain state
       type: object

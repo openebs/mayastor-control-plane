@@ -285,10 +285,15 @@ pub struct ClearErrorsRequest {
 /// Clear errors variants.
 #[derive(Debug, Clone, Copy, Default, EnumString, Display)]
 pub enum ClearMethod {
-    /// Clears all counted errors and related alerts.
-    /// Example, it clears the io stall transitions, but doesn't clear an io stall.
+    /// Clears all counted errors and stall transitions.
+    /// Note: It doesn't clear an io stall state if the pool is currently in a stalled state.
+    /// The stall state will be cleared when the pool is no longer stalled.
     #[default]
     All,
+    /// Clears only the counted I/O errors.
+    IoErrors,
+    /// Clears only the I/O stall transition count.
+    IoStallTransitions,
 }
 
 #[async_trait(?Send)]
@@ -305,6 +310,8 @@ impl Errors for Pool {
             disks: r.disks.clone(),
             clear: match r.clear {
                 ClearMethod::All => models::PoolClearErr::All,
+                ClearMethod::IoErrors => models::PoolClearErr::IoErrors,
+                ClearMethod::IoStallTransitions => models::PoolClearErr::IoStallTransitions,
             },
         });
         let cli = RestClient::client().pools_api();
