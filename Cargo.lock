@@ -1537,6 +1537,8 @@ dependencies = [
  "serde",
  "serde_json",
  "snafu",
+ "strum",
+ "strum_macros",
  "tokio",
  "tonic",
  "tonic-build",
