@@ -23,7 +23,7 @@ use stor_port::{
     IntoOption,
 };
 
-use grpc::operations::pool::traits::ClearErrorsRequest;
+use grpc::operations::pool::traits::{ClearErrors, ClearErrorsRequest};
 use itertools::Itertools;
 use std::{convert::TryFrom, time::UNIX_EPOCH};
 
@@ -1032,11 +1032,16 @@ impl From<ExternalType<EncryptionSecret>> for v1::pb::EncryptionSecret {
 impl AgentToIoEngine for ClearErrorsRequest {
     type IoEngineMessage = v1::pool::ClearErrorRequest;
     fn to_rpc(&self) -> Self::IoEngineMessage {
+        let clear = match self.clear {
+            ClearErrors::All => v1::pool::ClearErrors::ClearAll,
+            ClearErrors::IoErrors => v1::pool::ClearErrors::ClearIoErrors,
+            ClearErrors::IoStallTransitions => v1::pool::ClearErrors::ClearIoStallTransitions,
+        };
         v1::pool::ClearErrorRequest {
             name: self.pool_id.to_string(),
             uuid: None,
             disks: vec![],
-            clear: 0,
+            clear: clear as i32,
         }
     }
 }

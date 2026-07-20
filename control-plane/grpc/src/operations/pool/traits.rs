@@ -1173,10 +1173,15 @@ impl ClearErrorsRequest {
 /// Clear errors variants.
 #[derive(Debug, Clone, Copy, Default)]
 pub enum ClearErrors {
-    /// Clears all counted errors and related alerts.
-    /// Example, it clears the io stall transitions, but doesn't clear an io stall.
+    /// Clears all counted errors and stall transitions.
+    /// Note: It doesn't clear an io stall state if the pool is currently in a stalled state.
+    /// The stall state will be cleared when the pool is no longer stalled.
     #[default]
     All,
+    /// Clears only the counted I/O errors.
+    IoErrors,
+    /// Clears only the I/O stall transition count.
+    IoStallTransitions,
 }
 
 impl From<pool::ClearErrorsRequest> for ClearErrorsRequest {
@@ -1212,6 +1217,8 @@ impl From<pool::ClearErrors> for ClearErrors {
     fn from(value: pool::ClearErrors) -> Self {
         match value {
             pool::ClearErrors::ClearAll => Self::All,
+            pool::ClearErrors::ClearIoErrors => Self::IoErrors,
+            pool::ClearErrors::ClearIoStallTransitions => Self::IoStallTransitions,
         }
     }
 }
@@ -1219,6 +1226,8 @@ impl From<ClearErrors> for pool::ClearErrors {
     fn from(value: ClearErrors) -> Self {
         match value {
             ClearErrors::All => Self::ClearAll,
+            ClearErrors::IoErrors => Self::ClearIoErrors,
+            ClearErrors::IoStallTransitions => Self::ClearIoStallTransitions,
         }
     }
 }
