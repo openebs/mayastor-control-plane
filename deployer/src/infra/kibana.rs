@@ -1,5 +1,5 @@
 use crate::infra::{
-    async_trait, Builder, ComponentAction, Components, ComposeTest, Error, Kibana, StartOptions,
+    async_trait, Builder, ComponentAction, Components, Error, Kibana, StartOptions,
 };
 use composer::ContainerSpec;
 
@@ -20,13 +20,17 @@ impl ComponentAction for Kibana {
         })
     }
 
-    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start(&self, options: &StartOptions, cfg: &crate::ComposeTestNt) -> Result<(), Error> {
         if options.kibana {
             cfg.start("kibana").await?;
         }
         Ok(())
     }
-    async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(
+        &self,
+        options: &StartOptions,
+        cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         if options.kibana && (options.jaeger || cfg.container_exists("jaeger").await) {
             loop {
                 let form = reqwest::multipart::Form::new().percent_encode_noop().part(

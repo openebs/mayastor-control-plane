@@ -691,9 +691,9 @@ impl StartOptions {
 }
 
 impl StartOptions {
-    pub async fn start(&self) -> Result<composer::ComposeTest, Error> {
+    pub async fn start(&self) -> Result<ComposeTestNt, Error> {
         let components = Components::new(self.clone());
-        let composer = Builder::new()
+        let compose_builder = Builder::new()
             .name(&self.cluster_label.name())
             .label_prefix(&self.cluster_label.prefix())
             .with_clean(false)
@@ -704,9 +704,9 @@ impl StartOptions {
             .with_rust_log_silence(self.rust_log_silence.clone())
             .load_existing_containers()
             .await
-            .configure(components.clone())?
-            .build()
-            .await?;
+            .configure(components.clone())?;
+
+        let composer = ComposeTestNt::new(compose_builder).await?;
 
         match self.wait_timeout {
             Some(timeout) => {
@@ -861,4 +861,145 @@ pub fn host_tmp() -> Result<String, std::io::Error> {
         std::fs::create_dir(&root_tmp)?;
     }
     Ok(root_tmp)
+}
+
+struct ComposeTestFlags {
+    logs_on_panic: bool,
+    clean: bool,
+    allow_clean_on_panic: bool,
+}
+impl ComposeTestFlags {
+    fn override_flags(flag: &mut bool, flag_name: &str) {
+        let key = format!("COMPOSE_{}", flag_name.to_ascii_uppercase());
+        if let Some(val) = std::env::var_os(&key) {
+            let clean = match val.to_str().unwrap_or_default() {
+                "true" => true,
+                "false" => false,
+                _ => return,
+            };
+            if clean != *flag {
+                tracing::warn!(
+                    "env::{} => Overriding the {} flag to {}",
+                    key,
+                    flag_name,
+                    clean
+                );
+                *flag = clean;
+            }
+        }
+    }
+    /// override clean flags with environment variable
+    /// useful for testing without having to change the code
+    fn override_debug_flags(&mut self) {
+        Self::override_flags(&mut self.clean, "clean");
+        Self::override_flags(&mut self.allow_clean_on_panic, "allow_clean_on_panic");
+        Self::override_flags(&mut self.logs_on_panic, "logs_on_panic");
+    }
+}
+/// A wrapper over the composer utility meant to ensure termination in the
+/// correct order.
+/// todo: add shutdown order!
+pub struct ComposeTestNt {
+    flags: ComposeTestFlags,
+    composer: composer::ComposeTest,
+    name: String,
+    shutdown_order: Vec<Vec<String>>,
+}
+impl ComposeTestNt {
+    /// Create a new instance of the ComposeTestNt wrapper.
+    pub async fn new(composer: Builder) -> Result<Self, Error> {
+        let mut flags = ComposeTestFlags {
+            logs_on_panic: composer.logs_on_panic(),
+            clean: composer.clean(),
+            allow_clean_on_panic: false,
+        };
+        flags.override_debug_flags();
+        let name = composer.get_name();
+        let mut composer = composer
+            .with_clean(false)
+            .with_clean_on_panic(false)
+            .with_logs(false)
+            .build()
+            .await?;
+        composer.clear_logs_on_panic();
+        Ok(Self {
+            flags,
+            composer,
+            name,
+            shutdown_order: vec![],
+        })
+    }
+    /// Output logs on drop if there was a panic.
+    pub fn logs_on_panic(&self) -> bool {
+        self.flags.logs_on_panic
+    }
+    /// Clear the `logs_on_panic` flag.
+    pub fn clear_logs_on_panic(&mut self) {
+        self.flags.logs_on_panic = false;
+    }
+    /// Cleans containers on drop.
+    pub fn clean(&self) -> bool {
+        self.flags.clean
+    }
+    /// Cleans containers on drop if there was a panic.
+    pub fn clean_on_panic(&self) -> bool {
+        self.flags.allow_clean_on_panic
+    }
+}
+impl std::ops::Deref for ComposeTestNt {
+    type Target = composer::ComposeTest;
+    fn deref(&self) -> &Self::Target {
+        &self.composer
+    }
+}
+impl Drop for ComposeTestNt {
+    fn drop(&mut self) {
+        use std::process::Command;
+
+        if std::thread::panicking() && self.logs_on_panic() {
+            self.print_all_logs();
+        }
+
+        if self.clean() && (!std::thread::panicking() || self.clean_on_panic()) {
+            let containers = self.composer.containers();
+            let container_names = containers.keys().map(|k| k.as_str());
+
+            // todo: shutdown order not in-place at the moment
+            if !self.shutdown_order.is_empty() {
+                let sh = self.shutdown_order.drain(..);
+                sh.into_iter().for_each(|c| {
+                    c.into_iter()
+                        .map(|c| {
+                            std::thread::spawn(move || {
+                                Command::new("docker")
+                                    .args(["kill", "-s", "term", c.as_str()])
+                                    .output()
+                                    .unwrap();
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .for_each(|h| {
+                            h.join().ok();
+                        });
+                });
+            } else {
+                // Kill with SIGTERM to allow for some cleanup
+                let cmd = vec!["kill", "-s", "term"]
+                    .into_iter()
+                    .chain(container_names.clone());
+                Command::new("docker").args(cmd).output().unwrap();
+            }
+
+            // Remove (killing with force if not already stopped)
+            let cmd = vec!["rm", "-vf"].into_iter().chain(container_names.clone());
+            Command::new("docker").args(cmd).output().unwrap();
+
+            // Finally remove the network, leaving no traces of our composer
+            Command::new("docker")
+                .args(["network", "rm", self.name.as_str()])
+                .output()
+                .unwrap();
+        }
+    }
 }

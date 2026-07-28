@@ -1,6 +1,4 @@
-use crate::infra::{
-    async_trait, Builder, ComponentAction, Components, ComposeTest, Error, Rest, StartOptions,
-};
+use crate::infra::{async_trait, Builder, ComponentAction, Components, Error, Rest, StartOptions};
 use composer::{Binary, ContainerSpec};
 use std::time::Duration;
 use utils::DEFAULT_JSON_GRPC_CLIENT_ADDR;
@@ -73,13 +71,17 @@ impl ComponentAction for Rest {
             )
         })
     }
-    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start(&self, options: &StartOptions, cfg: &crate::ComposeTestNt) -> Result<(), Error> {
         if !options.no_rest {
             cfg.start("rest").await?;
         }
         Ok(())
     }
-    async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(
+        &self,
+        options: &StartOptions,
+        _cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         if options.no_rest {
             return Ok(());
         }

@@ -1,8 +1,6 @@
 use crate::{
     build_error,
-    infra::{
-        async_trait, Builder, ComponentAction, ComposeTest, Error, JsonGrpcAgent, StartOptions,
-    },
+    infra::{async_trait, Builder, ComponentAction, Error, JsonGrpcAgent, StartOptions},
 };
 use composer::Binary;
 use grpc::operations::jsongrpc::client::JsonGrpcClient;
@@ -31,11 +29,19 @@ impl ComponentAction for JsonGrpcAgent {
         }
         Ok(cfg.add_container_bin(name, binary))
     }
-    async fn start(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start(
+        &self,
+        _options: &StartOptions,
+        cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         cfg.start("jsongrpc").await?;
         Ok(())
     }
-    async fn wait_on(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(
+        &self,
+        _options: &StartOptions,
+        cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         let ip = cfg.container_ip("jsongrpc");
         let uri = tonic::transport::Uri::from_str(&format!("https://{ip}:50052")).unwrap();
         let timeout = grpc::context::TimeoutOptions::new()

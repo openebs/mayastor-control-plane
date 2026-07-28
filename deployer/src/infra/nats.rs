@@ -1,4 +1,4 @@
-use crate::infra::{async_trait, Builder, ComponentAction, ComposeTest, Error, Nats, StartOptions};
+use crate::infra::{async_trait, Builder, ComponentAction, Error, Nats, StartOptions};
 use composer::ContainerSpec;
 use events_api::mbus_nats::message_bus_init;
 use std::ffi::OsString;
@@ -29,7 +29,7 @@ impl ComponentAction for Nats {
             )
         })
     }
-    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start(&self, options: &StartOptions, cfg: &crate::ComposeTestNt) -> Result<(), Error> {
         if options.eventing {
             cfg.start("nats").await?;
         }
@@ -38,7 +38,11 @@ impl ComponentAction for Nats {
         }
         Ok(())
     }
-    async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(
+        &self,
+        options: &StartOptions,
+        cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         if options.eventing || cfg.container_exists("nats").await {
             let _ = message_bus_init("localhost:4222", Some(1)).await;
         }

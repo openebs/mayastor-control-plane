@@ -1,8 +1,6 @@
 use std::os::unix::process::CommandExt;
 
-use crate::infra::{
-    async_trait, Builder, ComponentAction, ComposeTest, Error, RwxVm, StartOptions,
-};
+use crate::infra::{async_trait, Builder, ComponentAction, Error, RwxVm, StartOptions};
 
 macro_rules! ws_path {
     ($p:literal) => {
@@ -61,7 +59,7 @@ impl ComponentAction for RwxVm {
 
         Ok(cfg)
     }
-    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start(&self, options: &StartOptions, cfg: &crate::ComposeTestNt) -> Result<(), Error> {
         if !options.rwx_vm {
             return Ok(());
         }
@@ -86,7 +84,11 @@ impl ComponentAction for RwxVm {
 
         Ok(())
     }
-    async fn wait_on(&self, _options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(
+        &self,
+        _options: &StartOptions,
+        _cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         // we let the csi-node-2 and agent-ha-node-2 do the waiting
         Ok(())
     }

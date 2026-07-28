@@ -1,6 +1,4 @@
-use crate::infra::{
-    async_trait, Builder, ComponentAction, ComposeTest, Error, Jaeger, StartOptions,
-};
+use crate::infra::{async_trait, Builder, ComponentAction, Error, Jaeger, StartOptions};
 use composer::ContainerSpec;
 
 #[async_trait]
@@ -68,13 +66,17 @@ impl ComponentAction for Jaeger {
             cfg.add_container_spec(image)
         })
     }
-    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start(&self, options: &StartOptions, cfg: &crate::ComposeTestNt) -> Result<(), Error> {
         if options.jaeger {
             cfg.start("jaeger").await?;
         }
         Ok(())
     }
-    async fn wait_on(&self, _options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(
+        &self,
+        _options: &StartOptions,
+        _cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         Ok(())
     }
 }

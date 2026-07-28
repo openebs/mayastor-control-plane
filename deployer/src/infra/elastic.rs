@@ -1,5 +1,5 @@
 use crate::infra::{
-    async_trait, Builder, ComponentAction, Components, ComposeTest, Elastic, Error, StartOptions,
+    async_trait, Builder, ComponentAction, Components, Elastic, Error, StartOptions,
 };
 use composer::ContainerSpec;
 
@@ -24,13 +24,17 @@ impl ComponentAction for Elastic {
         })
     }
 
-    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start(&self, options: &StartOptions, cfg: &crate::ComposeTestNt) -> Result<(), Error> {
         if options.elastic {
             cfg.start("elastic").await?;
         }
         Ok(())
     }
-    async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(
+        &self,
+        options: &StartOptions,
+        _cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         if options.elastic {
             Components::wait_url("http://localhost:9200").await?;
         }
