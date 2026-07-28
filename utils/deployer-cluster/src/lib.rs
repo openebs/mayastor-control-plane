@@ -516,6 +516,11 @@ impl Cluster {
         self.builder.opts.io_engines
     }
 
+    /// FIO taskset affinity for non/io-engine cores.
+    pub fn fio_taskset(&self) -> String {
+        format!("{}", self.builder.opts.io_engines)
+    }
+
     /// The io-engine node nqn for `index`.
     pub fn node_nqn(&self, index: u32) -> transport::HostNqn {
         IoEngine::nqn(index, &self.builder.opts).try_into().unwrap()

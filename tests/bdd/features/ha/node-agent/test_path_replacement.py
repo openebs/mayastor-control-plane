@@ -38,6 +38,7 @@ NEXUS_NQN = f"{nvme_nqn_prefix}:{VOLUME_UUID}"
 PATH_DETECTION_TIME = 2
 # FIO should be active long enough to outlive the detection interval.
 FIO_RUNTIME = PATH_DETECTION_TIME * 4
+IO_ENGINES = 3
 
 
 @scenario(
@@ -103,7 +104,7 @@ def it_should_be_possible_to_create_a_second_nexus_and_replace_failed_path_with_
 @pytest.fixture
 def background():
     Deployer.start(
-        3,
+        IO_ENGINES,
         node_agent=True,
         cluster_agent=True,
         csi_node=True,
@@ -142,7 +143,7 @@ def background():
 def connect_to_first_path(background):
     volume = background
     device_uri = volume.state.target.device_uri
-    yield nvme_connect(device_uri)
+    yield nvme_connect(device_uri, delay=1)
     nvme_disconnect(device_uri)
 
 
@@ -163,6 +164,8 @@ def run_fio_to_first_path(connect_to_first_path):
 
 @pytest.fixture
 def degrade_first_path():
+    # Let fio start and run for a while before degrading the only I/O path.
+    sleep(1)
     Docker.kill_container(TARGET_NODE_1)
     # Sleep some time to allow HA node agent detect failed path.
     # Add one extra second to make sure detection 100% happens.

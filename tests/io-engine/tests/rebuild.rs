@@ -508,6 +508,9 @@ async fn run_fio_vol_verify(
         let filename = format!("--filename={device}");
         let time = format!("--runtime={time}");
         vec![
+            "taskset",
+            "-c",
+            cluster.fio_taskset().as_str(),
             "fio",
             "--direct=1",
             "--ioengine=libaio",

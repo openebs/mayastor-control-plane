@@ -167,6 +167,9 @@ async fn reservation() {
             format!("--filename=trtype=tcp adrfam=IPv4 traddr={ip} trsvcid=8420 subnqn={nqn} ns=1");
         tracing::debug!("Filename: {filename}");
         vec![
+            "taskset",
+            "-c",
+            cluster.fio_taskset().as_str(),
             "fio",
             "--name=benchtest",
             filename.as_str(),
