@@ -742,6 +742,7 @@ impl StopOptions {
         composer
             .remove_network_containers(&self.cluster_label.name())
             .await?;
+        RwxVm::stop()?;
         Ok(())
     }
 }

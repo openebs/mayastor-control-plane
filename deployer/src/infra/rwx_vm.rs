@@ -11,6 +11,7 @@ macro_rules! ws_path {
     };
 }
 const RWX_VM: &str = ws_path!("/deployer/misc/rwx-vm");
+const RWX_VM_QC: &str = ws_path!("/deployer/misc/rwx-vm/nixos.qcow2");
 const RWX_VM_NIX: &str = ws_path!("/deployer/misc/rwx-vm/csi-node-2.nix");
 
 fn is_nixos() -> bool {
@@ -72,6 +73,7 @@ impl ComponentAction for RwxVm {
             .stderr(std::process::Stdio::null());
 
         if cfg.clean() {
+            // When clean is set, we don't need to make use of `RwxVm::stop()` to kill the VM
             unsafe {
                 cmd.pre_exec(|| {
                     // When parent dies, send SIGTERM to this process
@@ -91,5 +93,73 @@ impl ComponentAction for RwxVm {
     ) -> Result<(), Error> {
         // we let the csi-node-2 and agent-ha-node-2 do the waiting
         Ok(())
+    }
+}
+
+use nix::{
+    sys::signal::{self, Signal},
+    unistd::Pid,
+};
+use std::fs;
+
+impl RwxVm {
+    /// Stops the RWX VM by killing any QEMU processes that have the VM disk open.
+    pub fn stop() -> std::io::Result<()> {
+        let needle = format!("file={RWX_VM_QC}");
+
+        let mut pids = Vec::new();
+        for entry in fs::read_dir("/proc")? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+
+            let pid: i32 = match name.parse() {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+
+            let cmdline_path = format!("/proc/{pid}/cmdline");
+            let cmdline_bytes = match fs::read(&cmdline_path) {
+                Ok(b) => b,
+                Err(_) => continue,
+            };
+
+            // cmdline is NUL-separated args; replace with spaces for substring matching.
+            let cmdline = String::from_utf8_lossy(&cmdline_bytes);
+            if cmdline.contains("qemu-system") && cmdline.contains(&needle) {
+                pids.push(pid);
+            }
+        }
+
+        if pids.is_empty() {
+            tracing::info!("No QEMU processes found using {RWX_VM_QC}");
+            return Ok(());
+        }
+
+        tracing::info!(
+            "Found QEMU processes: {}",
+            pids.iter()
+                .map(i32::to_string)
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
+
+        for pid in pids {
+            kill_pid(pid);
+        }
+
+        Ok(())
+    }
+}
+
+/// Similar to the cleanup script, kill with grace, then with force, and ignore errors.
+/// This is to avoid panics in the cleanup code when the process has already exited.
+/// kill "$pid" || kill -9 "$pid" || :
+fn kill_pid(pid: i32) {
+    let nix_pid = Pid::from_raw(pid);
+
+    if signal::kill(nix_pid, Signal::SIGTERM).is_err() {
+        // Ignore the error, matching the bash `|| :` fallback semantics.
+        let _ = signal::kill(nix_pid, Signal::SIGKILL);
     }
 }
