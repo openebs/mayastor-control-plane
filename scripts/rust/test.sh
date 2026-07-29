@@ -47,3 +47,8 @@ for package in deployer-cluster grpc agents rest io-engine-tests shutdown csi-dr
 done
 
 $cargo_test ${OPTS} -- ${ARGS} --test-threads=1
+$cargo_test ${OPTS} -- ${ARGS} --test-threads=1
+$cargo_test ${OPTS} -- ${ARGS} --test-threads=1
+$cargo_test ${OPTS} -- ${ARGS} --test-threads=1
+$cargo_test ${OPTS} -- ${ARGS} --test-threads=1
+$cargo_test ${OPTS} -- ${ARGS} --test-threads=1
