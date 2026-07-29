@@ -292,6 +292,28 @@ impl Cluster {
         }
         Err(())
     }
+    /// Wait till the pool is online.
+    pub async fn wait_pools_online<I: AsRef<NodeId>>(&self, node: I) -> Result<(), String> {
+        let timeout = Duration::from_secs(2);
+        let start = std::time::Instant::now();
+        loop {
+            let filter = Filter::Node(node.as_ref().clone());
+            if let Ok(pools) = self.grpc_client().pool().get(filter, None).await {
+                if pools.into_inner().into_iter().all(|p| {
+                    p.state()
+                        .map(|s| s.status == PoolStatus::Online)
+                        .unwrap_or_default()
+                }) {
+                    return Ok(());
+                }
+            }
+            if std::time::Instant::now() > (start + timeout) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        Err("Timeout waiting for all pools to be online".to_string())
+    }
 
     /// return grpc handle to the container
     pub async fn grpc_handle(&self, name: &str) -> Result<RpcHandle, String> {
@@ -405,6 +427,22 @@ impl Cluster {
     ) -> Result<bool, ReplyError> {
         self.restart_core().await;
         self.volume_service_liveness(timeout_opts).await
+    }
+
+    /// Wait until the node and its pools are online.
+    pub async fn restart_node_wait(&self, index: u32) -> Result<(), String> {
+        let node = self.node(index);
+        self.composer().restart(&node).await.unwrap();
+        self.wait_node_status(&node, NodeStatus::Online).await?;
+        self.wait_pools_online(&node).await?;
+        Ok(())
+    }
+
+    /// Wait until the node and its pools are online.
+    pub async fn wait_node_pool(&self, node: &NodeId) -> Result<(), String> {
+        self.wait_node_status(node, NodeStatus::Online).await?;
+        self.wait_pools_online(node).await?;
+        Ok(())
     }
 
     /// Replace the given old node with a new one from the idles.

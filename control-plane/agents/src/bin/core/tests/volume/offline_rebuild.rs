@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use super::helpers::{wait_node_online, wait_till_volume_status};
+use super::helpers::wait_till_volume_status;
 use deployer_cluster::ClusterBuilder;
 use std::{collections::HashMap, time::Duration};
 use stor_port::types::v0::{
@@ -473,10 +473,10 @@ async fn restart_node(cluster: &deployer_cluster::Cluster, node: &str) {
         .start(node)
         .await
         .expect("Should restart io-engine node");
-    let node_client = cluster.grpc_client().node();
-    wait_node_online(&node_client, NodeId::from(node))
+    cluster
+        .wait_node_pool(&NodeId::from(node))
         .await
-        .expect("Restarted node should come back Online");
+        .expect("Node should come back Online after restart");
 }
 
 /// Wait for the volume to have a target with no share protocol (offline-rebuild marker).
