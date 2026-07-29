@@ -974,6 +974,9 @@ async fn run_fio_vol_verify(
     let fio_builder = |device: &str| {
         let filename = format!("--filename={device}");
         vec![
+            "taskset",
+            "-c",
+            cluster.fio_taskset().as_str(),
             "fio",
             "--direct=1",
             "--ioengine=libaio",
