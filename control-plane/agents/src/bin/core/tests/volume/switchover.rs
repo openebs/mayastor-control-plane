@@ -892,7 +892,7 @@ async fn republished_nexus_io_engine_txn_fail() {
     println!("STEP: disconnected container from network...");
 
     cluster
-        .wait_node_status(node_idx0.clone(), NodeStatus::Unknown)
+        .wait_node_status_ext(node_idx0.clone(), |s| !matches!(s, NodeStatus::Online))
         .await
         .unwrap();
     println!("STEP: node now unknown...");
