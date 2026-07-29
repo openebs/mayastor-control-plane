@@ -65,6 +65,10 @@ impl ComponentAction for IoEngine {
                     .with_bind("/run/udev", "/run/udev");
             }
 
+            if !options.io_engine_isolate {
+                spec = spec.with_env("ENABLE_INTERRUPT_MODE", "true")
+            }
+
             let core_list = match options.io_engine_isolate {
                 true => {
                     let cores = 1.max(options.io_engine_cores);
