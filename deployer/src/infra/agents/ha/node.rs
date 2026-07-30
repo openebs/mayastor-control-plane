@@ -1,5 +1,5 @@
 use crate::infra::{
-    async_trait, Builder, ComponentAction, ComposeTest, CsiNode, Error, HaNodeAgent, StartOptions,
+    async_trait, Builder, ComponentAction, CsiNode, Error, HaNodeAgent, StartOptions,
 };
 use composer::{Binary, ContainerSpec};
 use std::str::FromStr;
@@ -43,12 +43,20 @@ impl ComponentAction for HaNodeAgent {
         Ok(cfg.add_container_spec(spec))
     }
 
-    async fn start(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start(
+        &self,
+        _options: &StartOptions,
+        cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         cfg.start("agent-ha-node").await?;
         Ok(())
     }
 
-    async fn wait_on(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(
+        &self,
+        _options: &StartOptions,
+        cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         // Wait till node-agent's gRPC server is ready to server the request
         wait_on(&format!(
             "https://{}:11600",

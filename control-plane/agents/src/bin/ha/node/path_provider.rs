@@ -25,35 +25,52 @@ const CACHE_EVENTS_BATCH_SIZE: usize = 128;
 pub struct NvmePath {
     path_buffer: PathBuf,
     nqn: String,
+    /// A new path may be added as connecting, though it should transition to live shortly.
+    /// We add this tracker to avoid adding confusing logs.
+    new: bool,
 }
 
 impl NvmePath {
     fn new(path_buffer: PathBuf, nqn: String) -> Self {
-        Self { path_buffer, nqn }
+        Self {
+            path_buffer,
+            nqn,
+            new: false,
+        }
     }
 
     /// Get the NVMe path reference.
-    #[inline]
     pub fn path(&self) -> &Path {
         self.path_buffer.as_path()
     }
 
     /// Get the NVMe nqn reference.
-    #[inline]
     pub fn nqn(&self) -> &String {
         &self.nqn
+    }
+
+    /// Get the NVMe nqn reference.
+    pub fn is_new(&self) -> bool {
+        self.new
+    }
+
+    /// Mark the NVMe path as new.
+    pub fn with_new(mut self) -> Self {
+        self.new = true;
+        self
     }
 }
 
 /// Check that NVMe path represents a target created by our product and
 /// obtain a Path object that represents a system path for this NVMe device.
-pub fn get_nvme_path_entry(path: &String) -> Option<NvmePath> {
+pub fn get_nvme_path_entry(path: &String) -> Option<(Subsystem, NvmePath)> {
     Path::new(path).canonicalize().ok().and_then(|pb| {
         Subsystem::new(pb.as_path()).ok().and_then(|s| {
             // Check NQN of the subsystem to make sure it belongs to the product.
             // todo: this won't work for nqn prefix upgrades
             if s.nqn.starts_with(&nvme_target_nqn_prefix()) {
-                Some(NvmePath::new(pb, s.nqn))
+                let path = NvmePath::new(pb, s.nqn.clone());
+                Some((s, path))
             } else {
                 // todo: right after being added a path may not yet be fully init
                 // in the sysfs, example: nqn: "(efault)", state: "connecting"
@@ -246,23 +263,53 @@ impl NvmePathNameCollection {
     }
 
     fn add_cache_entry(&mut self, path: String) {
-        if let Some(pb) = get_nvme_path_entry(&path) {
-            tracing::info!(path, nqn = pb.nqn, "Adding new NVMe path entry to cache");
+        if let Some((subsystem, pb)) = get_nvme_path_entry(&path) {
+            tracing::info!(
+                path,
+                nqn = pb.nqn,
+                ?subsystem,
+                "Adding newly discovered NVMe path entry to cache"
+            );
             self.entries.insert(path, pb);
         }
     }
 
+    /// Add a new cache entry, marking it as new.
+    fn add_new_cache_entry(&mut self, path: String) {
+        if let Some((subsystem, pb)) = get_nvme_path_entry(&path) {
+            tracing::info!(
+                path,
+                nqn = pb.nqn,
+                ?subsystem,
+                "Adding newly created NVMe path entry to cache"
+            );
+            self.entries.insert(path, pb.with_new());
+        }
+    }
+
     fn update_cache_entry(&mut self, path: String) {
-        if let Some(pb) = get_nvme_path_entry(&path) {
+        // todo: if we miss a udev event, we may not have the entry in the cache
+        //  do we need to verify any issues with add/remove events sync?
+        if let Some((subsystem, pb)) = get_nvme_path_entry(&path) {
             match self.entries.entry(path.clone()) {
                 Entry::Occupied(mut existing) => {
                     if existing.get() != &pb {
-                        tracing::warn!(path, nqn = pb.nqn, "Updating NVMe path entry in cache");
+                        tracing::warn!(
+                            path,
+                            nqn = pb.nqn,
+                            ?subsystem,
+                            "Updating NVMe path entry in cache"
+                        );
                         *existing.get_mut() = pb;
                     }
                 }
                 Entry::Vacant(entry) => {
-                    tracing::warn!(path, nqn = pb.nqn, "Adding new NVMe path entry to cache");
+                    tracing::warn!(
+                        path,
+                        nqn = pb.nqn,
+                        ?subsystem,
+                        "Adding newly discovered NVMe path entry to cache"
+                    );
                     entry.insert(pb);
                 }
             }
@@ -296,7 +343,7 @@ impl NvmePathNameCollection {
             if let Some(e) = self.udev_queue.pop() {
                 match e {
                     CacheOp::Add(p) => {
-                        self.add_cache_entry(p);
+                        self.add_new_cache_entry(p);
                     }
                     CacheOp::Change(p) => {
                         self.update_cache_entry(p);

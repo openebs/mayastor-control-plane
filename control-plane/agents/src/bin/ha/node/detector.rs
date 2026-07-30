@@ -16,7 +16,9 @@ use tokio::{
 /// Possible states of every path record.
 #[derive(Debug, Clone, Eq, PartialEq)]
 enum PathState {
+    Added,
     Good,
+    AddedSuspected,
     Suspected,
     Failed,
     Removing,
@@ -55,7 +57,13 @@ impl PathRecords {
         self.paths
             .entry(path.clone())
             .or_insert_with(|| {
-                PathRecord::new(ctrlr.nqn().to_owned(), epoch, path, reporter.clone())
+                PathRecord::new(
+                    ctrlr.nqn().to_owned(),
+                    epoch,
+                    path,
+                    reporter.clone(),
+                    ctrlr.is_new(),
+                )
             })
             .with_epoch(epoch)
     }
@@ -91,13 +99,17 @@ struct PathRecord {
 }
 
 impl PathRecord {
-    fn new(nqn: String, epoch: u64, path: String, reporter: Rc<PathReporter>) -> Self {
+    fn new(nqn: String, epoch: u64, path: String, reporter: Rc<PathReporter>, new: bool) -> Self {
         tracing::trace!(%path, %nqn, "New PathRecord");
         Self {
             nqn,
             epoch,
             path,
-            state: PathState::Good,
+            state: if new {
+                PathState::Added
+            } else {
+                PathState::Good
+            },
             reporter,
         }
     }
@@ -118,10 +130,26 @@ impl PathRecord {
     /// Trigger state transition based on 'connecting' state of the underlying NVMe controller.
     fn report_connecting(&mut self) {
         match self.state {
+            PathState::Added => {
+                tracing::info!(
+                    target = self.nqn,
+                    path = self.path,
+                    "Target first seen as connecting (should settle in the next transition)"
+                );
+                self.state = PathState::AddedSuspected;
+            }
+            PathState::AddedSuspected => {
+                tracing::info!(
+                    target=self.nqn,
+                    path=self.path,
+                    "Target first seen as connecting, but it's still connecting so it's now suspected"
+                );
+                self.state = PathState::Suspected;
+            }
             PathState::Good => {
                 self.state = PathState::Suspected;
                 tracing::info!(
-                    state=%PathState::Suspected,
+                    state=%self.state,
                     target=self.nqn,
                     path=self.path,
                     "Target state transition"
@@ -131,7 +159,7 @@ impl PathRecord {
             PathState::Suspected => {
                 self.state = PathState::Failed;
                 tracing::error!(
-                    state=%PathState::Failed,
+                    state=%self.state,
                     target=self.nqn,
                     path=self.path,
                     "Target state transition",
@@ -145,14 +173,30 @@ impl PathRecord {
     }
 
     fn report_live(&mut self) {
-        if self.state != PathState::Good {
-            tracing::info!(
-                from=%self.state,
-                to=%PathState::Good,
-                target=self.nqn,
-                path=self.path,
-                "Target path has been fixed",
-            );
+        match &self.state {
+            PathState::Added | PathState::AddedSuspected => {
+                tracing::info!(
+                    from=%self.state,
+                    to=%PathState::Good,
+                    target=self.nqn,
+                    path=self.path,
+                    epoch=self.epoch,
+                    "Target path was newly added and is now live",
+                );
+            }
+            PathState::Good => {
+                return; // No state transition, path is already good.
+            }
+            _else => {
+                tracing::info!(
+                    from=%self.state,
+                    to=%PathState::Good,
+                    target=self.nqn,
+                    path=self.path,
+                    epoch=self.epoch,
+                    "Target path has been fixed",
+                );
+            }
         }
         self.state = PathState::Good;
     }
@@ -303,7 +347,7 @@ impl PathFailureDetector {
                 match subsystem.state.as_str() {
                     "connecting" => {
                         // Add a new record in case no record exists for target NQN.
-                        let rec = self
+                        let rec: &mut PathRecords = self
                             .suspected_paths
                             .entry(subsystem.nqn)
                             .or_insert_with(|| {
@@ -312,6 +356,7 @@ impl PathFailureDetector {
                                     self.epoch,
                                     ctrlr.path().to_string_lossy().to_string(),
                                     self.reporter.clone(),
+                                    ctrlr.is_new(),
                                 ))
                             });
                         rec.report_connecting(ctrlr, self.epoch, &self.reporter);

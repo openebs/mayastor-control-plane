@@ -2,9 +2,7 @@ use std::convert::TryFrom;
 use tokio::time::{sleep, Duration};
 use tonic::transport::Endpoint;
 
-use crate::infra::{
-    async_trait, Builder, ComponentAction, ComposeTest, Error, HaClusterAgent, StartOptions,
-};
+use crate::infra::{async_trait, Builder, ComponentAction, Error, HaClusterAgent, StartOptions};
 use composer::{Binary, ContainerSpec};
 
 #[async_trait]
@@ -41,12 +39,20 @@ impl ComponentAction for HaClusterAgent {
         Ok(cfg.add_container_spec(spec))
     }
 
-    async fn start(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start(
+        &self,
+        _options: &StartOptions,
+        cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         cfg.start("agent-ha-cluster").await?;
         Ok(())
     }
 
-    async fn wait_on(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(
+        &self,
+        _options: &StartOptions,
+        cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         // Wait till cluster-agent's gRPC server is ready to server the request
         loop {
             match Endpoint::try_from(format!(

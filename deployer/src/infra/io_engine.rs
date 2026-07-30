@@ -1,6 +1,4 @@
-use crate::infra::{
-    async_trait, Builder, ComponentAction, ComposeTest, Error, IoEngine, StartOptions,
-};
+use crate::infra::{async_trait, Builder, ComponentAction, Error, IoEngine, StartOptions};
 use composer::{Binary, ContainerSpec};
 use rpc::io_engine::{IoEngineApiVersion, RpcHandle};
 use std::net::{IpAddr, SocketAddr};
@@ -67,6 +65,10 @@ impl ComponentAction for IoEngine {
                     .with_bind("/run/udev", "/run/udev");
             }
 
+            if !options.io_engine_isolate {
+                spec = spec.with_env("ENABLE_INTERRUPT_MODE", "true")
+            }
+
             let core_list = match options.io_engine_isolate {
                 true => {
                     let cores = 1.max(options.io_engine_cores);
@@ -113,13 +115,17 @@ impl ComponentAction for IoEngine {
         }
         Ok(cfg)
     }
-    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start(&self, options: &StartOptions, cfg: &crate::ComposeTestNt) -> Result<(), Error> {
         let io_engines = (0..options.io_engines)
             .map(|i| async move { cfg.start(&Self::name(i, options)).await });
         futures::future::try_join_all(io_engines).await?;
         Ok(())
     }
-    async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(
+        &self,
+        options: &StartOptions,
+        cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         for i in 0..options.io_engines {
             let name = Self::name(i, options);
             let container_ip = cfg.container_ip_as_ref(&name);

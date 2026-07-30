@@ -1,6 +1,7 @@
 """Swap ANA enabled Nexus on ANA enabled host feature tests."""
 
 import subprocess
+from time import sleep
 from urllib.parse import urlparse
 
 import pytest
@@ -34,6 +35,7 @@ POOL_NODE = "io-engine-3"
 TARGET_NODE_1 = "io-engine-1"
 TARGET_NODE_2 = "io-engine-2"
 FIO_RUNTIME = 4
+IO_ENGINES = 3
 
 
 @scenario(
@@ -97,7 +99,7 @@ def it_should_be_possible_to_remove_the_first_failed_io_path(remove_first_path):
 @pytest.fixture
 def background():
     Deployer.start(
-        3,
+        IO_ENGINES,
         cache_period="1s",
         io_engine_coreisol=True,
         node_conn_timeout="100ms",
@@ -132,7 +134,7 @@ def connect_to_first_path(background):
     print(volume)
     print(volume.state.target)
     device_uri = volume.state.target.device_uri
-    yield nvme_connect(device_uri)
+    yield nvme_connect(device_uri, delay=1)
     nvme_disconnect(device_uri)
 
 
@@ -147,12 +149,15 @@ def run_fio_to_first_path(connect_to_first_path):
     assert len(subsystem["Paths"]) == 1, "Must be exactly one I/O path to target nexus"
     assert subsystem["Paths"][0]["State"] == "live", "I/O path is not healthy"
     # Launch fio in background and let it always run along with the test.
-    fio = Fio("job", "randread", device, runtime=FIO_RUNTIME)
+    taskset = f"f{IO_ENGINES}"  # avoid io-engine cores to avoid interference with fio
+    fio = Fio("job", "randread", device, runtime=FIO_RUNTIME, taskset=taskset)
     return fio.open()
 
 
 @pytest.fixture
 def degrade_first_path():
+    # Let fio start and run for a while before degrading the only I/O path.
+    sleep(1)
     Docker.kill_container(TARGET_NODE_1)
 
 
@@ -180,7 +185,7 @@ def publish_to_node_2(background):
 @pytest.fixture
 @retry(wait_fixed=10, stop_max_attempt_number=200)
 def connect_to_node_2(publish_to_node_2):
-    device = nvme_connect(publish_to_node_2)
+    device = nvme_connect(publish_to_node_2, delay=1)
     desc = nvme_list_subsystems(device)
     subsystem = desc["Subsystems"][0]
     assert len(subsystem["Paths"]) == 2, "Second nexus must be added to I/O path"

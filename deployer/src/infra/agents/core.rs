@@ -85,11 +85,19 @@ impl ComponentAction for CoreAgent {
             ContainerSpec::from_binary(name, binary).with_portmap("50051", "50051"),
         ))
     }
-    async fn start(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start(
+        &self,
+        _options: &StartOptions,
+        cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         cfg.start("core").await?;
         Ok(())
     }
-    async fn wait_on(&self, _options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(
+        &self,
+        _options: &StartOptions,
+        cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         let ip = cfg.container_ip("core");
         let uri = tonic::transport::Uri::from_str(&format!("https://{ip}:50051")).unwrap();
         let timeout = grpc::context::TimeoutOptions::new()

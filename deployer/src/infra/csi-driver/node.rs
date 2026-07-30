@@ -1,6 +1,4 @@
-use crate::infra::{
-    async_trait, Builder, ComponentAction, ComposeTest, CsiNode, Error, StartOptions,
-};
+use crate::infra::{async_trait, Builder, ComponentAction, CsiNode, Error, StartOptions};
 use composer::{Binary, ContainerSpec};
 use std::{convert::TryFrom, ops::Deref};
 use tokio::{
@@ -52,7 +50,7 @@ impl ComponentAction for CsiNode {
             cfg
         })
     }
-    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start(&self, options: &StartOptions, cfg: &crate::ComposeTestNt) -> Result<(), Error> {
         if options.csi_node {
             let local_nodes = if options.local_nodes {
                 options.io_engines
@@ -75,7 +73,11 @@ impl ComponentAction for CsiNode {
         Ok(())
     }
 
-    async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(
+        &self,
+        options: &StartOptions,
+        _cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         if !options.csi_node {
             return Ok(());
         }

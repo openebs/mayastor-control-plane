@@ -115,12 +115,7 @@ async fn disconnect_controller(
     let new_path_uri = parse_uri(new_path.as_str())?;
     let path = &ctrlr.path;
     match get_nvme_path_entry(path) {
-        Some(pbuf) => {
-            let subsystem = Subsystem::new(pbuf.path()).map_err(|_| SvcError::NotFound {
-                kind: ResourceKind::NvmeSubsystem,
-                id: path.to_owned(),
-            })?;
-
+        Some((subsystem, _)) => {
             // sanity check to make sure this information is still up to date!
             if subsystem.nqn != new_path_uri.nqn {
                 return Err(SvcError::UnexpectedSubsystemNqn {

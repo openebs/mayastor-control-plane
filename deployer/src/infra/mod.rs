@@ -13,6 +13,8 @@ pub mod nats;
 mod rest;
 mod rwx_vm;
 
+use crate::ComposeTestNt;
+
 use super::StartOptions;
 use async_trait::async_trait;
 
@@ -159,7 +161,7 @@ impl Components {
     /// Start all components and wait up to the provided timeout.
     pub async fn start_wait(
         &self,
-        cfg: &ComposeTest,
+        cfg: &ComposeTestNt,
         timeout: std::time::Duration,
     ) -> Result<(), Error> {
         match tokio::time::timeout(timeout, self.start_wait_inner(cfg)).await {
@@ -171,7 +173,7 @@ impl Components {
         }
     }
     /// Start all components, in order, but don't wait for them.
-    pub async fn start(&self, cfg: &ComposeTest) -> Result<(), Error> {
+    pub async fn start(&self, cfg: &ComposeTestNt) -> Result<(), Error> {
         let mut last_done = None;
         for component in &self.0 {
             if let Some(last_done) = last_done {
@@ -195,7 +197,7 @@ impl Components {
     }
     /// Start all components, in order. Then wait for all components with a wait between each
     /// component to make sure they start orderly.
-    async fn start_wait_inner(&self, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start_wait_inner(&self, cfg: &ComposeTestNt) -> Result<(), Error> {
         let mut last_done = None;
 
         for component in &self.0 {
@@ -274,13 +276,13 @@ macro_rules! impl_component {
                     $(Self::$name(obj) => obj.configure(options, cfg),)+
                 }
             }
-            async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+            async fn start(&self, options: &StartOptions, cfg: &ComposeTestNt) -> Result<(), Error> {
                 let _trace = TraceFn::new(self, "start");
                 match self {
                     $(Self::$name(obj) => obj.start(options, cfg).await,)+
                 }
             }
-            async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+            async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTestNt) -> Result<(), Error> {
                 let _trace = TraceFn::new(self, "wait_on");
                 match self {
                     $(Self::$name(obj) => obj.wait_on(options, cfg).await,)+
@@ -315,8 +317,8 @@ macro_rules! impl_component {
 #[async_trait]
 pub trait ComponentAction {
     fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error>;
-    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error>;
-    async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error>;
+    async fn start(&self, options: &StartOptions, cfg: &ComposeTestNt) -> Result<(), Error>;
+    async fn wait_on(&self, options: &StartOptions, cfg: &ComposeTestNt) -> Result<(), Error>;
 }
 /// List of Control Plane Components to deploy.
 #[derive(Debug, Clone)]
@@ -364,7 +366,7 @@ impl Components {
     }
     pub async fn wait_on(
         &self,
-        cfg: &ComposeTest,
+        cfg: &ComposeTestNt,
         timeout: std::time::Duration,
     ) -> Result<(), Error> {
         match tokio::time::timeout(timeout, self.wait_on_inner(cfg)).await {
@@ -378,7 +380,7 @@ impl Components {
     async fn wait_on_components(
         &self,
         components: &[&Component],
-        cfg: &ComposeTest,
+        cfg: &ComposeTestNt,
     ) -> Result<(), Error> {
         let mut futures = vec![];
         for component in components {
@@ -403,7 +405,7 @@ impl Components {
             Ok(())
         }
     }
-    async fn wait_on_inner(&self, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on_inner(&self, cfg: &ComposeTestNt) -> Result<(), Error> {
         self.wait_on_components(&self.0.iter().collect::<Vec<_>>(), cfg)
             .await
     }

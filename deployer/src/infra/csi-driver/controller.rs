@@ -1,6 +1,4 @@
-use crate::infra::{
-    async_trait, Builder, ComponentAction, ComposeTest, CsiController, Error, StartOptions,
-};
+use crate::infra::{async_trait, Builder, ComponentAction, CsiController, Error, StartOptions};
 use composer::{Binary, ContainerSpec};
 use std::convert::TryFrom;
 use tokio::{
@@ -50,14 +48,18 @@ impl ComponentAction for CsiController {
             )
         })
     }
-    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start(&self, options: &StartOptions, cfg: &crate::ComposeTestNt) -> Result<(), Error> {
         if options.csi_controller {
             cfg.start("csi-controller").await?;
         }
         Ok(())
     }
 
-    async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(
+        &self,
+        options: &StartOptions,
+        _cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         if !options.csi_controller {
             return Ok(());
         }

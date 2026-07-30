@@ -892,7 +892,7 @@ async fn republished_nexus_io_engine_txn_fail() {
     println!("STEP: disconnected container from network...");
 
     cluster
-        .wait_node_status(node_idx0.clone(), NodeStatus::Unknown)
+        .wait_node_status_ext(node_idx0.clone(), |s| !matches!(s, NodeStatus::Online))
         .await
         .unwrap();
     println!("STEP: node now unknown...");
@@ -974,6 +974,9 @@ async fn run_fio_vol_verify(
     let fio_builder = |device: &str| {
         let filename = format!("--filename={device}");
         vec![
+            "taskset",
+            "-c",
+            cluster.fio_taskset().as_str(),
             "fio",
             "--direct=1",
             "--ioengine=libaio",

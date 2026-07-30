@@ -1,6 +1,4 @@
-use crate::infra::{
-    async_trait, Builder, ComponentAction, ComposeTest, Error, FioSpdk, StartOptions,
-};
+use crate::infra::{async_trait, Builder, ComponentAction, Error, FioSpdk, StartOptions};
 use composer::ContainerSpec;
 
 #[async_trait]
@@ -19,13 +17,17 @@ impl ComponentAction for FioSpdk {
             cfg
         })
     }
-    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start(&self, options: &StartOptions, cfg: &crate::ComposeTestNt) -> Result<(), Error> {
         if options.fio_spdk {
             cfg.start("fio-spdk").await?;
         }
         Ok(())
     }
-    async fn wait_on(&self, _options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(
+        &self,
+        _options: &StartOptions,
+        _cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         // this is fine 🔥
         Ok(())
     }

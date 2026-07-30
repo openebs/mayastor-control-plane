@@ -1,4 +1,4 @@
-use crate::infra::{async_trait, Builder, ComponentAction, ComposeTest, Error, Etcd, StartOptions};
+use crate::infra::{async_trait, Builder, ComponentAction, Error, Etcd, StartOptions};
 use composer::{Binary, ContainerSpec};
 use stor_port::pstor::etcd::Etcd as EtcdStore;
 
@@ -40,13 +40,17 @@ impl ComponentAction for Etcd {
             cfg
         })
     }
-    async fn start(&self, options: &StartOptions, cfg: &ComposeTest) -> Result<(), Error> {
+    async fn start(&self, options: &StartOptions, cfg: &crate::ComposeTestNt) -> Result<(), Error> {
         if !options.no_etcd {
             cfg.start("etcd").await?;
         }
         Ok(())
     }
-    async fn wait_on(&self, options: &StartOptions, _cfg: &ComposeTest) -> Result<(), Error> {
+    async fn wait_on(
+        &self,
+        options: &StartOptions,
+        _cfg: &crate::ComposeTestNt,
+    ) -> Result<(), Error> {
         if !options.no_etcd {
             let _store = EtcdStore::new("[::]:2379")
                 .await

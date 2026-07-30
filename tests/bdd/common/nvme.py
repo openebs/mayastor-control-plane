@@ -67,7 +67,7 @@ def nvme_hostnqn_arg(uri: ParseResult):
         return ""
 
 
-def nvme_connect(uri):
+def nvme_connect(uri, delay=None):
     u = urlparse(uri)
     port = u.port
     host = u.hostname
@@ -75,6 +75,8 @@ def nvme_connect(uri):
     hostnqn = nvme_hostnqn_arg(u)
 
     command = f"sudo {nvme_bin} connect -t tcp -s {port} -a {host} -I {hostid}{hostnqn} -n {nqn}"
+    if delay is not None:
+        command += f" -c {delay}"
     print(command)
     try:
         subprocess.run(

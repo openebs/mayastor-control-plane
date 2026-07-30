@@ -1748,8 +1748,8 @@ async fn health() {
                 && h.all_healthy_replicas_clean
                 && h.clean_replicas == h.healthy_replicas
                 && h.online_clean_replicas == h.online_healthy_replicas
-                && h.live_healthy_replicas == 2
-                && h.online_healthy_replicas == 2
+                && h.live_healthy_replicas == 0
+                && h.online_healthy_replicas == 1
         },
     )
     .await

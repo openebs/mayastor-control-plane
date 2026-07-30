@@ -4,6 +4,8 @@ import subprocess
 from typing import Optional
 from urllib.parse import ParseResult, parse_qs
 
+import pytest
+
 fio_bin = shutil.which("fio")
 
 
@@ -22,6 +24,7 @@ class Fio(object):
         norandommap=True,
         offset="0",
         extra_args="",
+        taskset=None,
     ):
         self.name = name
         self.rw = rw
@@ -36,6 +39,7 @@ class Fio(object):
         self.io_depth = io_depth
         self.offset = offset
         self.norandommap = norandommap
+        self.taskset = taskset
 
         if device is None == uri is None:
             raise "Device and Uri as exclusive!"
@@ -45,6 +49,8 @@ class Fio(object):
         if uri is not None:
             self.uri = uri
             self.userspace = True
+        if taskset is None:
+            self.taskset = f"{pytest.deployer_options.io_engines}"
 
     def build(self):
         if self.userspace:
@@ -66,14 +72,24 @@ class Fio(object):
         args = f"{args} --iodepth={self.io_depth} {self.extra_args}"
         return args
 
+    def taskset_args(self):
+        if self.taskset is not None:
+            return f"taskset -c {self.taskset} "
+        return ""
+
     def build_for_kernel(self):
         args = self.build_common_args()
         devs = [self.device] if isinstance(self.device, str) else self.device
         filename = ":".join(map(str, devs))
+        taskset = self.taskset_args()
+
+        taskset = ""
+        if self.taskset is not None:
+            taskset = f"taskset -c {self.taskset} "
 
         command = (
-            f"sudo {fio_bin} --ioengine=linuxaio --filename={filename} "
-            f"--numjobs=1 --thread=1 {args} "
+            f"date; {taskset}sudo {fio_bin} --ioengine=linuxaio --filename={filename} "
+            f"--numjobs=1 --thread=1 {args}; date"
         )
 
         return command
@@ -84,25 +100,28 @@ class Fio(object):
         uri_query = parse_qs(self.uri.query)
         traddr = self.uri.hostname
         subnqn = self.uri.path[1:].replace(":", "\\:")
+        taskset = self.taskset_args()
 
         if uri_query.keys().__contains__("hostnqn"):
             args = "--hostnqn={} {}".format(uri_query["hostnqn"][0], args)
 
         command = (
-            "docker exec -i fio-spdk fio --ioengine=spdk "
+            f"docker exec -i fio-spdk {taskset}fio --ioengine=spdk "
             f"--filename='trtype=tcp adrfam=IPv4 traddr={traddr} trsvcid=8420 subnqn={subnqn} ns=1' "
             f"--numjobs=1 --thread=1 {args} "
         )
         return command
 
     def open(self):
-        print(f"{self.build()}")
-        return subprocess.Popen(self.build(), shell=True)
+        build = self.build()
+        print(f"{build}")
+        return subprocess.Popen(build, shell=True)
 
     def run(self):
-        print(f"{self.build()}")
+        build = self.build()
+        print(f"{build}")
         try:
-            return subprocess.run(self.build(), shell=True, check=True)
+            return subprocess.run(build, shell=True, check=True)
         except subprocess.CalledProcessError:
             if self.userspace:
                 self.remove_stale_files_on_error()

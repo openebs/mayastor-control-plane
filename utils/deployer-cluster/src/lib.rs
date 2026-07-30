@@ -5,7 +5,7 @@ use composer::{Builder, ComposeTest};
 use deployer_lib::{
     default_agents,
     infra::{Components, Error, IoEngine},
-    StartOptions,
+    ComposeTestNt, StartOptions,
 };
 use opentelemetry::{global, KeyValue};
 use opentelemetry_sdk::{propagation::TraceContextPropagator, trace as sdktrace};
@@ -81,130 +81,6 @@ pub fn default_options() -> StartOptions {
         .with_show_info(true)
         .with_build_all(!matches!(std::env::var("CI").as_deref(), Ok("1")))
         .with_env_tags(vec!["CARGO_PKG_NAME"])
-}
-
-struct ComposeTestFlags {
-    logs_on_panic: bool,
-    clean: bool,
-    allow_clean_on_panic: bool,
-}
-impl ComposeTestFlags {
-    fn override_flags(flag: &mut bool, flag_name: &str) {
-        let key = format!("COMPOSE_{}", flag_name.to_ascii_uppercase());
-        if let Some(val) = std::env::var_os(&key) {
-            let clean = match val.to_str().unwrap_or_default() {
-                "true" => true,
-                "false" => false,
-                _ => return,
-            };
-            if clean != *flag {
-                tracing::warn!(
-                    "env::{} => Overriding the {} flag to {}",
-                    key,
-                    flag_name,
-                    clean
-                );
-                *flag = clean;
-            }
-        }
-    }
-    /// override clean flags with environment variable
-    /// useful for testing without having to change the code
-    fn override_debug_flags(&mut self) {
-        Self::override_flags(&mut self.clean, "clean");
-        Self::override_flags(&mut self.allow_clean_on_panic, "allow_clean_on_panic");
-        Self::override_flags(&mut self.logs_on_panic, "logs_on_panic");
-    }
-}
-/// A wrapper over the composer utility meant to ensure termination in the
-/// correct order.
-/// todo: add shutdown order!
-pub struct ComposeTestNt {
-    flags: ComposeTestFlags,
-    composer: ComposeTest,
-    name: String,
-    shutdown_order: Vec<Vec<String>>,
-}
-impl ComposeTestNt {
-    async fn new(composer: Builder) -> Result<Self, Error> {
-        let mut flags = ComposeTestFlags {
-            logs_on_panic: composer.logs_on_panic(),
-            clean: composer.clean(),
-            allow_clean_on_panic: false,
-        };
-        flags.override_debug_flags();
-        let name = composer.get_name();
-        let mut composer = composer
-            .with_clean(false)
-            .with_clean_on_panic(false)
-            .with_logs(false)
-            .build()
-            .await?;
-        composer.clear_logs_on_panic();
-        Ok(Self {
-            flags,
-            composer,
-            name,
-            shutdown_order: vec![],
-        })
-    }
-}
-impl Deref for ComposeTestNt {
-    type Target = ComposeTest;
-    fn deref(&self) -> &Self::Target {
-        &self.composer
-    }
-}
-impl Drop for ComposeTestNt {
-    fn drop(&mut self) {
-        use std::process::Command;
-
-        if std::thread::panicking() && self.flags.logs_on_panic {
-            self.print_all_logs();
-        }
-
-        if self.flags.clean && (!std::thread::panicking() || self.flags.allow_clean_on_panic) {
-            let containers = self.composer.containers();
-            let container_names = containers.keys().map(|k| k.as_str());
-
-            // todo: shutdown order not in-place at the moment
-            if !self.shutdown_order.is_empty() {
-                let sh = self.shutdown_order.drain(..);
-                sh.into_iter().for_each(|c| {
-                    c.into_iter()
-                        .map(|c| {
-                            std::thread::spawn(move || {
-                                Command::new("docker")
-                                    .args(["kill", "-s", "term", c.as_str()])
-                                    .output()
-                                    .unwrap();
-                            })
-                        })
-                        .collect::<Vec<_>>()
-                        .into_iter()
-                        .for_each(|h| {
-                            h.join().ok();
-                        });
-                });
-            } else {
-                // Kill with SIGTERM to allow for some cleanup
-                let cmd = vec!["kill", "-s", "term"]
-                    .into_iter()
-                    .chain(container_names.clone());
-                Command::new("docker").args(cmd).output().unwrap();
-            }
-
-            // Remove (killing with force if not already stopped)
-            let cmd = vec!["rm", "-vf"].into_iter().chain(container_names.clone());
-            Command::new("docker").args(cmd).output().unwrap();
-
-            // Finally remove the network, leaving no traces of our composer
-            Command::new("docker")
-                .args(["network", "rm", self.name.as_str()])
-                .output()
-                .unwrap();
-        }
-    }
 }
 
 /// Cluster with the composer, the rest client and the jaeger pipeline
@@ -300,7 +176,6 @@ impl Cluster {
             "Max tries exceeded, node service not up".to_string(),
         ))
     }
-
     /// Wait till the node is in the given status.
     pub async fn wait_node_status<I: AsRef<NodeId>>(
         &self,
@@ -309,6 +184,55 @@ impl Cluster {
     ) -> Result<(), String> {
         self.wait_node_status_tmo(node_id, status, Duration::from_secs(2))
             .await
+    }
+    /// Wait till the node is in the given status.
+    pub async fn wait_node_status_ext<I: AsRef<NodeId>>(
+        &self,
+        node_id: I,
+        status: impl Fn(&NodeStatus) -> bool,
+    ) -> Result<(), String> {
+        self.wait_node_status_tmo_ext(node_id, Duration::from_secs(2), status)
+            .await
+    }
+    /// Wait till the node is in the given status.
+    pub async fn wait_node_status_tmo_ext<I: AsRef<NodeId>>(
+        &self,
+        node_id: I,
+        timeout: Duration,
+        status: impl Fn(&NodeStatus) -> bool,
+    ) -> Result<(), String> {
+        let node_id = node_id.as_ref();
+        let node_cli = self.grpc_client().node();
+        let start = std::time::Instant::now();
+        let mut seen_status = None;
+        loop {
+            let result = node_cli
+                .get(Filter::Node(node_id.clone()), true, None)
+                .await;
+            match result {
+                Ok(nodes) => {
+                    if let Some(node) = nodes.0.first() {
+                        if status(
+                            &node
+                                .state()
+                                .map(|n| n.status)
+                                .unwrap_or(NodeStatus::Unknown),
+                        ) {
+                            return Ok(());
+                        }
+                        seen_status = node.state().map(|n| n.status);
+                    }
+                }
+                Err(error) => tracing::error!(%error, "Failed to fetch node"),
+            }
+            if std::time::Instant::now() > (start + timeout) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        Err(format!(
+            "Node {node_id} not in the desired status within {timeout:?}, currently: {seen_status:?}"
+        ))
     }
     /// Wait till the node is in the given status.
     pub async fn wait_node_status_tmo<I: AsRef<NodeId>>(
@@ -367,6 +291,28 @@ impl Cluster {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
         Err(())
+    }
+    /// Wait till the pool is online.
+    pub async fn wait_pools_online<I: AsRef<NodeId>>(&self, node: I) -> Result<(), String> {
+        let timeout = Duration::from_secs(2);
+        let start = std::time::Instant::now();
+        loop {
+            let filter = Filter::Node(node.as_ref().clone());
+            if let Ok(pools) = self.grpc_client().pool().get(filter, None).await {
+                if pools.into_inner().into_iter().all(|p| {
+                    p.state()
+                        .map(|s| s.status == PoolStatus::Online)
+                        .unwrap_or_default()
+                }) {
+                    return Ok(());
+                }
+            }
+            if std::time::Instant::now() > (start + timeout) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        Err("Timeout waiting for all pools to be online".to_string())
     }
 
     /// return grpc handle to the container
@@ -483,6 +429,22 @@ impl Cluster {
         self.volume_service_liveness(timeout_opts).await
     }
 
+    /// Wait until the node and its pools are online.
+    pub async fn restart_node_wait(&self, index: u32) -> Result<(), String> {
+        let node = self.node(index);
+        self.composer().restart(&node).await.unwrap();
+        self.wait_node_status(&node, NodeStatus::Online).await?;
+        self.wait_pools_online(&node).await?;
+        Ok(())
+    }
+
+    /// Wait until the node and its pools are online.
+    pub async fn wait_node_pool(&self, node: &NodeId) -> Result<(), String> {
+        self.wait_node_status(node, NodeStatus::Online).await?;
+        self.wait_pools_online(node).await?;
+        Ok(())
+    }
+
     /// Replace the given old node with a new one from the idles.
     pub async fn replace_node(&self, old: NodeId, new: NodeId) -> Result<(), ()> {
         self.composer().stop(&old).await.unwrap();
@@ -514,6 +476,11 @@ impl Cluster {
     /// How many io-engine nodes deployed.
     pub fn nodes(&self) -> u32 {
         self.builder.opts.io_engines
+    }
+
+    /// FIO taskset affinity for non/io-engine cores.
+    pub fn fio_taskset(&self) -> String {
+        format!("{}", self.builder.opts.io_engines)
     }
 
     /// The io-engine node nqn for `index`.
