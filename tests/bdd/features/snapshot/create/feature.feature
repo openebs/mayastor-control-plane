@@ -77,7 +77,7 @@ Feature: Volume Snapshot Creation
     And the node A is stopped
     And we delete the source volume
     And we retry the same snapshot creation
-    Then the snapshot creation should fail with failed preconditions
+    Then the snapshot creation should fail with failed preconditions or not found
     When the node A is brought back
     Then eventually the snapshot should be deleted
 

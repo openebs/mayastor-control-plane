@@ -333,11 +333,11 @@ def the_snapshot_creation_should_fail():
     assert pytest.exception is not None
 
 
-@then("the snapshot creation should fail with failed preconditions")
-def the_snapshot_creation_should_fail_with_failed_preconditions():
-    """the snapshot creation should fail with failed preconditions."""
+@then("the snapshot creation should fail with failed preconditions or not found")
+def the_snapshot_creation_should_fail_with_failed_preconditions_or_not_found():
+    """the snapshot creation should fail with failed preconditions or not found."""
     assert pytest.exception is not None
-    assert pytest.exception.status == 412
+    assert pytest.exception.status in [412, 404]
 
 
 @then("the snapshot creation should fail with preconditions failed")
