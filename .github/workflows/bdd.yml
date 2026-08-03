@@ -27,33 +27,13 @@ jobs:
           echo '{"log-driver": "journald"}' | sudo tee /etc/docker/daemon.json
           sudo systemctl restart docker
 
-      - uses: cachix/install-nix-action@v31.10.6
+      - name: Setup Nix Environment
+        uses: ./.github/actions/setup-nix
         with:
-          github_access_token: ''
-
-      - name: Inject github token to nix config
-        run: |
-          cat <<EOF | sudo tee -a /etc/nix/nix.conf
-          access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-          trusted-users = root runner
-          EOF
-
-      - name: Restart Nix daemon
-        run: sudo systemctl restart nix-daemon
-
-      - name: Pre-populate nix-shell
-        run: |
-          export NIX_PATH=nixpkgs=$(jq '.nixpkgs.url' nix/sources.json -r)
-          echo "NIX_PATH=$NIX_PATH" >> $GITHUB_ENV
-          nix-shell --run "echo" shell.nix
-
-      - name: Rustc for Rust dependencies caching
-        run: |
-          nix-shell --pure --run 'dirname "$(command -v rustc)" > rustc' shell.nix
-          echo "PATH=$(cat rustc):$PATH" >> $GITHUB_ENV
-
-      - name: Handle Rust dependencies caching
-        uses: Swatinem/rust-cache@v2
+          preFetchNix: ./shell.nix
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          hide_cachix_token: true
+          rust_cache: true
 
       - name: Build binaries
         run: nix-shell --run "cargo build --bins"

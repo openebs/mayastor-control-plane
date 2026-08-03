@@ -33,6 +33,7 @@ let
         extraPrefix = "";
       })
     ];
+    doCheck = false;
   }));
   tag = if img_tag != "" then img_tag else control-plane.version;
   image_suffix = { "release" = ""; "debug" = "-dev"; "coverage" = "-cov"; };
