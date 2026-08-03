@@ -648,7 +648,7 @@ async fn snapshot_upgrade() {
         .with_options(|b| {
             b.with_io_engines(2)
                 .with_idle_io_engines(2)
-                .with_io_engine_tag("v2.6.1")
+                .with_prev_io_engine_tag("v2.6.1")
         })
         .build()
         .await
