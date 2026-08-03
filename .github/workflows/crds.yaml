@@ -53,14 +53,7 @@ jobs:
         with:
           preFetchNix: ./shell.nix
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Rustc for Rust dependencies caching
-        run: |
-          nix-shell --pure --run 'dirname "$(command -v rustc)" > rustc' shell.nix
-          echo "PATH=$(cat rustc):$PATH" >> $GITHUB_ENV
-
-      - name: Handle Rust dependencies caching
-        uses: Swatinem/rust-cache@v2
+          rust_cache: true
 
       - name: Install cty
         run: |

@@ -33,16 +33,7 @@ jobs:
           preFetchNix: ./shell.nix
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
           hide_cachix_token: true
-
-      - name: Rustc for Rust dependencies caching
-        run: |
-          nix-shell --pure --run 'dirname "$(command -v rustc)" > rustc' shell.nix
-          echo "PATH=$(cat rustc):$PATH" >> $GITHUB_ENV
-
-      - name: Handle Rust dependencies caching
-        uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ startsWith(github.ref_name, 'release/') || github.ref_name == 'develop' }}
+          rust_cache: true
 
       - name: Build rust binaries
         run: nix-shell --run "cargo build --bins"

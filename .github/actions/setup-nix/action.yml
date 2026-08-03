@@ -11,15 +11,16 @@ inputs:
     description: Clear up storage from worker
     required: false
     default: false
-  enable_kvm:
-    required: false
-    default: false
   github_access_token:
     description: GitHub access token for installing Nix
     required: false
     default: ""
   hide_cachix_token:
     description: Hide github access token from logs
+    required: false
+    default: false
+  rust_cache:
+    description: Enable Rust dependencies caching
     required: false
     default: false
 
@@ -52,11 +53,10 @@ runs:
         else
           echo "CACHIX_TOKEN=${{ inputs.github_access_token }}" >> $GITHUB_OUTPUT
         fi
-    - uses: cachix/install-nix-action@v31.3.0
+    - uses: cachix/install-nix-action@v31.11.0
       with:
         nix_path: "${{ steps.nixpkgs.outputs.nix_path }}"
         install_options: ${{ runner.os == 'Linux' && '--no-daemon' || '' }}
-        enable_kvm: ${{ inputs.enable_kvm }}
         extra_nix_config: |
           keep-env-derivations = true
           keep-outputs = true
@@ -82,3 +82,16 @@ runs:
 
           echo "⏱️ $nix took $(( end - start ))s"
         done
+
+    - name: Rustc for Rust dependencies caching
+      if: ${{ inputs.rust_cache == 'true' }}
+      shell: bash
+      run: |
+        nix-shell --pure --run 'dirname "$(command -v rustc)" > rustc' shell.nix
+        echo "PATH=$(cat rustc):$PATH" >> $GITHUB_ENV
+
+    - name: Handle Rust dependencies caching
+      if: ${{ inputs.rust_cache == 'true' }}
+      uses: Swatinem/rust-cache@v2
+      with:
+        save-if: ${{ startsWith(github.ref_name, 'release/') || github.ref_name == 'develop' }}
