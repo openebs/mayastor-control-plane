@@ -162,20 +162,22 @@ pub struct StartOptions {
     pub io_engine_image: String,
 
     /// Use the following docker image for the io_engine instances.
-    #[clap(long, env = "IDLE_IO_ENGINE_IMAGE", default_value = utils::io_engine_image())]
-    pub idle_io_engine_image: String,
+    /// This is used for upgrade tests, where this is the older version.
+    #[clap(long, env = "PREV_IO_ENGINE_IMAGE")]
+    pub prev_io_engine_image: Option<String>,
 
     /// Use the following runnable binary for the io_engine instances.
     #[clap(long, env = "IO_ENGINE_BIN", conflicts_with = "io_engine_image")]
     pub io_engine_bin: Option<String>,
 
-    /// Use the following runnable binary for the io_engine instances.
+    /// Use the following runnable binary for the previous io_engine instances.
+    /// This is used for upgrade tests, where this is the older version.
     #[clap(
         long,
-        env = "IDLE_IO_ENGINE_BIN",
-        conflicts_with = "idle_io_engine_image"
+        env = "PREV_IO_ENGINE_BIN",
+        conflicts_with = "prev_io_engine_image"
     )]
-    pub idle_io_engine_bin: Option<String>,
+    pub prev_io_engine_bin: Option<String>,
 
     /// Add host block devices to the io_engine containers as a docker bind mount
     /// A raw block device: --io_engine-devices /dev/sda /dev/sdb
@@ -587,13 +589,18 @@ impl StartOptions {
         self
     }
     #[must_use]
+    pub fn with_prev_io_engine_tag(mut self, tag: &str) -> Self {
+        self.prev_io_engine_image = Some(utils::io_engine_image_tagged(tag.into()));
+        self
+    }
+    #[must_use]
     pub fn with_io_engine_img(mut self, image: &str) -> Self {
         self.io_engine_image = image.to_string();
         self
     }
     #[must_use]
-    pub fn with_idle_io_engine_bin(mut self, bin: &str) -> Self {
-        self.idle_io_engine_bin = Some(bin.to_string());
+    pub fn with_prev_io_engine_bin(mut self, bin: &str) -> Self {
+        self.prev_io_engine_bin = Some(bin.to_string());
         self
     }
     #[must_use]
@@ -687,6 +694,13 @@ impl StartOptions {
     pub fn no_deprecated_access_mode(mut self, value: bool) -> Self {
         self.no_deprecated_access_mode = value;
         self
+    }
+    /// If using previous io-engine image or binary.
+    pub(crate) fn prev_io_engine(&self) -> (Option<&String>, Option<&String>) {
+        (
+            self.prev_io_engine_image.as_ref(),
+            self.prev_io_engine_bin.as_ref(),
+        )
     }
 }
 

@@ -18,22 +18,20 @@ impl ComponentAction for IoEngine {
 
             let ptpl_dir = format!("{}/{}", Self::ptpl().1, name);
 
-            let bin = utils::DATA_PLANE_BINARY;
-            let binary = if i < options.io_engines {
-                options.io_engine_bin.clone()
-            } else {
-                options.idle_io_engine_bin.clone()
-            }
-            .or_else(|| Self::binary(bin));
+            let binary = match options.prev_io_engine() {
+                (_, Some(prev_bin)) if i < options.io_engines => Some(prev_bin.clone()),
+                (Some(_), _) if i < options.io_engines => None,
+                _ if i < options.io_engines && options.idle_io_engines > 0 => None,
+                _ => options.io_engine_bin.clone(),
+            };
 
             let mut spec = if let Some(binary) = binary {
                 ContainerSpec::from_binary(&name, Binary::from_path(&binary))
                     .with_bind_binary_dir(true)
             } else {
-                let image = if i < options.io_engines {
-                    &options.io_engine_image
-                } else {
-                    &options.idle_io_engine_image
+                let image = match options.prev_io_engine() {
+                    (Some(prev_image), _) if i < options.io_engines => prev_image,
+                    _ => &options.io_engine_image,
                 };
                 ContainerSpec::from_image(&name, image)
                     .with_pull_policy(options.image_pull_policy.clone())
@@ -179,12 +177,5 @@ impl IoEngine {
     /// Get the persistent reservation base path for host and container.
     pub fn ptpl() -> (&'static str, &'static str) {
         ("/tmp/ptpl", "/host/tmp/ptpl")
-    }
-    fn binary(path: &str) -> Option<String> {
-        match std::env::var_os(path) {
-            None => None,
-            Some(val) if val.is_empty() => None,
-            Some(val) => Some(val.to_string_lossy().to_string()),
-        }
     }
 }

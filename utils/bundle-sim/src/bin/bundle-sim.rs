@@ -94,8 +94,7 @@ impl SimulateOptions {
         // We're going to fake the nodes
         self.opts.io_engines = 0;
         self.opts.idle_io_engines = 1;
-        self.opts.idle_io_engine_bin =
-            Some(root.join("target/debug/io-engine").display().to_string());
+        self.opts.io_engine_bin = Some(root.join("target/debug/io-engine").display().to_string());
         let full = self.bundle.canonicalize()?;
         self.opts.io_engine_devices = vec![full.display().to_string()];
         self.opts.io_engine_env = Some(vec![KeyValue::new(
