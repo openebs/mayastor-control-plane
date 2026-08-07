@@ -204,7 +204,7 @@ async fn handle_faulted_child(
         if let Err(error) = online_nexus_child(nexus_spec, &child.uri, context).await {
             // Check if online_nexus_child failed due to max_rebuild limit being hit.
             // If no, initiate Full rebuild of the child.
-            if error.tonic_code() != tonic::Code::ResourceExhausted {
+            if error.tonic_code() != tonic::Code::OutOfRange {
                 tracing::warn!(
                     %child.uri,
                     child.uuid=%child_uuid,

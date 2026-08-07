@@ -556,6 +556,7 @@ impl SvcError {
             Self::ReplicaSetPropertyFailed { .. } => tonic::Code::DataLoss,
             Self::ReplaceNqnNotFound { .. } => tonic::Code::FailedPrecondition,
             Self::PoolCreateError { code, .. } => *code,
+            Self::MaxRebuilds { .. } => tonic::Code::OutOfRange,
             _ => tonic::Code::Internal,
         }
     }
