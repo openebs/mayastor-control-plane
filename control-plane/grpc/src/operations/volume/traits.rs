@@ -1,4 +1,4 @@
-pub use super::traits_snapshots::*;
+pub use super::{traits_snapshot_groups::*, traits_snapshots::*};
 use crate::{
     common,
     common::LabelVersion,
@@ -32,9 +32,9 @@ use stor_port::{
             NexusNvmfConfig, NexusVersion, NodeId, NodeTopology, NvmeNqn, PoolTopology,
             PublishVolume, ReplicaId, ReplicaStatus, ReplicaTopology, ReplicaUsage,
             RepublishVolume, ResizeVolume, SetVolumeProperty, SetVolumeReplica, ShareVolume,
-            SnapshotId, SnapshotRestorePolicy, Topology, UnpublishVolume, UnshareVolume, Volume,
-            VolumeAccessMode, VolumeHealth, VolumeId, VolumeLabels, VolumePolicy, VolumeProperty,
-            VolumeShareProtocol, VolumeState, VolumeUsage,
+            SnapshotGroupId, SnapshotId, SnapshotRestorePolicy, Topology, UnpublishVolume,
+            UnshareVolume, Volume, VolumeAccessMode, VolumeHealth, VolumeId, VolumeLabels,
+            VolumePolicy, VolumeProperty, VolumeShareProtocol, VolumeState, VolumeUsage,
         },
     },
     IntoOption, IntoVec, TryIntoOption,
@@ -139,6 +139,24 @@ pub trait VolumeOperations: Send + Sync {
         req: &dyn CreateSnapshotVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError>;
+    /// Create a snapshot group across multiple volumes.
+    async fn create_snapshot_group(
+        &self,
+        request: &dyn CreateSnapshotGroupInfo,
+        ctx: Option<Context>,
+    ) -> Result<SnapshotGroup, ReplyError>;
+    /// Get volume snapshot groups, optionally scoped to a single group.
+    async fn get_snapshot_groups(
+        &self,
+        group_id: Option<SnapshotGroupId>,
+        ctx: Option<Context>,
+    ) -> Result<SnapshotGroups, ReplyError>;
+    /// Destroy a volume snapshot group along with its member snapshots.
+    async fn destroy_snapshot_group(
+        &self,
+        request: &dyn DestroySnapshotGroupInfo,
+        ctx: Option<Context>,
+    ) -> Result<(), ReplyError>;
     /// Resize a volume
     async fn resize(
         &self,

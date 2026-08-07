@@ -2,24 +2,30 @@ use crate::{
     misc::traits::ValidateRequestTypes,
     operations::{volume::traits::VolumeOperations, Event, Pagination},
     volume::{
-        create_snapshot_reply, create_snapshot_volume_reply, create_volume_reply,
-        get_snapshots_reply, get_volumes_reply, publish_volume_reply, republish_volume_reply,
-        resize_volume_reply, set_volume_property_reply, set_volume_replica_reply,
-        share_volume_reply, unpublish_volume_reply,
+        create_snapshot_group_reply, create_snapshot_reply, create_snapshot_volume_reply,
+        create_volume_reply, get_snapshot_groups_reply, get_snapshots_reply, get_volumes_reply,
+        publish_volume_reply, republish_volume_reply, resize_volume_reply,
+        set_volume_property_reply, set_volume_replica_reply, share_volume_reply,
+        unpublish_volume_reply,
         volume_grpc_server::{VolumeGrpc, VolumeGrpcServer},
-        CreateSnapshotReply, CreateSnapshotRequest, CreateSnapshotVolumeReply,
-        CreateSnapshotVolumeRequest, CreateVolumeReply, CreateVolumeRequest,
-        DestroyShutdownTargetReply, DestroyShutdownTargetRequest, DestroySnapshotReply,
-        DestroySnapshotRequest, DestroyVolumeReply, DestroyVolumeRequest, GetSnapshotsReply,
-        GetSnapshotsRequest, GetVolumesReply, GetVolumesRequest, ProbeRequest, ProbeResponse,
-        PublishVolumeReply, PublishVolumeRequest, RepublishVolumeReply, RepublishVolumeRequest,
-        ResizeVolumeReply, ResizeVolumeRequest, SetVolumePropertyReply, SetVolumePropertyRequest,
+        CreateSnapshotGroupReply, CreateSnapshotGroupRequest, CreateSnapshotReply,
+        CreateSnapshotRequest, CreateSnapshotVolumeReply, CreateSnapshotVolumeRequest,
+        CreateVolumeReply, CreateVolumeRequest, DestroyShutdownTargetReply,
+        DestroyShutdownTargetRequest, DestroySnapshotGroupReply, DestroySnapshotGroupRequest,
+        DestroySnapshotReply, DestroySnapshotRequest, DestroyVolumeReply, DestroyVolumeRequest,
+        GetSnapshotGroupsReply, GetSnapshotGroupsRequest, GetSnapshotsReply, GetSnapshotsRequest,
+        GetVolumesReply, GetVolumesRequest, ProbeRequest, ProbeResponse, PublishVolumeReply,
+        PublishVolumeRequest, RepublishVolumeReply, RepublishVolumeRequest, ResizeVolumeReply,
+        ResizeVolumeRequest, SetVolumePropertyReply, SetVolumePropertyRequest,
         SetVolumeReplicaReply, SetVolumeReplicaRequest, ShareVolumeReply, ShareVolumeRequest,
         UnpublishVolumeReply, UnpublishVolumeRequest, UnshareVolumeReply, UnshareVolumeRequest,
     },
 };
 use std::{convert::TryFrom, sync::Arc};
-use stor_port::types::v0::transport::Filter;
+use stor_port::{
+    transport_api::{ReplyError, ResourceKind},
+    types::v0::transport::{Filter, SnapshotGroupId},
+};
 use tonic::{Request, Response, Status};
 
 /// RPC Volume Server
@@ -311,6 +317,67 @@ impl VolumeGrpc for VolumeServer {
             })),
             Err(err) => Ok(Response::new(CreateSnapshotVolumeReply {
                 reply: Some(create_snapshot_volume_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn create_snapshot_group(
+        &self,
+        request: Request<CreateSnapshotGroupRequest>,
+    ) -> Result<Response<CreateSnapshotGroupReply>, Status> {
+        let req = request.into_inner().validated()?;
+        match self.service.create_snapshot_group(&req, None).await {
+            Ok(group) => Ok(Response::new(CreateSnapshotGroupReply {
+                reply: Some(create_snapshot_group_reply::Reply::Group(group.try_into()?)),
+            })),
+            Err(err) => Ok(Response::new(CreateSnapshotGroupReply {
+                reply: Some(create_snapshot_group_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn get_snapshot_groups(
+        &self,
+        request: Request<GetSnapshotGroupsRequest>,
+    ) -> Result<Response<GetSnapshotGroupsReply>, Status> {
+        let req = request.into_inner();
+        let group_id = match req.group_id {
+            None => None,
+            Some(id) => match SnapshotGroupId::try_from(id) {
+                Ok(group_id) => Some(group_id),
+                Err(error) => {
+                    return Ok(Response::new(GetSnapshotGroupsReply {
+                        reply: Some(get_snapshot_groups_reply::Reply::Error(
+                            ReplyError::invalid_argument(
+                                ResourceKind::VolumeSnapshotGroup,
+                                "group_id",
+                                error,
+                            )
+                            .into(),
+                        )),
+                    }))
+                }
+            },
+        };
+        match self.service.get_snapshot_groups(group_id, None).await {
+            Ok(groups) => Ok(Response::new(GetSnapshotGroupsReply {
+                reply: Some(get_snapshot_groups_reply::Reply::Groups(groups.try_into()?)),
+            })),
+            Err(error) => Ok(Response::new(GetSnapshotGroupsReply {
+                reply: Some(get_snapshot_groups_reply::Reply::Error(error.into())),
+            })),
+        }
+    }
+
+    async fn destroy_snapshot_group(
+        &self,
+        request: Request<DestroySnapshotGroupRequest>,
+    ) -> Result<Response<DestroySnapshotGroupReply>, Status> {
+        let req = request.into_inner().validated()?;
+        match self.service.destroy_snapshot_group(&req, None).await {
+            Ok(()) => Ok(Response::new(DestroySnapshotGroupReply { error: None })),
+            Err(err) => Ok(Response::new(DestroySnapshotGroupReply {
+                error: Some(err.into()),
             })),
         }
     }

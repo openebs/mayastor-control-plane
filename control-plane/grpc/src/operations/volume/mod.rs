@@ -6,4 +6,5 @@ pub mod server;
 
 /// Volume traits for the transport.
 pub mod traits;
+mod traits_snapshot_groups;
 mod traits_snapshots;

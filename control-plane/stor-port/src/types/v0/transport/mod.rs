@@ -164,6 +164,12 @@ pub enum MessageIdVs {
     DestroyVolumeSnapshot,
     /// Get volume snapshots.
     GetVolumeSnapshots,
+    /// Create volume snapshot group.
+    CreateVolumeSnapshotGroup,
+    /// Delete volume snapshot group.
+    DestroyVolumeSnapshotGroup,
+    /// Get volume snapshot groups.
+    GetVolumeSnapshotGroups,
     /// Create volume as snapshot clone.
     CreateSnapshotVolume,
     /// Generic JSON gRPC message.

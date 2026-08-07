@@ -141,6 +141,8 @@ pub enum ResourceKind {
     Volume,
     /// Volume snapshot.
     VolumeSnapshot,
+    /// Volume snapshot group.
+    VolumeSnapshotGroup,
     /// Volume snapshot clone.
     VolumeSnapshotClone,
     /// Json Grpc methods.

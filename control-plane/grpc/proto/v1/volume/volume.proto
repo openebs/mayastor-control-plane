@@ -680,6 +680,73 @@ message CreateSnapshotVolumeReply {
   }
 }
 
+// How the members of a snapshot group are quiesced while the group is taken.
+enum SnapshotGroupQuiesce {
+  // Freeze the filesystem of every published member.
+  Freeze = 0;
+  // No quiescing, members are snapshotted as-is.
+  NoQuiesce = 1;
+}
+
+// Take a crash-consistent snapshot of a group of volumes.
+message CreateSnapshotGroupRequest {
+  // uuid of the snapshot group
+  string group_id = 1;
+  // members of the group, mapping volume ids to their pre-derived snapshot ids
+  map<string, string> members = 2;
+  // how the members are quiesced during the group operation
+  SnapshotGroupQuiesce quiesce = 3;
+}
+// Reply type for a CreateSnapshotGroupRequest request
+message CreateSnapshotGroupReply {
+  oneof reply {
+    SnapshotGroup group = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// A group of volume snapshots taken together.
+message SnapshotGroup {
+  // uuid of the snapshot group
+  string group_id = 1;
+  // members of the group, mapping volume ids to their snapshot ids
+  map<string, string> members = 2;
+  // status of the group specification
+  common.SpecStatus spec_status = 3;
+  // Creation timestamp of the group (set after creation time).
+  optional google.protobuf.Timestamp timestamp = 4;
+  // how the members are quiesced during the group operation
+  SnapshotGroupQuiesce quiesce = 5;
+  // the member volume snapshots
+  repeated VolumeSnapshot snapshots = 6;
+}
+
+message GetSnapshotGroupsRequest {
+  // uuid of a specific snapshot group, unset lists all groups
+  optional string group_id = 1;
+}
+// Reply type for a GetSnapshotGroupsRequest request
+message GetSnapshotGroupsReply {
+  oneof reply {
+    SnapshotGroups groups = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+message SnapshotGroups {
+  repeated SnapshotGroup groups = 1;
+}
+
+// Delete a snapshot group along with its member snapshots.
+message DestroySnapshotGroupRequest {
+  // uuid of the snapshot group
+  string group_id = 1;
+}
+// Reply type for a DestroySnapshotGroupRequest request
+message DestroySnapshotGroupReply {
+  optional common.ReplyError error = 1;
+}
+
 service VolumeGrpc {
   rpc CreateVolume (CreateVolumeRequest) returns (CreateVolumeReply) {}
   rpc DestroyVolume (DestroyVolumeRequest) returns (DestroyVolumeReply) {}
@@ -701,4 +768,9 @@ service VolumeGrpc {
 
   // Create a new volume by restoring the snapshot into a new volume by cloning the replica snapshots
   rpc CreateSnapshotVolume (CreateSnapshotVolumeRequest) returns (CreateSnapshotVolumeReply) {}
+
+  // Snapshot groups
+  rpc CreateSnapshotGroup (CreateSnapshotGroupRequest) returns (CreateSnapshotGroupReply) {}
+  rpc GetSnapshotGroups (GetSnapshotGroupsRequest) returns (GetSnapshotGroupsReply) {}
+  rpc DestroySnapshotGroup (DestroySnapshotGroupRequest) returns (DestroySnapshotGroupReply) {}
 }

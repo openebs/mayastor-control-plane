@@ -4,10 +4,11 @@ use crate::{
     operations::{
         volume::{
             traits::{
-                CreateSnapshotVolumeInfo, CreateVolumeInfo, CreateVolumeSnapshotInfo,
-                DestroyShutdownTargetsInfo, DestroyVolumeInfo, PublishVolumeInfo,
-                RepublishVolumeInfo, ResizeVolumeInfo, SetVolumePropertyInfo, SetVolumeReplicaInfo,
-                ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
+                CreateSnapshotGroupInfo, CreateSnapshotVolumeInfo, CreateVolumeInfo,
+                CreateVolumeSnapshotInfo, DestroyShutdownTargetsInfo, DestroySnapshotGroupInfo,
+                DestroyVolumeInfo, PublishVolumeInfo, RepublishVolumeInfo, ResizeVolumeInfo,
+                SetVolumePropertyInfo, SetVolumeReplicaInfo, ShareVolumeInfo, SnapshotGroup,
+                SnapshotGroups, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
                 VolumeSnapshot, VolumeSnapshots,
             },
             traits_snapshots::DestroyVolumeSnapshotInfo,
@@ -15,17 +16,17 @@ use crate::{
         Pagination,
     },
     volume::{
-        create_snapshot_reply, create_snapshot_volume_reply, create_volume_reply,
-        get_snapshots_reply, get_snapshots_request, get_volumes_reply, get_volumes_request,
-        publish_volume_reply, republish_volume_reply, resize_volume_reply,
-        set_volume_property_reply, set_volume_replica_reply, share_volume_reply,
-        unpublish_volume_reply, volume_grpc_client::VolumeGrpcClient, GetSnapshotsRequest,
-        GetVolumesRequest, ProbeRequest,
+        create_snapshot_group_reply, create_snapshot_reply, create_snapshot_volume_reply,
+        create_volume_reply, get_snapshot_groups_reply, get_snapshots_reply, get_snapshots_request,
+        get_volumes_reply, get_volumes_request, publish_volume_reply, republish_volume_reply,
+        resize_volume_reply, set_volume_property_reply, set_volume_replica_reply,
+        share_volume_reply, unpublish_volume_reply, volume_grpc_client::VolumeGrpcClient,
+        GetSnapshotGroupsRequest, GetSnapshotsRequest, GetVolumesRequest, ProbeRequest,
     },
 };
 use stor_port::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind, TimeoutOptions},
-    types::v0::transport::{Filter, MessageIdVs, Volume},
+    types::v0::transport::{Filter, MessageIdVs, SnapshotGroupId, Volume},
 };
 
 use std::{convert::TryFrom, ops::Deref};
@@ -389,6 +390,81 @@ impl VolumeOperations for VolumeClient {
                 create_snapshot_volume_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Volume)),
+        }
+    }
+
+    #[tracing::instrument(
+        name = "VolumeClient::create_snapshot_group",
+        level = "info",
+        skip(self)
+    )]
+    async fn create_snapshot_group(
+        &self,
+        request: &dyn CreateSnapshotGroupInfo,
+        ctx: Option<Context>,
+    ) -> Result<SnapshotGroup, ReplyError> {
+        let req = self.request(request, ctx, MessageIdVs::CreateVolumeSnapshotGroup);
+        let response = self.client().create_snapshot_group(req).await?.into_inner();
+        match response.reply {
+            Some(reply) => match reply {
+                create_snapshot_group_reply::Reply::Group(group) => {
+                    Ok(SnapshotGroup::try_from(group)?)
+                }
+                create_snapshot_group_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(
+                ResourceKind::VolumeSnapshotGroup,
+            )),
+        }
+    }
+
+    #[tracing::instrument(
+        name = "VolumeClient::get_snapshot_groups",
+        level = "debug",
+        skip(self)
+    )]
+    async fn get_snapshot_groups(
+        &self,
+        group_id: Option<SnapshotGroupId>,
+        ctx: Option<Context>,
+    ) -> Result<SnapshotGroups, ReplyError> {
+        let req = GetSnapshotGroupsRequest {
+            group_id: group_id.map(|id| id.to_string()),
+        };
+        let req = self.request(req, ctx, MessageIdVs::GetVolumeSnapshotGroups);
+        let response = self.client().get_snapshot_groups(req).await?.into_inner();
+        match response.reply {
+            Some(reply) => match reply {
+                get_snapshot_groups_reply::Reply::Groups(groups) => {
+                    Ok(SnapshotGroups::try_from(groups)?)
+                }
+                get_snapshot_groups_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(
+                ResourceKind::VolumeSnapshotGroup,
+            )),
+        }
+    }
+
+    #[tracing::instrument(
+        name = "VolumeClient::destroy_snapshot_group",
+        level = "info",
+        skip(self)
+    )]
+    async fn destroy_snapshot_group(
+        &self,
+        request: &dyn DestroySnapshotGroupInfo,
+        ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let req = self.request(request, ctx, MessageIdVs::DestroyVolumeSnapshotGroup);
+        let response = self
+            .client()
+            .destroy_snapshot_group(req)
+            .await?
+            .into_inner();
+        match response.error {
+            None => Ok(()),
+            Some(err) => Err(err.into()),
         }
     }
 }

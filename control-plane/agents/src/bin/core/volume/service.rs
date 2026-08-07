@@ -18,11 +18,12 @@ use grpc::{
     context::Context,
     operations::{
         volume::traits::{
-            CreateSnapshotVolumeInfo, CreateVolumeInfo, CreateVolumeSnapshot,
-            CreateVolumeSnapshotInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo,
-            DestroyVolumeSnapshot, DestroyVolumeSnapshotInfo, PublishVolumeInfo,
-            RepublishVolumeInfo, ResizeVolumeInfo, SetVolumePropertyInfo, SetVolumeReplicaInfo,
-            ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
+            CreateSnapshotGroupInfo, CreateSnapshotVolumeInfo, CreateVolumeInfo,
+            CreateVolumeSnapshot, CreateVolumeSnapshotInfo, DestroyShutdownTargetsInfo,
+            DestroySnapshotGroupInfo, DestroyVolumeInfo, DestroyVolumeSnapshot,
+            DestroyVolumeSnapshotInfo, PublishVolumeInfo, RepublishVolumeInfo, ResizeVolumeInfo,
+            SetVolumePropertyInfo, SetVolumeReplicaInfo, ShareVolumeInfo, SnapshotGroup,
+            SnapshotGroups, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
             VolumeSnapshot, VolumeSnapshots,
         },
         Pagination,
@@ -38,7 +39,7 @@ use stor_port::{
         transport::{
             CreateSnapshotVolume, CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter,
             PublishVolume, RepublishVolume, ResizeVolume, SetVolumeProperty, SetVolumeReplica,
-            ShareVolume, UnpublishVolume, UnshareVolume, Volume,
+            ShareVolume, SnapshotGroupId, UnpublishVolume, UnshareVolume, Volume,
         },
     },
 };
@@ -238,6 +239,36 @@ impl VolumeOperations for Service {
             Context::spawn(async move { service.create_snapshot_volume(&mut request).await })
                 .await??;
         Ok(volume)
+    }
+
+    async fn create_snapshot_group(
+        &self,
+        _request: &dyn CreateSnapshotGroupInfo,
+        _ctx: Option<Context>,
+    ) -> Result<SnapshotGroup, ReplyError> {
+        Err(ReplyError::unimplemented(
+            "Volume snapshot group creation is not implemented yet".to_string(),
+        ))
+    }
+
+    async fn get_snapshot_groups(
+        &self,
+        _group_id: Option<SnapshotGroupId>,
+        _ctx: Option<Context>,
+    ) -> Result<SnapshotGroups, ReplyError> {
+        Err(ReplyError::unimplemented(
+            "Volume snapshot group listing is not implemented yet".to_string(),
+        ))
+    }
+
+    async fn destroy_snapshot_group(
+        &self,
+        _request: &dyn DestroySnapshotGroupInfo,
+        _ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        Err(ReplyError::unimplemented(
+            "Volume snapshot group deletion is not implemented yet".to_string(),
+        ))
     }
 
     async fn resize(
