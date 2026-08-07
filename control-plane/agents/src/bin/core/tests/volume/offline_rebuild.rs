@@ -61,6 +61,106 @@ async fn offline_rebuild_e2e() {
     no_pool_candidate_defers_rebuild(&cluster).await;
 }
 
+/// Scale-up on an unpublished volume adds a replica that is absent from the
+/// persisted `NexusInfo`. It appears in the topology as Online but
+/// healthy=false, flipping the volume to Degraded. The offline-rebuild
+/// reconciler must treat this as "known needs rebuild" and skip the grace
+/// period.
+///
+/// A long grace period is configured so a passing test proves the bypass: if
+/// the reconciler still waited on the grace timer, the temp nexus would not
+/// appear within the assertion window.
+#[tokio::test]
+async fn offline_rebuild_scale_up_bypasses_grace() {
+    const LONG_GRACE_SECS: u64 = 30;
+    const START_WINDOW_SECS: u64 = 8;
+
+    let reconcile = Duration::from_millis(RECONCILE_PERIOD_MS);
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_io_engines(3)
+        .with_tmpfs_pool(52428800)
+        .with_cache_period("250ms")
+        .with_reconcile_period(reconcile, reconcile)
+        .with_options(|o| {
+            o.with_isolated_io_engine(true)
+                .with_agents_env("OFFLINE_REBUILD_ENABLED", "true")
+                .with_agents_env(
+                    "OFFLINE_REBUILD_GRACE_PERIOD",
+                    &format!("{LONG_GRACE_SECS}s"),
+                )
+        })
+        .build()
+        .await
+        .unwrap();
+
+    let api_client = cluster.rest_v00();
+    let volume_api = api_client.volumes_api();
+
+    let volid = VolumeId::new();
+    let body = models::CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false, false);
+    let volume = volume_api.put_volume(&volid, body).await.unwrap();
+    let uid = volume.spec.uuid;
+
+    volume_api
+        .put_volume_target(
+            &uid,
+            models::PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                cluster.node(0).to_string(),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+                cluster.csi_node(0),
+                None,
+            ),
+        )
+        .await
+        .expect("Should publish volume");
+    volume_api
+        .del_volume_target(&uid, None, None)
+        .await
+        .expect("Should unpublish volume");
+
+    // Scale up to 3. The new replica is absent from persisted NexusInfo, so
+    // the volume flips to Degraded.
+    let t0 = std::time::Instant::now();
+    volume_api
+        .put_volume_replica_count(&uid, 3)
+        .await
+        .expect("Should scale up to 3 replicas");
+
+    wait_till_volume_status(
+        &cluster,
+        &uid,
+        VolumeStatus::Degraded,
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("Volume should become Degraded after scale-up");
+
+    // Bypass proof: the reconciler must stand up the unshared temp target
+    // well inside the grace period.
+    wait_for_unshared_target(&cluster, &uid, Duration::from_secs(START_WINDOW_SECS))
+        .await
+        .expect(
+            "Offline rebuild should start within the assertion window \
+            (grace period should be bypassed on scale-up)",
+        );
+
+    assert!(
+        t0.elapsed() < Duration::from_secs(LONG_GRACE_SECS),
+        "Scale-up rebuild took {:?}, expected under grace period of {LONG_GRACE_SECS}s",
+        t0.elapsed()
+    );
+
+    wait_till_volume_online_no_target(&cluster, &uid, Duration::from_secs(REBUILD_TIMEOUT_SECS))
+        .await
+        .expect("Volume should be Online with no target after rebuild completes");
+
+    volume_api.del_volume(&uid).await.unwrap();
+}
+
 /// Happy path scenario, see [`offline_rebuild_e2e`] doc.
 async fn happy_path(cluster: &deployer_cluster::Cluster) {
     let api_client = cluster.rest_v00();
