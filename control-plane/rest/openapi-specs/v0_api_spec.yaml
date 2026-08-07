@@ -2130,6 +2130,96 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  '/volumes/snapshots/groups/{group_id}':
+    get:
+      tags:
+        - Snapshots
+      operationId: get_snapshot_group
+      parameters:
+        - in: path
+          name: group_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/SnapshotGroupId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VolumeSnapshotGroup'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
+    put:
+      tags:
+        - Snapshots
+      operationId: put_snapshot_group
+      parameters:
+        - in: path
+          name: group_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/SnapshotGroupId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVolumeSnapshotGroupBody'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VolumeSnapshotGroup'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
+    delete:
+      tags:
+        - Snapshots
+      operationId: del_snapshot_group
+      parameters:
+        - in: path
+          name: group_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/SnapshotGroupId'
+      responses:
+        '204':
+          description: OK
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
+  '/volumes/snapshots/groups':
+    get:
+      tags:
+        - Snapshots
+      operationId: get_snapshot_groups
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VolumeSnapshotGroups'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/volumes/snapshots/{snapshot_id}':
     get:
       tags:
@@ -2444,6 +2534,10 @@ components:
       format: uuid
     SnapshotId:
       example: 25823425-41fa-434a-9efd-a356b70b5d7c
+      type: string
+      format: uuid
+    SnapshotGroupId:
+      example: 3f4a1b62-9d3c-4a4e-8b6a-6e2c1e2b7c5a
       type: string
       format: uuid
     ReplicaId:
@@ -4692,6 +4786,74 @@ components:
           type: integer
       required:
         - entries
+    SnapshotGroupQuiesce:
+      description: |-
+        How the members of a snapshot group are quiesced while the group snapshot is taken.
+      type: string
+      enum:
+        - freeze
+        - none
+      default: freeze
+    CreateVolumeSnapshotGroupBody:
+      description: |-
+        Create Volume Snapshot Group Body.
+        The caller supplies the snapshot id for each member volume so retried
+        requests are idempotent and map onto the same member snapshots.
+      type: object
+      properties:
+        members:
+          description: Map of member volume ids to their snapshot ids.
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/SnapshotId'
+        quiesce:
+          $ref: '#/components/schemas/SnapshotGroupQuiesce'
+      required:
+        - members
+    VolumeSnapshotGroups:
+      description: |-
+        Array of volume snapshot groups.
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/VolumeSnapshotGroup'
+      required:
+        - entries
+    VolumeSnapshotGroup:
+      description: |-
+        Volume Snapshot Group Information.
+        The member snapshots are ordinary volume snapshots which may also be
+        retrieved through the volume snapshot endpoints.
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/SnapshotGroupId'
+        members:
+          description: Map of member volume ids to their snapshot ids.
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/SnapshotId'
+        status:
+          $ref: '#/components/schemas/SpecStatus'
+        timestamp:
+          description: Timestamp when all group member snapshots completed on the storage system.
+          type: string
+          format: date-time
+        quiesce:
+          $ref: '#/components/schemas/SnapshotGroupQuiesce'
+        snapshots:
+          description: The member volume snapshots.
+          type: array
+          items:
+            $ref: '#/components/schemas/VolumeSnapshot'
+      required:
+        - id
+        - members
+        - status
+        - quiesce
+        - snapshots
     VolumeSnapshot:
       description: |-
         Volume Snapshot Information.

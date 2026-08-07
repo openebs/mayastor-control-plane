@@ -1,14 +1,19 @@
 use super::*;
 use grpc::operations::{
     volume::traits::{
-        CreateVolumeSnapshot, DestroyVolumeSnapshot, ReplicaSnapshot, VolumeOperations,
-        VolumeReplicaSnapshotState, VolumeSnapshot,
+        CreateSnapshotGroup, CreateVolumeSnapshot, DestroySnapshotGroup, DestroyVolumeSnapshot,
+        ReplicaSnapshot, SnapshotGroup, VolumeOperations, VolumeReplicaSnapshotState,
+        VolumeSnapshot,
     },
     MaxEntries, Pagination, StartingToken,
 };
 use humantime::Timestamp;
 use rest_client::versions::v0::apis::Uuid;
-use std::collections::HashMap;
+use std::{collections::HashMap, convert::TryFrom};
+use stor_port::types::v0::{
+    store::snapshots::group::VolumeSnapshotGroupQuiesce,
+    transport::{SnapshotId, VolumeId},
+};
 
 fn client() -> impl VolumeOperations {
     core_grpc().volume()
@@ -162,6 +167,92 @@ impl apis::actix_server::Snapshots for RestApi {
         let snap = client().create_snapshot(&request, None).await?;
         Ok(to_models_volume_snapshot(&snap))
     }
+
+    async fn del_snapshot_group(
+        Path(group_id): Path<Uuid>,
+    ) -> Result<(), RestError<RestJsonError>> {
+        client()
+            .destroy_snapshot_group(&DestroySnapshotGroup::new(group_id.into()), None)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_snapshot_group(
+        Path(group_id): Path<Uuid>,
+    ) -> Result<models::VolumeSnapshotGroup, RestError<RestJsonError>> {
+        let groups = client()
+            .get_snapshot_groups(Some(group_id.into()), None)
+            .await?;
+        let group = groups.entries().first().ok_or_else(|| {
+            ReplyError::not_found(
+                ResourceKind::VolumeSnapshotGroup,
+                "Snapshot group not found".to_string(),
+                group_id.to_string(),
+            )
+        })?;
+        Ok(to_models_snapshot_group(group))
+    }
+
+    async fn get_snapshot_groups() -> Result<models::VolumeSnapshotGroups, RestError<RestJsonError>>
+    {
+        let groups = client().get_snapshot_groups(None, None).await?;
+        Ok(models::VolumeSnapshotGroups {
+            entries: groups
+                .entries()
+                .iter()
+                .map(to_models_snapshot_group)
+                .collect(),
+        })
+    }
+
+    async fn put_snapshot_group(
+        Path(group_id): Path<Uuid>,
+        Body(body): Body<models::CreateVolumeSnapshotGroupBody>,
+    ) -> Result<models::VolumeSnapshotGroup, RestError<RestJsonError>> {
+        let members = body
+            .members
+            .into_iter()
+            .map(|(volume_id, snapshot_id)| {
+                let volume_id = VolumeId::try_from(volume_id).map_err(|error| {
+                    ReplyError::invalid_argument(
+                        ResourceKind::VolumeSnapshotGroup,
+                        "members.volume_id",
+                        error,
+                    )
+                })?;
+                Ok((volume_id, SnapshotId::from(snapshot_id)))
+            })
+            .collect::<Result<HashMap<VolumeId, SnapshotId>, ReplyError>>()?;
+        let quiesce = match body.quiesce.unwrap_or_default() {
+            models::SnapshotGroupQuiesce::Freeze => VolumeSnapshotGroupQuiesce::Freeze,
+            models::SnapshotGroupQuiesce::None => VolumeSnapshotGroupQuiesce::None,
+        };
+        let request = CreateSnapshotGroup::new(group_id.into(), members, quiesce);
+        let group = client().create_snapshot_group(&request, None).await?;
+        Ok(to_models_snapshot_group(&group))
+    }
+}
+
+fn to_models_snapshot_group(group: &SnapshotGroup) -> models::VolumeSnapshotGroup {
+    models::VolumeSnapshotGroup::new_all(
+        group.group_id().uuid().to_owned(),
+        group
+            .members()
+            .iter()
+            .map(|(volume_id, snapshot_id)| (volume_id.to_string(), snapshot_id.uuid().to_owned()))
+            .collect::<HashMap<_, _>>(),
+        group.status().clone(),
+        group.timestamp().map(|t| t.to_string()),
+        match group.quiesce() {
+            VolumeSnapshotGroupQuiesce::Freeze => models::SnapshotGroupQuiesce::Freeze,
+            VolumeSnapshotGroupQuiesce::None => models::SnapshotGroupQuiesce::None,
+        },
+        group
+            .snapshots()
+            .iter()
+            .map(to_models_volume_snapshot)
+            .collect::<Vec<_>>(),
+    )
 }
 
 fn to_models_volume_snapshot(snap: &VolumeSnapshot) -> models::VolumeSnapshot {
