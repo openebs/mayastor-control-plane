@@ -126,6 +126,8 @@ pub enum SvcError {
         snap_id: String,
         source_id: Option<String>,
     },
+    #[snafu(display("VolumeSnapshotGroup '{}' not found", group_id))]
+    VolSnapshotGroupNotFound { group_id: String },
     #[snafu(display(
         "Invalid source Volume: {} for VolumeSnapshot: {}, expected source Volume: {}",
         invalid_source_id,
@@ -424,6 +426,14 @@ pub enum SvcError {
     SnapshotMaxLimit {
         max_snapshots: u32,
         volume_id: String,
+    },
+    #[snafu(display(
+        "Snapshot group '{group_id}' has {members} members, exceeding the maximum of {max_members}"
+    ))]
+    SnapshotGroupMaxMembers {
+        group_id: String,
+        members: usize,
+        max_members: usize,
     },
     #[snafu(display("Invalid property name '{property_name}' for the volume '{id}'"))]
     InvalidSetProperty { property_name: String, id: String },
@@ -1169,6 +1179,12 @@ impl From<SvcError> for ReplyError {
                 source,
                 extra,
             },
+            SvcError::VolSnapshotGroupNotFound { .. } => ReplyError {
+                kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::VolumeSnapshotGroup,
+                source,
+                extra,
+            },
             SvcError::InvalidSnapshotSource { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::VolumeSnapshot,
@@ -1268,6 +1284,12 @@ impl From<SvcError> for ReplyError {
             SvcError::SnapshotMaxLimit { .. } => ReplyError {
                 kind: ReplyErrorKind::OutOfRange,
                 resource: ResourceKind::Volume,
+                source,
+                extra,
+            },
+            SvcError::SnapshotGroupMaxMembers { .. } => ReplyError {
+                kind: ReplyErrorKind::OutOfRange,
+                resource: ResourceKind::VolumeSnapshotGroup,
                 source,
                 extra,
             },

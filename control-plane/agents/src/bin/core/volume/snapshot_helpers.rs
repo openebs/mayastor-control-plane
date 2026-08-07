@@ -12,6 +12,10 @@ use stor_port::{
     types::v0::{
         store::{
             snapshots::{
+                group::{
+                    VolumeSnapshotGroup, VolumeSnapshotGroupCreateInfo,
+                    VolumeSnapshotGroupOperation,
+                },
                 replica::ReplicaSnapshot,
                 volume::{
                     VolumeSnapshot, VolumeSnapshotCompleter, VolumeSnapshotCreateInfo,
@@ -76,6 +80,64 @@ impl SpecOperationsHelper for VolumeSnapshot {
     }
     fn kind(&self) -> ResourceKind {
         ResourceKind::VolumeSnapshot
+    }
+    fn uuid_str(&self) -> String {
+        self.uid().to_string()
+    }
+    fn status(&self) -> SpecStatus<Self::Status> {
+        self.status().clone()
+    }
+    fn set_status(&mut self, status: SpecStatus<Self::Status>) {
+        self.set_status(status);
+    }
+    fn operation_result(&self) -> Option<Option<bool>> {
+        self.metadata().operation().as_ref().map(|r| r.result)
+    }
+}
+
+#[async_trait::async_trait]
+impl GuardedOperationsHelper for OperationGuardArc<VolumeSnapshotGroup> {
+    type Create = VolumeSnapshotGroupCreateInfo;
+    type Owners = ();
+    type Status = ();
+    type State = VolumeSnapshotGroup;
+    type UpdateOp = VolumeSnapshotGroupOperation;
+    type Inner = VolumeSnapshotGroup;
+
+    fn remove_spec(&self, registry: &Registry) {
+        let uuid = self.uuid().clone();
+        registry.specs().remove_volume_snapshot_group(&uuid);
+    }
+}
+
+#[async_trait::async_trait]
+impl SpecOperationsHelper for VolumeSnapshotGroup {
+    type Create = VolumeSnapshotGroupCreateInfo;
+    type Owners = ();
+    type Status = ();
+    type State = VolumeSnapshotGroup;
+    type UpdateOp = VolumeSnapshotGroupOperation;
+
+    async fn start_update_op(
+        &mut self,
+        _registry: &Registry,
+        _state: &Self::State,
+        operation: Self::UpdateOp,
+    ) -> Result<(), SvcError> {
+        self.start_op(operation);
+        Ok(())
+    }
+    fn start_create_op(&mut self, request: &Self::Create) {
+        self.start_op(VolumeSnapshotGroupOperation::Create(request.clone()));
+    }
+    fn start_destroy_op(&mut self) {
+        self.start_op(VolumeSnapshotGroupOperation::Destroy);
+    }
+    fn dirty(&self) -> bool {
+        self.has_pending_op()
+    }
+    fn kind(&self) -> ResourceKind {
+        ResourceKind::VolumeSnapshotGroup
     }
     fn uuid_str(&self) -> String {
         self.uid().to_string()

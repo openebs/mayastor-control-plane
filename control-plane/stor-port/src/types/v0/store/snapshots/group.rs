@@ -5,7 +5,10 @@ use crate::types::v0::{
 use chrono::{DateTime, Utc};
 use pstor::{ApiVersion, ObjectKey, StorableObject, StorableObjectType};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 /// State of the VolumeSnapshotGroup Spec.
 pub type VolumeSnapshotGroupSpecStatus = SpecStatus<()>;
@@ -149,16 +152,41 @@ pub enum VolumeSnapshotGroupOperation {
     Destroy,
 }
 
-/// Group create information logged as part of the operation write log.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct VolumeSnapshotGroupCreateInfo {
+/// Completion info for the volume snapshot group create operation.
+pub type VolumeSnapshotGroupCompleter = Arc<Mutex<Option<VolumeSnapshotGroupCreateResult>>>;
+
+/// The result of a successful group create operation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VolumeSnapshotGroupCreateResult {
     /// The timestamp reported when all member snapshots completed.
     timestamp: DateTime<Utc>,
 }
-impl VolumeSnapshotGroupCreateInfo {
+impl VolumeSnapshotGroupCreateResult {
     /// Create a new `Self` with the given completion timestamp.
     pub fn new(timestamp: DateTime<Utc>) -> Self {
         Self { timestamp }
+    }
+}
+
+/// Group create information logged as part of the operation write log, along with
+/// the completion channel that is used to get the resulting data.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct VolumeSnapshotGroupCreateInfo {
+    #[serde(skip, default)]
+    complete: VolumeSnapshotGroupCompleter,
+}
+impl VolumeSnapshotGroupCreateInfo {
+    /// Create a new `Self` with the given completion channel.
+    pub fn new(complete: &VolumeSnapshotGroupCompleter) -> Self {
+        Self {
+            complete: complete.clone(),
+        }
+    }
+}
+impl PartialEq for VolumeSnapshotGroupCreateInfo {
+    fn eq(&self, _other: &Self) -> bool {
+        // The create info carries no request parameters, only the completion channel.
+        true
     }
 }
 
@@ -183,8 +211,14 @@ impl SpecTransaction<VolumeSnapshotGroupOperation> for VolumeSnapshotGroup {
         };
         match op.operation {
             VolumeSnapshotGroupOperation::Create(info) => {
-                self.metadata.timestamp = Some(info.timestamp);
-                self.status = SpecStatus::Created(());
+                if let Some(result) = info.complete.lock().unwrap().as_ref() {
+                    self.metadata.timestamp = Some(result.timestamp);
+                    self.status = SpecStatus::Created(());
+                } else {
+                    // means we've restarted with the op in progress... and the group was not
+                    // successful!
+                    tracing::error!(?self, "Snapshot group create completion without the result");
+                }
             }
             VolumeSnapshotGroupOperation::Destroy => {
                 self.status = SpecStatus::Deleted;
@@ -249,7 +283,9 @@ impl StorableObject for VolumeSnapshotGroup {
 
 impl PartialEq<VolumeSnapshotGroupCreateInfo> for VolumeSnapshotGroup {
     fn eq(&self, _other: &VolumeSnapshotGroupCreateInfo) -> bool {
-        false
+        // A creating group may always retry its create operation; membership equality
+        // is enforced by the caller against the persisted user spec.
+        true
     }
 }
 

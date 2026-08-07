@@ -22,7 +22,7 @@ use crate::{
 };
 use agents::errors::{
     NotEnough, SvcError,
-    SvcError::{VolSnapshotNotFound, VolumeNotFound},
+    SvcError::{VolSnapshotGroupNotFound, VolSnapshotNotFound, VolumeNotFound},
 };
 use grpc::operations::{PaginatedResult, Pagination};
 use stor_port::{
@@ -33,7 +33,10 @@ use stor_port::{
             nexus::NexusSpec,
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
-            snapshots::volume::VolumeSnapshot,
+            snapshots::{
+                group::{VolumeSnapshotGroup, VolumeSnapshotGroupUserSpec},
+                volume::VolumeSnapshot,
+            },
             volume::{
                 AffinityGroupId, AffinityGroupSpec, PublishOperation, VolumeOperation, VolumeSpec,
             },
@@ -41,7 +44,7 @@ use stor_port::{
         },
         transport::{
             CreateReplica, CreateVolume, NodeBugFix, NodeId, PoolId, Protocol, Replica, ReplicaId,
-            ReplicaName, ReplicaOwners, SnapshotId, VolumeAccessMode, VolumeId,
+            ReplicaName, ReplicaOwners, SnapshotGroupId, SnapshotId, VolumeAccessMode, VolumeId,
             VolumeShareProtocol, VolumeState, VolumeStatus,
         },
     },
@@ -815,6 +818,11 @@ impl ResourceSpecsLocked {
         let mut specs = self.write();
         specs.volume_snapshots.remove(id);
     }
+    /// Remove volume snapshot group by its `id`.
+    pub(super) fn remove_volume_snapshot_group(&self, id: &SnapshotGroupId) {
+        let mut specs = self.write();
+        specs.volume_snapshot_groups.remove(id);
+    }
 
     /// Remove Affinity Group by its `id` only if the volume list becomes empty.
     pub(super) fn remove_affinity_group(&self, id: &VolumeId, ag_id: &String) {
@@ -884,6 +892,49 @@ impl ResourceSpecsLocked {
     pub(crate) fn volume_snapshots_rsc(&self) -> Vec<ResourceMutex<VolumeSnapshot>> {
         let specs = self.read();
         specs.volume_snapshots.to_vec()
+    }
+
+    /// Get a guarded VolumeSnapshotGroup for the group with the given ID.
+    pub(crate) async fn volume_snapshot_group(
+        &self,
+        id: &SnapshotGroupId,
+    ) -> Result<OperationGuardArc<VolumeSnapshotGroup>, SvcError> {
+        match self.volume_snapshot_group_rsc(id) {
+            Some(spec) => spec.operation_guard_wait().await,
+            None => Err(VolSnapshotGroupNotFound {
+                group_id: id.to_string(),
+            }),
+        }
+    }
+
+    /// Get the resourced VolumeSnapshotGroup with the given ID.
+    pub(crate) fn volume_snapshot_group_rsc(
+        &self,
+        group_id: &SnapshotGroupId,
+    ) -> Option<ResourceMutex<VolumeSnapshotGroup>> {
+        let specs = self.read();
+        specs.volume_snapshot_groups.get(group_id).cloned()
+    }
+
+    /// Gets a copy of all resourced VolumeSnapshotGroups.
+    pub(crate) fn volume_snapshot_groups_rsc(&self) -> Vec<ResourceMutex<VolumeSnapshotGroup>> {
+        let specs = self.read();
+        specs.volume_snapshot_groups.to_vec()
+    }
+
+    /// Get or Create the resourced VolumeSnapshotGroup for the given request.
+    pub(crate) fn get_or_create_snapshot_group(
+        &self,
+        request: &VolumeSnapshotGroupUserSpec,
+    ) -> ResourceMutex<VolumeSnapshotGroup> {
+        let mut specs = self.write();
+        if let Some(group) = specs.volume_snapshot_groups.get(request.uuid()) {
+            group.clone()
+        } else {
+            specs
+                .volume_snapshot_groups
+                .insert(VolumeSnapshotGroup::from(request))
+        }
     }
 
     /// Get the list of snapshots that are in creating state by its source.

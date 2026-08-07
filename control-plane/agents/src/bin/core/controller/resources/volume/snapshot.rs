@@ -1,7 +1,7 @@
 use super::{ResourceMutex, ResourceUid};
 use stor_port::types::v0::{
-    store::snapshots::{volume::VolumeSnapshot, ReplicaSnapshotState},
-    transport::SnapshotId,
+    store::snapshots::{group::VolumeSnapshotGroup, volume::VolumeSnapshot, ReplicaSnapshotState},
+    transport::{SnapshotGroupId, SnapshotId},
 };
 
 impl ResourceMutex<VolumeSnapshot> {
@@ -21,5 +21,18 @@ impl ResourceUid for ReplicaSnapshotState {
     type Uid = SnapshotId;
     fn uid(&self) -> &Self::Uid {
         self.snapshot.snap_uuid()
+    }
+}
+impl ResourceMutex<VolumeSnapshotGroup> {
+    /// Get the resource uuid.
+    #[allow(dead_code)]
+    pub fn uuid(&self) -> &SnapshotGroupId {
+        self.immutable_ref().uid()
+    }
+}
+impl ResourceUid for VolumeSnapshotGroup {
+    type Uid = SnapshotGroupId;
+    fn uid(&self) -> &Self::Uid {
+        self.uuid()
     }
 }

@@ -11,20 +11,25 @@ use crate::{
             OperationGuardArc,
         },
     },
-    volume::snapshot_operations::DestroyVolumeSnapshotRequest,
+    volume::{
+        group_snapshot_operations::{
+            CreateVolumeSnapshotGroupRequest, DestroyVolumeSnapshotGroupRequest,
+        },
+        snapshot_operations::DestroyVolumeSnapshotRequest,
+    },
 };
 use agents::errors::SvcError;
 use grpc::{
     context::Context,
     operations::{
         volume::traits::{
-            CreateSnapshotGroupInfo, CreateSnapshotVolumeInfo, CreateVolumeInfo,
-            CreateVolumeSnapshot, CreateVolumeSnapshotInfo, DestroyShutdownTargetsInfo,
-            DestroySnapshotGroupInfo, DestroyVolumeInfo, DestroyVolumeSnapshot,
-            DestroyVolumeSnapshotInfo, PublishVolumeInfo, RepublishVolumeInfo, ResizeVolumeInfo,
-            SetVolumePropertyInfo, SetVolumeReplicaInfo, ShareVolumeInfo, SnapshotGroup,
-            SnapshotGroups, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
-            VolumeSnapshot, VolumeSnapshots,
+            CreateSnapshotGroup, CreateSnapshotGroupInfo, CreateSnapshotVolumeInfo,
+            CreateVolumeInfo, CreateVolumeSnapshot, CreateVolumeSnapshotInfo,
+            DestroyShutdownTargetsInfo, DestroySnapshotGroup, DestroySnapshotGroupInfo,
+            DestroyVolumeInfo, DestroyVolumeSnapshot, DestroyVolumeSnapshotInfo, PublishVolumeInfo,
+            RepublishVolumeInfo, ResizeVolumeInfo, SetVolumePropertyInfo, SetVolumeReplicaInfo,
+            ShareVolumeInfo, SnapshotGroup, SnapshotGroups, UnpublishVolumeInfo, UnshareVolumeInfo,
+            VolumeOperations, VolumeSnapshot, VolumeSnapshots,
         },
         Pagination,
     },
@@ -33,7 +38,10 @@ use stor_port::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind},
     types::v0::{
         store::{
-            snapshots::volume::VolumeSnapshotUserSpec,
+            snapshots::{
+                group::{VolumeSnapshotGroup, VolumeSnapshotGroupUserSpec},
+                volume::VolumeSnapshotUserSpec,
+            },
             volume::{VolumeContentSource, VolumeSpec},
         },
         transport::{
@@ -243,32 +251,34 @@ impl VolumeOperations for Service {
 
     async fn create_snapshot_group(
         &self,
-        _request: &dyn CreateSnapshotGroupInfo,
+        request: &dyn CreateSnapshotGroupInfo,
         _ctx: Option<Context>,
     ) -> Result<SnapshotGroup, ReplyError> {
-        Err(ReplyError::unimplemented(
-            "Volume snapshot group creation is not implemented yet".to_string(),
-        ))
+        let service = self.clone();
+        let request = request.info();
+        let group =
+            Context::spawn(async move { service.create_snapshot_group(request).await }).await??;
+        Ok(group)
     }
 
     async fn get_snapshot_groups(
         &self,
-        _group_id: Option<SnapshotGroupId>,
+        group_id: Option<SnapshotGroupId>,
         _ctx: Option<Context>,
     ) -> Result<SnapshotGroups, ReplyError> {
-        Err(ReplyError::unimplemented(
-            "Volume snapshot group listing is not implemented yet".to_string(),
-        ))
+        let groups = self.get_snapshot_groups(group_id).await?;
+        Ok(groups)
     }
 
     async fn destroy_snapshot_group(
         &self,
-        _request: &dyn DestroySnapshotGroupInfo,
+        request: &dyn DestroySnapshotGroupInfo,
         _ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
-        Err(ReplyError::unimplemented(
-            "Volume snapshot group deletion is not implemented yet".to_string(),
-        ))
+        let service = self.clone();
+        let request = request.info();
+        Context::spawn(async move { service.destroy_snapshot_group(request).await }).await??;
+        Ok(())
     }
 
     async fn resize(
@@ -616,6 +626,89 @@ impl Service {
                 false => pagination.map(|p| p.starting_token() + p.max_entries()),
             },
         })
+    }
+
+    /// Create a volume snapshot group.
+    #[tracing::instrument(level = "info", skip(self, request), err, fields(snapshot_group.uuid = %request.group_id()))]
+    async fn create_snapshot_group(
+        &self,
+        request: CreateSnapshotGroup,
+    ) -> Result<SnapshotGroup, SvcError> {
+        let spec = VolumeSnapshotGroupUserSpec::new(
+            request.group_id().clone(),
+            request.members().clone(),
+            request.quiesce(),
+        );
+        let group = OperationGuardArc::<VolumeSnapshotGroup>::create(
+            &self.registry,
+            &CreateVolumeSnapshotGroupRequest { spec },
+        )
+        .await?;
+        let group = group.as_ref().clone();
+        self.snapshot_group(&group).await
+    }
+
+    /// Get volume snapshot groups.
+    pub(super) async fn get_snapshot_groups(
+        &self,
+        group_id: Option<SnapshotGroupId>,
+    ) -> Result<SnapshotGroups, SvcError> {
+        let groups = match group_id {
+            Some(group_id) => vec![self.specs().volume_snapshot_group_rsc(&group_id).ok_or(
+                SvcError::VolSnapshotGroupNotFound {
+                    group_id: group_id.to_string(),
+                },
+            )?],
+            None => self.specs().volume_snapshot_groups_rsc(),
+        };
+        let mut entries = Vec::with_capacity(groups.len());
+        for group in groups {
+            let group = group.lock().clone();
+            entries.push(self.snapshot_group(&group).await?);
+        }
+        Ok(SnapshotGroups::new(entries))
+    }
+
+    /// Destroy a volume snapshot group along with its member snapshots.
+    #[tracing::instrument(level = "info", skip(self, request), err, fields(snapshot_group.uuid = %request.group_id()))]
+    async fn destroy_snapshot_group(&self, request: DestroySnapshotGroup) -> Result<(), SvcError> {
+        let mut group = self
+            .specs()
+            .volume_snapshot_group(request.group_id())
+            .await?;
+        group
+            .destroy(
+                &self.registry,
+                &DestroyVolumeSnapshotGroupRequest::default(),
+            )
+            .await
+    }
+
+    /// Get the given snapshot group along with its member snapshots.
+    async fn snapshot_group(&self, group: &VolumeSnapshotGroup) -> Result<SnapshotGroup, SvcError> {
+        let members = group.spec().members();
+        let mut snapshots = Vec::with_capacity(members.len());
+        for volume_id in group.spec().sorted_volumes() {
+            let Some(snapshot_id) = members.get(&volume_id) else {
+                continue;
+            };
+            match self.registry.snapshot(Some(&volume_id), snapshot_id).await {
+                Ok(snapshot) => snapshots.push(snapshot),
+                Err(SvcError::VolSnapshotNotFound { .. }) => continue,
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(SnapshotGroup::new(
+            group.uuid().clone(),
+            members.clone(),
+            group.status().clone(),
+            group
+                .metadata()
+                .timestamp()
+                .map(|t| std::time::SystemTime::from(t).into()),
+            group.spec().quiesce(),
+            snapshots,
+        ))
     }
 
     /// Create a new volume from a snapshot using the given parameters.

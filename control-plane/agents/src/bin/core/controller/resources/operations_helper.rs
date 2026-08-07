@@ -20,13 +20,14 @@ use stor_port::{
             node::NodeSpec,
             pool::PoolSpec,
             replica::ReplicaSpec,
-            snapshots::volume::VolumeSnapshot,
+            snapshots::{group::VolumeSnapshotGroup, volume::VolumeSnapshot},
             volume::{AffinityGroupSpec, VolumeContentSource, VolumeSpec},
             AsOperationSequencer, OperationMode, SpecStatus, SpecTransaction,
         },
         transport::{
-            AppNodeId, NexusId, NodeId, PoolId, ReplicaId, ReplicaTopology, SnapshotId,
-            SnapshotLossDetail, SnapshotLossInfo, VolumeId, VolumeLossDetail, VolumeLossInfo,
+            AppNodeId, NexusId, NodeId, PoolId, ReplicaId, ReplicaTopology, SnapshotGroupId,
+            SnapshotId, SnapshotLossDetail, SnapshotLossInfo, VolumeId, VolumeLossDetail,
+            VolumeLossInfo,
         },
     },
 };
@@ -937,6 +938,8 @@ pub(crate) struct ResourceSpecs {
     pub(crate) affinity_groups: ResourceMutexMap<String, AffinityGroupSpec>,
     /// Top-level volume snapshots.
     pub(crate) volume_snapshots: ResourceMutexMap<SnapshotId, VolumeSnapshot>,
+    /// Volume snapshot groups, whose members are top-level volume snapshots.
+    pub(crate) volume_snapshot_groups: ResourceMutexMap<SnapshotGroupId, VolumeSnapshotGroup>,
     pub(crate) app_nodes: ResourceMutexMap<AppNodeId, AppNodeSpec>,
 }
 
@@ -959,6 +962,7 @@ impl ResourceSpecsLocked {
             StorableObjectType::PoolSpec,
             StorableObjectType::ReplicaSpec,
             StorableObjectType::VolumeSnapshot,
+            StorableObjectType::VolumeSnapshotGroup,
             StorableObjectType::AppNodeSpec,
         ];
         for spec in &spec_types {
@@ -1110,6 +1114,14 @@ impl ResourceSpecsLocked {
                     },
                 )?;
                 resource_specs.volume_snapshots.populate(specs);
+            }
+            StorableObjectType::VolumeSnapshotGroup => {
+                let specs = Self::deserialise_specs::<VolumeSnapshotGroup>(store_values).context(
+                    Deserialise {
+                        obj_type: StorableObjectType::VolumeSnapshotGroup,
+                    },
+                )?;
+                resource_specs.volume_snapshot_groups.populate(specs);
             }
             StorableObjectType::AppNodeSpec => {
                 let specs =
