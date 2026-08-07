@@ -21,6 +21,7 @@ pub enum StorableObjectType {
     VolumeSpec,
     VolumeState,
     VolumeSnapshot,
+    VolumeSnapshotGroup,
     ChildSpec,
     ChildState,
     CoreRegistryConfig,

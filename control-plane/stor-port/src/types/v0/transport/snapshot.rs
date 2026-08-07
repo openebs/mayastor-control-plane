@@ -3,6 +3,7 @@ use crate::types::v0::store::replica::PoolRef;
 use serde::Serialize;
 
 rpc_impl_string_uuid!(SnapshotId, "UUID of a snapshot");
+rpc_impl_string_uuid!(SnapshotGroupId, "UUID of a snapshot group");
 /// UUID of a snapshot clone.
 pub type VolSnapshotCloneId = VolumeId;
 /// UUID of a replica clone.
