@@ -13,8 +13,14 @@ use crate::{
 
 use stor_port::types::v0::{
     store::volume::VolumeSpec,
-    transport::{PublishVolume, UnpublishVolume, VolumeState, VolumeStatus, VolumeTargetMode},
+    transport::{
+        PublishVolume, ReplicaId, ReplicaTopology, UnpublishVolume, VolumeState, VolumeStatus,
+        VolumeTargetMode,
+    },
 };
+
+use agents::errors::SvcError;
+use std::collections::{HashMap, HashSet};
 
 /// Offline Volume Rebuild.
 ///
@@ -109,26 +115,97 @@ async fn offline_rebuild_reconcile(
         return PollResult::Ok(PollerState::Idle);
     }
 
-    let degraded_for = volume.lock().metadata.offline_rebuild_degraded();
-    let grace_period = context.registry().offline_rebuild_grace_period();
-    if degraded_for < grace_period {
-        tracing::debug!(
+    // Scale-up added a replica that was never part of the last-published
+    // nexus, so it is definitively out-of-sync — not a transient blip the
+    // grace period is meant to absorb. If that replica is also currently
+    // online it can serve as an in-place rebuild target, so no fresh pool is
+    // needed either.
+    let has_in_place_target =
+        has_scale_up_rebuild_target(&volume, &volume_state.replica_topology, context).await?;
+
+    if !has_in_place_target {
+        let degraded_for = volume.lock().metadata.offline_rebuild_degraded();
+        let grace_period = context.registry().offline_rebuild_grace_period();
+        if degraded_for < grace_period {
+            tracing::debug!(
+                volume.uuid = %volume.uuid(),
+                remaining = ?grace_period.saturating_sub(degraded_for),
+                "Offline rebuild waiting for grace period"
+            );
+            return PollResult::Ok(PollerState::Busy);
+        }
+    } else {
+        tracing::info!(
             volume.uuid = %volume.uuid(),
-            remaining = ?grace_period.saturating_sub(degraded_for),
-            "Offline rebuild waiting for grace period"
+            "Bypassing grace period: replica added since last publish"
         );
-        return PollResult::Ok(PollerState::Busy);
     }
 
-    initiate_offline_rebuild(&mut volume, &volume_state, context).await
+    initiate_offline_rebuild(&mut volume, &volume_state, context, has_in_place_target).await
+}
+
+/// Returns `true` when a scale-up left an Online replica that the
+/// last-published nexus never had, making it an in-place rebuild destination.
+///
+/// Such a replica is known-out-of-sync by definition rather than transiently
+/// degraded, and being Online it is also reachable, so the rebuild can start
+/// without waiting on the grace period or standing up a fresh pool.
+///
+/// The Online guard matters: a spec-only replica whose node is currently down
+/// would still be in `replica_topology` and absent from `NexusInfo`, but the
+/// temp nexus would come up short one child and the rebuild would never make
+/// progress.
+///
+/// Known caveat: if the last publish itself came up short because a replica
+/// was unavailable then, `children.len()` already trails `num_replicas` and a
+/// replacement reads as a scale-up. That only costs an earlier rebuild.
+///
+/// If the `NexusInfo` cannot be loaded (missing key, transient store error),
+/// falls back to the safe default of *not* bypassing the grace period.
+async fn has_scale_up_rebuild_target(
+    volume: &OperationGuardArc<VolumeSpec>,
+    replica_topology: &HashMap<ReplicaId, ReplicaTopology>,
+    context: &PollContext,
+) -> Result<bool, SvcError> {
+    let Some(nexus_info) = context
+        .registry()
+        .nexus_info(
+            Some(volume.uuid()),
+            volume.as_ref().health_info_id(),
+            false,
+            None,
+        )
+        .await?
+    else {
+        return Ok(false);
+    };
+
+    // The replica count reconciler also adds replicas that are absent from
+    // NexusInfo, to replace a failed one. Those must still serve out the grace
+    // period in case the original comes back, so require the desired count to
+    // have outgrown the last-published child count.
+    if usize::from(volume.as_ref().num_replicas) <= nexus_info.children.len() {
+        return Ok(false);
+    }
+
+    let known: HashSet<_> = nexus_info.children.iter().map(|c| &c.uuid).collect();
+    Ok(replica_topology
+        .iter()
+        .any(|(uuid, topo)| topo.status().online() && !known.contains(uuid)))
 }
 
 /// Creates a non-shared nexus for the volume so the existing rebuild engine
 /// (HotSpareReconciler) can restore faulted replicas.
+///
+/// `has_in_place_target` skips the candidate-pool check: when an extra
+/// replica already sits in the topology (e.g. from scale-up while
+/// unpublished), that replica is itself the rebuild destination and no fresh
+/// pool is required.
 async fn initiate_offline_rebuild(
     volume: &mut OperationGuardArc<VolumeSpec>,
     volume_state: &VolumeState,
     context: &PollContext,
+    has_in_place_target: bool,
 ) -> PollResult {
     let registry = context.registry();
 
@@ -143,8 +220,8 @@ async fn initiate_offline_rebuild(
 
     // Pre-flight viability: only stand up the temp nexus if the rebuild can
     // actually make progress. Needs both a source (a healthy replica to copy
-    // from) and a target (a candidate pool with room for the replacement
-    // replica).
+    // from) and a target (either an in-place replica flagged unhealthy, or
+    // a candidate pool with room for a replacement replica).
     //
     // Prefer the strict health signal — `online_clean_replicas > 0` — when
     // available; that's the CP's own trust decision and already accounts for
@@ -162,18 +239,18 @@ async fn initiate_offline_rebuild(
                 .values()
                 .any(|r| r.status().online())
         });
-    let target_viable = || async {
-        !volume_pool_candidates(GetSuitablePools::new(volume.as_ref(), None), registry)
+    let target_viable = has_in_place_target
+        || !volume_pool_candidates(GetSuitablePools::new(volume.as_ref(), None), registry)
             .await
-            .is_empty()
-    };
+            .is_empty();
 
-    if !source_viable || !target_viable().await {
+    if !source_viable || !target_viable {
         tracing::debug!(
             volume.uuid = %volume.uuid(),
             source_viable,
+            has_in_place_target,
             "Offline rebuild deferred: rebuild not viable \
-            (no healthy source replica and/or no candidate pool)"
+            (no healthy source replica and/or no rebuild destination)"
         );
         return PollResult::Ok(PollerState::Idle);
     }
