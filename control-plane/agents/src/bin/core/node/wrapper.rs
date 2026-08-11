@@ -895,7 +895,10 @@ impl NodeWrapper {
                 self.resources_mut().update_nexuses(nexuses);
                 self.update_num_rebuilds();
             }
-            ResourceType::Nexus(nexus) => self.resources_mut().update_nexus(nexus),
+            ResourceType::Nexus(nexus) => {
+                self.resources_mut().update_nexus(nexus);
+                self.update_num_rebuilds();
+            }
             ResourceType::Pools(pools) => {
                 self.resources_mut().update_pools(pools);
             }
