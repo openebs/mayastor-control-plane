@@ -41,6 +41,8 @@ pub struct ApiRest {}
 pub struct Etcd {}
 /// Internal for type-state.
 pub struct Loki {}
+/// Internal for type-state.
+pub struct Nats {}
 
 /// The scheme component of the URI.
 #[derive(Clone, Debug)]
@@ -146,6 +148,25 @@ impl Default for ConfigBuilder<Loki> {
         }
     }
 }
+impl Default for ConfigBuilder<Nats> {
+    fn default() -> Self {
+        Self {
+            target: kube_forward::Target::new(
+                kube_forward::TargetSelector::ServiceLabel(utils::NATS_LABEL.to_string()),
+                utils::NATS_PORT,
+                utils::DEFAULT_NAMESPACE,
+            ),
+            timeout: Some(std::time::Duration::from_secs(5)),
+            method: ForwardingProxy::TCP,
+            scheme: Scheme::HTTP,
+            kube_config: None,
+            context: None,
+            security_prefix: None,
+            client: None,
+            builder_target: std::marker::PhantomData,
+        }
+    }
+}
 
 impl ConfigBuilder<ApiRest> {
     /// Returns a `Self` with sane defaults for the api-rest.
@@ -163,6 +184,12 @@ impl ConfigBuilder<Loki> {
     /// Returns a `Self` with sane defaults for the Loki.
     pub fn default_loki() -> ConfigBuilder<Loki> {
         ConfigBuilder::<Loki>::default()
+    }
+}
+impl ConfigBuilder<Nats> {
+    /// Returns a `Self` with sane defaults for NATS.
+    pub fn default_nats() -> ConfigBuilder<Nats> {
+        ConfigBuilder::<Nats>::default()
     }
 }
 
@@ -352,6 +379,25 @@ impl ConfigBuilder<Etcd> {
 
         let scheme = self.scheme.name();
         let uri = Uri::try_from(&format!("{scheme}://localhost:{port}"))?;
+        Ok(uri)
+    }
+}
+
+impl ConfigBuilder<Nats> {
+    /// Tries to build a `nats://` URI from the current self by port-forwarding the NATS service.
+    pub async fn build(self) -> Result<Uri, Error> {
+        let client = super::client_from_kubeconfig(self.kube_config, self.context).await?;
+
+        let pf = kube_forward::PortForward::new_with_secrets(
+            self.target,
+            None,
+            client,
+            self.security_prefix,
+        );
+
+        let (port, _handle) = pf.port_forward().await?;
+
+        let uri = Uri::try_from(&format!("nats://localhost:{port}"))?;
         Ok(uri)
     }
 }
