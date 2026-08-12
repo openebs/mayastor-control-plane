@@ -84,6 +84,11 @@ pub const LOKI_LABEL: &str = "app=loki";
 /// The service port for the loki.
 pub const LOKI_PORT: &str = "http-metrics";
 
+/// The service label for the NATS service.
+pub const NATS_LABEL: &str = "app.kubernetes.io/name=nats";
+/// The client port name for the NATS service.
+pub const NATS_PORT: &str = "client";
+
 /// The default value to be assigned as GRPC server addr if not overridden.
 pub const DEFAULT_GRPC_SERVER_ADDR: &str = "[::]:50051";
 
