@@ -179,8 +179,6 @@ impl NodeAgentSvc {
         // Get the client to the nvme operations service running in csi-node.
         let mut client = csi_node_nvme_client().clone();
 
-        tracing::info!(new_path, "Connecting to NVMe target");
-
         // Check to ensure Nqn is already connected
         if Subsystem::try_from_nqn(&nqn).is_err() {
             return Err(SvcError::ReplaceNqnNotFound { nqn });
@@ -195,6 +193,10 @@ impl NodeAgentSvc {
             parsed_uri.nqn().as_str(),
         )
         .is_ok();
+
+        if !preexisted_subsystem {
+            tracing::info!(new_path, "Connecting to NVMe target");
+        }
 
         // Open connection to the new target: ANA will automatically create
         // the second path and add it as an alternative for the first broken one,
@@ -218,6 +220,13 @@ impl NodeAgentSvc {
                     connect_xprt,
                     parsed_uri.nqn().as_str(),
                 ) {
+                    Ok(subsystem) if preexisted_subsystem => {
+                        tracing::info!(
+                            new_path,
+                            "Awaiting on existing connection({connect_xprt:?}) to NVMe target"
+                        );
+                        Ok(subsystem)
+                    }
                     Ok(subsystem) => {
                         tracing::info!(
                             new_path,
@@ -365,7 +374,9 @@ impl NodeAgentOperations for NodeAgentSvc {
     ) -> Result<(), ReplyError> {
         let deadline = std::time::Duration::from_secs(50);
         let start = std::time::Instant::now();
-        tracing::info!(?request, "Replacing failed NVMe path");
+
+        tracing::info!(?request, "Replace NVMe path request received");
+
         // Lookup NVMe controller whose path has failed.
         let ctrlrs = self
             .path_cache
