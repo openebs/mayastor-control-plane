@@ -190,7 +190,7 @@ impl Attach for NvmfAttach {
             self.nqn.as_str(),
         ) {
             Ok(subsystem) => {
-                tracing::debug!(?subsystem, "Subsystem already present, skipping connect");
+                tracing::info!(?subsystem, "Subsystem already present, skipping connect");
                 Ok(())
             }
             Err(NvmeError::SubsystemNotFound { .. }) => {
