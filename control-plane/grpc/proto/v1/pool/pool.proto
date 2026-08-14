@@ -2,6 +2,8 @@ syntax = "proto3";
 
 import "v1/misc/common.proto";
 import "google/protobuf/wrappers.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
 
 package v1.pool;
 
@@ -122,9 +124,37 @@ message PoolSpec {
   // Cordon Drain state
   oneof CordonDrain {
     CordonedState cordoned = 7;
+    DrainSpec drain = 9;
   }
   // Blobstore cluster size required for this pool
   optional uint32 cluster_size = 8;
+}
+
+message DrainSpec {
+  // The time at which the drain request was made.
+  google.protobuf.Timestamp request_timestamp = 1;
+  // The user's drain policy, each of which alters what the drain operation will do.
+  DrainPolicy policy = 2;
+  // Holds user applied cordon configs if present before starting drain.
+  CordonedState user_cordon = 3;
+}
+
+message DrainPolicy {
+  // What the drain does with the snapshots left on the pool once all replicas are evacuated.
+  SnapshotPolicy snapshot_policy = 1;
+  // Grace period, after which an unplaceable replica is force-evicted.
+  optional google.protobuf.Duration unsafe_rebuild_otherwise_evict = 2;
+  // Skip the safe over-replicate flow and evict replicas directly.
+  bool unsafe_evict = 3;
+}
+
+// What a drain does with the snapshots left on the pool once all replicas are evacuated.
+// Snapshots cannot be moved, so the caller has to say up front what should happen to them.
+enum SnapshotPolicy {
+  // Move replicas only, leaving the snapshots in place.
+  Ignore = 0;
+  // Destroy the snapshots left on the pool once all replicas are evacuated.
+  AcceptLoss = 1;
 }
 
 // Pool information

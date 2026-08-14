@@ -28,6 +28,7 @@ use std::{
     convert::From,
     fmt::Debug,
     ops::{Deref, DerefMut},
+    time::{Duration, SystemTime},
 };
 
 /// Pool data structure used by the persistent store.
@@ -280,6 +281,13 @@ impl PoolSpec {
                         self.cordon_drain = None;
                     }
                 }
+                CordonDrainState::Drain(spec) => {
+                    if let Some(uc) = &spec.user_cordon {
+                        if !uc.cordoned() {
+                            spec.user_cordon = None;
+                        }
+                    }
+                }
             }
         }
     }
@@ -306,13 +314,11 @@ impl PoolSpec {
     }
 
     /// Returns whether the pool is cordoned and its state.
-    pub fn cordoned(&self) -> Option<&CordonedState> {
-        self.cordon_drain.as_ref().map(|s| match s {
-            CordonDrainState::Cordoned(cordoned) => cordoned,
-        })
+    pub fn cordoned(&self) -> Option<CordonedState> {
+        self.effective_cordon()
     }
 
-    /// Check if the pool is cordoned for imports.
+    /// Check if the pool is cordoned for imports, as per the effective cordon policy.
     pub fn cordoned_imports(&self) -> bool {
         self.cordoned().map(|s| s.import).unwrap_or_default()
     }
@@ -340,6 +346,41 @@ impl PoolSpec {
             return true;
         };
         diag.import.retriable()
+    }
+
+    /// Sets drain configuration on the pool, carrying over the user's own cordon, if any.
+    pub fn start_drain(&mut self, policy: DrainPolicy) {
+        let user_cordon = self.cordon_drain.as_ref().and_then(|s| match s {
+            CordonDrainState::Drain(drain) => drain.user_cordon.clone(),
+            CordonDrainState::Cordoned(cordoned) => Some(cordoned.clone()),
+        });
+        let drain_spec = DrainSpec::new(policy, user_cordon);
+        self.cordon_drain = Some(CordonDrainState::Drain(drain_spec));
+    }
+
+    /// Removes drain configuration from the pool, restoring the user's own cordon, if they had
+    /// one set before the drain.
+    pub fn abort_drain(&mut self) {
+        if let Some(CordonDrainState::Drain(drain)) = &self.cordon_drain {
+            self.cordon_drain = drain
+                .user_cordon
+                .as_ref()
+                .map(|uc| CordonDrainState::Cordoned(uc.clone()));
+        }
+    }
+
+    /// Returns the applied drain configuration on the pool.
+    pub fn drain_policy(&self) -> Option<&DrainPolicy> {
+        match self.cordon_drain.as_ref()? {
+            CordonDrainState::Drain(drain) => Some(&drain.policy),
+            CordonDrainState::Cordoned(_) => None,
+        }
+    }
+
+    /// Returns the cordon policy in effect: consider self-cordon while a drain is applied, otherwise
+    /// the cordon the user applied.
+    pub fn effective_cordon(&self) -> Option<CordonedState> {
+        self.cordon_drain.as_ref().map(|s| s.effective_cordon())
     }
 }
 
@@ -658,6 +699,14 @@ impl CordonedState {
     fn cordoned(&self) -> bool {
         self.replicas || self.snapshots || self.restores || self.import
     }
+
+    /// A cordoned state that is self-cordoned for all operations except import.
+    pub const SELF_CORDON: Self = Self {
+        replicas: true,
+        snapshots: true,
+        restores: true,
+        import: false,
+    };
 }
 
 impl From<PoolCordonOp> for CordonedState {
@@ -712,6 +761,8 @@ impl CordonedState {
 pub enum CordonDrainState {
     /// The pool is being cordoned.
     Cordoned(CordonedState),
+    /// The pool is being drained.
+    Drain(DrainSpec),
 }
 
 impl CordonDrainState {
@@ -721,36 +772,126 @@ impl CordonDrainState {
             CordonDrainState::Cordoned(state) => {
                 state.add_cordon(cordon);
             }
+            CordonDrainState::Drain(state) => {
+                if let Some(uc) = state.user_cordon.as_mut() {
+                    uc.add_cordon(cordon);
+                }
+            }
         }
     }
+
     /// Update cordon with the given options.
     pub fn rm_cordon(&mut self, cordon: PoolCordonOp) {
         match self {
             CordonDrainState::Cordoned(state) => {
                 state.rm_cordon(cordon);
             }
+            CordonDrainState::Drain(spec) => {
+                if let Some(uc) = spec.user_cordon.as_mut() {
+                    uc.rm_cordon(cordon);
+                }
+            }
+        }
+    }
+    /// Returns the cordon policy in effect.
+    /// A draining pool is always self-cordoned for replicas, snapshots and restores, so only the
+    /// import cordon is taken from the user's own cordon, if they had one set before the drain.
+    pub fn effective_cordon(&self) -> CordonedState {
+        match self {
+            CordonDrainState::Cordoned(cordoned) => cordoned.clone(),
+            CordonDrainState::Drain(spec) => CordonedState {
+                import: spec.user_cordon.as_ref().is_some_and(|uc| uc.import),
+                ..CordonedState::SELF_CORDON
+            },
         }
     }
     /// Returns whether the state has all the specified cordon labels.
     pub fn would_modify(&self, op: &PoolCordonOp, cordon: bool) -> bool {
         match self {
             CordonDrainState::Cordoned(state) => state.would_modify(op, cordon),
+            CordonDrainState::Drain(spec) => {
+                if let Some(uc) = &spec.user_cordon {
+                    uc.would_modify(op, cordon)
+                } else {
+                    cordon
+                }
+            }
         }
     }
 }
 
 impl From<CordonDrainState> for models::PoolCordonDrain {
-    fn from(node_ds: CordonDrainState) -> Self {
-        match node_ds {
-            CordonDrainState::Cordoned(state) => {
-                let cs = models::PoolCordon {
-                    replicas: state.replicas,
-                    snapshots: state.snapshots,
-                    restores: state.restores,
-                    import: state.import,
-                };
-                Self::cordoned(cs)
-            }
+    fn from(pool_ds: CordonDrainState) -> Self {
+        let state = pool_ds.effective_cordon();
+        // TODO: We don't currently report the drain policy, will be added in a future PR.
+        // This mapping will change when Drain is added to openapi.
+        Self::cordoned(models::PoolCordon {
+            replicas: state.replicas,
+            snapshots: state.snapshots,
+            restores: state.restores,
+            import: state.import,
+        })
+    }
+}
+
+/// Drain spec applied on the pool.
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub struct DrainSpec {
+    /// Timestamp when the drain was requested.
+    pub request_timestamp: SystemTime,
+    /// Drain policy applied on the pool.
+    pub policy: DrainPolicy,
+    /// Holds user applied cordon configs if present before starting drain.
+    pub user_cordon: Option<CordonedState>,
+}
+
+impl DrainSpec {
+    /// Create a new drain spec with the given policy.
+    pub fn new(policy: DrainPolicy, user_cordon: Option<CordonedState>) -> Self {
+        Self {
+            request_timestamp: SystemTime::now(),
+            policy,
+            user_cordon,
         }
     }
+}
+
+/// The user's drain policy, each of which alters what the drain is permitted to do.
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Default)]
+pub struct DrainPolicy {
+    /// What to do with the snapshots left on the pool once all replicas are evacuated.
+    /// Defaults to `Ignore`, which leaves them in place.
+    pub snapshot_policy: SnapshotPolicy,
+    /// Grace period after which an unplaceable replica is force-evicted.
+    /// `None` disables forced eviction entirely.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unsafe_rebuild_otherwise_evict: Option<Duration>,
+    /// Skip the safe over-replicate flow and evict replicas directly.
+    pub unsafe_evict: bool,
+}
+
+impl DrainPolicy {
+    /// Create a new drain policy with the given parameters.
+    pub fn new(
+        snapshot_policy: SnapshotPolicy,
+        unsafe_rebuild_otherwise_evict: Option<Duration>,
+        unsafe_evict: bool,
+    ) -> Self {
+        Self {
+            snapshot_policy,
+            unsafe_rebuild_otherwise_evict,
+            unsafe_evict,
+        }
+    }
+}
+
+/// What a drain does with the snapshots left on the pool once all replicas are evacuated.
+#[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
+pub enum SnapshotPolicy {
+    /// Move the replicas only, leaving the snapshots in place.
+    #[default]
+    Ignore,
+    /// Destroy the snapshots left on the pool once all replicas are evacuated, letting the
+    /// pool reach `Drained`.
+    AcceptLoss,
 }
