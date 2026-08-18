@@ -20,7 +20,7 @@ let
   rust = rust_chan.${rust-profile}.overrideAttrs (oldAttrs: {
     # don't propagate any build inputs - this allows us to set cc in stdenv below
     propagatedBuildInputs = [ ];
-    depsHostHostPropagated = [ ];
+    depsHostHostPropagated = [ clang ];
     depsTargetTargetPropagated = [ ];
   });
   usePreCommit = builtins.getEnv "IN_NIX_SHELL" == "impure" && builtins.getEnv "CI" != "1";
