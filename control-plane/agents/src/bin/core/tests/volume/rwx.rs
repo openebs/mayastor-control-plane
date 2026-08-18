@@ -11,6 +11,11 @@ use uuid::Uuid;
 
 #[tokio::test]
 async fn rwx() {
+    #[cfg(target_arch = "aarch64")]
+    if !std::path::Path::new("/dev/kvm").exists() {
+        println!("WARN: KVM is not available, skipping test");
+        return;
+    }
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_io_engines(2)
