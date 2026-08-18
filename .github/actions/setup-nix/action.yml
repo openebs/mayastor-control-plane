@@ -32,7 +32,7 @@ runs:
       if: ${{ runner.os == 'Linux' && inputs.gc == 'true' }}
       run: |
         lsblk -fm
-        echo "::group::Step: nix-build $nix"
+        echo "::group::Step: GC Disk"
         start=$(date +%s)
         sudo rm -rf /usr/local/lib/android
         sudo rm -rf /usr/local/.ghcup
@@ -47,8 +47,8 @@ runs:
       shell: bash
       run: |
         echo "nix_path=nixpkgs=$(jq -r '.nixpkgs.url' nix/sources.json)" >> $GITHUB_OUTPUT
-        echo "home=${HOME:-/home/runner}" >> $GITHUB_OUTPUT
-        if [[ "${{ inputs.hide_token }}" == "true" ]]; then
+        echo "user=${USER:-$(whoami)}" >> $GITHUB_OUTPUT
+        if [[ "${{ inputs.hide_cachix_token }}" == "true" ]]; then
           echo "CACHIX_TOKEN=" >> $GITHUB_OUTPUT
         else
           echo "CACHIX_TOKEN=${{ inputs.github_access_token }}" >> $GITHUB_OUTPUT
@@ -60,11 +60,10 @@ runs:
         extra_nix_config: |
           keep-env-derivations = true
           keep-outputs = true
-          trusted-users = root runner
+          trusted-users = root ${{ steps.nixpkgs.outputs.user }}
           access-tokens = github.com=${{ env.CACHIX_TOKEN }}
         github_access_token: ${{ env.CACHIX_TOKEN }}
       env:
-        HOME: ${{ steps.nixpkgs.outputs.home }}
         NIX_PATH: "${{ steps.nixpkgs.outputs.nix_path }}"
     - name: PreFetch Nix
       if: ${{ inputs.preFetchNix }}
