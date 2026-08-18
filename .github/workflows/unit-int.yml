@@ -9,7 +9,11 @@ env:
 
 jobs:
   int-tests:
-    runs-on: oracle-vm-16cpu-64gb-x86-64
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [cncf-ubuntu-16-64-x86, cncf-ubuntu-16-64-arm]
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       id-token: write
@@ -68,7 +72,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: ci-report-int
+          name: ci-report-int-${{ matrix.runner }}
           path: ./ci-report/ci-report.tar.gz
 
       # debugging

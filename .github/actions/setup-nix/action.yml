@@ -27,6 +27,15 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Linux Runner Info
+      shell: bash
+      if: ${{ runner.os == 'Linux' }}
+      run: |
+        lscpu
+        free -h
+        lsblk -fm
+        lsb_release -a
+        uname -a
     - name: Disk Garbage Collection
       shell: bash
       if: ${{ runner.os == 'Linux' && inputs.gc == 'true' }}
