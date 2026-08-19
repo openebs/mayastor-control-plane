@@ -20,7 +20,7 @@ let
   rust = rust_chan.${rust-profile}.overrideAttrs (oldAttrs: {
     # don't propagate any build inputs - this allows us to set cc in stdenv below
     propagatedBuildInputs = [ ];
-    depsHostHostPropagated = [ clang ];
+    depsHostHostPropagated = [ ];
     depsTargetTargetPropagated = [ ];
   });
   usePreCommit = builtins.getEnv "IN_NIX_SHELL" == "impure" && builtins.getEnv "CI" != "1";
@@ -29,7 +29,8 @@ let
     cp ${pkgs.pre-commit}/bin/pre-commit $out/bin/pre-commit
   '';
 in
-mkShellNoCC {
+#mkShellNoCC {
+(mkShell.override { stdenv = llvmPackages_10.stdenv; }) {
   name = "control-plane-shell";
   buildInputs = [
     llvmPackages.bintools
