@@ -95,3 +95,5 @@ runs:
       uses: Swatinem/rust-cache@v2
       with:
         save-if: ${{ startsWith(github.ref_name, 'release/') || github.ref_name == 'develop' }}
+
+    - uses: Mic92/hestia@v3

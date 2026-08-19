@@ -1,7 +1,9 @@
 name: ImageBuild CI
 on:
   workflow_call:
-
+  push:
+    branches:
+      - cache
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
@@ -9,6 +11,9 @@ env:
 
 jobs:
   image-build-test:
+    permissions:
+      contents: read
+      actions: read # optional: detect evicted cache entries upfront
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
