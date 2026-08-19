@@ -30,7 +30,7 @@ let
   '';
 in
 #mkShellNoCC {
-(mkShell.override { stdenv = llvmPackages_10.stdenv; }) {
+(mkShell.override { stdenv = llvmPackages.stdenv; }) {
   name = "control-plane-shell";
   buildInputs = [
     llvmPackages.bintools
