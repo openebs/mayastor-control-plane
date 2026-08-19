@@ -107,6 +107,117 @@ message Metadata {
   // Note that this number may not match the volume-snapshots api, as it will include all snapshots,
   // configured to reside in the pool, sometimes even the failed ones until such time they are deleted.
   optional uint64 snap_count = 4;
+  // Populated when drain request is submitted.
+  // Stores states driving the drain procedure.
+  optional PoolDrainRecord drain_record = 5;
+}
+
+// Record of an in-progress pool drain, driving the drain procedure and tracking its progress.
+message PoolDrainRecord {
+  // Current phase of the drain state machine.
+  DrainPhase phase = 1;
+  // Why pool is in the aforementioned phase.
+  optional PhaseReason phase_reason = 2;
+  // Statistics about the pool's usage at the time the drain was requested, and a live snapshot
+  // of its current usage.
+  optional PoolDrainStatistics drain_statistics = 3;
+  // In-flight replica moves for this drain.
+  repeated DrainConfig replica_moves = 4;
+}
+
+// Why the pool is in its current drain phase.
+enum PhaseReason {
+  // The pool is waiting for a slot to start draining, as the number of concurrent
+  // drains is capped cluster-wide.
+  WaitingForSlot = 0;
+  // The pool is degraded and cannot safely drain without risking data loss.
+  OfflinePool = 1;
+  // The pool has a single replica that cannot be safely evicted without risking data loss.
+  SingleReplicaUnsafeEviction = 2;
+  // The node containing pool is back but pool is cordoned for import, so it cannot be drained.
+  ImportCordoned = 3;
+  // Snapshots are left behind due to user chosen drain policy.
+  SnapshotsRetained = 4;
+}
+
+// Contains the reason for unwinding a spare replica, which is used to determine how
+// to proceed with the drain procedure.
+enum UnwindSpare {
+  // The drain was aborted (`DrainPhase → Aborted`): remove the spare and end the
+  // move, keeping `draining_replica` where it is.
+  Abort = 0;
+  // The pool hosting the still-rebuilding spare has itself entered a drain: remove
+  // the spare and let this move place a fresh one on another eligible pool.
+  Respare = 1;
+}
+
+// Configuration of a single replica move carried out as part of a pool drain.
+message DrainConfig {
+  // When this move first attempted to place its spare.
+  optional google.protobuf.Timestamp placement_started_at = 1;
+  // Id of the volume draining_replica belongs to.
+  string volume = 2;
+  // Id of the pool draining_replica belongs to.
+  string pool = 3;
+  // Id of the draining replica. It's None when it's evacuated successfully.
+  optional string draining_replica = 4;
+  // Id of the spare replica created as part of drain procedure.
+  optional SpareReplica spare_replica = 5;
+  // Why a move's over-replicated spare is being removed.
+  optional UnwindSpare unwind_spare = 6;
+}
+
+// Spare replica reference for this drain.
+message SpareReplica {
+  // Replica Id of the spare, if placed.
+  optional string replica_id = 1;
+}
+
+// The phase of the pool drain state machine.
+enum DrainPhase {
+  // Could not determine the actual drain state.
+  DrainUnknown = 0;
+  // The drain has been admitted and the pool self-cordoned, but no replica has been moved yet:
+  // the pool is waiting for a slot.
+  Queued = 1;
+  // Replicas are actively being evacuated, each one rebuilt onto a spare replica elsewhere
+  // before the copy on this pool is dropped.
+  Draining = 2;
+  // All replicas are evacuated from this pool from the volume's perspective, but replicas are
+  // pending cleanup on the pool itself.
+  AwaitingCleanup = 3;
+  // The user has cancelled the drain and the control plane is undoing the changes it made.
+  // Transient rather than terminal: once cleanup completes the drain record is cleared and the
+  // self-cordon dropped. A new drain is rejected while the pool is in this phase.
+  DrainAborted = 4;
+  // Transitioned from Draining when we can't make any progress on drain operation. Awaiting on
+  // state change or user intervention to continue.
+  PartiallyDrained = 5;
+  // The pool has reached zero allocation: all replicas evacuated and no snapshots left behind,
+  // either because there were none or because they were destroyed under --accept-snapshot-loss.
+  Drained = 6;
+}
+
+/// Gets applied when the pool transitions into Draining state.
+message PoolDrainStatistics {
+  // The initial usage stats of the pool when the pool transitions into Draining state.
+  PoolUsage initial = 1;
+  // A live pool usage snapshot, as the drain's progress counterpart to `initial`.
+  // `None` when the pool has no reported state (node offline / not imported): progress is
+  // then unknown, not zero.
+  optional PoolUsage current = 2;
+}
+
+message PoolUsage {
+  // How many replicas in the pool.
+  uint64 repl_count = 1;
+  // How many replica-snapshots in the pool.
+  uint64 snap_count = 2;
+  // Used bytes from the pool.
+  uint64 used = 3;
+  // Total size of pool replicas.
+  // Unset when the pool state does not report a commitment.
+  optional uint64 committed = 4;
 }
 
 // User specification of a pool.
