@@ -11,7 +11,7 @@ use crate::{
     mount::lazy_unmount_mountpaths,
     nodeplugin_svc,
     nodeplugin_svc::{find_mount, lookup_device},
-    runtime,
+    recent_stage, runtime,
     shutdown_event::Shutdown,
 };
 use csi_driver::{
@@ -26,6 +26,7 @@ use nodeplugin_svc::TypeOfMount;
 use nvmeadm::{error::NvmeError, nvmf_subsystem::Subsystem};
 use utils::nvme_target_nqn_prefix;
 
+use std::time::Duration;
 use tonic::{transport::Server, Request, Response, Status};
 use tracing::{debug, error, info};
 use uuid::Uuid;
@@ -33,6 +34,9 @@ use uuid::Uuid;
 #[derive(Debug, Default)]
 pub(crate) struct NodePluginSvc {
     kubelet_path: String,
+    /// See `recent_stage`: how recently a volume must have been staged on
+    /// this node for `force_unstage_volume` to skip disconnecting it.
+    force_unstage_grace_period: Duration,
 }
 
 #[tonic::async_trait]
@@ -80,6 +84,26 @@ impl NodePlugin for NodePluginSvc {
 
         let _guard = VolumeOpGuard::new_str(&volume_id)?;
 
+        let uuid = Uuid::parse_str(&volume_id).map_err(|error| {
+            Status::invalid_argument(format!("Invalid volume UUID: {volume_id}, {error}"))
+        })?;
+
+        // Skip cleanup for a volume that was legitimately (re)staged on this
+        // node moments ago -- almost certainly a concurrent CSI publish
+        // resync, not a genuinely stale connection, and disconnecting it now
+        // would tear a fresh mount out from under kubelet with no way for it
+        // to recover on its own (GLCP-379583). Volumes that are actually
+        // stale (eg: left over from before a reboot) have no recent stage
+        // record and fall straight through to the cleanup below.
+        if recent_stage::recently_staged(&uuid, self.force_unstage_grace_period) {
+            info!(
+                "Volume {volume_id} was staged on this node within the last {:?}; \
+                skipping force-unstage cleanup",
+                self.force_unstage_grace_period
+            );
+            return Ok(Response::new(ForceUnstageVolumeReply {}));
+        }
+
         debug!("Starting cleanup for volume: {volume_id}");
 
         let nqn = format!("{}:{volume_id}", nvme_target_nqn_prefix());
@@ -102,10 +126,6 @@ impl NodePlugin for NodePluginSvc {
                 )))
             }
             Err(NvmeError::NqnNotFound { .. }) => {
-                let uuid = Uuid::parse_str(&volume_id).map_err(|error| {
-                    Status::invalid_argument(format!("Invalid volume UUID: {volume_id}, {error}"))
-                })?;
-
                 if let Ok(Some(device)) = Device::lookup(&uuid).await {
                     let mountpaths = findmnt::get_mountpaths(&device.devname()).await?;
                     debug!(
@@ -155,13 +175,17 @@ impl NodePluginGrpcServer {
     pub(crate) async fn run(
         endpoint: std::net::SocketAddr,
         kubelet_path: String,
+        force_unstage_grace_period: Duration,
     ) -> anyhow::Result<()> {
         info!(
             "node plugin gRPC server configured at address {:?}",
             endpoint
         );
         Server::builder()
-            .add_service(NodePluginServer::new(NodePluginSvc { kubelet_path }))
+            .add_service(NodePluginServer::new(NodePluginSvc {
+                kubelet_path,
+                force_unstage_grace_period,
+            }))
             .serve_with_shutdown(endpoint, Shutdown::wait())
             .await
             .map_err(|error| {

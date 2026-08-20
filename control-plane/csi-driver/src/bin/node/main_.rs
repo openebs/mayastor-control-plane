@@ -200,6 +200,19 @@ pub(super) async fn main() -> anyhow::Result<()> {
                 .help("Kubelet path on the host system")
         )
         .arg(
+            Arg::new("force-unstage-grace-period")
+                .long("force-unstage-grace-period")
+                .value_name("DURATION")
+                .default_value("20s")
+                .help(
+                    "How recently a volume must have been staged on this node for \n\
+                    force_unstage_volume to skip disconnecting it, instead of tearing \n\
+                    down a freshly (re)established connection out from under a \n\
+                    concurrent CSI publish (GLCP-379583). Does not affect cleanup of \n\
+                    genuinely stale/older connections, which have no recent stage record."
+            )
+        )
+        .arg(
             Arg::new("tls-ca-file")
                 .long("tls-ca-file")
                 .value_parser(clap::value_parser!(PathBuf))
@@ -456,13 +469,22 @@ pub(super) async fn main() -> anyhow::Result<()> {
     let grpc_sock_addr = validate_endpoints(&matches, registration_enabled)?;
 
     let kubelet_path = matches.get_one::<String>("kubelet-path").unwrap();
+    let force_unstage_grace_period = matches
+        .get_one::<String>("force-unstage-grace-period")
+        .expect("has a default value")
+        .parse::<humantime::Duration>()?
+        .into();
 
     // Start the CSI server, node plugin grpc server and registration loop if registration is
     // enabled.
     *crate::config::config().nvme_as_mut() = TryFrom::try_from(&matches)?;
     let (csi, grpc, registration) = tokio::join!(
         CsiServer::run(csi_socket, &matches, &rest_config)?,
-        NodePluginGrpcServer::run(grpc_sock_addr, kubelet_path.to_owned()),
+        NodePluginGrpcServer::run(
+            grpc_sock_addr,
+            kubelet_path.to_owned(),
+            force_unstage_grace_period
+        ),
         run_registration_loop(
             node_name.clone(),
             grpc_sock_addr.to_string(),

@@ -278,6 +278,11 @@ impl Node {
             }
         }
 
+        // Record this as a fresh, legitimate stage so a subsequent
+        // force_unstage_volume call within the grace period skips tearing
+        // it back down. See GLCP-379583 and recent_stage.rs.
+        crate::recent_stage::mark_staged(uuid);
+
         Ok(())
     }
 }

@@ -38,6 +38,10 @@ mod nodeplugin_grpc;
 mod nodeplugin_nvme;
 #[cfg(target_os = "linux")]
 mod nodeplugin_svc;
+/// Tracks recently-staged volumes so `force_unstage_volume` can avoid
+/// tearing down a freshly (re)established mount. See GLCP-379583.
+#[cfg(target_os = "linux")]
+mod recent_stage;
 mod registration;
 mod runtime;
 /// Shutdown event which lets the plugin know it needs to stop processing new events and
