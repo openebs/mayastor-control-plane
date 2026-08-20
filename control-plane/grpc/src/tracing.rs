@@ -5,10 +5,7 @@ use opentelemetry::{
 };
 use opentelemetry_http::HeaderInjector;
 use std::{future::Future, pin::Pin};
-use tonic::{
-    codegen::http::{Request, Response},
-    transport::Channel,
-};
+use tonic::codegen::http::{Request, Response};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 const HTTP_STATUS_CODE: Key = Key::from_static_str("http.status_code");
@@ -44,9 +41,17 @@ impl<S> OpenTelClientService<S> {
 type TonicClientRequest = Request<tonic::body::Body>;
 type BoxedFuture<Resp, Err> = Pin<Box<dyn Future<Output = Result<Resp, Err>> + Send>>;
 
-impl tower::Service<TonicClientRequest> for OpenTelClientService<Channel> {
-    type Response = <Channel as tower::Service<TonicClientRequest>>::Response;
-    type Error = <Channel as tower::Service<TonicClientRequest>>::Error;
+impl<S, R, E> tower::Service<TonicClientRequest> for OpenTelClientService<S>
+where
+    S: tower::Service<TonicClientRequest, Response = Response<R>, Error = E>
+        + Clone
+        + Send
+        + 'static,
+    S::Future: Send,
+    E: ToString,
+{
+    type Response = Response<R>;
+    type Error = E;
     type Future = BoxedFuture<Self::Response, Self::Error>;
 
     fn poll_ready(

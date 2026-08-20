@@ -40,8 +40,20 @@ pub struct VolumeClient {
 impl VolumeClient {
     /// creates a new base tonic endpoint with the timeout options and the address
     pub async fn new<O: Into<Option<TimeoutOptions>>>(addr: Uri, opts: O) -> Self {
-        let client = Client::new(addr, opts, VolumeGrpcClient::new).await;
+        let client = Client::new(addr, opts, VolumeGrpcClient::new)
+            .await
+            .expect("a plaintext gRPC channel cannot fail to initialise");
         Self { inner: client }
+    }
+
+    /// Creates a TLS-enabled client whose certificates are reloaded after rotation.
+    pub async fn new_with_tls<O: Into<Option<TimeoutOptions>>>(
+        addr: Uri,
+        opts: O,
+        tls: crate::tls::TlsConfig,
+    ) -> anyhow::Result<Self> {
+        let client = Client::new_with_tls(addr, opts, Some(tls), VolumeGrpcClient::new).await?;
+        Ok(Self { inner: client })
     }
 }
 

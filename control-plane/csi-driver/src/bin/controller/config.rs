@@ -25,6 +25,10 @@ pub(crate) struct CsiControllerConfig {
     client_key_path: Option<PathBuf>,
     /// Path to a file containing the JWT bearer token for REST authentication.
     jwt: Option<PathBuf>,
+    /// File-backed TLS configuration for node plugin gRPC connections.
+    grpc_tls: Option<grpc::tls::TlsConfig>,
+    /// Connect to node plugin gRPC servers over TLS without certificate verification.
+    grpc_auto_tls: bool,
 }
 
 impl CsiControllerConfig {
@@ -65,6 +69,14 @@ impl CsiControllerConfig {
         let client_key_path: Option<&PathBuf> = args.get_one::<PathBuf>("tls-key-file");
         let jwt = args.get_one::<PathBuf>("jwt").cloned();
 
+        let grpc_tls = grpc::tls::TlsConfig::new(
+            args.get_one::<PathBuf>("grpc-tls-ca-file").cloned(),
+            args.get_one::<PathBuf>("grpc-tls-cert-file").cloned(),
+            args.get_one::<PathBuf>("grpc-tls-key-file").cloned(),
+        )?;
+        let grpc_tls = grpc_tls.enabled().then_some(grpc_tls);
+        let grpc_auto_tls = args.get_flag("grpc-auto-tls");
+
         CONFIG.get_or_init(|| Self {
             rest_endpoint: rest_endpoint.into(),
             io_timeout: io_timeout.into(),
@@ -75,6 +87,8 @@ impl CsiControllerConfig {
             client_certificate_path: client_certificate_path.cloned(),
             client_key_path: client_key_path.cloned(),
             jwt,
+            grpc_tls,
+            grpc_auto_tls,
         });
         Ok(())
     }
@@ -128,5 +142,15 @@ impl CsiControllerConfig {
     /// Path to the file containing the JWT bearer token for REST authentication.
     pub(crate) fn jwt(&self) -> &Option<PathBuf> {
         &self.jwt
+    }
+
+    /// File-backed TLS configuration for node plugin gRPC connections.
+    pub(crate) fn grpc_tls(&self) -> Option<&grpc::tls::TlsConfig> {
+        self.grpc_tls.as_ref()
+    }
+
+    /// Connect to node plugin gRPC servers over TLS without certificate verification.
+    pub(crate) fn grpc_auto_tls(&self) -> bool {
+        self.grpc_auto_tls
     }
 }

@@ -122,6 +122,18 @@ pub(crate) struct CliArgs {
     /// (supports the http/https schema)
     #[clap(long, short, default_value = DEFAULT_GRPC_SERVER_ADDR)]
     pub(crate) grpc_server_addr: SocketAddr,
+    /// Path to the TLS server certificate chain for the Core gRPC server.
+    #[clap(long = "grpc-tls-cert-file", requires = "grpc_tls_key_file")]
+    grpc_tls_cert_file: Option<std::path::PathBuf>,
+    /// Path to the TLS server private key for the Core gRPC server.
+    #[clap(long = "grpc-tls-key-file", requires = "grpc_tls_cert_file")]
+    grpc_tls_key_file: Option<std::path::PathBuf>,
+    /// Path to the CA bundle used to authenticate Core gRPC clients.
+    #[clap(long = "grpc-tls-ca-file")]
+    grpc_tls_ca_file: Option<std::path::PathBuf>,
+    /// Auto-generate an ephemeral self-signed certificate for the Core gRPC server.
+    #[clap(long = "grpc-auto-tls", conflicts_with_all = ["grpc_tls_cert_file", "grpc_tls_key_file", "grpc_tls_ca_file"])]
+    grpc_auto_tls: bool,
     /// The maximum number of system-wide rebuilds permitted at any given time.
     /// If `None` do not limit the number of rebuilds.
     #[clap(long)]
@@ -196,6 +208,19 @@ impl CliArgs {
     fn args() -> Self {
         CliArgs::parse()
     }
+
+    fn grpc_tls(&self) -> anyhow::Result<Option<grpc::tls::TlsConfig>> {
+        match (&self.grpc_tls_cert_file, &self.grpc_tls_key_file) {
+            (None, None) => Ok(None),
+            (Some(certificate), Some(private_key)) => grpc::tls::TlsConfig::new(
+                self.grpc_tls_ca_file.clone(),
+                Some(certificate.clone()),
+                Some(private_key.clone()),
+            )
+            .map(Some),
+            _ => unreachable!("clap requires the gRPC TLS certificate and private key together"),
+        }
+    }
 }
 
 /// Cluster wide thin provisioning parameters.
@@ -256,6 +281,7 @@ fn value_parse_percent(value: &str) -> Result<u64, ParseIntError> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    utils::init_rustls_crypto_provider();
     let cli_args = CliArgs::args();
     utils::print_package_info!();
     println!("Using options: {cli_args:?}");
@@ -273,6 +299,9 @@ async fn main() -> anyhow::Result<()> {
 async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
     stor_port::platform::init_cluster_info_or_panic().await;
     let sim_args: Option<SimArgs> = (&cli_args).try_into()?;
+    let grpc_tls = cli_args.grpc_tls()?;
+    let grpc_auto_tls = cli_args.grpc_auto_tls;
+    let grpc_server_addr = cli_args.grpc_server_addr;
     let registry = controller::registry::Registry::new(
         cli_args.cache_period.into(),
         cli_args.store.clone(),
@@ -314,7 +343,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
             ),
         )
         .with_shared_state(registry.clone())
-        .with_shared_state(cli_args.grpc_server_addr)
+        .with_shared_state(grpc_server_addr)
         .configure_async(node::configure)
         .await
         .configure(pool::configure)
@@ -325,9 +354,25 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         .configure(app_node::configure);
 
     registry.start().await;
-    let result = service.run_err(cli_args.grpc_server_addr).await;
+    let result = run_grpc_server(service, grpc_server_addr, grpc_auto_tls, grpc_tls).await;
     registry.stop().await;
     utils::tracing_telemetry::flush_traces();
     result?;
     Ok(())
+}
+
+async fn run_grpc_server(
+    service: agents::Service,
+    socket: SocketAddr,
+    auto_tls: bool,
+    tls: Option<grpc::tls::TlsConfig>,
+) -> Result<(), agents::ServiceError> {
+    match (auto_tls, tls) {
+        // Core sits at a mixed-version boundary: io-engines register here and may still be
+        // plaintext during a rolling upgrade, so its listener sniffs and accepts both transports.
+        (true, None) => service.run_auto_tls_err(socket, true).await,
+        (true, Some(_)) => unreachable!("clap prevents combining gRPC TLS files and auto TLS"),
+        (false, Some(tls)) => service.run_tls_err(socket, tls, true).await,
+        (false, None) => service.run_err(socket).await,
+    }
 }

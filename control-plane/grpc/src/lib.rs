@@ -3,6 +3,7 @@ pub mod context;
 pub mod misc;
 /// All server, client implementations and the traits.
 pub mod operations;
+pub mod tls;
 pub mod tracing;
 
 /// Common module for all the misc operations.

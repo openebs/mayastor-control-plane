@@ -24,6 +24,8 @@ pub use common::errors;
 pub enum ServiceError {
     #[snafu(display("GrpcServer error"))]
     GrpcServer { source: tonic::transport::Error },
+    #[snafu(display("Grpc TLS error"))]
+    GrpcTls { source: anyhow::Error },
 }
 
 type LayerStack = tower::layer::util::Stack<OpenTelServer, tower::layer::util::Identity>;
@@ -107,6 +109,52 @@ impl Service {
     pub async fn run_err(self, socket: SocketAddr) -> Result<(), ServiceError> {
         self.tonic_server
             .serve_with_shutdown(socket, Self::shutdown_signal())
+            .await
+            .map_err(|source| ServiceError::GrpcServer { source })
+    }
+
+    /// Runs the server over TLS, reloading certificate material for new connections after it
+    /// changes on disk.
+    ///
+    /// When `sniff` is set the listener also accepts plaintext clients on the same port, which is
+    /// only required by a server at a mixed-version boundary (e.g. core accepting registrations
+    /// from both plaintext and TLS io-engines during a rolling upgrade).
+    pub async fn run_tls_err(
+        self,
+        socket: SocketAddr,
+        tls: grpc::tls::TlsConfig,
+        sniff: bool,
+    ) -> Result<(), ServiceError> {
+        let incoming = grpc::tls::incoming(socket, tls, sniff)
+            .await
+            .map_err(|source| ServiceError::GrpcTls { source })?;
+        self.tonic_server
+            .serve_with_incoming_shutdown(incoming, Self::shutdown_signal())
+            .await
+            .map_err(|source| ServiceError::GrpcServer { source })
+    }
+
+    /// Runs the server with an ephemeral self-signed TLS certificate.
+    ///
+    /// The generated material is in-memory only and therefore is neither reloadable nor suitable
+    /// for mutual TLS authentication.
+    ///
+    /// When `sniff` is set the listener also accepts plaintext clients on the same port, which is
+    /// only required by a server at a mixed-version boundary (e.g. core accepting registrations
+    /// from both plaintext and TLS io-engines during a rolling upgrade).
+    pub async fn run_auto_tls_err(
+        self,
+        socket: SocketAddr,
+        sniff: bool,
+    ) -> Result<(), ServiceError> {
+        tracing::info!("Running gRPC server with ephemeral self-signed TLS certificate");
+        let config = grpc::tls::auto_server_config(vec!["localhost".to_string()])
+            .map_err(|source| ServiceError::GrpcTls { source })?;
+        let incoming = grpc::tls::incoming_with_server_config(socket, config, sniff)
+            .await
+            .map_err(|source| ServiceError::GrpcTls { source })?;
+        self.tonic_server
+            .serve_with_incoming_shutdown(incoming, Self::shutdown_signal())
             .await
             .map_err(|source| ServiceError::GrpcServer { source })
     }

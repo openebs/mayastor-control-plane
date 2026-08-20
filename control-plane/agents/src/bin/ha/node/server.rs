@@ -35,6 +35,8 @@ const HA_AGENT_ERR_SOURCE: &str = "HA Node agent gRPC server";
 /// High-level object that represents HA Node agent gRPC server.
 pub(crate) struct NodeAgentApiServer {
     endpoint: SocketAddr,
+    tls: Option<grpc::tls::TlsConfig>,
+    auto_tls: bool,
     path_cache: NvmePathCache,
     path_connection_timeout: Duration,
     subsys_refresh_period: Duration,
@@ -45,6 +47,10 @@ impl NodeAgentApiServer {
     pub(crate) fn new(args: &Cli, path_cache: NvmePathCache) -> Self {
         Self {
             endpoint: args.grpc_endpoint(),
+            tls: args
+                .grpc_tls()
+                .expect("invalid HA Node Agent gRPC TLS configuration"),
+            auto_tls: args.grpc_auto_tls,
             path_cache,
             path_connection_timeout: *args.path_connection_timeout,
             subsys_refresh_period: *args.subsys_refresh_period,
@@ -64,10 +70,13 @@ impl NodeAgentApiServer {
             subsys_refresh_period=?self.subsys_refresh_period,
             "Starting gRPC server"
         );
-        agents::Service::builder()
-            .with_service(r.into_grpc_server())
-            .run_err(self.endpoint)
-            .await
+        let service = agents::Service::builder().with_service(r.into_grpc_server());
+        match (self.auto_tls, self.tls.clone()) {
+            (true, None) => service.run_auto_tls_err(self.endpoint, false).await,
+            (true, Some(_)) => unreachable!("clap prevents combining gRPC TLS files and auto TLS"),
+            (false, Some(tls)) => service.run_tls_err(self.endpoint, tls, false).await,
+            (false, None) => service.run_err(self.endpoint).await,
+        }
     }
 }
 

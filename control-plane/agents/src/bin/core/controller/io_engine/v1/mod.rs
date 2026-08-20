@@ -41,14 +41,10 @@ pub(crate) struct RpcClient {
 impl RpcClient {
     /// Create a new grpc client with a context.
     pub(crate) async fn new(context: &GrpcContext) -> Result<Self, SvcError> {
-        let channel = context
-            .tonic_endpoint()
-            .connect()
-            .await
-            .context(GrpcConnect {
-                node_id: context.node().to_owned(),
-                endpoint: context.endpoint().to_string(),
-            })?;
+        let channel = context.connect_channel().await.context(GrpcConnect {
+            node_id: context.node().to_owned(),
+            endpoint: context.endpoint().to_string(),
+        })?;
 
         Ok(Self {
             host: HostClient::new(channel.clone()),

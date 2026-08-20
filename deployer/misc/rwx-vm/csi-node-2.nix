@@ -45,7 +45,7 @@
           # ARGS=--nvme-nr-io-queues 1 --node-name app-node-2 --csi-socket /var/tmp/csi-app-node-2.sock --grpc-endpoint [::]:50055
           # EnvironmentFile = "/workspace/tmp/run/csi-node.env";
           # ExecStart = "/workspace/target/debug/csi-node $ARGS";
-          ExecStart = "/workspace/target/debug/csi-node --nvme-nr-io-queues 1 --node-name app-node-2 --csi-socket /var/tmp/csi-app-node-2.sock --grpc-endpoint [::]:50055";
+          ExecStart = "/workspace/target/debug/csi-node --nvme-nr-io-queues 1 --node-name app-node-2 --csi-socket /var/tmp/csi-app-node-2.sock --grpc-endpoint [::]:50055 --grpc-auto-tls";
         };
       };
       agent-ha-node = {
@@ -54,7 +54,7 @@
         after = [ "network-online.target" ];
         wants = [ "network-online.target" ];
         serviceConfig = {
-          ExecStart = "/workspace/target/debug/agent-ha-node -napp-node-2 -g[::]:50070 --csi-socket /var/tmp/csi-app-node-2.sock --cluster-agent https://10.1.0.1:11500 --fake-grpc-endpoint 10.1.0.1:50070";
+          ExecStart = "/workspace/target/debug/agent-ha-node -napp-node-2 -g[::]:50070 --grpc-auto-tls --csi-socket /var/tmp/csi-app-node-2.sock --cluster-agent https://10.1.0.1:11500 --fake-grpc-endpoint 10.1.0.1:50070";
         };
       };
       # this is required to convert TCP into unix-socket which is what the csi node plugin listen on

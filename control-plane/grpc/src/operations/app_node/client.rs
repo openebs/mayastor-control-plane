@@ -26,12 +26,34 @@ pub struct AppNodeClient {
 impl AppNodeClient {
     /// Creates a new base tonic endpoint with the timeout options and the address.
     pub async fn new<O: Into<Option<TimeoutOptions>> + Clone>(addr: Uri, opts: O) -> Self {
-        let ops_client = Client::new(addr.clone(), opts.clone(), AppNodeGrpcClient::new).await;
-        let registration_client = Client::new(addr, opts, RegistrationClient::new).await;
+        let ops_client = Client::new(addr.clone(), opts.clone(), AppNodeGrpcClient::new)
+            .await
+            .expect("a plaintext gRPC channel cannot fail to initialise");
+        let registration_client = Client::new(addr, opts, RegistrationClient::new)
+            .await
+            .expect("a plaintext gRPC channel cannot fail to initialise");
         Self {
             ops: ops_client,
             registration: registration_client,
         }
+    }
+
+    /// Creates a TLS-enabled client whose certificates are reloaded after rotation.
+    pub async fn new_with_tls<O: Into<Option<TimeoutOptions>> + Clone>(
+        addr: Uri,
+        opts: O,
+        tls: crate::tls::TlsConfig,
+    ) -> anyhow::Result<Self> {
+        let ops = Client::new_with_tls(
+            addr.clone(),
+            opts.clone(),
+            Some(tls.clone()),
+            AppNodeGrpcClient::new,
+        )
+        .await?;
+        let registration =
+            Client::new_with_tls(addr, opts, Some(tls), RegistrationClient::new).await?;
+        Ok(Self { ops, registration })
     }
 }
 

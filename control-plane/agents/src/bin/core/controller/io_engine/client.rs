@@ -30,10 +30,13 @@ pub(crate) struct GrpcContext {
     api_version: ApiVersion,
     /// Simulated io-engine node.
     sim: bool,
+    /// Whether the io-engine gRPC server expects TLS connections.
+    tls: bool,
 }
 
 impl GrpcContext {
     /// Return a new `Self` from the given parameters.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         lock: Arc<tokio::sync::Mutex<()>>,
         node: &NodeId,
@@ -42,6 +45,7 @@ impl GrpcContext {
         request: Option<MessageId>,
         api_version: ApiVersion,
         sim: bool,
+        tls: bool,
     ) -> Result<Self, SvcError> {
         let uri = http::uri::Uri::builder()
             .scheme("http")
@@ -70,6 +74,7 @@ impl GrpcContext {
             comms_timeouts: comms_timeouts.clone(),
             api_version,
             sim,
+            tls,
         })
     }
     /// Override the timeout config in the context for the given request.
@@ -107,6 +112,19 @@ impl GrpcContext {
             endpoint = endpoint.user_agent(self.node().as_str()).unwrap();
         }
         endpoint
+    }
+    /// Connect a tonic `Channel` to this node.
+    /// Uses auto-TLS (certificate verification bypassed) when the io-engine advertises gRPC TLS
+    /// support in its registration, otherwise a plaintext connection.
+    pub(crate) async fn connect_channel(
+        &self,
+    ) -> Result<tonic::transport::Channel, tonic::transport::Error> {
+        let endpoint = self.tonic_endpoint();
+        if self.tls {
+            grpc::tls::auto_tls_connect(&endpoint).await
+        } else {
+            endpoint.connect().await
+        }
     }
     /// Get the node identifier.
     pub(crate) fn node(&self) -> &NodeId {

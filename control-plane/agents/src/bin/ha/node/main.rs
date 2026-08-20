@@ -39,6 +39,16 @@ struct Cli {
     /// HA Cluster Agent URL or address to connect to the services.
     #[clap(long, short, default_value = DEFAULT_CLUSTER_AGENT_CLIENT_ADDR)]
     cluster_agent: Uri,
+    /// Path to the CA bundle used to verify the HA Cluster Agent and authenticate HA Node Agent
+    /// gRPC clients.
+    #[clap(long = "grpc-tls-ca-file")]
+    grpc_tls_ca_file: Option<std::path::PathBuf>,
+    /// Path to the TLS certificate used by the HA Node Agent gRPC server and client.
+    #[clap(long = "grpc-tls-cert-file", requires = "grpc_tls_key_file")]
+    grpc_tls_cert_file: Option<std::path::PathBuf>,
+    /// Path to the TLS private key used by the HA Node Agent gRPC server and client.
+    #[clap(long = "grpc-tls-key-file", requires = "grpc_tls_cert_file")]
+    grpc_tls_key_file: Option<std::path::PathBuf>,
 
     /// Node name(spec.nodeName). This must be the same as provided in csi-node.
     #[clap(short, long)]
@@ -53,6 +63,9 @@ struct Cli {
 
     #[clap(long, default_value_t = DEFAULT_NODE_AGENT_SERVER_PORT)]
     grpc_port: u16,
+    /// Auto-generate an ephemeral self-signed certificate for the HA Node Agent gRPC server.
+    #[clap(long = "grpc-auto-tls", conflicts_with_all = ["grpc_tls_ca_file", "grpc_tls_cert_file", "grpc_tls_key_file"])]
+    grpc_auto_tls: bool,
 
     /// Reports this endpoint.
     #[clap(long)]
@@ -151,13 +164,34 @@ impl Cli {
             std::net::SocketAddr::new(self.grpc_ip, self.grpc_port)
         }
     }
+
+    fn grpc_tls(&self) -> anyhow::Result<Option<grpc::tls::TlsConfig>> {
+        if self.grpc_tls_ca_file.is_some() && self.grpc_tls_cert_file.is_none() {
+            anyhow::bail!(
+                "a TLS-enabled HA Node Agent requires both gRPC TLS certificate and private key files"
+            );
+        }
+        let tls = grpc::tls::TlsConfig::new(
+            self.grpc_tls_ca_file.clone(),
+            self.grpc_tls_cert_file.clone(),
+            self.grpc_tls_key_file.clone(),
+        )?;
+        if !tls.enabled() {
+            return Ok(None);
+        }
+        if self.cluster_agent.scheme_str() != Some("https") {
+            anyhow::bail!("a TLS-enabled HA Cluster Agent client requires an https:// URL");
+        }
+        Ok(Some(tls))
+    }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    utils::init_rustls_crypto_provider();
     let cli_args = Cli::args();
-
     utils::print_package_info!();
+    println!("Using options: {cli_args:?}");
 
     utils::tracing_telemetry::TracingTelemetry::builder()
         .with_writer(FmtLayer::Stdout)
@@ -168,8 +202,14 @@ async fn main() -> anyhow::Result<()> {
         .with_tracing_tags(cli_args.tracing_tags.clone())
         .init("agent-ha-node");
 
+    let client = match cli_args.grpc_tls()? {
+        Some(tls) => {
+            ClusterAgentClient::new_with_tls(cli_args.cluster_agent.clone(), None, tls).await?
+        }
+        None => ClusterAgentClient::new(cli_args.cluster_agent.clone(), None).await,
+    };
     CLUSTER_AGENT_CLIENT
-        .set(ClusterAgentClient::new(cli_args.cluster_agent.clone(), None).await)
+        .set(client)
         .ok()
         .expect("Expect to be initialized only once");
 

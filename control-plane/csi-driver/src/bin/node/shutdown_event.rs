@@ -104,11 +104,10 @@ mod tests {
             }
         });
         tokio::time::sleep(Duration::from_millis(250)).await;
-        let channel =
-            tonic::transport::Endpoint::from(Uri::from_str("https://[::]:50011").unwrap())
-                .connect()
-                .await
-                .unwrap();
+        let channel = tonic::transport::Endpoint::from(Uri::from_str("http://[::]:50011").unwrap())
+            .connect()
+            .await
+            .unwrap();
         let mut cli = NodePluginClient::new(channel);
 
         // 1. schedule the first request

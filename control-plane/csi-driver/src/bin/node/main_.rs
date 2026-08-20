@@ -229,6 +229,33 @@ pub(super) async fn main() -> anyhow::Result<()> {
                 .value_parser(clap::value_parser!(PathBuf))
                 .help("path to a file containing the JWT bearer token for REST authentication")
         )
+        .arg(
+            Arg::new("grpc-tls-ca-file")
+                .long("grpc-tls-ca-file")
+                .value_parser(clap::value_parser!(PathBuf))
+                .help("path to the CA certificate file for the internal node plugin gRPC server")
+        )
+        .arg(
+            Arg::new("grpc-tls-cert-file")
+                .long("grpc-tls-cert-file")
+                .value_parser(clap::value_parser!(PathBuf))
+                .requires("grpc-tls-key-file")
+                .help("path to the TLS certificate file for the internal node plugin gRPC server")
+        )
+        .arg(
+            Arg::new("grpc-tls-key-file")
+                .long("grpc-tls-key-file")
+                .value_parser(clap::value_parser!(PathBuf))
+                .requires("grpc-tls-cert-file")
+                .help("path to the TLS private key file for the internal node plugin gRPC server")
+        )
+        .arg(
+            Arg::new("grpc-auto-tls")
+                .long("grpc-auto-tls")
+                .action(clap::ArgAction::SetTrue)
+                .conflicts_with_all(["grpc-tls-ca-file", "grpc-tls-cert-file", "grpc-tls-key-file"])
+                .help("run the internal node plugin gRPC server with an ephemeral self-signed TLS certificate")
+        )
         .subcommand(
             clap::Command::new("fs-freeze")
                 .arg(
@@ -457,12 +484,26 @@ pub(super) async fn main() -> anyhow::Result<()> {
 
     let kubelet_path = matches.get_one::<String>("kubelet-path").unwrap();
 
+    // The TLS configuration of the internal node plugin gRPC server.
+    let grpc_tls = grpc::tls::TlsConfig::new(
+        matches.get_one::<PathBuf>("grpc-tls-ca-file").cloned(),
+        matches.get_one::<PathBuf>("grpc-tls-cert-file").cloned(),
+        matches.get_one::<PathBuf>("grpc-tls-key-file").cloned(),
+    )?;
+    let grpc_tls = grpc_tls.enabled().then_some(grpc_tls);
+    let grpc_auto_tls = matches.get_flag("grpc-auto-tls");
+
     // Start the CSI server, node plugin grpc server and registration loop if registration is
     // enabled.
     *crate::config::config().nvme_as_mut() = TryFrom::try_from(&matches)?;
     let (csi, grpc, registration) = tokio::join!(
         CsiServer::run(csi_socket, &matches, &rest_config)?,
-        NodePluginGrpcServer::run(grpc_sock_addr, kubelet_path.to_owned()),
+        NodePluginGrpcServer::run(
+            grpc_sock_addr,
+            kubelet_path.to_owned(),
+            grpc_tls,
+            grpc_auto_tls
+        ),
         run_registration_loop(
             node_name.clone(),
             grpc_sock_addr.to_string(),

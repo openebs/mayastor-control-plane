@@ -80,6 +80,9 @@ impl ComponentAction for CoreAgent {
         if !options.no_deprecated_access_mode {
             binary = binary.with_arg("--deprecated-access-mode");
         }
+        if !options.no_grpc_tls {
+            binary = binary.with_arg("--grpc-auto-tls");
+        }
 
         Ok(cfg.add_container_spec(
             ContainerSpec::from_binary(name, binary).with_portmap("50051", "50051"),
@@ -95,11 +98,12 @@ impl ComponentAction for CoreAgent {
     }
     async fn wait_on(
         &self,
-        _options: &StartOptions,
+        options: &StartOptions,
         cfg: &crate::ComposeTestNt,
     ) -> Result<(), Error> {
         let ip = cfg.container_ip("core");
-        let uri = tonic::transport::Uri::from_str(&format!("https://{ip}:50051")).unwrap();
+        let scheme = if options.no_grpc_tls { "http" } else { "https" };
+        let uri = tonic::transport::Uri::from_str(&format!("{scheme}://{ip}:50051")).unwrap();
         let timeout = grpc::context::TimeoutOptions::new()
             .with_req_timeout(std::time::Duration::from_millis(100));
         let core =
@@ -115,9 +119,10 @@ impl ComponentAction for CoreAgent {
 
 impl CoreAgent {
     /// Wait for a node to become online.
-    pub(crate) async fn wait_node_online(cfg: &ComposeTest, node: &str) {
+    pub(crate) async fn wait_node_online(cfg: &ComposeTest, node: &str, no_grpc_tls: bool) {
         let ip = cfg.container_ip("core");
-        let uri = tonic::transport::Uri::from_str(&format!("https://{ip}:50051")).unwrap();
+        let scheme = if no_grpc_tls { "http" } else { "https" };
+        let uri = tonic::transport::Uri::from_str(&format!("{scheme}://{ip}:50051")).unwrap();
 
         let timeout = grpc::context::TimeoutOptions::new()
             .with_req_timeout(std::time::Duration::from_millis(100));

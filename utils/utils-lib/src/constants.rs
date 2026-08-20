@@ -90,10 +90,16 @@ pub const NATS_LABEL: &str = "app.kubernetes.io/name=nats";
 pub const NATS_PORT: &str = "client";
 
 /// The default value to be assigned as GRPC server addr if not overridden.
+/// A single port serves both TLS and plaintext connections, chosen per connection by sniffing the
+/// TLS handshake, so legacy plaintext io-engine registration and TLS clients share this port.
 pub const DEFAULT_GRPC_SERVER_ADDR: &str = "[::]:50051";
 
 /// The default value to be assigned as GRPC client addr if not overridden.
 pub const DEFAULT_GRPC_CLIENT_ADDR: &str = "https://core:50051";
+
+/// The default value for legacy io-engine registration clients.
+/// This targets the same port as the main gRPC server, using plaintext.
+pub const DEFAULT_GRPC_REGISTRATION_CLIENT_ADDR: &str = "http://core:50051";
 
 /// The default value to be assigned as JSON GRPC server addr if not overridden.
 pub const DEFAULT_JSON_GRPC_SERVER_ADDR: &str = "[::]:50052";

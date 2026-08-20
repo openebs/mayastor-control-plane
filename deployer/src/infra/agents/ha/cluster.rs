@@ -8,11 +8,12 @@ use composer::{Binary, ContainerSpec};
 #[async_trait]
 impl ComponentAction for HaClusterAgent {
     fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
-        let mut spec = ContainerSpec::from_binary(
-            "agent-ha-cluster",
-            Binary::from_dbg("agent-ha-cluster").with_args(vec!["-g=[::]:11500"]),
-        )
-        .with_portmap("11500", "11500");
+        let mut binary = Binary::from_dbg("agent-ha-cluster").with_args(vec!["-g=[::]:11500"]);
+        if !options.no_grpc_tls {
+            binary = binary.with_arg("--grpc-auto-tls");
+        }
+        let mut spec =
+            ContainerSpec::from_binary("agent-ha-cluster", binary).with_portmap("11500", "11500");
 
         if let Some(env) = &options.agents_env {
             for kv in env {
@@ -50,21 +51,28 @@ impl ComponentAction for HaClusterAgent {
 
     async fn wait_on(
         &self,
-        _options: &StartOptions,
+        options: &StartOptions,
         cfg: &crate::ComposeTestNt,
     ) -> Result<(), Error> {
         // Wait till cluster-agent's gRPC server is ready to server the request
         loop {
-            match Endpoint::try_from(format!(
-                "https://{}:11500",
+            // The auto-tls connector performs the TLS handshake itself, so the endpoint always
+            // uses an http scheme to stop tonic from applying (and rejecting) its own TLS logic.
+            let endpoint = Endpoint::try_from(format!(
+                "http://{}:11500",
                 cfg.container_ip("agent-ha-cluster")
             ))?
-            .connect_timeout(Duration::from_millis(100))
-            .connect()
-            .await
-            {
+            .connect_timeout(Duration::from_millis(100));
+            let connect = match options.no_grpc_tls {
+                true => endpoint.connect().await,
+                false => grpc::tls::auto_tls_connect(&endpoint).await,
+            };
+            match connect {
                 Ok(_) => break,
-                Err(_) => sleep(Duration::from_millis(25)).await,
+                Err(error) => {
+                    tracing::error!(?error, "Failed to connect to cluster-agent gRPC server");
+                    sleep(Duration::from_millis(25)).await;
+                }
             }
         }
         Ok(())

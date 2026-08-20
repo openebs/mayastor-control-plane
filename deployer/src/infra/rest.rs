@@ -1,7 +1,6 @@
 use crate::infra::{async_trait, Builder, ComponentAction, Components, Error, Rest, StartOptions};
 use composer::{Binary, ContainerSpec};
 use std::time::Duration;
-use utils::DEFAULT_JSON_GRPC_CLIENT_ADDR;
 
 #[async_trait]
 impl ComponentAction for Rest {
@@ -19,9 +18,12 @@ impl ComponentAction for Rest {
             } else {
                 "--http"
             };
+            let grpc_scheme = if options.no_grpc_tls { "http" } else { "https" };
+            let core_grpc = format!("{grpc_scheme}://core:50051/");
             let binary = Binary::from_dbg("rest")
                 .with_arg("--auto-tls")
                 .with_args(vec!["--https", "rest:8080"])
+                .with_args(vec!["--core-grpc", &core_grpc])
                 .with_args(vec![http, "rest:8081"])
                 .with_arg("--workers=1");
             let binary = if let Some(jwk) = &options.rest_jwk {
@@ -57,7 +59,8 @@ impl ComponentAction for Rest {
             };
 
             if cfg.container_exists("jsongrpc") {
-                binary = binary.with_args(vec!["--json-grpc", DEFAULT_JSON_GRPC_CLIENT_ADDR]);
+                let json_grpc = format!("{grpc_scheme}://jsongrpc:50052");
+                binary = binary.with_args(vec!["--json-grpc", &json_grpc]);
             }
 
             if let Some(size) = &options.otel_max_batch_size {

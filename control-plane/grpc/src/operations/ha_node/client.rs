@@ -22,8 +22,20 @@ pub struct ClusterAgentClient {
 impl ClusterAgentClient {
     /// creates a new base tonic endpoint with the timeout options and the address
     pub async fn new<O: Into<Option<TimeoutOptions>>>(addr: Uri, opts: O) -> Self {
-        let client = Client::new(addr, opts, HaClusterRpcClient::new).await;
+        let client = Client::new(addr, opts, HaClusterRpcClient::new)
+            .await
+            .expect("a plaintext gRPC channel cannot fail to initialise");
         Self { inner: client }
+    }
+
+    /// Creates a TLS-enabled client whose certificates are reloaded after rotation.
+    pub async fn new_with_tls<O: Into<Option<TimeoutOptions>>>(
+        addr: Uri,
+        opts: O,
+        tls: crate::tls::TlsConfig,
+    ) -> anyhow::Result<Self> {
+        let client = Client::new_with_tls(addr, opts, Some(tls), HaClusterRpcClient::new).await?;
+        Ok(Self { inner: client })
     }
 }
 
@@ -82,8 +94,20 @@ pub struct NodeAgentClient {
 impl NodeAgentClient {
     /// creates a new base tonic endpoint with the timeout options and the address
     pub async fn new<O: Into<Option<TimeoutOptions>>>(addr: Uri, opts: O) -> Self {
-        let client = Client::new(addr, opts, HaNodeRpcClient::new).await;
+        let client = Client::new(addr, opts, HaNodeRpcClient::new)
+            .await
+            .expect("a plaintext gRPC channel cannot fail to initialise");
         Self { inner: client }
+    }
+
+    /// Creates a TLS-enabled client whose certificates are reloaded after rotation.
+    pub async fn new_with_tls<O: Into<Option<TimeoutOptions>>>(
+        addr: Uri,
+        opts: O,
+        tls: crate::tls::TlsConfig,
+    ) -> anyhow::Result<Self> {
+        let client = Client::new_with_tls(addr, opts, Some(tls), HaNodeRpcClient::new).await?;
+        Ok(Self { inner: client })
     }
 }
 

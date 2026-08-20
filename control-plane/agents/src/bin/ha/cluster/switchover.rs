@@ -178,7 +178,11 @@ impl SwitchOverRequest {
 
     fn node_uri(&self) -> Result<Uri, http::Error> {
         Uri::builder()
-            .scheme("http")
+            .scheme(if crate::grpc_tls_enabled() {
+                "https"
+            } else {
+                "http"
+            })
             .authority(self.callback_uri.to_string())
             .path_and_query("")
             .build()
@@ -266,7 +270,17 @@ impl SwitchOverRequest {
             return;
         };
         if let Some(new_path) = self.new_path.clone() {
-            let node_client = NodeAgentClient::new(uri, None).await;
+            let node_client = match crate::grpc_tls() {
+                Some(tls) => NodeAgentClient::new_with_tls(uri, None, tls).await,
+                None => Ok(NodeAgentClient::new(uri, None).await),
+            };
+            let node_client = match node_client {
+                Ok(client) => client,
+                Err(error) => {
+                    tracing::error!(%error, "Failed to create HA Node Agent client");
+                    return;
+                }
+            };
             let request = GetController::new(new_path);
             if let Err(error) = match node_client.get_nvme_controller(&request, None).await {
                 Ok(target_addresses) => {
@@ -426,7 +440,10 @@ impl SwitchOverRequest {
             new_path,
             self.publish_context.clone(),
         );
-        let client = NodeAgentClient::new(uri, None).await;
+        let client = match crate::grpc_tls() {
+            Some(tls) => NodeAgentClient::new_with_tls(uri, None, tls).await?,
+            None => NodeAgentClient::new(uri, None).await,
+        };
         match client.replace_path(&replace_request, None).await {
             Ok(_) => Ok(()),
             Err(error) if error.kind == ReplyErrorKind::FailedPrecondition => {

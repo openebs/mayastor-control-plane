@@ -15,15 +15,25 @@ use stor_port::{
 /// High-level object that represents HA Cluster agent gRPC server.
 pub(crate) struct ClusterAgent {
     endpoint: SocketAddr,
+    tls: Option<grpc::tls::TlsConfig>,
+    auto_tls: bool,
     nodes: NodeList,
     mover: VolumeMover,
 }
 
 impl ClusterAgent {
     /// Returns a new `Self` with the given parameters.
-    pub(crate) fn new(endpoint: SocketAddr, nodes: NodeList, mover: VolumeMover) -> Self {
+    pub(crate) fn new(
+        endpoint: SocketAddr,
+        tls: Option<grpc::tls::TlsConfig>,
+        auto_tls: bool,
+        nodes: NodeList,
+        mover: VolumeMover,
+    ) -> Self {
         ClusterAgent {
             endpoint,
+            tls,
+            auto_tls,
             nodes,
             mover,
         }
@@ -34,10 +44,13 @@ impl ClusterAgent {
             nodes: self.nodes,
             mover: self.mover,
         }));
-        agents::Service::builder()
-            .with_service(r.into_grpc_server())
-            .run_err(self.endpoint)
-            .await
+        let service = agents::Service::builder().with_service(r.into_grpc_server());
+        match (self.auto_tls, self.tls) {
+            (true, None) => service.run_auto_tls_err(self.endpoint, false).await,
+            (true, Some(_)) => unreachable!("clap prevents combining gRPC TLS files and auto TLS"),
+            (false, Some(tls)) => service.run_tls_err(self.endpoint, tls, false).await,
+            (false, None) => service.run_err(self.endpoint).await,
+        }
     }
 }
 

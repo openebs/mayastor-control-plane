@@ -749,6 +749,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cert-watcher"
+version = "0.1.0"
+dependencies = [
+ "inotify",
+ "tracing",
+]
+
+[[package]]
 name = "cexpr"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1721,17 +1729,27 @@ dependencies = [
 name = "grpc"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "cert-watcher",
  "events-api",
+ "futures",
+ "http 1.1.0",
  "humantime",
+ "hyper-util",
  "once_cell",
  "opentelemetry",
  "opentelemetry-http",
  "prost",
  "prost-types",
+ "rcgen",
  "rpc",
+ "rustls",
+ "rustls-pemfile",
  "serde_json",
  "stor-port",
  "tokio",
+ "tokio-rustls",
+ "tokio-stream",
  "tonic",
  "tonic-build",
  "tower",
@@ -2670,7 +2688,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -2966,6 +2984,7 @@ version = "1.0.0"
 dependencies = [
  "actix-web",
  "async-trait",
+ "cert-watcher",
  "dyn-clonable",
  "futures",
  "http-body",
@@ -2974,7 +2993,6 @@ dependencies = [
  "hyper-body",
  "hyper-rustls",
  "hyper-util",
- "inotify",
  "opentelemetry",
  "opentelemetry-http",
  "opentelemetry-otlp",
@@ -3625,13 +3643,13 @@ dependencies = [
  "actix-web",
  "anyhow",
  "async-trait",
+ "cert-watcher",
  "clap",
  "deployer-cluster",
  "futures",
  "grpc",
  "http 1.1.0",
  "humantime",
- "inotify",
  "jsonwebtoken",
  "num_cpus",
  "once_cell",
@@ -4526,12 +4544,11 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-version = "0.26.0"
+version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c7bc40d0e5a97695bb96e27995cd3a08538541b0a846f65bba7a359f36700d4"
+checksum = "1729aa945f29d91ba541258c8df89027d5792d85a8841fb65e8bf0f4ede4ef61"
 dependencies = [
  "rustls",
- "rustls-pki-types",
  "tokio",
 ]
 
@@ -4626,6 +4643,7 @@ dependencies = [
  "prost",
  "socket2 0.5.7",
  "tokio",
+ "tokio-rustls",
  "tokio-stream",
  "tower",
  "tower-layer",
@@ -4961,6 +4979,7 @@ dependencies = [
  "opentelemetry-semantic-conventions",
  "opentelemetry_sdk",
  "regex",
+ "rustls",
  "strum",
  "strum_macros",
  "tracing",

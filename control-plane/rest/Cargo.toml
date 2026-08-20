@@ -42,10 +42,8 @@ humantime = { workspace = true }
 grpc = { path = "../grpc" }
 num_cpus = { workspace = true }
 rcgen = { workspace = true }
-
 # certificate file watching for TLS auto-reload; Linux/inotify only
-[target.'cfg(target_os = "linux")'.dependencies]
-inotify = { workspace = true }
+cert-watcher = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

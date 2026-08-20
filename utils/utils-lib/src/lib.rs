@@ -11,6 +11,11 @@ pub mod version;
 pub use version::{long_raw_version_str, raw_version_str, raw_version_string};
 pub use version_info::{version_info as version_info_inner, VersionInfo};
 
+/// Select aws-lc-rs as Rustls's process-wide crypto provider when one has not been selected yet.
+pub fn init_rustls_crypto_provider() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+}
+
 /// Byte conversion helpers.
 pub mod bytes;
 /// Dev path normalizer helpers.

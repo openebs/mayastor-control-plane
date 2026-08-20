@@ -26,9 +26,25 @@ mod test {
     type CompleteSender = Arc<Mutex<Option<Sender<(bool, Instant)>>>>;
     static COMPLETE_CHAN: OnceCell<CompleteSender> = OnceCell::new();
 
+    /// Generate an ephemeral self-signed TLS config, shared by both the client and the server, so
+    /// the client presents (and the server verifies) the same certificate (mutual TLS).
+    fn self_signed_tls(san: String) -> (crate::tls::TlsConfig, std::path::PathBuf) {
+        let cert = rcgen::generate_simple_self_signed(vec![san]).unwrap();
+        let dir = std::env::temp_dir().join(format!("grpc-timeout-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cert_path = dir.join("cert.pem");
+        let key_path = dir.join("key.pem");
+        std::fs::write(&cert_path, cert.cert.pem()).unwrap();
+        std::fs::write(&key_path, cert.key_pair.serialize_pem()).unwrap();
+        let tls =
+            crate::tls::TlsConfig::new(Some(cert_path.clone()), Some(cert_path), Some(key_path))
+                .unwrap();
+        (tls, dir)
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn timeout() {
-        let socket_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), 50011);
+        let socket_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 50011);
         let uri = Uri::builder()
             .scheme("https")
             .path_and_query("")
@@ -36,11 +52,17 @@ mod test {
             .build()
             .unwrap();
 
+        let (tls, tls_dir) = self_signed_tls(socket_addr.ip().to_string());
+
+        let server_tls = tls.clone();
         tokio::spawn(async move {
             let service = PoolServer::new(Arc::new(server::Server {}));
+            let incoming = crate::tls::incoming(socket_addr, server_tls, false)
+                .await
+                .unwrap();
             tonic::transport::Server::builder()
                 .add_service(service.into_grpc_server())
-                .serve(socket_addr)
+                .serve_with_incoming(incoming)
                 .await
                 .unwrap();
         });
@@ -54,7 +76,9 @@ mod test {
         *channel.lock().unwrap() = Some(sender);
 
         let timeout_opts = TimeoutOptions::new().with_req_timeout(Duration::from_secs(10));
-        let client = PoolClient::new(uri, timeout_opts).await;
+        let client = PoolClient::new_with_tls(uri, timeout_opts, tls)
+            .await
+            .unwrap();
 
         let req_timeout = Duration::from_secs(1);
         let ctx = Context::new(TimeoutOptions::new().with_req_timeout(req_timeout));
@@ -66,6 +90,8 @@ mod test {
             complete,
             timestamp - before
         );
+        // remove the temporary TLS material before the assertions, which may panic
+        std::fs::remove_dir_all(&tls_dir).unwrap();
         // client should have timed out!
         assert!(result.is_err());
         // timeout within the req_timeout, with 200ms slack
