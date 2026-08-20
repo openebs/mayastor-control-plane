@@ -105,6 +105,181 @@ impl Node {
         }
         Ok(uri)
     }
+
+    /// Core "attach + stage" logic, shared by the `NodeStageVolume` RPC and by
+    /// `NodePublishVolume`'s re-stage fallback (used when the staging mount has
+    /// gone missing by the time publish runs, eg: GLCP-379583).
+    ///
+    /// Callers MUST already hold a `VolumeOpGuard` for `msg.volume_id` -- this
+    /// function does not take one itself, since `VolumeOpGuard` is not
+    /// reentrant (a second acquisition for the same volume fails with
+    /// `Aborted("Existing Csi operation is in progress...")` instead of
+    /// blocking), and `NodePublishVolume` already holds its own guard for the
+    /// same volume when it needs to call this.
+    async fn do_stage_volume(&self, msg: &NodeStageVolumeRequest) -> Result<(), Status> {
+        let access_type = match get_access_type(&msg.volume_capability) {
+            Ok(accesstype) => accesstype,
+            Err(error) => {
+                return Err(failure!(
+                    Code::InvalidArgument,
+                    "Failed to stage volume {}: {}",
+                    &msg.volume_id,
+                    error
+                ));
+            }
+        };
+
+        if let Err(error) = check_access_mode(
+            &msg.volume_capability,
+            access_type,
+            // relax the check a bit by pretending all stage mounts are ro
+            true,
+        ) {
+            return Err(failure!(
+                Code::InvalidArgument,
+                "Failed to stage volume {}: {}",
+                &msg.volume_id,
+                error
+            ));
+        };
+
+        let uuid = Uuid::parse_str(&msg.volume_id).map_err(|error| {
+            failure!(
+                Code::Internal,
+                "Failed to stage volume {}: not a valid UUID: {}",
+                &msg.volume_id,
+                error
+            )
+        })?;
+
+        // We cannot fully rely on the URI stored in the `publish_context` because it may change
+        // if the target gets moved to another node.
+        // It's possible that a pod gets restaged on the same node, and thus skipping the controller
+        // publish call, leaving us with a bad URI:
+        // https://github.com/openebs/mayastor/issues/1781
+        // In order to fix this issue we need to fetch the volume uri from the control-plane.
+        let uri = self.volume_uri(&uuid, &msg.publish_context).await?;
+
+        // Note checking existence of staging_target_path, is delegated to
+        // code handling those volume types where it is relevant.
+
+        // All checks complete, now attach, if not attached already.
+        debug!("Volume {} has URI {}", &msg.volume_id, uri);
+
+        let mut device = Device::parse(&uri).map_err(|error| {
+            failure!(
+                Code::Internal,
+                "Failed to stage volume {}: error parsing URI {}: {}",
+                &msg.volume_id,
+                uri,
+                error
+            )
+        })?;
+        device
+            .parse_parameters(&msg.publish_context)
+            .await
+            .map_err(|error| {
+                failure!(
+                    Code::InvalidArgument,
+                    "Failed to parse storage class parameters for volume {}: {}",
+                    &msg.volume_id,
+                    error
+                )
+            })?;
+
+        let device_path = match device.find().await.map_err(|error| {
+            failure!(
+                Code::Internal,
+                "Failed to stage volume {}: error locating device for URI {}: {}",
+                &msg.volume_id,
+                uri,
+                error
+            )
+        })? {
+            Some(devpath) => devpath,
+            None => {
+                debug!("Attaching volume {}", &msg.volume_id);
+                // device.attach is idempotent, so does not restart the attach
+                // process
+                if let Err(error) = device.attach().await {
+                    return Err(failure!(
+                        Code::Internal,
+                        "Failed to stage volume {}: attach failed: {}",
+                        &msg.volume_id,
+                        error
+                    ));
+                }
+
+                let devpath =
+                    Device::wait_for_device(&*device, ATTACH_TIMEOUT_INTERVAL, ATTACH_RETRIES)
+                        .await
+                        .map_err(|error| {
+                            failure!(
+                                Code::Unavailable,
+                                "Failed to stage volume {}: {}",
+                                &msg.volume_id,
+                                error
+                            )
+                        })?;
+
+                device.fixup().await.map_err(|error| {
+                    failure!(
+                        Code::Internal,
+                        "Could not set parameters on staged device {}: {}",
+                        &msg.volume_id,
+                        error
+                    )
+                })?;
+
+                devpath
+            }
+        };
+        let format_options = match msg.volume_context.get(Parameters::FormatOptions.as_ref()) {
+            Some(opts) => opts,
+            None => "",
+        };
+        let override_global_format_opts = match Parameters::override_global_format_opts(
+            msg.volume_context
+                .get(Parameters::OverrideGlobalFormatOpts.as_ref()),
+        ) {
+            Ok(opts_bool) => opts_bool.unwrap_or(false),
+            Err(_) => false,
+        };
+        // Attach successful, now stage mount if required.
+        match access_type {
+            AccessType::Mount(mnt) => {
+                if let Err(fsmount_error) = stage_fs_volume(
+                    msg,
+                    &device_path,
+                    mnt,
+                    &self.filesystems,
+                    format_options,
+                    override_global_format_opts,
+                )
+                .await
+                {
+                    let mounts = crate::mount::find_src_mounts(&device_path, None);
+                    // If the device is mounted elsewhere, don't detach it!
+                    if mounts.is_empty() {
+                        detach(
+                            &uuid,
+                            format!(
+                                "Failed to stage volume {}: {};",
+                                &msg.volume_id, fsmount_error
+                            ),
+                        )
+                        .await?;
+                    }
+                    return Err(fsmount_error);
+                }
+            }
+            AccessType::Block(_) => {
+                // block volumes are not staged
+            }
+        }
+
+        Ok(())
+    }
 }
 
 const ATTACH_TIMEOUT_INTERVAL: Duration = Duration::from_millis(100);
@@ -336,6 +511,43 @@ impl node_server::Node for Node {
 
         match access_type {
             AccessType::Mount(mnt) => {
+                // The staging mount can go missing out from under us between a
+                // successful NodeStageVolume and this NodePublishVolume call,
+                // eg: a concurrent HA-switchover/force-unstage cleanup racing
+                // the CSI publish flow (GLCP-379583). Per the CSI spec the CO
+                // (kubelet) treats staging as one-shot and will never re-invoke
+                // NodeStageVolume on its own once it has recorded success, so
+                // without this fallback the volume is stuck failing publish
+                // forever and needs a pod delete to recover. Detect the missing
+                // mount here and re-stage before publishing, instead of failing
+                // hard.
+                if find_mount(None, Some(msg.staging_target_path.as_str())).is_none() {
+                    warn!(
+                        volume.uuid = %msg.volume_id,
+                        "No mount found at staging path {}; re-staging before publish",
+                        msg.staging_target_path
+                    );
+
+                    let stage_msg = NodeStageVolumeRequest {
+                        volume_id: msg.volume_id.clone(),
+                        publish_context: msg.publish_context.clone(),
+                        staging_target_path: msg.staging_target_path.clone(),
+                        volume_capability: msg.volume_capability.clone(),
+                        secrets: msg.secrets.clone(),
+                        volume_context: msg.volume_context.clone(),
+                    };
+                    // `_guard` above already reserves this volume_id, and
+                    // `do_stage_volume` does not take its own guard, so this is
+                    // safe to call directly (see its doc comment).
+                    self.do_stage_volume(&stage_msg).await?;
+
+                    info!(
+                        volume.uuid = %msg.volume_id,
+                        "Volume re-staged to {} after staging path was found missing at publish time",
+                        msg.staging_target_path
+                    );
+                }
+
                 publish_fs_volume(&msg, mnt, &self.filesystems).await?;
             }
             AccessType::Block(_) => {
@@ -674,32 +886,6 @@ impl node_server::Node for Node {
             ));
         }
 
-        let access_type = match get_access_type(&msg.volume_capability) {
-            Ok(accesstype) => accesstype,
-            Err(error) => {
-                return Err(failure!(
-                    Code::InvalidArgument,
-                    "Failed to stage volume {}: {}",
-                    &msg.volume_id,
-                    error
-                ));
-            }
-        };
-
-        if let Err(error) = check_access_mode(
-            &msg.volume_capability,
-            access_type,
-            // relax the check a bit by pretending all stage mounts are ro
-            true,
-        ) {
-            return Err(failure!(
-                Code::InvalidArgument,
-                "Failed to stage volume {}: {}",
-                &msg.volume_id,
-                error
-            ));
-        };
-
         let uuid = Uuid::parse_str(&msg.volume_id).map_err(|error| {
             failure!(
                 Code::Internal,
@@ -710,131 +896,7 @@ impl node_server::Node for Node {
         })?;
         let _guard = VolumeOpGuard::new(uuid)?;
 
-        // We cannot fully rely on the URI stored in the `publish_context` because it may change
-        // if the target gets moved to another node.
-        // It's possible that a pod gets restaged on the same node, and thus skipping the controller
-        // publish call, leaving us with a bad URI:
-        // https://github.com/openebs/mayastor/issues/1781
-        // In order to fix this issue we need to fetch the volume uri from the control-plane.
-        let uri = self.volume_uri(&uuid, &msg.publish_context).await?;
-
-        // Note checking existence of staging_target_path, is delegated to
-        // code handling those volume types where it is relevant.
-
-        // All checks complete, now attach, if not attached already.
-        debug!("Volume {} has URI {}", &msg.volume_id, uri);
-
-        let mut device = Device::parse(&uri).map_err(|error| {
-            failure!(
-                Code::Internal,
-                "Failed to stage volume {}: error parsing URI {}: {}",
-                &msg.volume_id,
-                uri,
-                error
-            )
-        })?;
-        device
-            .parse_parameters(&msg.publish_context)
-            .await
-            .map_err(|error| {
-                failure!(
-                    Code::InvalidArgument,
-                    "Failed to parse storage class parameters for volume {}: {}",
-                    &msg.volume_id,
-                    error
-                )
-            })?;
-
-        let device_path = match device.find().await.map_err(|error| {
-            failure!(
-                Code::Internal,
-                "Failed to stage volume {}: error locating device for URI {}: {}",
-                &msg.volume_id,
-                uri,
-                error
-            )
-        })? {
-            Some(devpath) => devpath,
-            None => {
-                debug!("Attaching volume {}", &msg.volume_id);
-                // device.attach is idempotent, so does not restart the attach
-                // process
-                if let Err(error) = device.attach().await {
-                    return Err(failure!(
-                        Code::Internal,
-                        "Failed to stage volume {}: attach failed: {}",
-                        &msg.volume_id,
-                        error
-                    ));
-                }
-
-                let devpath =
-                    Device::wait_for_device(&*device, ATTACH_TIMEOUT_INTERVAL, ATTACH_RETRIES)
-                        .await
-                        .map_err(|error| {
-                            failure!(
-                                Code::Unavailable,
-                                "Failed to stage volume {}: {}",
-                                &msg.volume_id,
-                                error
-                            )
-                        })?;
-
-                device.fixup().await.map_err(|error| {
-                    failure!(
-                        Code::Internal,
-                        "Could not set parameters on staged device {}: {}",
-                        &msg.volume_id,
-                        error
-                    )
-                })?;
-
-                devpath
-            }
-        };
-        let format_options = match msg.volume_context.get(Parameters::FormatOptions.as_ref()) {
-            Some(opts) => opts,
-            None => "",
-        };
-        let override_global_format_opts = match Parameters::override_global_format_opts(
-            msg.volume_context
-                .get(Parameters::OverrideGlobalFormatOpts.as_ref()),
-        ) {
-            Ok(opts_bool) => opts_bool.unwrap_or(false),
-            Err(_) => false,
-        };
-        // Attach successful, now stage mount if required.
-        match access_type {
-            AccessType::Mount(mnt) => {
-                if let Err(fsmount_error) = stage_fs_volume(
-                    &msg,
-                    &device_path,
-                    mnt,
-                    &self.filesystems,
-                    format_options,
-                    override_global_format_opts,
-                )
-                .await
-                {
-                    let mounts = crate::mount::find_src_mounts(&device_path, None);
-                    // If the device is mounted elsewhere, don't detach it!
-                    if mounts.is_empty() {
-                        detach(
-                            &uuid,
-                            format!(
-                                "Failed to stage volume {}: {};",
-                                &msg.volume_id, fsmount_error
-                            ),
-                        )
-                        .await?;
-                    }
-                    return Err(fsmount_error);
-                }
-            }
-            AccessType::Block(_) => {
-                // block volumes are not staged
-            }
-        }
+        self.do_stage_volume(&msg).await?;
 
         req.info_ok();
         Ok(Response::new(NodeStageVolumeResponse {}))
