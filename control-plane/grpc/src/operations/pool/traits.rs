@@ -8,13 +8,14 @@ use crate::{
     },
 };
 use prost::UnknownEnumValue;
-use std::{collections::HashMap, convert::TryFrom, ops::Deref};
+use std::{collections::HashMap, convert::TryFrom, ops::Deref, time::SystemTime};
 use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind},
     types::v0::{
         store::pool::{
-            CordonDrainState, CordonedState, Encryption, EncryptionSecret, PoolLabel, PoolMetadata,
-            PoolRuntimeMetadata, PoolSpec, PoolSpecStatus, PoolUSpec, POOL_BS_CLUSTER_SIZE_DEFAULT,
+            CordonDrainState, CordonedState, DrainPolicy, DrainSpec, Encryption, EncryptionSecret,
+            PoolLabel, PoolMetadata, PoolRuntimeMetadata, PoolSpec, PoolSpecStatus, PoolUSpec,
+            SnapshotPolicy, POOL_BS_CLUSTER_SIZE_DEFAULT,
         },
         transport::{
             CreatePool, CtrlPoolState, DestroyPool, DiskInfo, ExpandPool, Filter, LabelPool,
@@ -195,12 +196,10 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
                 cordon_drain: match pool_spec.cordon_drain {
                     Some(state) => match state {
                         pool::pool_spec::CordonDrain::Cordoned(state) => {
-                            Some(CordonDrainState::Cordoned(CordonedState {
-                                replicas: state.replicas,
-                                snapshots: state.snapshots,
-                                restores: state.restores,
-                                import: state.import,
-                            }))
+                            Some(CordonDrainState::Cordoned(state.into()))
+                        }
+                        pool::pool_spec::CordonDrain::Drain(spec) => {
+                            Some(CordonDrainState::Drain(spec.try_into()?))
                         }
                     },
                     None => None,
@@ -219,6 +218,132 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
                 },
             },
         })
+    }
+}
+
+impl From<pool::CordonedState> for CordonedState {
+    fn from(state: pool::CordonedState) -> Self {
+        Self {
+            replicas: state.replicas,
+            snapshots: state.snapshots,
+            restores: state.restores,
+            import: state.import,
+        }
+    }
+}
+
+impl From<CordonedState> for pool::CordonedState {
+    fn from(state: CordonedState) -> Self {
+        Self {
+            replicas: state.replicas,
+            snapshots: state.snapshots,
+            restores: state.restores,
+            import: state.import,
+        }
+    }
+}
+
+impl TryFrom<pool::DrainSpec> for DrainSpec {
+    type Error = ReplyError;
+
+    fn try_from(spec: pool::DrainSpec) -> Result<Self, Self::Error> {
+        let request_timestamp = spec.request_timestamp.ok_or_else(|| {
+            ReplyError::missing_argument(
+                ResourceKind::Pool,
+                "pool.spec.drain_spec.request_timestamp",
+            )
+        })?;
+        let policy = spec.policy.ok_or_else(|| {
+            ReplyError::missing_argument(ResourceKind::Pool, "pool.spec.drain_spec.policy")
+        })?;
+        Ok(DrainSpec {
+            request_timestamp: SystemTime::try_from(request_timestamp).map_err(|error| {
+                ReplyError::invalid_argument(
+                    ResourceKind::Pool,
+                    "pool.spec.drain_spec.request_timestamp",
+                    error,
+                )
+            })?,
+            policy: DrainPolicy::try_from(policy)?,
+            user_cordon: spec.user_cordon.into_opt(),
+        })
+    }
+}
+
+impl From<DrainSpec> for pool::DrainSpec {
+    fn from(spec: DrainSpec) -> Self {
+        pool::DrainSpec {
+            request_timestamp: Some(prost_types::Timestamp::from(spec.request_timestamp)),
+            policy: Some(spec.policy.into()),
+            user_cordon: spec.user_cordon.into_opt(),
+        }
+    }
+}
+
+impl TryFrom<pool::DrainPolicy> for DrainPolicy {
+    type Error = ReplyError;
+
+    fn try_from(policy: pool::DrainPolicy) -> Result<Self, Self::Error> {
+        let snapshot_policy = pool::SnapshotPolicy::try_from(policy.snapshot_policy)
+            .map(SnapshotPolicy::from)
+            .map_err(|error| {
+                ReplyError::invalid_argument(
+                    ResourceKind::Pool,
+                    "pool.spec.drain_spec.policy.snapshot_policy",
+                    error,
+                )
+            })?;
+        let unsafe_rebuild_otherwise_evict = policy
+            .unsafe_rebuild_otherwise_evict
+            .map(std::time::Duration::try_from)
+            .transpose()
+            .map_err(|error| {
+                ReplyError::invalid_argument(
+                    ResourceKind::Pool,
+                    "pool.spec.drain_spec.policy.unsafe_rebuild_otherwise_evict",
+                    error,
+                )
+            })?;
+        Ok(DrainPolicy {
+            snapshot_policy,
+            unsafe_rebuild_otherwise_evict,
+            unsafe_evict: policy.unsafe_evict,
+        })
+    }
+}
+
+impl From<DrainPolicy> for pool::DrainPolicy {
+    fn from(policy: DrainPolicy) -> Self {
+        pool::DrainPolicy {
+            snapshot_policy: pool::SnapshotPolicy::from(policy.snapshot_policy) as i32,
+            unsafe_rebuild_otherwise_evict: policy.unsafe_rebuild_otherwise_evict.map(|grace| {
+                // Only fails for a grace period beyond i64::MAX seconds, which we saturate
+                // rather than round down to zero - erring towards evicting later, never sooner.
+                prost_types::Duration::try_from(grace).unwrap_or(prost_types::Duration {
+                    seconds: i64::MAX,
+                    nanos: 0,
+                })
+            }),
+            unsafe_evict: policy.unsafe_evict,
+        }
+    }
+}
+
+impl From<pool::SnapshotPolicy> for SnapshotPolicy {
+    fn from(policy: pool::SnapshotPolicy) -> Self {
+        match policy {
+            pool::SnapshotPolicy::Ignore => Self::Ignore,
+            pool::SnapshotPolicy::AcceptLoss => Self::AcceptLoss,
+        }
+    }
+}
+
+impl From<SnapshotPolicy> for pool::SnapshotPolicy {
+    fn from(policy: SnapshotPolicy) -> Self {
+        match policy {
+            SnapshotPolicy::Ignore => Self::Ignore,
+            SnapshotPolicy::AcceptLoss => Self::AcceptLoss,
+        }
     }
 }
 
@@ -436,17 +561,14 @@ impl From<PoolDef> for pool::PoolDefinition {
                     },
                 },
                 cordon_drain: match pool_spec.cordon_drain {
-                    Some(cordon_drain) => {
-                        let co = match cordon_drain {
-                            CordonDrainState::Cordoned(state) => pool::CordonedState {
-                                replicas: state.replicas,
-                                snapshots: state.snapshots,
-                                restores: state.restores,
-                                import: state.import,
-                            },
-                        };
-                        Some(pool::pool_spec::CordonDrain::Cordoned(co))
-                    }
+                    Some(cordon_drain) => match cordon_drain {
+                        CordonDrainState::Cordoned(state) => {
+                            Some(pool::pool_spec::CordonDrain::Cordoned(state.into()))
+                        }
+                        CordonDrainState::Drain(spec) => {
+                            Some(pool::pool_spec::CordonDrain::Drain(spec.into()))
+                        }
+                    },
                     None => None,
                 },
                 cluster_size: Some(pool_spec.cluster_size),
