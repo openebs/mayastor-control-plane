@@ -17,7 +17,7 @@ use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
         store::{
-            pool::{CordonDrainState, PoolCordonOp, PoolOperation, PoolSpec},
+            pool::{PoolCordonOp, PoolOperation, PoolSpec},
             snapshots::replica::ReplicaSnapshot,
         },
         transport::{
@@ -529,16 +529,17 @@ impl OperationGuardArc<PoolSpec> {
     }
 
     /// Validate that the pool is cordoned with both replicas and snapshots blocked.
+    /// Uses the effective cordon, so a self-cordoned draining pool also qualifies.
     fn validate_purge_cordon(
         &self,
         pool_id: &PoolId,
         pool_spec: &PoolSpec,
     ) -> Result<(), SvcError> {
-        match &pool_spec.cordon_drain {
+        match pool_spec.cordoned() {
             None => Err(SvcError::PoolNotCordonedForPurge {
                 pool_id: pool_id.clone(),
             }),
-            Some(CordonDrainState::Cordoned(state)) => {
+            Some(state) => {
                 if !state.replicas || !state.snapshots {
                     Err(SvcError::PoolCordonInsufficientForPurge {
                         pool_id: pool_id.clone(),
