@@ -98,7 +98,7 @@ impl PoolItemLister {
                 n.pool_wrappers()
                     .into_iter()
                     .filter_map(|p| {
-                        let cordoned = registry.specs().pool_with(&p.id, |p| p.cordoned().cloned());
+                        let cordoned = registry.specs().pool_with(&p.id, |p| p.cordoned());
                         let cordoned = cordoned.ok()?;
                         let ag_rep_count =
                             pool_ag_rep.as_ref().and_then(|map| map.get(&p.id).cloned());
@@ -121,7 +121,7 @@ impl PoolItemLister {
                     .and_then(|node| {
                         let cordoned = registry
                             .specs()
-                            .pool_with(&item.pool().id, |p| p.cordoned().cloned());
+                            .pool_with(&item.pool().id, |p| p.cordoned());
                         let pool =
                             PoolItem::new(node.clone(), item.pool().clone(), None, cordoned.ok()?);
                         Some(pool)
@@ -174,7 +174,7 @@ impl PoolItemLister {
             };
             let (node, cordoned) = {
                 let pool_spec = pool_spec.lock();
-                (pool_spec.node.clone(), pool_spec.cordoned().cloned())
+                (pool_spec.node.clone(), pool_spec.cordoned())
             };
             let Ok(node) = registry.node_wrapper(&node).await else {
                 continue;
