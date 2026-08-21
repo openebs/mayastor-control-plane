@@ -13,6 +13,13 @@ macro_rules! ws_path {
 const RWX_VM: &str = ws_path!("/deployer/misc/rwx-vm");
 const RWX_VM_QC: &str = ws_path!("/deployer/misc/rwx-vm/nixos.qcow2");
 const RWX_VM_NIX: &str = ws_path!("/deployer/misc/rwx-vm/csi-node-2.nix");
+/// Directory where the CI report collects artifacts (see scripts/ci-report.sh).
+/// Logs are dropped here (as `*.txt`) so they get bundled into ci-report.tar.gz.
+const CI_REPORT_DIR: &str = ws_path!("/ci-report");
+/// Console log of the QEMU VM. Useful to debug boot/panic/slow-boot issues on CI.
+const RWX_VM_LOG: &str = ws_path!("/ci-report/rwx-vm-console.txt");
+/// Log of the nix build of the VM image. Useful to debug build failures on CI.
+const RWX_VM_BUILD_LOG: &str = ws_path!("/ci-report/rwx-vm-nix-build.txt");
 
 fn is_nixos() -> bool {
     // todo: any advantage is using nixos-rebuild?
@@ -29,6 +36,8 @@ impl ComponentAction for RwxVm {
             return Ok(cfg);
         }
 
+        std::fs::create_dir_all(CI_REPORT_DIR)?;
+        let build_log = std::fs::File::create(RWX_VM_BUILD_LOG)?;
         let status = if is_nixos() {
             std::process::Command::new("nixos-rebuild")
                 .arg("build-vm")
@@ -36,6 +45,8 @@ impl ComponentAction for RwxVm {
                 .arg(format!("nixos-config={RWX_VM_NIX}"))
                 .current_dir(RWX_VM)
                 .env("WORKSPACE_ROOT", ws_path!())
+                .stdout(build_log.try_clone()?)
+                .stderr(build_log)
                 .status()?
         } else {
             std::process::Command::new("nix")
@@ -50,12 +61,15 @@ impl ComponentAction for RwxVm {
                 .arg("--out-link")
                 .arg(format!("{RWX_VM}/result"))
                 .env("WORKSPACE_ROOT", ws_path!())
+                .stdout(build_log.try_clone()?)
+                .stderr(build_log)
                 .status()?
         };
         if !status.success() {
-            return Err(
-                std::io::Error::other(format!("Failed to build the rwx vm: {status:?}")).into(),
-            );
+            return Err(std::io::Error::other(format!(
+                "Failed to build the rwx vm: {status:?}; see {RWX_VM_BUILD_LOG}"
+            ))
+            .into());
         }
 
         Ok(cfg)
@@ -65,12 +79,32 @@ impl ComponentAction for RwxVm {
             return Ok(());
         }
 
+        // QEMU is started with `-machine accel=kvm:tcg`, so a missing/inaccessible
+        // /dev/kvm silently falls back to (very slow) software emulation, which is a
+        // common cause of the rwx test timing out on CI.
+        match std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open("/dev/kvm")
+        {
+            Ok(_) => tracing::info!("KVM acceleration available (/dev/kvm is accessible)"),
+            Err(error) => tracing::warn!(
+                "KVM not accessible ({error}); QEMU will fall back to TCG software \
+                 emulation which is much slower and may cause the rwx test to time out"
+            ),
+        }
+
+        // Capture the VM console so boot/panic/slow-boot can be inspected (e.g. on CI).
+        std::fs::create_dir_all(CI_REPORT_DIR)?;
+        let console = std::fs::File::create(RWX_VM_LOG)?;
+        tracing::info!("Starting the rwx vm; console log at {RWX_VM_LOG}");
+
         let mut cmd = std::process::Command::new("./result/bin/run-nixos-vm");
         cmd.arg("-nographic")
             .current_dir(RWX_VM)
             .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null());
+            .stdout(console.try_clone()?)
+            .stderr(console);
 
         if cfg.clean() {
             // When clean is set, we don't need to make use of `RwxVm::stop()` to kill the VM

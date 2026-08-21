@@ -3,6 +3,7 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
   boot.kernelModules = [ "nvme-tcp" ];
+  boot.consoleLogLevel = 7;
 
   services.getty.autologinUser = "root";
   users.users.root.initialPassword = "a";

@@ -17,7 +17,12 @@ let
   pytest_inputs = python3.withPackages
     (ps: with ps; [ virtualenv grpcio grpcio-tools black isort autoflake ]);
   rust_chan = channel.default_src;
-  rust = rust_chan.${rust-profile};
+  rust = rust_chan.${rust-profile}.overrideAttrs (oldAttrs: {
+    # don't propagate any build inputs - this allows us to set cc in stdenv below
+    propagatedBuildInputs = [ ];
+    depsHostHostPropagated = [ clang ];
+    depsTargetTargetPropagated = [ ];
+  });
   usePreCommit = builtins.getEnv "IN_NIX_SHELL" == "impure" && builtins.getEnv "CI" != "1";
   pre-commit = pkgs.runCommand "pre-commit" { } ''
     mkdir -p $out/bin
@@ -61,7 +66,8 @@ mkShellNoCC {
     rdma-core
   ] ++ pkgs.lib.optional (system == "aarch64-darwin") darwin.apple_sdk.frameworks.Security;
 
-  LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
+  nativeBuildInputs = [ rustPlatform.bindgenHook ];
+
   PROTOC = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE = "${protobuf}/include";
 
