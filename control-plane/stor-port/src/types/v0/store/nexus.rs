@@ -112,6 +112,11 @@ pub struct NexusSpec {
     /// The version of the nexus label.
     #[serde(default)]
     pub version: transport::NexusVersion,
+    /// Publish read-only. Reflects the current `share_nvmf` request so a nexus
+    /// re-share by the reconciler carries the ROX flag forward instead of
+    /// silently reverting to RWO.
+    #[serde(default)]
+    pub read_only: bool,
 }
 impl NexusSpec {
     /// Check if the spec contains the provided replica by it's `ReplicaId`.
@@ -199,6 +204,7 @@ impl From<&NexusSpec> for ShareNexus {
             key: None,
             protocol: from.share.try_into().unwrap_or_default(),
             allowed_hosts: from.allowed_hosts.clone(),
+            read_only: from.read_only,
         }
     }
 }
@@ -276,12 +282,14 @@ impl SpecTransaction<NexusOperation> for NexusSpec {
                 NexusOperation::Create => {
                     self.spec_status = SpecStatus::Created(transport::NexusStatus::Online);
                 }
-                NexusOperation::Share(share, host_nqn) => {
+                NexusOperation::Share(share, host_nqn, read_only) => {
                     self.share = share.into();
                     self.allowed_hosts = host_nqn;
+                    self.read_only = read_only;
                 }
                 NexusOperation::Unshare => {
                     self.share = Protocol::None;
+                    self.read_only = false;
                 }
                 NexusOperation::Shutdown => {
                     self.spec_status = SpecStatus::Created(transport::NexusStatus::Shutdown)
@@ -332,7 +340,9 @@ pub enum NexusOperation {
     Create,
     Destroy,
     Shutdown,
-    Share(NexusShareProtocol, Vec<HostNqn>),
+    /// The trailing bool is the read-only flag. Pre-ROX entries encode this as a
+    /// two-element tuple, so it must default rather than fail to deserialise.
+    Share(NexusShareProtocol, Vec<HostNqn>, #[serde(default)] bool),
     Unshare,
     AddChild(NexusChild),
     RemoveChild(NexusChild),
@@ -341,9 +351,13 @@ pub enum NexusOperation {
 }
 impl NexusOperation {
     /// Create a new sorted share operation.
-    pub fn new_share(share: NexusShareProtocol, mut allowed_hosts: Vec<HostNqn>) -> Self {
+    pub fn new_share(
+        share: NexusShareProtocol,
+        mut allowed_hosts: Vec<HostNqn>,
+        read_only: bool,
+    ) -> Self {
         allowed_hosts.sort();
-        Self::Share(share, allowed_hosts)
+        Self::Share(share, allowed_hosts, read_only)
     }
 }
 
@@ -398,6 +412,7 @@ impl From<&CreateNexus> for NexusSpec {
             status_info: NexusStatusInfo::new(false),
             allowed_hosts: vec![],
             version: request.version.unwrap_or_default(),
+            read_only: false,
         }
     }
 }
@@ -483,5 +498,26 @@ impl NexusStatusInfo {
     }
     pub fn reshutdown(&self) -> bool {
         self.reshutdown
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A pending Share op is written to the store before it executes, so an upgrade
+    /// mid-share leaves the pre-ROX two-element encoding in etcd. It has to load.
+    #[test]
+    fn nexus_op_share_pre_rox_defaults_read_only() {
+        let json = r#"{"Share":["nvmf",["nqn.2019-05.io.openebs:host"]]}"#;
+        let op: NexusOperation = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            op,
+            NexusOperation::Share(
+                NexusShareProtocol::Nvmf,
+                vec![HostNqn::try_from("nqn.2019-05.io.openebs:host").unwrap()],
+                false
+            )
+        );
     }
 }

@@ -658,12 +658,16 @@ pub enum VolumeAccessMode {
     #[default]
     SingleNodeWriter,
     MultiNodeMultiWriter,
+    /// Multi-initiator read-only attach. Publishes made with this mode set the
+    /// nexus `read_only` flag so writes are rejected at the data plane.
+    MultiNodeReaderOnly,
 }
 impl From<models::VolumeAccessMode> for VolumeAccessMode {
     fn from(value: models::VolumeAccessMode) -> Self {
         match value {
             models::VolumeAccessMode::SingleNodeWriter => Self::SingleNodeWriter,
             models::VolumeAccessMode::MultiNodeMultiWriter => Self::MultiNodeMultiWriter,
+            models::VolumeAccessMode::MultiNodeReaderOnly => Self::MultiNodeReaderOnly,
         }
     }
 }

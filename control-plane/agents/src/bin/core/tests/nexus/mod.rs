@@ -84,6 +84,7 @@ async fn nexus() {
                 key: None,
                 protocol: NexusShareProtocol::Nvmf,
                 allowed_hosts: vec![],
+                read_only: false,
             },
             None,
         )

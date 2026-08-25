@@ -125,6 +125,7 @@ impl apis::actix_server::Nexuses for RestApi {
             key: None,
             protocol: protocol.into(),
             allowed_hosts: vec![],
+            read_only: false,
         };
         let share_uri = client().share(&share, None).await?;
         Ok(share_uri)

@@ -51,10 +51,11 @@ impl SpecOperationsHelper for NexusSpec {
         op: Self::UpdateOp,
     ) -> Result<(), SvcError> {
         match &op {
-            NexusOperation::Share(_, a)
+            NexusOperation::Share(_, a, r)
                 if state.share.shared()
                     && &state.allowed_hosts == a
-                    && &self.allowed_hosts == a =>
+                    && &self.allowed_hosts == a
+                    && self.read_only == *r =>
             {
                 Err(SvcError::AlreadyShared {
                     kind: ResourceKind::Nexus,
@@ -62,7 +63,7 @@ impl SpecOperationsHelper for NexusSpec {
                     share: state.share.to_string(),
                 })
             }
-            NexusOperation::Share(_, _) => Ok(()),
+            NexusOperation::Share(_, _, _) => Ok(()),
             NexusOperation::Unshare if !state.share.shared() => Err(SvcError::NotShared {
                 kind: ResourceKind::Nexus,
                 id: self.uuid_str(),

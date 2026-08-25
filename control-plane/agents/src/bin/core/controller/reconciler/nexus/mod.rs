@@ -536,10 +536,12 @@ pub(super) async fn fixup_nexus_protocol(
                 match NexusShareProtocol::try_from(nexus_spec.share) {
                     Ok(protocol) => {
                         let allowed_hosts = nexus_spec.allowed_hosts.clone();
+                        let read_only = nexus_spec.read_only;
                         nexus
                             .share(
                                 context.registry(),
-                                &ShareNexus::new(&nexus_state, protocol, allowed_hosts),
+                                &ShareNexus::new(&nexus_state, protocol, allowed_hosts)
+                                    .with_read_only(read_only),
                             )
                             .await?;
                         nexus_spec
@@ -564,10 +566,12 @@ pub(super) async fn fixup_nexus_protocol(
             match NexusShareProtocol::try_from(nexus_spec.share) {
                 Ok(protocol) => {
                     let allowed_hosts = nexus_spec.allowed_hosts.clone();
+                    let read_only = nexus_spec.read_only;
                     nexus
                         .share(
                             context.registry(),
-                            &ShareNexus::new(&nexus_state, protocol, allowed_hosts),
+                            &ShareNexus::new(&nexus_state, protocol, allowed_hosts)
+                                .with_read_only(read_only),
                         )
                         .await?;
                     nexus_spec

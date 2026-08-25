@@ -111,6 +111,8 @@ message TargetConfig {
   nexus.NexusNvmfConfig     config = 2;
   // Frontend configuration.
   optional FrontendConfig frontend = 3;
+  // Publish read-only (ROX). Absent = false for back-compat.
+  optional bool read_only = 4;
 }
 
 message FrontendConfig {
@@ -329,6 +331,10 @@ enum SnapshotRestorePolicy {
 enum AccessMode {
     SingleNodeWriter = 0;
     MultiNodeMultiWriter = 1;
+    // Multi-initiator read-only attach (CSI MULTI_NODE_READER_ONLY). Publishes made
+    // with this mode set target_config.read_only, which the nexus enforces at the
+    // data plane by rejecting writes.
+    MultiNodeReaderOnly = 2;
 }
 
 // Publish a volume on a node

@@ -3239,6 +3239,7 @@ components:
       enum:
         - SingleNodeWriter
         - MultiNodeMultiWriter
+        - MultiNodeReaderOnly
     NexusState:
       description: State of the Nexus
       type: string
