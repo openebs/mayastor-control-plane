@@ -2,12 +2,15 @@
 
 use crate::{
     types::v0::{
-        openapi::{models, models::PoolSpecEncryption},
+        openapi::models::{self, PoolSpecEncryption},
         store::{
             definitions::{ObjectKey, StorableObject, StorableObjectType},
             AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
         },
-        transport::{self, CreatePool, ImportPool, NodeId, PoolDeviceUri, PoolDiag, PoolId},
+        transport::{
+            self, CreatePool, ImportPool, NodeId, PoolDeviceUri, PoolDiag, PoolId, ReplicaId,
+            VolumeId,
+        },
     },
     IntoOption,
 };
@@ -198,8 +201,115 @@ pub struct PoolMetadata {
 
 /// Pool meta information.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
-pub struct PoolPersistedMetadata {}
+pub struct PoolPersistedMetadata {
+    /// Populated when drain request is submitted.
+    /// Stores states driving the drain procedure.
+    #[serde(default, skip_serializing_if = "super::is_default")]
+    pub drain_record: Option<PoolDrainRecord>,
+}
 
+/// Record of an in-progress pool drain, driving the drain procedure and tracking its progress.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PoolDrainRecord {
+    /// Current phase of the drain state machine.
+    pub phase: DrainPhase,
+    /// Why pool is in the aforementioned phase.
+    pub phase_reason: Option<PhaseReason>,
+    /// The initial usage stats of the pool when the pool transitions into Draining state.
+    pub initial_stats: Option<PoolUsage>,
+    /// In-flight replica moves for this drain.
+    pub replica_moves: Vec<DrainConfig>,
+}
+
+/// Why the pool is in its current drain phase.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum PhaseReason {
+    /// The pool is waiting for a slot to start draining, as the number of concurrent drains is
+    /// capped cluster-wide.
+    WaitingForSlot,
+    /// The pool is degraded and cannot safely drain without risking data loss.
+    OfflinePool,
+    /// The pool has a single replica that cannot be safely evicted without risking data loss.
+    SingleReplicaUnsafeEviction,
+    /// The node containing pool is back but pool is cordoned for import, so it cannot be drained.
+    ImportCordoned,
+    /// Snapshots are left behind due to user chosen drain policy.
+    SnapshotsRetained,
+}
+
+/// The phase of the pool drain state machine.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum DrainPhase {
+    /// Could not determine the actual drain state.
+    Unknown,
+    /// The drain has been admitted and the pool is self-cordoned, but no replica has been moved
+    /// yet, the pool is waiting for a concurrency slot.
+    Queued,
+    /// Replicas are actively being evacuated.
+    Draining,
+    /// All replicas are evacuated from this pool from the volume's perspective, but replicas are
+    /// pending cleanup on the pool itself.
+    AwaitingCleanup,
+    /// Transitioned from Draining when we can't make any progress on drain operation. Awaiting on
+    /// state change or user intervention to continue.
+    PartiallyDrained,
+    /// The pool has reached zero allocation/commitment: all replicas were evacuated and no
+    /// snapshots are left behind.
+    Drained,
+    /// The user has cancelled the drain and the control plane is undoing the changes the drain
+    /// made, unwinding in-flight moves and their spare replicas.
+    Aborted,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct PoolUsage {
+    /// Number of replicas present on pool.
+    pub repl_count: u64,
+    /// Number of snapshots present on pool.
+    pub snap_count: u64,
+    /// Used capacity, in bytes.
+    pub used: u64,
+    /// Committed capacity, in bytes.
+    /// `None` when the pool state does not report a commitment.
+    pub committed: Option<u64>,
+}
+
+/// Configuration of a single replica move carried out as part of a pool drain.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct DrainConfig {
+    /// When this move first attempted to place its spare.
+    pub placement_started_at: Option<SystemTime>,
+    /// Id of the volume draining_replica belongs to.
+    pub volume: VolumeId,
+    /// Id of the pool draining_replica belongs to.
+    pub pool: PoolId,
+    /// Id of the draining replica. It's None when it's evacuated successfully.
+    pub draining_replica: Option<ReplicaId>,
+    /// Id of the spare replica created as part of drain procedure.
+    pub spare_replica: Option<SpareReplica>,
+    /// Why a move's over-replicated spare is being removed.
+    #[serde(skip)]
+    pub unwind_spare: Option<UnwindSpare>,
+}
+
+/// Spare replica reference for this drain.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct SpareReplica {
+    /// Replica Id of the spare, if placed.
+    pub replica_id: Option<ReplicaId>,
+}
+
+/// Contains the reason for unwinding a spare replica, which is used to determine how to proceed with
+/// the drain procedure.
+#[derive(Debug, Clone, PartialEq)]
+pub enum UnwindSpare {
+    /// The drain was aborted (`DrainPhase → Aborted`): remove the spare and end the
+    /// move, keeping `draining_replica` where it is.
+    Abort,
+    /// The pool hosting the still-rebuilding spare has itself entered a drain: remove
+    /// the spare and let this move place a fresh one on another eligible pool.
+    Respare,
+}
 /// Runtime pool information.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct PoolRuntimeMetadata {
