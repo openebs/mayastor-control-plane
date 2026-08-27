@@ -6,7 +6,7 @@ use crate::{
         store::{
             definitions::{ObjectKey, StorableObject, StorableObjectType},
             nexus_persistence::VolumeHealthKey,
-            pool::{default_pool_cluster_size, POOL_BS_CLUSTER_SIZE_DEFAULT},
+            pool::{default_pool_cluster_size, DrainConfig, POOL_BS_CLUSTER_SIZE_DEFAULT},
             AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{
@@ -429,6 +429,8 @@ pub struct VolumeRuntimeMetadata {
     /// Degraded; used to enforce the grace period before starting a rebuild.
     /// Tied to the volume's lifetime so it goes away when the volume is deleted.
     offline_rebuild_degraded_since: Option<std::time::Instant>,
+    /// Configuration for the replica move operation, if any.
+    replica_move: Option<ReplicaMoveRequester>,
 }
 impl VolumeRuntimeMetadata {
     /// Check if there's any snapshot.
@@ -457,6 +459,14 @@ impl VolumeRuntimeMetadata {
     pub fn clear_offline_rebuild_degraded(&mut self) {
         self.offline_rebuild_degraded_since = None;
     }
+}
+
+/// The entity on whose behalf a replica move is being carried out, along with the move
+/// configuration specific to it.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ReplicaMoveRequester {
+    /// The move was requested by a pool drain.
+    PoolDrain(DrainConfig),
 }
 
 /// The volume's Nvmf Configuration.

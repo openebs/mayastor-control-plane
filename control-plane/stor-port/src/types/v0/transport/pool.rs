@@ -2,7 +2,8 @@ use super::*;
 
 use crate::{
     types::v0::store::pool::{
-        Encryption, EncryptionSecret, PoolLabel, PoolRuntimeMetadata, PoolSpec, PoolUSpec,
+        Encryption, EncryptionSecret, PoolLabel, PoolPersistedMetadata, PoolRuntimeMetadata,
+        PoolSpec, PoolUSpec, PoolUsage,
     },
     IntoOption,
 };
@@ -532,6 +533,7 @@ pub struct PoolDef {
     pub replica_count: Option<u64>,
     /// How many snapshots are owned by the pool.
     pub snapshot_count: Option<u64>,
+    pub persisted_metadata: PoolPersistedMetadata,
 }
 
 /// User configuration with user specification and metadata information.
@@ -559,6 +561,7 @@ impl From<PoolSpec> for PoolConfig {
                 spec: value.spec,
                 replica_count: value.metadata.runtime.replica_count,
                 snapshot_count: value.metadata.runtime.snapshot_count,
+                persisted_metadata: value.metadata.persisted,
             },
             diag: value.metadata.runtime.diag,
         }
@@ -620,6 +623,17 @@ impl Pool {
     /// Get the pool diagnostics.
     pub fn diag(&self) -> Option<&PoolDiag> {
         self.config.as_ref()?.diag.as_ref()
+    }
+    /// Get a live pool usage statistics, if available.
+    pub fn current_usage(&self) -> Option<PoolUsage> {
+        let state = self.state.as_ref()?;
+        let def = self.config.as_ref().map(|config| &config.definition);
+        Some(PoolUsage {
+            repl_count: def.and_then(|def| def.replica_count)?,
+            snap_count: def.and_then(|def| def.snapshot_count)?,
+            used: state.used,
+            committed: state.committed,
+        })
     }
     /// Get the pool identification.
     pub fn id(&self) -> &PoolId {
