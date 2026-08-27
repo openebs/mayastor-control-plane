@@ -5,9 +5,8 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["rls-ring"]
+default = ["rls-aws-lc-rs"]
 rls-aws-lc-rs = ["async-nats/aws-lc-rs"]
-rls-ring = ["async-nats/ring"]
 
 [dependencies]
 async-nats = { workspace = true, default-features = false }

@@ -11,16 +11,12 @@ path = "src/lib.rs"
 [features]
 default = ["tower-client-rls", "tower-trace"]
 actix-server = ["actix"]
-actix-client = ["actix", "awc"]
 actix = ["actix-web", "rustls"]
-tower-client-rls = ["tower-client", "rustls_ring"]
-tower-client-tls = ["tower-client", "hyper_tls_feat"]
+tower-client-rls = ["tower-client", "rustls_aws_lc_rs"]
 tower-client = ["tower-hyper"]
 tower-hyper = ["hyper", "tower", "tower-http", "http-body", "futures", "pin-project", "tokio"]
-hyper_tls_feat = ["hyper-tls", "tokio-native-tls"]
-rustls_feat = ["rustls", "webpki", "hyper-rustls"]
+rustls_feat = ["rustls", "hyper-rustls"]
 rustls_aws_lc_rs = ["rustls_feat", "rustls/aws-lc-rs", "hyper-rustls/aws-lc-rs"]
-rustls_ring = ["rustls_feat", "rustls/ring", "hyper-rustls/ring"]
 tower-trace = ["opentelemetry-otlp", "opentelemetry_sdk", "tracing-opentelemetry", "opentelemetry", "opentelemetry-http", "tracing", "tracing-subscriber"]
 
 [dependencies]
@@ -36,7 +32,6 @@ serde_urlencoded = { workspace = true }
 # actix dependencies
 actix-web = { workspace = true, optional = true }
 
-awc = { workspace = true, optional = true }
 # tower and hyper dependencies
 hyper = { workspace = true, features = ["http1", "http2", "client"], optional = true }
 hyper-util = { workspace = true, features = ["client", "client-legacy", "http1", "http2", "tokio", "service"] }
@@ -52,10 +47,7 @@ hyper-body = { workspace = true }
 # SSL
 rustls = { workspace = true, default-features = false, optional = true }
 rustls-pemfile = { workspace = true }
-webpki = { workspace = true, optional = true }
 hyper-rustls = { workspace = true, default-features = false, features = ["rustls-native-certs"], optional = true }
-hyper-tls = { workspace = true, optional = true }
-tokio-native-tls = { workspace = true, optional = true }
 # tracing and telemetry
 opentelemetry-otlp = { workspace = true, optional = true }
 opentelemetry_sdk = { workspace = true, optional = true }
