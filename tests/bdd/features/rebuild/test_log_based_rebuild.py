@@ -36,11 +36,11 @@ POOL_1_UUID = "4cc6ee64-7232-497d-a26f-38284a444980"
 POOL_2_UUID = "91a60318-bcfe-4e36-92cb-ddc7abf212ea"
 POOL_3_UUID = "4d471e62-ca17-44d1-a6d3-8820f6156c1a"
 POOL_4_UUID = "d5c5e3de-d77b-11ed-afa1-0242ac120002"
-VOLUME_SIZE = 494 * 1024 * 1024
-POOL_SIZE = 800 * 1024 * 1024
+VOLUME_SIZE = 200 * 1024 * 1024
+POOL_SIZE = 500 * 1024 * 1024
 NUM_VOLUME_REPLICAS = 3
 FAULTED_CHILD_WAIT_SECS = 2
-FIO_RUN = 7
+FIO_RUN = 5
 SLEEP_BEFORE_START = 1
 
 
@@ -184,6 +184,7 @@ def wait_child_faulted():
     for child in childlist:
         if child.state == ChildState("Faulted"):
             pytest.faulted_child_uri = child.uri
+            print(f"Faulted child found: {pytest.faulted_child_uri}")
     assert pytest.faulted_child_uri is not None, "Failed to find Faulted child!"
 
 

@@ -1,5 +1,7 @@
 """Volume Snapshot garbage collection feature tests."""
 
+import os
+
 import pytest
 from common.apiclient import ApiClient
 from common.deployer import Deployer
@@ -46,11 +48,17 @@ def create_pool_disk_images():
 
 @pytest.fixture(scope="module")
 def setup(create_pool_disk_images):
+    tmo = 300
+    is_arm = os.uname().machine in ("arm64", "aarch64")
+    if is_arm:
+        # At least on the CI runners, the ARM64 machines are slower and the default timeout of 300ms
+        #  is not enough for the gRPC calls to complete.
+        tmo *= 2
     Deployer.start(
         io_engines=1,
         cache_period="50ms",
         reconcile_period="50ms",
-        request_timeout="300ms",
+        request_timeout=f"{tmo}ms",
         no_min_timeouts=True,
         io_engine_env="MAYASTOR_HB_INTERVAL_SEC=1",
     )

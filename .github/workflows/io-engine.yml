@@ -1,0 +1,37 @@
+name: Validate io-engine image
+on:
+  workflow_dispatch:
+    inputs:
+      io-engine-img:
+        required: true
+        description: "The io-engine image to use for the tests. If not provided, the default image will be used."
+        type: string
+      fio-spdk-img:
+        required: true
+        description: "The fio_spdk image to use for the tests. If not provided, the default image will be used."
+        type: string
+
+jobs:
+  int-ci:
+    uses: ./.github/workflows/unit-int.yml
+    with:
+      io-engine-img: ${{ inputs.io-engine-img }}
+      fio-spdk-img: ${{ inputs.fio-spdk-img }}
+  bdd-ci:
+    uses: ./.github/workflows/bdd.yml
+    with:
+      io-engine-img: ${{ inputs.io-engine-img }}
+      fio-spdk-img: ${{ inputs.fio-spdk-img }}
+  bors-ci:
+    if: ${{ !cancelled() }}
+    needs:
+      - int-ci
+      - bdd-ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: CI succeeded
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            exit 1
+          fi
+          exit 0
