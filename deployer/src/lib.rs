@@ -161,6 +161,10 @@ pub struct StartOptions {
     #[clap(long, env = "IO_ENGINE_IMAGE", default_value = utils::io_engine_image())]
     pub io_engine_image: String,
 
+    /// Use the following docker image for the fio_spdk instances.
+    #[clap(long, env = "FIO_SPDK_IMAGE", default_value = utils::fio_spdk_image())]
+    pub fio_spdk_image: String,
+
     /// Use the following docker image for the io_engine instances.
     /// This is used for upgrade tests, where this is the older version.
     #[clap(long, env = "PREV_IO_ENGINE_IMAGE")]
