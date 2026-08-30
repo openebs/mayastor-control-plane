@@ -28,6 +28,7 @@ __pycache__
 /local-fio-0-verify.state
 /report.xml
 /docker-logs.txt
+/sbom/
 /.tmp
 /ci-report/
 pytest.log

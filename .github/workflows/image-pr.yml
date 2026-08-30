@@ -25,4 +25,7 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Test building the release images
-        run: ./scripts/release.sh --skip-publish --build-bins
+        # SBOMs are generated here too so that a break in the SBOM path is caught
+        # pre-merge rather than on the develop push. Nothing is signed, since
+        # nothing is published.
+        run: ./scripts/release.sh --skip-publish --build-bins --sbom

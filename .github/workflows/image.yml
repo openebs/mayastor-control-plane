@@ -4,6 +4,7 @@ on:
     branches:
       - develop
       - 'release/**'
+      - sbom
   workflow_call:
     inputs:
       tag:
@@ -35,6 +36,11 @@ jobs:
           # todo: once we support multi-arch builds
           #- ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+      # Required for cosign to get an OIDC token for keyless signing.
+      id-token: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -64,7 +70,14 @@ jobs:
       - name: Build and push the release images
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            ./scripts/release.sh --tag ${{ inputs.tag }} --registry ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.namespace }}
+            ./scripts/release.sh --tag ${{ inputs.tag }} --registry ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.namespace }} --sbom --attest
           elif [[ "${{ github.event_name }}" == "push" ]]; then
-            ./scripts/release.sh
+            ./scripts/release.sh --tag sbom --sbom --attest
           fi
+      - name: Upload the SBOMs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.runner }}
+          path: sbom/*.json
+          if-no-files-found: warn
