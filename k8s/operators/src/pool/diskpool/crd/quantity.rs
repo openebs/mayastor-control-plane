@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use std::convert::TryFrom;
 
 /// A quantity represented as a humansize with up to 1 floating point.
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
 pub struct Quantity(pub u64);
 impl Quantity {
     /// Create a [`Self`] from bytes.
@@ -21,13 +21,6 @@ impl TryFrom<&str> for Quantity {
         parse_size::parse_size(quantity).map(Self)
     }
 }
-
-impl PartialEq for Quantity {
-    fn eq(&self, other: &Self) -> bool {
-        self.bytes() == other.bytes() || self.to_string() == other.to_string()
-    }
-}
-impl Eq for Quantity {}
 
 impl std::fmt::Display for Quantity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -84,7 +77,7 @@ fn test() {
     struct Struct {
         q: Quantity,
     }
-    fn assert_size(bytes: u64, q_str: &str) {
+    fn assert_size(bytes: u64, q_str: &str, roundtrip_bytes: u64) {
         let q = Quantity::from_bytes(bytes);
         assert_eq!(q.bytes(), bytes);
         assert_eq!(q.to_string(), q_str);
@@ -95,15 +88,27 @@ fn test() {
             "q": q_str
         });
         assert_eq!(serde_json::to_string(&dsp).unwrap(), dsp_val.to_string());
-        assert_eq!(dsp, serde_json::from_value(dsp_val).unwrap());
+        assert_eq!(
+            serde_json::from_value::<Struct>(dsp_val).unwrap().q.bytes(),
+            roundtrip_bytes
+        );
     }
     let mb = 1024 * 1024;
     let gb = mb * 1024;
 
-    assert_size(100 * mb, "100 MiB");
-    assert_size(gb, "1 GiB");
-    assert_size(gb + 20 * mb, "1 GiB");
-    assert_size(gb + 25 * mb, "1 GiB");
-    assert_size(gb + 200 * mb, "1.2 GiB");
-    assert_size(1500 * 1000 * 1000, "1.4 GiB");
+    assert_size(100 * mb, "100 MiB", 100 * mb);
+    assert_size(gb, "1 GiB", gb);
+    assert_size(gb + 20 * mb, "1 GiB", gb);
+    assert_size(gb + 25 * mb, "1 GiB", gb);
+    assert_size(gb + 200 * mb, "1.2 GiB", 1288490189);
+    assert_size(1500 * 1000 * 1000, "1.4 GiB", 1503238554);
+}
+
+#[test]
+fn quantity_equality_is_exact() {
+    let mb = 1024 * 1024;
+    let gb = mb * 1024;
+
+    assert_ne!(Quantity::from_bytes(gb), Quantity::from_bytes(gb + 25 * mb));
+    assert_eq!(Quantity::from_bytes(gb), Quantity::from_bytes(gb));
 }
