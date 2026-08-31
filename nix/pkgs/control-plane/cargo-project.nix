@@ -38,10 +38,7 @@ let
     rustc = stable_channel.rustc;
     cargo = stable_channel.cargo;
   };
-  naersk = pkgs.callPackage sources.naersk {
-    rustc = stable_channel.rustc;
-    cargo = stable_channel.cargo;
-  };
+  naersk = channel.naersk_package channel.default;
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
   PROTOC_INCLUDE = "${protobuf}/include";
