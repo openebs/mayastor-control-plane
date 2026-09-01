@@ -340,7 +340,7 @@ mod tests {
             .with_criteria(SimplePolicy::free_space)
             .with_criteria(SimplePolicy::over_commitment);
 
-        let mut pools = vec![
+        let mut pools = [
             make_pool("1", "1", gig, 0, None),
             make_pool("1", "2", gig * 2, 0, None),
             make_pool("2", "3", gig, 1, None),
@@ -350,7 +350,7 @@ mod tests {
         let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
         assert_eq!(pool_names, vec!["2", "1", "3"]);
 
-        let mut pools = vec![
+        let mut pools = [
             make_pool("1", "1", gig * 3, 0, None),
             make_pool("1", "2", gig * 2, 0, None),
             make_pool("2", "3", gig, 1, None),
@@ -360,7 +360,7 @@ mod tests {
         let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
         assert_eq!(pool_names, vec!["1", "2", "3"]);
 
-        let mut pools = vec![
+        let mut pools = [
             make_pool("1", "1", gig * 3, 400, None),
             make_pool("1", "2", gig * 2, 0, None),
             make_pool("2", "3", gig, 1, None),
@@ -370,7 +370,7 @@ mod tests {
         let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
         assert_eq!(pool_names, vec!["2", "3", "1"]);
 
-        let mut pools = vec![
+        let mut pools = [
             make_pool("1", "1", gig * 50, 100, None),
             make_pool("1", "2", gig * 2, 0, None),
             make_pool("2", "3", gig, 1, None),
@@ -380,7 +380,7 @@ mod tests {
         let pool_names = pools.iter().map(|p| p.pool.id.as_str()).collect::<Vec<_>>();
         assert_eq!(pool_names, vec!["1", "2", "3"]);
 
-        let mut pools = vec![
+        let mut pools = [
             make_pool("1", "pool-1", gig, 500, None),
             make_pool("2", "pool-2", gig, 20, None),
             make_pool("3", "pool-3", gig, 500, Some(2)),
@@ -396,7 +396,7 @@ mod tests {
             vec!["pool-2", "pool-1", "pool-3", "pool-6", "pool-5", "pool-4"]
         );
 
-        let mut pools = vec![
+        let mut pools = [
             make_pool("1", "pool-1", gig, 500, None),
             make_pool("2", "pool-2", gig * 2, 20, None),
             make_pool("3", "pool-3", gig, 500, Some(2)),

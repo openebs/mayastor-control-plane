@@ -86,7 +86,7 @@ pub(crate) enum ResourceExcReason {
 }
 impl PartialOrd for ResourceExcReason {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.order_weight().cmp(&other.order_weight()))
+        Some(self.cmp(other))
     }
 }
 impl Ord for ResourceExcReason {

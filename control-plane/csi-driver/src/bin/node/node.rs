@@ -329,7 +329,7 @@ impl node_server::Node for Node {
                 Code::Internal,
                 format!(
                     "Failed to find parent dir for mountpoint {}, volume {}",
-                    &msg.target_path, &msg.volume_id
+                    msg.target_path, msg.volume_id
                 ),
             ));
         }
@@ -821,10 +821,7 @@ impl node_server::Node for Node {
                     if mounts.is_empty() {
                         detach(
                             &uuid,
-                            format!(
-                                "Failed to stage volume {}: {};",
-                                &msg.volume_id, fsmount_error
-                            ),
+                            format!("Failed to stage volume {}: {fsmount_error};", msg.volume_id),
                         )
                         .await?;
                     }
@@ -894,7 +891,7 @@ impl node_server::Node for Node {
         // this is correct, as the attach for nbd is a no-op.
         detach(
             &uuid,
-            format!("Failed to unstage volume {}:", &msg.volume_id),
+            format!("Failed to unstage volume {}:", msg.volume_id),
         )
         .await?;
 

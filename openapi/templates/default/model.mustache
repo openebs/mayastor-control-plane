@@ -9,11 +9,12 @@ use crate::apis::{IntoOptVec, IntoVec};
 {{!-- for enum schemas --}}
 {{#isEnum}}
 /// {{{description}}}
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum {{{classname}}} {
 {{#allowableValues}}
 {{#enumVars}}
     #[serde(rename = "{{{value}}}")]
+    {{#-first}}#[default]{{/-first}}
     {{{name}}},
 {{/enumVars}}{{/allowableValues}}
 }
@@ -28,12 +29,6 @@ impl std::fmt::Display for {{{classname}}} {
             {{/allowableValues}}
         };
         write!(f, "{str_value}")
-    }
-}
-
-impl Default for {{{classname}}} {
-    fn default() -> Self {
-        Self::{{#allowableValues}}{{#enumVars}}{{#-first}}{{{name}}}{{/-first}}{{/enumVars}}{{/allowableValues}}
     }
 }
 
@@ -109,11 +104,12 @@ pub enum {{{classname}}} {
 {{#vars}}
 {{#isEnum}}
 {{#description}}/// {{{description}}}{{/description}}
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum {{{enumName}}} {
 {{#allowableValues}}
 {{#enumVars}}
     #[serde(rename = "{{{value}}}")]
+    {{#-first}}#[default]{{/-first}}
     {{{name}}},
 {{/enumVars}}
 {{/allowableValues}}
@@ -129,12 +125,6 @@ impl std::fmt::Display for {{{enumName}}} {
             {{/allowableValues}}
         };
         write!(f, "{str_value}")
-    }
-}
-
-impl Default for {{{enumName}}} {
-    fn default() -> Self {
-        Self::{{#allowableValues}}{{#enumVars}}{{#-first}}{{{name}}}{{/-first}}{{/enumVars}}{{/allowableValues}}
     }
 }
 

@@ -186,9 +186,9 @@ impl From<&PoolWrapper> for Vec<Replica> {
 // (here we should have pool IO stats over time so we can pick less active
 // pools rather than the number of replicas which is useless if the volumes
 // are not active)
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl PartialOrd for PoolWrapper {
     // todo: change code to support using cmp
-    #[allow(clippy::non_canonical_partial_ord_impl)]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match self.state.status.partial_cmp(&other.state.status) {
             Some(Ordering::Greater) => Some(Ordering::Greater),
@@ -204,6 +204,7 @@ impl PartialOrd for PoolWrapper {
 }
 
 impl Ord for PoolWrapper {
+    #[allow(clippy::non_canonical_partial_ord_impl)]
     fn cmp(&self, other: &Self) -> Ordering {
         self.partial_cmp(other).unwrap_or(Ordering::Equal)
     }

@@ -332,7 +332,7 @@ async fn probes_only_on_insecure(
 async fn main() -> anyhow::Result<()> {
     utils::print_package_info!();
     let cli_args = CliArgs::args();
-    println!("Using options: {:?}", &cli_args);
+    println!("Using options: {cli_args:?}");
 
     utils::tracing_telemetry::TracingTelemetry::builder()
         .with_writer(FmtLayer::Stdout)

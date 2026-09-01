@@ -961,7 +961,7 @@ impl ResourceContext {
                 "DiskNotFound",
                 &format!(
                     "The block device(s): {} can not be found",
-                    &self.spec.disks()[0]
+                    self.spec.disks()[0]
                 ),
                 "Warning",
             )

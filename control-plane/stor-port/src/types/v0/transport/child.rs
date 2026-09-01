@@ -77,9 +77,10 @@ impl PartialEq<String> for ChildUri {
 }
 
 /// Child State information
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Display)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq, Display)]
 pub enum ChildState {
     /// Default Unknown state
+    #[default]
     Unknown,
     /// healthy and contains the latest bits
     Online,
@@ -181,11 +182,6 @@ impl From<&ChildStateReason> for Option<models::ChildStateReason> {
     }
 }
 
-impl Default for ChildState {
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
 impl From<ChildState> for models::ChildState {
     fn from(src: ChildState) -> Self {
         match src {

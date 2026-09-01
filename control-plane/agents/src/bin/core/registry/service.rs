@@ -68,7 +68,7 @@ impl Service {
 
         // Aggregate the state information from each node.
         let nodes = self.registry.nodes().read().await;
-        for (_node_id, locked_node_wrapper) in nodes.iter() {
+        for locked_node_wrapper in nodes.values() {
             let node_wrapper = locked_node_wrapper.read().await;
             nexuses.extend(node_wrapper.nexus_states_cloned());
             pools.extend(node_wrapper.pool_states_cloned());

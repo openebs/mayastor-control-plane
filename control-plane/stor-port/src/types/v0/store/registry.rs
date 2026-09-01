@@ -92,23 +92,19 @@ impl CoreRegistryConfig {
 }
 
 /// How the Node Registration is handled
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone)]
 pub enum NodeRegistration {
     /// Nodes have to be registered via the RestApi before they can be used.
     Manual,
     /// Nodes are automatically registered when a Register message is received from an
     /// io-engine instance.
     /// They can be explicitly removed via the RestApi.
+    #[default]
     Automatic,
 }
 impl NodeRegistration {
     pub fn automatic(&self) -> bool {
         self == &Self::Automatic
-    }
-}
-impl Default for NodeRegistration {
-    fn default() -> Self {
-        Self::Automatic
     }
 }
 

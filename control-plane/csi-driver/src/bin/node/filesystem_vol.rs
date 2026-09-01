@@ -52,8 +52,8 @@ pub(crate) async fn stage_fs_volume(
             return Err(Status::new(
                 Code::Internal,
                 format!(
-                    "Failed to create mountpoint {} for volume {}: {}",
-                    &fs_staging_path, volume_uuid, err
+                    "Failed to create mountpoint {} for volume {volume_uuid}: {err}",
+                    fs_staging_path,
                 ),
             ));
         }
