@@ -1,6 +1,15 @@
 name: Integration CI
 on:
   workflow_call:
+    inputs:
+      io-engine-img:
+        required: false
+        description: "The io-engine image to use for the tests. If not provided, the default image will be used."
+        type: string
+      fio-spdk-img:
+        required: false
+        description: "The fio_spdk image to use for the tests. If not provided, the default image will be used."
+        type: string
 
 env:
   CARGO_TERM_COLOR: always
@@ -14,8 +23,7 @@ jobs:
       matrix:
         runner:
           - cncf-ubuntu-16-64-x86
-          # can't run until we build io-engine arm images
-          # - cncf-ubuntu-16-64-arm
+          - cncf-ubuntu-16-64-arm
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -28,6 +36,15 @@ jobs:
           submodules: 'recursive'
 
       - run: echo "CI_REPORT_START_DATE=$(date +"%Y-%m-%d %H:%M:%S")" >> $GITHUB_ENV
+
+      - name: Set container image overrides
+        run: |
+          if [ -n "${{ inputs.io-engine-img }}" ]; then
+            echo "IO_ENGINE_IMAGE=${{ inputs.io-engine-img }}" >> $GITHUB_ENV
+          fi
+          if [ -n "${{ inputs.fio-spdk-img }}" ]; then
+            echo "FIO_SPDK_IMAGE=${{ inputs.fio-spdk-img }}" >> $GITHUB_ENV
+          fi
 
       - name: Configure Docker logging driver
         run: |
@@ -58,6 +75,9 @@ jobs:
           sudo modprobe nvme_tcp
           # Check if nvme config is valid, otherwise apply it
           sudo ./utils/dependencies/scripts/nvme-conf.sh --check --apply --overwrite
+          # On the arm runners we have:
+          # -A INPUT -j REJECT --reject-with icmp-host-prohibited
+          sudo iptables -I INPUT 1 -p tcp -s 10.1.0.0/16 -d 10.1.0.1 --dport 8082 -m conntrack --ctstate NEW -j ACCEPT
 
       - name: Run Tests
         run: |

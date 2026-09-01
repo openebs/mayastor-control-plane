@@ -1,3 +1,4 @@
+#[cfg(target_arch = "x86_64")]
 use super::RECONCILE_TIMEOUT_SECS;
 use crate::volume::helpers::wait_node_online;
 use deployer_cluster::{Cluster, ClusterBuilder, FindVolumeRequest};
@@ -636,6 +637,7 @@ async fn unknown_snapshot_garbage_collector() {
 }
 
 #[tokio::test]
+#[cfg(target_arch = "x86_64")]
 async fn snapshot_upgrade() {
     let mb = 1024 * 1024;
     let gc_period = Duration::from_millis(200);
