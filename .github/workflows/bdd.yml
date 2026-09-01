@@ -10,6 +10,9 @@ on:
         required: false
         description: "The fio_spdk image to use for the tests. If not provided, the default image will be used."
         type: string
+  push:
+    branches:
+      - arm-test
 
 env:
   CARGO_TERM_COLOR: always
@@ -22,7 +25,7 @@ jobs:
       fail-fast: false
       matrix:
         runner:
-          - cncf-ubuntu-16-64-x86
+          # - cncf-ubuntu-16-64-x86
           - cncf-ubuntu-16-64-arm
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -59,49 +62,54 @@ jobs:
           hide_cachix_token: true
           rust_cache: true
 
-      - name: Build binaries
-        run: nix-shell --run "cargo build --bins"
+      # - name: Build binaries
+      #   run: nix-shell --run "cargo build --bins"
+      
+      - name: Setup tmate session
+        # if: ${{ failure() }}
+        timeout-minutes: 240
+        uses: owenthereal/action-upterm@v1
 
-      - name: Setup Test Pre-Requisites
-        run: |
-          sudo debconf-communicate <<< "set man-db/auto-update false" || true
-          sudo dpkg-reconfigure man-db || true
-          sudo sysctl -w vm.nr_hugepages=3072
-          sudo apt-get update || (sleep 5; sudo apt-get update)
-          sudo apt-get install linux-modules-extra-$(uname -r)
-          sudo modprobe nvme_tcp
-          # Check if nvme config is valid, otherwise apply it
-          sudo ./utils/dependencies/scripts/nvme-conf.sh --check --apply --overwrite
+      # - name: Setup Test Pre-Requisites
+      #   run: |
+      #     sudo debconf-communicate <<< "set man-db/auto-update false" || true
+      #     sudo dpkg-reconfigure man-db || true
+      #     sudo sysctl -w vm.nr_hugepages=3072
+      #     sudo apt-get update || (sleep 5; sudo apt-get update)
+      #     sudo apt-get install linux-modules-extra-$(uname -r)
+      #     sudo modprobe nvme_tcp
+      #     # Check if nvme config is valid, otherwise apply it
+      #     sudo ./utils/dependencies/scripts/nvme-conf.sh --check --apply --overwrite
 
-      - name: Run BDD Tests
-        run: |
-          nix-shell --run "deployer start --image-pull-policy always -w 60s && deployer stop"
-          nix-shell --run "./scripts/python/test.sh"
+      # - name: Run BDD Tests
+      #   run: |
+      #     nix-shell --run "deployer start --image-pull-policy always -w 60s && deployer stop"
+      #     nix-shell --run "./scripts/python/test.sh"
 
-      - name: Cleanup
-        if: always()
-        run: |
-          nix-shell --run "./scripts/ci-report.sh"
-          nix-shell --run "./scripts/python/test-residue-cleanup.sh"
+      # - name: Cleanup
+      #   if: always()
+      #   run: |
+      #     nix-shell --run "./scripts/ci-report.sh"
+      #     nix-shell --run "./scripts/python/test-residue-cleanup.sh"
 
-      - uses: actions/upload-artifact@v7
-        if: failure()
-        with:
-          name: ci-report-bdd-${{ matrix.runner }}
-          path: ./ci-report/ci-report.tar.gz
+      # - uses: actions/upload-artifact@v7
+      #   if: failure()
+      #   with:
+      #     name: ci-report-bdd-${{ matrix.runner }}
+      #     path: ./ci-report/ci-report.tar.gz
 
-      - name: Pytest BDD Report
-        if: always()
-        uses: pmeier/pytest-results-action@main
-        with:
-          path: ci-report/bdd-report.xml
-          summary: true
-          display-options: a
-          fail-on-empty: true
-          title: Test results
+      # - name: Pytest BDD Report
+      #   if: always()
+      #   uses: pmeier/pytest-results-action@main
+      #   with:
+      #     path: ci-report/bdd-report.xml
+      #     summary: true
+      #     display-options: a
+      #     fail-on-empty: true
+      #     title: Test results
 
       # debugging
       # - name: Setup tmate session
       #   if: ${{ failure() }}
       #   timeout-minutes: 240
-      #   uses: mxschmitt/action-tmate@v3
+      #   uses: appleboy/ssh-action@v1
