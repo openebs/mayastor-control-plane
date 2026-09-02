@@ -144,6 +144,8 @@ pub trait PoolOperations: Send + Sync {
     async fn expand(&self, info: &dyn ExpandPoolInfo) -> Result<Pool, ReplyError>;
     /// Clears runtime errors from the specified pool.
     async fn clear_errors(&self, request: &ClearErrorsRequest) -> Result<Pool, ReplyError>;
+    /// Initiates drain of a pool using user specified config.
+    async fn drain(&self, request: &PoolDrainRequest) -> Result<Pool, ReplyError>;
 }
 
 impl TryFrom<pool::PoolDefinition> for PoolSpec {
@@ -649,7 +651,7 @@ impl From<PoolUsage> for pool::PoolUsage {
 impl From<DrainPhase> for pool::DrainPhase {
     fn from(value: DrainPhase) -> Self {
         match value {
-            DrainPhase::Unknown => Self::DrainUnknown,
+            DrainPhase::Unknown => Self::PhaseUnknown,
             DrainPhase::Queued => Self::Queued,
             DrainPhase::Draining => Self::Draining,
             DrainPhase::AwaitingCleanup => Self::AwaitingCleanup,
@@ -688,6 +690,7 @@ impl TryFrom<pool::PoolDrainRecord> for PoolDrainRecord {
 impl From<PhaseReason> for pool::PhaseReason {
     fn from(value: PhaseReason) -> Self {
         match value {
+            PhaseReason::Unknown => Self::ReasonUnknown,
             PhaseReason::WaitingForSlot => Self::WaitingForSlot,
             PhaseReason::OfflinePool => Self::OfflinePool,
             PhaseReason::SingleReplicaUnsafeEviction => Self::SingleReplicaUnsafeEviction,
@@ -700,6 +703,7 @@ impl From<PhaseReason> for pool::PhaseReason {
 impl From<pool::PhaseReason> for PhaseReason {
     fn from(value: pool::PhaseReason) -> Self {
         match value {
+            pool::PhaseReason::ReasonUnknown => Self::Unknown,
             pool::PhaseReason::WaitingForSlot => Self::WaitingForSlot,
             pool::PhaseReason::OfflinePool => Self::OfflinePool,
             pool::PhaseReason::SingleReplicaUnsafeEviction => Self::SingleReplicaUnsafeEviction,
@@ -712,7 +716,7 @@ impl From<pool::PhaseReason> for PhaseReason {
 impl From<pool::DrainPhase> for DrainPhase {
     fn from(value: pool::DrainPhase) -> Self {
         match value {
-            pool::DrainPhase::DrainUnknown => Self::Unknown,
+            pool::DrainPhase::PhaseUnknown => Self::Unknown,
             pool::DrainPhase::Queued => Self::Queued,
             pool::DrainPhase::Draining => Self::Draining,
             pool::DrainPhase::AwaitingCleanup => Self::AwaitingCleanup,
@@ -1476,6 +1480,43 @@ impl From<PoolCordonRequest> for CordonPoolRequest {
             snapshots: value.snapshots,
             restores: value.restores,
             import: value.import,
+        }
+    }
+}
+
+/// Pool drain information.
+#[derive(Debug, Clone)]
+pub struct PoolDrainRequest {
+    /// Node ID of where the pool resides on.
+    /// This is optional and may be used for stricter checks.
+    pub node_id: Option<NodeId>,
+    /// The ID of the pool to drain.
+    pub pool_id: PoolId,
+    /// The user's drain policy, each of which alters what the drain is permitted to do.
+    pub policy: DrainPolicy,
+}
+
+impl TryFrom<pool::DrainPoolRequest> for PoolDrainRequest {
+    type Error = ReplyError;
+
+    fn try_from(value: pool::DrainPoolRequest) -> Result<Self, Self::Error> {
+        let policy = value.policy.ok_or_else(|| {
+            ReplyError::missing_argument(ResourceKind::Pool, "drain_pool_request.policy")
+        })?;
+        Ok(Self {
+            node_id: value.node_id.map(Into::into),
+            pool_id: value.pool_id.into(),
+            policy: DrainPolicy::try_from(policy)?,
+        })
+    }
+}
+
+impl From<PoolDrainRequest> for pool::DrainPoolRequest {
+    fn from(value: PoolDrainRequest) -> Self {
+        Self {
+            node_id: value.node_id.map(Into::into),
+            pool_id: value.pool_id.into(),
+            policy: Some(value.policy.into()),
         }
     }
 }

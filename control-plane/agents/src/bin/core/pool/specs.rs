@@ -14,7 +14,7 @@ use stor_port::{
     types::v0::{
         store::{
             node::NodeSpec,
-            pool::{PoolLabelOp, PoolOperation, PoolSpec, PoolUnLabelOp},
+            pool::{DrainRefused, PoolLabelOp, PoolOperation, PoolSpec, PoolUnLabelOp},
             replica::{ReplicaOperation, ReplicaSpec},
             SpecStatus, SpecTransaction,
         },
@@ -125,6 +125,23 @@ impl SpecOperationsHelper for PoolSpec {
                     Ok(())
                 }
             },
+            PoolOperation::Drain(drain) => {
+                self.validate_drain(drain)
+                    .map_err(|refused| match refused {
+                        DrainRefused::EvictPolicyImmutable => SvcError::UnsupportedDrainUpdate {
+                            name: self.id().clone(),
+                        },
+                        DrainRefused::Unchanged => SvcError::NoSnapPolicyUpdateOnDrain {
+                            name: self.id().clone(),
+                        },
+                        DrainRefused::Terminal(phase) => SvcError::PoolAlreadyDrained {
+                            name: self.id().clone(),
+                            phase,
+                        },
+                    })?;
+                self.start_op(op);
+                Ok(())
+            }
             _ => {
                 self.start_op(op);
                 Ok(())
