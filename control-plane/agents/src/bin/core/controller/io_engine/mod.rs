@@ -18,17 +18,17 @@ use stor_port::{
     types::v0::transport::{
         AddNexusChild, ApiVersion, CreateNexus, CreatePool, CreateReplica, CreateReplicaSnapshot,
         DestroyNexus, DestroyPool, DestroyReplica, DestroyReplicaSnapshot, ExpandPool,
-        FaultNexusChild, GetBlockDevices, GetRebuildRecord, ImportPool, IoEngCreateSnapshotClone,
-        ListRebuildRecord, ListReplicaSnapshots, ListSnapshotClones, Nexus, NexusChildAction,
-        NexusChildActionContext, NexusChildActionKind, NexusId, PoolState, RebuildHistory,
-        Register, RemoveNexusChild, Replica, ReplicaId, ReplicaSnapshot, ResizeNexus,
-        ResizeReplica, SetReplicaEntityId, ShareNexus, ShareReplica, ShutdownNexus, UnshareNexus,
-        UnshareReplica,
+        FaultNexusChild, GetBlockDevices, GetPoolsSmartResponse, GetRebuildRecord, ImportPool,
+        IoEngCreateSnapshotClone, ListRebuildRecord, ListReplicaSnapshots, ListSnapshotClones,
+        Nexus, NexusChildAction, NexusChildActionContext, NexusChildActionKind, NexusId, PoolState,
+        RebuildHistory, Register, RemoveNexusChild, Replica, ReplicaId, ReplicaSnapshot,
+        ResizeNexus, ResizeReplica, SetReplicaEntityId, ShareNexus, ShareReplica, ShutdownNexus,
+        UnshareNexus, UnshareReplica,
     },
 };
 
 use async_trait::async_trait;
-use grpc::operations::pool::traits::ClearErrorsRequest;
+use grpc::operations::pool::traits::{ClearErrorsRequest, GetPoolsSmartRequest};
 
 #[async_trait]
 #[dyn_clonable::clonable]
@@ -74,6 +74,11 @@ pub(crate) trait PoolApi {
     async fn clear_errors(&self, request: &ClearErrorsRequest) -> Result<PoolState, SvcError>;
     /// Probe pool's disks for errors.
     async fn probe_pool(&self, request: &ProbePoolRequest) -> Result<ProbePoolResponse, SvcError>;
+    /// Get pool SMART / health information.
+    async fn get_pools_smart(
+        &self,
+        request: &GetPoolsSmartRequest,
+    ) -> Result<GetPoolsSmartResponse, SvcError>;
 }
 
 #[async_trait]

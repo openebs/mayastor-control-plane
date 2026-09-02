@@ -32,14 +32,20 @@ use stor_port::{
         store::{pool::PoolSpec, replica::ReplicaSpec},
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, ExpandPool, Filter, GetPools,
-            GetReplicas, LabelPool, NodeId, Pool, PoolDeleteResult, PoolId, Replica, ResizeReplica,
-            ShareReplica, UnlabelPool, UnshareReplica, VolumeId,
+            GetPoolsSmartResponse, GetReplicas, LabelPool, NodeId, Pool, PoolDeleteResult, PoolId,
+            Replica, ResizeReplica, ShareReplica, UnlabelPool, UnshareReplica, VolumeId,
         },
     },
 };
 
-use crate::controller::resources::{operations::ResourceCordon, ResourceUid};
-use grpc::operations::pool::traits::{ClearErrorsRequest, PoolCordonRequest, PoolCreateError};
+use crate::controller::{
+    io_engine::PoolApi,
+    resources::{operations::ResourceCordon, ResourceUid},
+};
+use grpc::operations::pool::traits::{
+    ClearErrorsRequest, GetPoolsSmartFilter, GetPoolsSmartRequest, PoolCordonRequest,
+    PoolCreateError,
+};
 use snafu::OptionExt;
 
 #[derive(Debug, Clone)]
@@ -142,6 +148,16 @@ impl PoolOperations for Service {
         let service = self.clone();
         let pool = Context::spawn(async move { service.drain(request).await }).await??;
         Ok(pool)
+    }
+    async fn get_pools_smart(
+        &self,
+        request: &GetPoolsSmartRequest,
+    ) -> Result<GetPoolsSmartResponse, ReplyError> {
+        let request = request.clone();
+        let service = self.clone();
+        let response =
+            Context::spawn(async move { service.get_pools_smart_inner(&request).await }).await??;
+        Ok(response)
     }
 }
 
@@ -493,5 +509,39 @@ impl Service {
         let spec = guarded_pool.drain(&self.registry, request).await?;
         let state = self.registry.ctrl_pool_state(guarded_pool.uid()).await.ok();
         Ok(Pool::new(spec, state))
+    }
+
+    /// Get SMART / health information for pools, dispatched by filter.
+    #[tracing::instrument(level = "info", skip(self), err)]
+    async fn get_pools_smart_inner(
+        &self,
+        request: &GetPoolsSmartRequest,
+    ) -> Result<GetPoolsSmartResponse, SvcError> {
+        match &request.filter {
+            GetPoolsSmartFilter::Node(node_id) => {
+                let node = self.registry.node_wrapper(node_id).await?;
+                node.get_pools_smart(request).await
+            }
+            GetPoolsSmartFilter::Pool(pool_id) => {
+                let node_id = self
+                    .registry
+                    .pool_node(pool_id)
+                    .await
+                    .context(PoolNotFound {
+                        pool_id: pool_id.clone(),
+                    })?;
+                let node = self.registry.node_wrapper(&node_id).await?;
+                node.get_pools_smart(request).await
+            }
+            GetPoolsSmartFilter::NodePool(node_id, pool_id) => {
+                if self.registry.pool_node(pool_id).await.as_ref() != Some(node_id) {
+                    return Err(SvcError::PoolNotFound {
+                        pool_id: pool_id.clone(),
+                    });
+                }
+                let node = self.registry.node_wrapper(node_id).await?;
+                node.get_pools_smart(request).await
+            }
+        }
     }
 }

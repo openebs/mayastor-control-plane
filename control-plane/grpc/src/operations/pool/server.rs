@@ -3,13 +3,13 @@ use crate::{
     operations::pool::traits::PoolOperations,
     pool::{
         self, clear_errors_reply, cordon_pool_reply, create_pool_reply, drain_pool_reply,
-        expand_pool_reply, get_pools_reply, label_pool_reply,
+        expand_pool_reply, get_pools_reply, get_pools_smart_reply, label_pool_reply,
         pool_grpc_server::{PoolGrpc, PoolGrpcServer},
         unlabel_pool_reply, ClearErrorsReply, ClearErrorsRequest, CordonPoolReply,
         CordonPoolRequest, CreatePoolReply, CreatePoolRequest, DestroyPoolReply,
         DestroyPoolRequest, DrainPoolReply, DrainPoolRequest, ExpandPoolReply, ExpandPoolRequest,
-        GetPoolsReply, GetPoolsRequest, LabelPoolReply, LabelPoolRequest, UnlabelPoolReply,
-        UnlabelPoolRequest,
+        GetPoolsReply, GetPoolsRequest, GetPoolsSmartReply, GetPoolsSmartRequest, LabelPoolReply,
+        LabelPoolRequest, UnlabelPoolReply, UnlabelPoolRequest,
     },
 };
 use std::sync::Arc;
@@ -196,6 +196,28 @@ impl PoolGrpc for PoolServer {
             })),
             Err(err) => Ok(Response::new(DrainPoolReply {
                 reply: Some(drain_pool_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn get_pools_smart(
+        &self,
+        request: Request<GetPoolsSmartRequest>,
+    ) -> Result<tonic::Response<GetPoolsSmartReply>, tonic::Status> {
+        let request = match super::traits::GetPoolsSmartRequest::try_from(request.into_inner()) {
+            Ok(req) => req,
+            Err(err) => {
+                return Ok(Response::new(GetPoolsSmartReply {
+                    reply: Some(get_pools_smart_reply::Reply::Error(err.into())),
+                }))
+            }
+        };
+        match self.service.get_pools_smart(&request).await {
+            Ok(response) => Ok(Response::new(GetPoolsSmartReply {
+                reply: Some(get_pools_smart_reply::Reply::Response(response.into())),
+            })),
+            Err(err) => Ok(Response::new(GetPoolsSmartReply {
+                reply: Some(get_pools_smart_reply::Reply::Error(err.into())),
             })),
         }
     }
