@@ -1,7 +1,9 @@
 use crate::controller::{
     registry::Registry,
     resources::{
-        operations::{ResourceLabel, ResourceLifecycle, ResourceResize, ResourceSharing},
+        operations::{
+            ResourceDrain, ResourceLabel, ResourceLifecycle, ResourceResize, ResourceSharing,
+        },
         operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
         OperationGuardArc, ResourceMutex,
     },
@@ -12,8 +14,8 @@ use grpc::{
     context::Context,
     operations::{
         pool::traits::{
-            CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo, PoolOperations,
-            UnlabelPoolInfo,
+            CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo, PoolDrainRequest,
+            PoolOperations, UnlabelPoolInfo,
         },
         replica::traits::{
             CreateReplicaInfo, DestroyReplicaInfo, ReplicaOperations, ResizeReplicaInfo,
@@ -132,6 +134,13 @@ impl PoolOperations for Service {
         let request = request.clone();
         let service = self.clone();
         let pool = Context::spawn(async move { service.clear_errors(request).await }).await??;
+        Ok(pool)
+    }
+
+    async fn drain(&self, request: &PoolDrainRequest) -> Result<Pool, ReplyError> {
+        let request = request.clone();
+        let service = self.clone();
+        let pool = Context::spawn(async move { service.drain(request).await }).await??;
         Ok(pool)
     }
 }
@@ -458,5 +467,14 @@ impl Service {
         let mut guarded_pool = self.specs().guarded_pool(&request.pool_id).await?;
         let pool = guarded_pool.clear_errors(&self.registry, &request).await?;
         Ok(pool)
+    }
+
+    /// Drain the specified pool.
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %request.pool_id))]
+    async fn drain(&self, request: PoolDrainRequest) -> Result<Pool, SvcError> {
+        let mut guarded_pool = self.specs().guarded_pool(&request.pool_id).await?;
+        let spec = guarded_pool.drain(&self.registry, request).await?;
+        let state = self.registry.ctrl_pool_state(guarded_pool.uid()).await.ok();
+        Ok(Pool::new(spec, state))
     }
 }

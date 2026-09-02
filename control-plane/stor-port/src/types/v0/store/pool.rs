@@ -221,6 +221,43 @@ pub struct PoolDrainRecord {
     pub replica_moves: Vec<DrainConfig>,
 }
 
+impl Default for PoolDrainRecord {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PoolDrainRecord {
+    fn new() -> Self {
+        Self {
+            phase: DrainPhase::Queued,
+            phase_reason: Some(PhaseReason::WaitingForSlot),
+            initial_stats: None,
+            replica_moves: vec![],
+        }
+    }
+
+    /// Returns the current phase of the drain state machine.
+    pub fn phase(&self) -> &DrainPhase {
+        &self.phase
+    }
+
+    /// Returns the reason for the current phase of the drain state machine.
+    pub fn phase_reason(&self) -> &Option<PhaseReason> {
+        &self.phase_reason
+    }
+
+    /// Returns the initial usage stats of the pool when the pool transitions into Draining state.
+    pub fn initial_stats(&self) -> &Option<PoolUsage> {
+        &self.initial_stats
+    }
+
+    /// Returns the in-flight replica moves for this drain.
+    pub fn replica_moves(&self) -> &Vec<DrainConfig> {
+        &self.replica_moves
+    }
+}
+
 /// Why the pool is in its current drain phase.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum PhaseReason {
@@ -449,6 +486,25 @@ impl PoolSpec {
         }
     }
 
+    /// Retuns true if drain is allowed.
+    pub fn drain_allowed(&self, op: &PoolDrainOp) -> bool {
+        match &self.cordon_drain {
+            Some(ds) => {
+                if let Some(record) = self.drain_record() {
+                    // No point on updating drain config on an already Drained pool.
+                    if record.phase == DrainPhase::Drained {
+                        false
+                    } else {
+                        ds.drain_allowed(op)
+                    }
+                } else {
+                    true
+                }
+            }
+            None => true,
+        }
+    }
+
     /// May retry the pool import.
     /// Otherwise, try again next time.
     pub fn can_retry_import(&self) -> bool {
@@ -459,13 +515,22 @@ impl PoolSpec {
     }
 
     /// Sets drain configuration on the pool, carrying over the user's own cordon, if any.
-    pub fn start_drain(&mut self, policy: DrainPolicy) {
-        let user_cordon = self.cordon_drain.as_ref().and_then(|s| match s {
-            CordonDrainState::Drain(drain) => drain.user_cordon.clone(),
-            CordonDrainState::Cordoned(cordoned) => Some(cordoned.clone()),
-        });
-        let drain_spec = DrainSpec::new(policy, user_cordon);
+    /// Existing drain record is preserved, if any, to keep track of the drain progress.
+    /// If no drain record exists, a new one is created.
+    pub fn set_drain(&mut self, op: PoolDrainOp) {
+        let (user_cordon, request_ts) = match self.cordon_drain.as_ref() {
+            Some(CordonDrainState::Drain(drain)) => {
+                (drain.user_cordon.clone(), Some(drain.request_timestamp))
+            }
+            Some(CordonDrainState::Cordoned(cordoned)) => (Some(cordoned.clone()), None),
+            None => (None, None),
+        };
+        let drain_spec = DrainSpec::new(op.policy, user_cordon, request_ts);
         self.cordon_drain = Some(CordonDrainState::Drain(drain_spec));
+        if self.metadata.persisted.drain_record.is_none() {
+            let drain_record = PoolDrainRecord::default();
+            self.metadata.persisted.drain_record = Some(drain_record);
+        }
     }
 
     /// Removes drain configuration from the pool, restoring the user's own cordon, if they had
@@ -477,6 +542,7 @@ impl PoolSpec {
                 .as_ref()
                 .map(|uc| CordonDrainState::Cordoned(uc.clone()));
         }
+        self.metadata.persisted.drain_record = None
     }
 
     /// Returns the applied drain configuration on the pool.
@@ -491,6 +557,11 @@ impl PoolSpec {
     /// the cordon the user applied.
     pub fn effective_cordon(&self) -> Option<CordonedState> {
         self.cordon_drain.as_ref().map(|s| s.effective_cordon())
+    }
+
+    /// Returns the drain record of the pool, if a drain has been admitted.
+    pub fn drain_record(&self) -> Option<&PoolDrainRecord> {
+        self.metadata.persisted.drain_record.as_ref()
     }
 }
 
@@ -585,6 +656,9 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
                 PoolOperation::Import(_) => {
                     self.metadata.runtime.diag = None;
                 }
+                PoolOperation::Drain(op) => {
+                    self.set_drain(op);
+                }
             }
         }
         self.clear_op();
@@ -630,6 +704,7 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
             PoolOperation::Cordon(_) => (false, true),
             PoolOperation::Uncordon(_) => (false, true),
             PoolOperation::Import(_) => (false, false),
+            PoolOperation::Drain(_) => (false, true),
         }
     }
 }
@@ -644,6 +719,7 @@ pub enum PoolOperation {
     Cordon(PoolCordonOp),
     Uncordon(PoolCordonOp),
     Import(PoolImportOp),
+    Drain(PoolDrainOp),
 }
 
 /// Pool importing info.
@@ -692,6 +768,13 @@ impl PoolCordonOp {
         .collect::<Vec<&str>>()
         .join(",")
     }
+}
+
+/// Parameter for draining a pool.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PoolDrainOp {
+    /// Drain policy to be applied to the pool.
+    pub policy: DrainPolicy,
 }
 
 /// Parameter for adding pool labels.
@@ -928,6 +1011,21 @@ impl CordonDrainState {
             }
         }
     }
+
+    /// Update of already existing is only allowed to change snapshot policy. unsafe_evict or
+    /// unsafe_rebuild_otherwise_evict should not be updated.
+    pub fn drain_allowed(&self, op: &PoolDrainOp) -> bool {
+        match self {
+            CordonDrainState::Cordoned(_) => true,
+            CordonDrainState::Drain(spec) => {
+                let applied_policy = &spec.policy;
+                let request_policy = &op.policy;
+                applied_policy.unsafe_evict == request_policy.unsafe_evict
+                    && applied_policy.unsafe_rebuild_otherwise_evict
+                        == request_policy.unsafe_rebuild_otherwise_evict
+            }
+        }
+    }
 }
 
 impl From<CordonDrainState> for models::PoolCordonDrain {
@@ -957,9 +1055,13 @@ pub struct DrainSpec {
 
 impl DrainSpec {
     /// Create a new drain spec with the given policy.
-    pub fn new(policy: DrainPolicy, user_cordon: Option<CordonedState>) -> Self {
+    pub fn new(
+        policy: DrainPolicy,
+        user_cordon: Option<CordonedState>,
+        req_tsc: Option<SystemTime>,
+    ) -> Self {
         Self {
-            request_timestamp: SystemTime::now(),
+            request_timestamp: req_tsc.unwrap_or(SystemTime::now()),
             policy,
             user_cordon,
         }

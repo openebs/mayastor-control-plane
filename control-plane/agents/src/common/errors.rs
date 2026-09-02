@@ -540,6 +540,8 @@ pub enum SvcError {
         code: tonic::Code,
         kind: ReplyErrorKind,
     },
+    #[snafu(display("Only snapshot policy can be updated for an ongoing drain of {name}"))]
+    UnsupportedDrainUpdate { name: PoolId },
 }
 
 impl SvcError {
@@ -566,6 +568,7 @@ impl SvcError {
             Self::ReplaceNqnNotFound { .. } => tonic::Code::FailedPrecondition,
             Self::PoolCreateError { code, .. } => *code,
             Self::MaxRebuilds { .. } => tonic::Code::OutOfRange,
+            Self::UnsupportedDrainUpdate { .. } => tonic::Code::FailedPrecondition,
             _ => tonic::Code::Internal,
         }
     }
@@ -1385,6 +1388,12 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::PoolCreateError { kind, .. } => ReplyError {
                 kind,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::UnsupportedDrainUpdate { .. } => ReplyError {
+                kind: ReplyErrorKind::NotAcceptable,
                 resource: ResourceKind::Pool,
                 source,
                 extra,

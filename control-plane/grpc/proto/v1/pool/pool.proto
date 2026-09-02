@@ -612,6 +612,20 @@ message ClearErrorsReply {
   }
 }
 
+message DrainPoolRequest {
+  /// The id of the pool to drain.
+  string pool_id = 1;
+  /// The drain policy to apply to the pool.
+  DrainPolicy policy = 2;
+}
+
+message DrainPoolReply {
+  oneof reply {
+    Pool pool = 1;
+    common.ReplyError error = 2;
+  }
+}
+
 // Service for managing storage pools
 service PoolGrpc {
   rpc CreatePool (CreatePoolRequest) returns (CreatePoolReply) {}
@@ -628,4 +642,5 @@ service PoolGrpc {
 
   // Clear error counters and alerts
   rpc ClearErrors (ClearErrorsRequest) returns (ClearErrorsReply) {}
+  rpc DrainPool (DrainPoolRequest) returns (DrainPoolReply) {}
 }

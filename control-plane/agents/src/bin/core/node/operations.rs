@@ -103,17 +103,18 @@ impl ResourceLabel for OperationGuardArc<NodeSpec> {
 /// Resource Drain Operations.
 #[async_trait::async_trait]
 impl ResourceDrain for OperationGuardArc<NodeSpec> {
-    type DrainOutput = NodeSpec;
+    type Output = NodeSpec;
+    type DrainRequest = String;
 
     /// Drain a node via operation guard functions.
     async fn drain(
         &mut self,
         registry: &Registry,
-        label: String,
-    ) -> Result<Self::DrainOutput, SvcError> {
+        request: String,
+    ) -> Result<Self::Output, SvcError> {
         let cloned_node_spec = self.lock().clone();
         let spec_clone = self
-            .start_update(registry, &cloned_node_spec, NodeOperation::Drain(label))
+            .start_update(registry, &cloned_node_spec, NodeOperation::Drain(request))
             .await?;
 
         self.complete_update(registry, Ok(()), spec_clone).await?;
@@ -121,7 +122,7 @@ impl ResourceDrain for OperationGuardArc<NodeSpec> {
     }
 
     /// Mark a node as drained via operation guard functions.
-    async fn set_drained(&mut self, registry: &Registry) -> Result<Self::DrainOutput, SvcError> {
+    async fn set_drained(&mut self, registry: &Registry) -> Result<Self::Output, SvcError> {
         let cloned_node_spec = self.lock().clone();
         let spec_clone = self
             .start_update(registry, &cloned_node_spec, NodeOperation::SetDrained())

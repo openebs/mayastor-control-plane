@@ -3,7 +3,9 @@ use crate::{
         io_engine::PoolApi,
         registry::Registry,
         resources::{
-            operations::{ResourceCordon, ResourceLabel, ResourceLifecycle, ResourceResize},
+            operations::{
+                ResourceCordon, ResourceDrain, ResourceLabel, ResourceLifecycle, ResourceResize,
+            },
             operations_helper::{GuardedOperationsHelper, OnCreateFail, OperationSequenceGuard},
             OperationGuardArc,
         },
@@ -11,13 +13,13 @@ use crate::{
     pool::operations_helper::devlink_preflight_checks,
 };
 use agents::errors::{SvcError, SvcError::CordonedNode};
-use grpc::operations::pool::traits::PoolCordonRequest;
+use grpc::operations::pool::traits::{PoolCordonRequest, PoolDrainRequest};
 use std::collections::{HashMap, HashSet};
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
         store::{
-            pool::{PoolCordonOp, PoolOperation, PoolSpec},
+            pool::{PoolCordonOp, PoolDrainOp, PoolOperation, PoolSpec},
             snapshots::replica::ReplicaSnapshot,
         },
         transport::{
@@ -303,6 +305,32 @@ impl ResourceCordon for OperationGuardArc<PoolSpec> {
 
         self.complete_update(registry, Ok(()), spec_clone).await?;
         Ok(self.as_ref().clone())
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceDrain for OperationGuardArc<PoolSpec> {
+    type Output = PoolSpec;
+    type DrainRequest = PoolDrainRequest;
+    /// Drain a pool via operation guard functions.
+    async fn drain(
+        &mut self,
+        registry: &Registry,
+        request: Self::DrainRequest,
+    ) -> Result<Self::Output, SvcError> {
+        let request = PoolDrainOp {
+            policy: request.policy,
+        };
+        let spec_clone = self.lock().clone();
+        let spec_clone = self
+            .start_update(registry, &spec_clone, PoolOperation::Drain(request))
+            .await?;
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
+    }
+
+    async fn set_drained(&mut self, _registry: &Registry) -> Result<Self::Output, SvcError> {
+        unimplemented!()
     }
 }
 
