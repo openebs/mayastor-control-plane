@@ -175,6 +175,12 @@ pub(crate) struct CliArgs {
     #[clap(long)]
     pool_cluster_size: Option<u32>,
 
+    /// Enable restoring snapshots to PVCs larger than the source volume.
+    /// When enabled, snapshot clones are created at the snapshot size and then
+    /// resized to the requested PVC size.
+    #[clap(long, env = "ENABLE_SNAPSHOT_RESIZE_ON_CLONE")]
+    pub(crate) enable_snapshot_resize_on_clone: bool,
+
     /// Allow any hostnqn access with single node access.
     /// This is to be used for testing only.
     #[clap(long)]
@@ -298,6 +304,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         cli_args.allow_non_persistent_devlink,
         cli_args.encrypted_pools_soft_scheduling,
         cli_args.pool_cluster_size,
+        cli_args.enable_snapshot_resize_on_clone,
         cli_args.deprecated_access_mode,
         sim_args,
         cli_args.offline_rebuild_enabled,
