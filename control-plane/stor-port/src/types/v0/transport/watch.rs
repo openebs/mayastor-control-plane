@@ -92,7 +92,7 @@ impl std::fmt::Display for WatchResourceId {
 }
 
 /// The difference types of watches
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum WatchType {
     /// watch for changes on the desired state
@@ -100,12 +100,8 @@ pub enum WatchType {
     /// watch for changes on the actual state
     Actual,
     /// watch for both `Desired` and `Actual` changes
+    #[default]
     All,
-}
-impl Default for WatchType {
-    fn default() -> Self {
-        Self::All
-    }
 }
 
 /// Delete watch which was previously created by CreateWatch

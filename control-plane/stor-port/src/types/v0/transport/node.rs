@@ -206,9 +206,12 @@ impl From<NodeRscCounts> for models::NodeMeta {
 }
 
 /// Status of the Node
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, EnumString, Display, Eq, PartialEq)]
+#[derive(
+    Serialize, Deserialize, Debug, Default, Clone, Copy, EnumString, Display, Eq, PartialEq,
+)]
 pub enum NodeStatus {
     /// Node has unexpectedly disappeared
+    #[default]
     Unknown,
     /// Node is deemed online if it has not missed the
     /// registration keep alive deadline
@@ -216,12 +219,6 @@ pub enum NodeStatus {
     /// Node is deemed offline if has missed the
     /// registration keep alive deadline
     Offline,
-}
-
-impl Default for NodeStatus {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 /// Node features as exposed by the node io-engine.
@@ -530,8 +527,9 @@ impl From<NodeStatus> for models::NodeStatus {
 }
 
 /// api versions known by control plane
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub enum ApiVersion {
+    #[default]
     V0,
     V1,
 }
@@ -545,11 +543,5 @@ impl FromStr for ApiVersion {
             "v1" => Ok(Self::V1),
             _ => Err(format!("The api version: {s} is not supported")),
         }
-    }
-}
-
-impl Default for ApiVersion {
-    fn default() -> Self {
-        Self::V0
     }
 }

@@ -743,7 +743,7 @@ impl Registry {
         match self.max_rebuilds {
             Some(max_rebuilds) => {
                 let mut num_rebuilds = 0;
-                for (_id, node_wrapper) in self.nodes.read().await.iter() {
+                for node_wrapper in self.nodes.read().await.values() {
                     num_rebuilds += node_wrapper.read().await.num_rebuilds();
                 }
 

@@ -749,7 +749,7 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
             if !matches!(error, ApiClientError::NotAcceptable(_)) {
                 return Err(Status::not_found(format!(
                     "Failed to unpublish volume {}, error = {error:?}",
-                    &args.volume_id
+                    args.volume_id
                 )));
             }
         }

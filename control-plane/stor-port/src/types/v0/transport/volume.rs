@@ -493,22 +493,17 @@ impl GetVolumes {
 
 /// Policy for restoring a volume from a snapshot when one or more snapshot
 /// replica pools cannot accept a new clone (for example, the source pool is full).
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum SnapshotRestorePolicy {
     /// Require every requested replica to be cloned from the source snapshot.
     /// The restore fails if any clone cannot be created. This is the default.
+    #[default]
     Strict,
     /// Allow the restore to proceed with fewer clones than the requested replica
     /// count, as long as at least one clone can be created. The volume is created
     /// in a degraded state and the missing replicas are filled in by the regular
     /// replica reconciler via a full rebuild.
     BestEffort,
-}
-
-impl Default for SnapshotRestorePolicy {
-    fn default() -> Self {
-        Self::Strict
-    }
 }
 
 impl From<models::SnapshotRestorePolicy> for SnapshotRestorePolicy {
@@ -715,10 +710,11 @@ impl PublishVolume {
 /// Persisted on the volume metadata so internal callers (reconcilers, future
 /// maintenance flows) can identify a target they themselves established
 /// without leaking that distinction through the public publish API.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum VolumeTargetMode {
     /// The target is serving a front-end application publish (the default
     /// path: CSI publish or REST publish that fronts a user workload).
+    #[default]
     ServeFrontendApp,
     /// The target was set up by the offline-rebuild reconciler to drive a
     /// rebuild on an unpublished volume. The reconciler owns its lifecycle.
@@ -727,12 +723,6 @@ pub enum VolumeTargetMode {
     /// (fsck, grow, migrate) and must not be promoted to serve app traffic
     /// until the maintenance flow releases it. Reserved for future use.
     MaintenanceMode,
-}
-
-impl Default for VolumeTargetMode {
-    fn default() -> Self {
-        Self::ServeFrontendApp
-    }
 }
 
 impl VolumeTargetMode {

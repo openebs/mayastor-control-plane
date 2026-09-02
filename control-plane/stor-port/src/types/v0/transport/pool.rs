@@ -20,9 +20,10 @@ pub struct GetPools {
 }
 
 /// Status of the Pool.
-#[derive(Serialize, Deserialize, Debug, Clone, EnumString, Display, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, EnumString, Display, Eq, PartialEq)]
 pub enum PoolStatus {
     /// Unknown state.
+    #[default]
     Unknown,
     /// The pool is in normal working order.
     Online,
@@ -36,11 +37,6 @@ pub enum PoolStatus {
     Offline,
 }
 
-impl Default for PoolStatus {
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
 // todo: this conversion is bypassing the io-engine proto-api translation.
 //  this may cause issues if the numbers here get desynced with the io-engine api.
 impl From<i32> for PoolStatus {

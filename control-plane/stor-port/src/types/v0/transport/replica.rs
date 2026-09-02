@@ -768,22 +768,20 @@ pub struct UnshareReplica {
 }
 
 /// The protocol used to share the replica.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, EnumString, Display, Eq, PartialEq)]
+#[derive(
+    Serialize, Deserialize, Debug, Default, Clone, Copy, EnumString, Display, Eq, PartialEq,
+)]
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
 pub enum ReplicaShareProtocol {
     /// Shared as NVMe-oF TCP.
+    #[default]
     Nvmf = 1,
 }
 
 impl std::cmp::PartialEq<Protocol> for ReplicaShareProtocol {
     fn eq(&self, other: &Protocol) -> bool {
         &Protocol::from(*self) == other
-    }
-}
-impl Default for ReplicaShareProtocol {
-    fn default() -> Self {
-        Self::Nvmf
     }
 }
 impl From<i32> for ReplicaShareProtocol {
@@ -803,11 +801,12 @@ impl From<ReplicaShareProtocol> for Protocol {
 }
 
 /// State of the Replica.
-#[derive(Serialize, Deserialize, Debug, Clone, EnumString, Display, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, EnumString, Display, Eq, PartialEq)]
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
 pub enum ReplicaStatus {
     /// Unknown state.
+    #[default]
     Unknown = 0,
     /// The replica is in normal working order.
     Online = 1,
@@ -823,11 +822,6 @@ impl ReplicaStatus {
     }
 }
 
-impl Default for ReplicaStatus {
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
 impl From<i32> for ReplicaStatus {
     fn from(src: i32) -> Self {
         match src {

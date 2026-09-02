@@ -141,9 +141,10 @@ impl Default for OperationSequence {
 }
 
 /// Sequence operations
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Copy, Clone, Eq, PartialEq)]
 pub enum OperationSequenceState {
     /// None in progress
+    #[default]
     Idle,
     /// An single exclusive operation (openapi driven)
     Exclusive,
@@ -151,11 +152,6 @@ pub enum OperationSequenceState {
     /// todo: If we have multiple concurrent reconcile loops, then we'll need an ID to
     /// distinguish between them and avoid concurrent updates
     Reconcile { active: bool },
-}
-impl Default for OperationSequenceState {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 /// Operations are locked

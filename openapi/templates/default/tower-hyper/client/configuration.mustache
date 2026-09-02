@@ -4,7 +4,6 @@ pub type ReqBody = hyper_body::Body;
 
 pub use hyper::{body, Request, Response, Uri};
 
-#[cfg(all(not(feature = "tower-client-tls"), feature = "tower-client-rls"))]
 use hyper_rustls::ConfigBuilderExt;
 use std::{
     future::Future,
@@ -651,7 +650,7 @@ impl Service<Request<ReqBody>> for TlsReloadService {
 
 fn build_http_client(url: &mut url::Url, tls: &TlsMode) -> Result<HttpClientService, Error> {
     let insecure_skip_verify = url.scheme() == "https" && tls.certificate().is_none();
-    #[cfg(all(not(feature = "tower-client-tls"), feature = "tower-client-rls"))]
+
     let client = {
         match tls.certificate() {
             None => {
@@ -725,67 +724,6 @@ fn build_http_client(url: &mut url::Url, tls: &TlsMode) -> Result<HttpClientServ
                 http.enforce_http(false);
                 let connector =
                     hyper_rustls::HttpsConnector::from((http, std::sync::Arc::new(config)));
-                url.set_scheme("https").ok();
-                hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-                    .build(connector)
-            }
-        }
-    };
-    #[cfg(feature = "tower-client-tls")]
-    let client = {
-        match tls.certificate() {
-            None => {
-                let mut http = hyper_tls::HttpsConnector::new();
-                if url.scheme() == "https" {
-                    http.https_only(true);
-                }
-
-                let mut tls_builder = hyper_tls::native_tls::TlsConnector::builder();
-                tls_builder
-                    .danger_accept_invalid_certs(insecure_skip_verify)
-                    .danger_accept_invalid_hostnames(insecure_skip_verify);
-                match (tls.client_cert(), tls.client_key()) {
-                    (Some(cert_bytes), Some(key_bytes)) => {
-                        let identity =
-                            hyper_tls::native_tls::Identity::from_pkcs8(cert_bytes, key_bytes)
-                                .map_err(|_| Error::ClientIdentity)?;
-                        tls_builder.identity(identity);
-                    }
-                    (None, None) => {}
-                    _ => return Err(Error::ClientIdentity),
-                }
-                let tls = tls_builder.build().map_err(|_| Error::TlsConnector)?;
-                let tls = tokio_native_tls::TlsConnector::from(tls);
-
-                let connector = hyper_tls::HttpsConnector::from((http, tls));
-                hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-                    .build(connector)
-            }
-            Some(bytes) => {
-                let certificate = hyper_tls::native_tls::Certificate::from_pem(bytes)
-                    .map_err(|_| Error::Certificate)?;
-
-                let mut tls_builder = hyper_tls::native_tls::TlsConnector::builder();
-                tls_builder
-                    .add_root_certificate(certificate)
-                    .danger_accept_invalid_hostnames(insecure_skip_verify)
-                    .disable_built_in_roots(true);
-                match (tls.client_cert(), tls.client_key()) {
-                    (Some(cert_bytes), Some(key_bytes)) => {
-                        let identity =
-                            hyper_tls::native_tls::Identity::from_pkcs8(cert_bytes, key_bytes)
-                                .map_err(|_| Error::ClientIdentity)?;
-                        tls_builder.identity(identity);
-                    }
-                    (None, None) => {}
-                    _ => return Err(Error::ClientIdentity),
-                }
-                let tls = tls_builder.build().map_err(|_| Error::TlsConnector)?;
-                let tls = tokio_native_tls::TlsConnector::from(tls);
-
-                let mut http = hyper_tls::HttpsConnector::new();
-                http.https_only(true);
-                let connector = hyper_tls::HttpsConnector::from((http, tls));
                 url.set_scheme("https").ok();
                 hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
                     .build(connector)
@@ -1155,10 +1093,9 @@ where
     }
 }
 
-#[cfg(all(feature = "tower-client-rls", not(feature = "tower-client-tls")))]
 #[derive(Debug)]
 struct NoCertificateVerification {}
-#[cfg(all(feature = "tower-client-rls", not(feature = "tower-client-tls")))]
+
 impl rustls::client::danger::ServerCertVerifier for NoCertificateVerification {
     fn verify_server_cert(
         &self,

@@ -614,10 +614,7 @@ impl Service {
 
         // If requested size is less than volume's current size(attempt to shrink volume),
         // then required becomes zero because we won't need to borrow anything from capacity_limit.
-        let required = request
-            .requested_size
-            .checked_sub(volume.as_ref().size)
-            .unwrap_or_default();
+        let required = request.requested_size.saturating_sub(volume.as_ref().size);
         let capacity_limit = self.capacity_limit_borrow.lock();
         // If there is a defined system wide capacity limit, ensure we don't breach that.
         self.specs()

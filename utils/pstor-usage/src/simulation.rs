@@ -170,7 +170,7 @@ impl Simulation {
         // create some pools as backing for the volumes
         let four_mb = 4096 * 1024;
         let mut volume_size = args.volume_size;
-        if (volume_size % four_mb) != 0 {
+        if !volume_size.is_multiple_of(four_mb) {
             volume_size += four_mb - (volume_size % four_mb);
         }
         let pools = if args.volumes > 0 && args.volume_samples > 0 {

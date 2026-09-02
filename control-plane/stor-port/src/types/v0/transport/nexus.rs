@@ -158,9 +158,10 @@ impl CreateNexusSnapReplDescr {
 }
 
 /// Nexus State information
-#[derive(Serialize, Deserialize, Debug, Clone, EnumString, Display, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, EnumString, Display, Eq, PartialEq)]
 pub enum NexusStatus {
     /// Default Unknown state.
+    #[default]
     Unknown,
     /// Healthy and working.
     Online,
@@ -172,11 +173,6 @@ pub enum NexusStatus {
     Shutdown,
     /// Shutdown in progress: not able to serve I/O.
     ShuttingDown,
-}
-impl Default for NexusStatus {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 impl From<NexusStatus> for models::NexusState {
     fn from(src: NexusStatus) -> Self {
@@ -192,11 +188,14 @@ impl From<NexusStatus> for models::NexusState {
 }
 
 /// The protocol used to share the nexus.
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, EnumString, Display, Eq, PartialEq)]
+#[derive(
+    Serialize, Deserialize, Debug, Default, Copy, Clone, EnumString, Display, Eq, PartialEq,
+)]
 #[strum(serialize_all = "camelCase")]
 #[serde(rename_all = "camelCase")]
 pub enum NexusShareProtocol {
     /// shared as NVMe-oF TCP
+    #[default]
     Nvmf = 1,
     /// shared as iSCSI
     Iscsi = 2,
@@ -205,11 +204,6 @@ pub enum NexusShareProtocol {
 impl std::cmp::PartialEq<Protocol> for NexusShareProtocol {
     fn eq(&self, other: &Protocol) -> bool {
         &Protocol::from(*self) == other
-    }
-}
-impl Default for NexusShareProtocol {
-    fn default() -> Self {
-        Self::Nvmf
     }
 }
 impl From<NexusShareProtocol> for Protocol {

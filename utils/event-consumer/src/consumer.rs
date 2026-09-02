@@ -27,6 +27,7 @@ pub enum ConsumerError {
 }
 
 /// A message received from NATS, abstracting over JetStream and Core NATS delivery.
+#[allow(clippy::large_enum_variant)]
 pub enum UnifiedMessage {
     /// A JetStream message that must be ACKed or NAKed by the caller.
     JetStream(async_nats::jetstream::Message),

@@ -493,6 +493,7 @@ impl LeaseLockKeeperClocking<Locking> for EtcdSingletonLock {
 #[async_trait::async_trait]
 impl LeaseLockKeeperClocking<Locked> for EtcdSingletonLock {
     #[tracing::instrument(skip(self, state), err)]
+    #[allow(clippy::result_large_err)]
     async fn clock(&mut self, state: Locked) -> LockStatesResult {
         tracing::info!(
             lock.name = %self.service_name,

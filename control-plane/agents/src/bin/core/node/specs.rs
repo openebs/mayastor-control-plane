@@ -322,15 +322,16 @@ impl SpecOperationsHelper for NodeSpec {
             }
             NodeOperation::Unlabel(NodeUnLabelOp { label_key }) => {
                 // Check that the label is present.
-                if !self.has_labels_key(label_key) {
-                    Err(SvcError::LabelNotFound {
+                match self.has_labels_key(label_key) {
+                    false => Err(SvcError::LabelNotFound {
                         resource: ResourceKind::Node,
                         id: self.id().to_string(),
                         label_key: label_key.to_string(),
-                    })
-                } else {
-                    self.start_op(op);
-                    Ok(())
+                    }),
+                    true => {
+                        self.start_op(op);
+                        Ok(())
+                    }
                 }
             }
             _ => {

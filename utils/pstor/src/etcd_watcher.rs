@@ -348,7 +348,7 @@ impl<Ctx: Send + Sync + 'static> EtcdWatchRunner<Ctx> {
         mut attempts: u32,
         request: &mut tokio::sync::mpsc::UnboundedReceiver<WatchRequest<Ctx>>,
     ) -> WatchState {
-        if attempts % 10 == 0 {
+        if attempts.is_multiple_of(10) {
             tracing::warn!("Starting etcd watch stream reconnection loop, attempt: {attempts}");
         }
 
