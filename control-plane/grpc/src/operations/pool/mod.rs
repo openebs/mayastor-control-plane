@@ -173,6 +173,14 @@ mod test {
             ) -> Result<Pool, ReplyError> {
                 todo!()
             }
+
+            async fn get_pool_health(
+                &self,
+                _pool_id: &stor_port::types::v0::transport::PoolId,
+            ) -> Result<stor_port::types::v0::transport::GetPoolHealthResponse, ReplyError>
+            {
+                todo!()
+            }
         }
     }
 }

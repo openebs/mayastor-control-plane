@@ -143,3 +143,15 @@ pub(crate) struct ProbeDiskInfo {
     #[allow(unused)]
     pub(crate) error: Vec<PoolDiskError>,
 }
+
+/// Get pool health request (forwarded to io-engine).
+#[derive(Debug, Clone)]
+pub(crate) struct GetPoolHealthRequest {
+    /// Name of the pool.
+    pub(crate) pool_name: String,
+    /// Optional UUID of the pool.
+    pub(crate) pool_uuid: Option<String>,
+}
+
+/// Pool health response from io-engine.
+pub(crate) type GetPoolHealthResponse = transport::GetPoolHealthResponse;

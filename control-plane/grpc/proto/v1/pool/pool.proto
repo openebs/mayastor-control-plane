@@ -628,4 +628,84 @@ service PoolGrpc {
 
   // Clear error counters and alerts
   rpc ClearErrors (ClearErrorsRequest) returns (ClearErrorsReply) {}
+
+  // Get SMART / health information for the disk(s) backing a pool
+  rpc GetPoolHealth (GetPoolHealthRequest) returns (GetPoolHealthReply) {}
+}
+
+message GetPoolHealthRequest {
+  string pool_id = 1;
+}
+
+message GetPoolHealthReply {
+  oneof reply {
+    PoolHealthResponse health = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+message PoolHealthResponse {
+  repeated DiskHealthInfo disks = 1;
+}
+
+message DiskHealthInfo {
+  string disk_uri = 1;
+  bool supported = 2;
+  optional DeviceHealthInfo health = 3;
+  optional string error = 4;
+}
+
+message DeviceHealthInfo {
+  uint32 critical_warning = 1;
+  bool healthy = 2;
+  optional sint32 temperature_celsius = 3;
+  optional uint32 available_spare_percent = 4;
+  optional uint32 available_spare_threshold_percent = 5;
+  optional uint32 percentage_used = 6;
+  optional uint64 data_units_read = 7;
+  optional uint64 data_units_written = 8;
+  optional uint64 host_reads = 9;
+  optional uint64 host_writes = 10;
+  optional uint64 controller_busy_minutes = 11;
+  optional uint64 power_cycles = 12;
+  optional uint64 power_on_hours = 13;
+  optional uint64 unsafe_shutdowns = 14;
+  optional uint64 media_errors = 15;
+  optional uint64 num_error_log_entries = 16;
+  optional DeviceIdentityInfo identity = 17;
+  repeated SmartAttributeInfo smart_attributes = 18;
+  repeated NvmeErrorLogEntryInfo error_log_entries = 19;
+}
+
+message DeviceIdentityInfo {
+  optional string model = 1;
+  optional string model_family = 2;
+  optional string serial_number = 3;
+  optional string firmware_revision = 4;
+  optional string wwn = 5;
+  optional uint64 capacity_bytes = 6;
+  optional uint32 logical_sector_size = 7;
+  optional uint32 physical_sector_size = 8;
+  optional uint32 rotation_rate = 9;
+  optional string form_factor = 10;
+  optional string transport = 11;
+  optional string link_speed = 12;
+}
+
+message SmartAttributeInfo {
+  uint32 id = 1;
+  string name = 2;
+  uint32 value = 3;
+  uint32 worst = 4;
+  uint32 threshold = 5;
+  uint64 raw_value = 6;
+}
+
+message NvmeErrorLogEntryInfo {
+  uint64 error_count = 1;
+  uint32 submission_queue_id = 2;
+  optional uint32 command_id = 3;
+  uint32 status_field = 4;
+  optional uint64 lba = 5;
+  optional uint32 namespace_id = 6;
 }

@@ -1087,3 +1087,81 @@ impl From<models::EncryptionSecret> for EncryptionSecret {
         Self { name: value.name }
     }
 }
+
+/// Response from a GetPoolHealth query.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct GetPoolHealthResponse {
+    pub disks: Vec<DiskHealth>,
+}
+
+/// Health for a single disk backing the pool.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct DiskHealth {
+    pub disk_uri: String,
+    pub supported: bool,
+    pub health: Option<DeviceHealth>,
+    pub error: Option<String>,
+}
+
+/// SMART / health information for a backing device.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct DeviceHealth {
+    pub critical_warning: u32,
+    pub healthy: bool,
+    pub temperature_celsius: Option<i32>,
+    pub available_spare_percent: Option<u32>,
+    pub available_spare_threshold_percent: Option<u32>,
+    pub percentage_used: Option<u32>,
+    pub data_units_read: Option<u64>,
+    pub data_units_written: Option<u64>,
+    pub host_reads: Option<u64>,
+    pub host_writes: Option<u64>,
+    pub controller_busy_minutes: Option<u64>,
+    pub power_cycles: Option<u64>,
+    pub power_on_hours: Option<u64>,
+    pub unsafe_shutdowns: Option<u64>,
+    pub media_errors: Option<u64>,
+    pub num_error_log_entries: Option<u64>,
+    pub identity: Option<DeviceIdentity>,
+    pub smart_attributes: Vec<SmartAttribute>,
+    pub error_log_entries: Vec<NvmeErrorLogEntry>,
+}
+
+/// Device identity/inventory data.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct DeviceIdentity {
+    pub model: Option<String>,
+    pub model_family: Option<String>,
+    pub serial_number: Option<String>,
+    pub firmware_revision: Option<String>,
+    pub wwn: Option<String>,
+    pub capacity_bytes: Option<u64>,
+    pub logical_sector_size: Option<u32>,
+    pub physical_sector_size: Option<u32>,
+    pub rotation_rate: Option<u32>,
+    pub form_factor: Option<String>,
+    pub transport: Option<String>,
+    pub link_speed: Option<String>,
+}
+
+/// A single SMART attribute table entry (ATA devices only).
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct SmartAttribute {
+    pub id: u32,
+    pub name: String,
+    pub value: u32,
+    pub worst: u32,
+    pub threshold: u32,
+    pub raw_value: u64,
+}
+
+/// A single NVMe Error Information Log entry.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct NvmeErrorLogEntry {
+    pub error_count: u64,
+    pub submission_queue_id: u32,
+    pub command_id: Option<u32>,
+    pub status_field: u32,
+    pub lba: Option<u64>,
+    pub namespace_id: Option<u32>,
+}
