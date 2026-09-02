@@ -48,15 +48,16 @@ pub(crate) trait ResourceLabel {
 /// Resource Drain Operations.
 #[async_trait::async_trait]
 pub(crate) trait ResourceDrain {
-    type DrainOutput: Sync + Send + Sized;
+    type Output: Sync + Send + Sized;
+    type DrainRequest: Sync + Send + Sized;
     /// Drain the resource.
     async fn drain(
         &mut self,
         registry: &Registry,
-        label: String,
-    ) -> Result<Self::DrainOutput, SvcError>;
+        request: Self::DrainRequest,
+    ) -> Result<Self::Output, SvcError>;
     /// Mark the resource as drained.
-    async fn set_drained(&mut self, registry: &Registry) -> Result<Self::DrainOutput, SvcError>;
+    async fn set_drained(&mut self, registry: &Registry) -> Result<Self::Output, SvcError>;
 }
 
 /// Resource Lifecycle Operations.

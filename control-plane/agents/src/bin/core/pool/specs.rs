@@ -127,6 +127,16 @@ impl SpecOperationsHelper for PoolSpec {
                     Ok(())
                 }
             }
+            PoolOperation::Drain(drain) => {
+                if !self.drain_allowed(drain) {
+                    Err(SvcError::UnsupportedDrainUpdate {
+                        name: self.id().clone(),
+                    })
+                } else {
+                    self.start_op(op);
+                    Ok(())
+                }
+            }
             _ => {
                 self.start_op(op);
                 Ok(())

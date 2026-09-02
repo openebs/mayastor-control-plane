@@ -2,13 +2,14 @@ use crate::{
     misc::traits::ValidateRequestTypes,
     operations::pool::traits::PoolOperations,
     pool::{
-        self, clear_errors_reply, cordon_pool_reply, create_pool_reply, expand_pool_reply,
-        get_pools_reply, label_pool_reply,
+        self, clear_errors_reply, cordon_pool_reply, create_pool_reply, drain_pool_reply,
+        expand_pool_reply, get_pools_reply, label_pool_reply,
         pool_grpc_server::{PoolGrpc, PoolGrpcServer},
         unlabel_pool_reply, ClearErrorsReply, ClearErrorsRequest, CordonPoolReply,
         CordonPoolRequest, CreatePoolReply, CreatePoolRequest, DestroyPoolReply,
-        DestroyPoolRequest, ExpandPoolReply, ExpandPoolRequest, GetPoolsReply, GetPoolsRequest,
-        LabelPoolReply, LabelPoolRequest, UnlabelPoolReply, UnlabelPoolRequest,
+        DestroyPoolRequest, DrainPoolReply, DrainPoolRequest, ExpandPoolReply, ExpandPoolRequest,
+        GetPoolsReply, GetPoolsRequest, LabelPoolReply, LabelPoolRequest, UnlabelPoolReply,
+        UnlabelPoolRequest,
     },
 };
 use std::sync::Arc;
@@ -180,6 +181,21 @@ impl PoolGrpc for PoolServer {
             })),
             Err(err) => Ok(Response::new(ClearErrorsReply {
                 reply: Some(clear_errors_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn drain_pool(
+        &self,
+        request: Request<DrainPoolRequest>,
+    ) -> Result<tonic::Response<DrainPoolReply>, tonic::Status> {
+        let request = request.into_inner();
+        match self.service.drain(&request.try_into()?).await {
+            Ok(pool) => Ok(Response::new(DrainPoolReply {
+                reply: Some(drain_pool_reply::Reply::Pool(pool.into())),
+            })),
+            Err(err) => Ok(Response::new(DrainPoolReply {
+                reply: Some(drain_pool_reply::Reply::Error(err.into())),
             })),
         }
     }

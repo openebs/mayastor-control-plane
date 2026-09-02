@@ -144,6 +144,8 @@ pub trait PoolOperations: Send + Sync {
     async fn expand(&self, info: &dyn ExpandPoolInfo) -> Result<Pool, ReplyError>;
     /// Clears runtime errors from the specified pool.
     async fn clear_errors(&self, request: &ClearErrorsRequest) -> Result<Pool, ReplyError>;
+    /// Initiates drain of a pool using user specified config.
+    async fn drain(&self, request: &PoolDrainRequest) -> Result<Pool, ReplyError>;
 }
 
 impl TryFrom<pool::PoolDefinition> for PoolSpec {
@@ -1476,6 +1478,38 @@ impl From<PoolCordonRequest> for CordonPoolRequest {
             snapshots: value.snapshots,
             restores: value.restores,
             import: value.import,
+        }
+    }
+}
+
+/// Pool drain information.
+#[derive(Debug, Clone)]
+pub struct PoolDrainRequest {
+    /// The ID of the pool to drain.
+    pub pool_id: PoolId,
+    /// The user's drain policy, each of which alters what the drain is permitted to do.
+    pub policy: DrainPolicy,
+}
+
+impl TryFrom<pool::DrainPoolRequest> for PoolDrainRequest {
+    type Error = ReplyError;
+
+    fn try_from(value: pool::DrainPoolRequest) -> Result<Self, Self::Error> {
+        let policy = value.policy.ok_or_else(|| {
+            ReplyError::missing_argument(ResourceKind::Pool, "drain_pool_request.policy")
+        })?;
+        Ok(Self {
+            pool_id: value.pool_id.into(),
+            policy: DrainPolicy::try_from(policy)?,
+        })
+    }
+}
+
+impl From<PoolDrainRequest> for pool::DrainPoolRequest {
+    fn from(value: PoolDrainRequest) -> Self {
+        Self {
+            pool_id: value.pool_id.into(),
+            policy: Some(value.policy.into()),
         }
     }
 }
