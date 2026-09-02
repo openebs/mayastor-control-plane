@@ -32,14 +32,19 @@ use stor_port::{
         store::{pool::PoolSpec, replica::ReplicaSpec},
         transport::{
             CreatePool, CreateReplica, DestroyPool, DestroyReplica, ExpandPool, Filter, GetPools,
-            GetReplicas, LabelPool, NodeId, Pool, PoolDeleteResult, PoolId, Replica, ResizeReplica,
-            ShareReplica, UnlabelPool, UnshareReplica, VolumeId,
+            GetReplicas, LabelPool, ListPoolsSmartResponse, NodeId, Pool, PoolDeleteResult, PoolId,
+            PoolSmart, Replica, ResizeReplica, ShareReplica, UnlabelPool, UnshareReplica, VolumeId,
         },
     },
 };
 
-use crate::controller::resources::{operations::ResourceCordon, ResourceUid};
-use grpc::operations::pool::traits::{ClearErrorsRequest, PoolCordonRequest, PoolCreateError};
+use crate::controller::{
+    io_engine::PoolApi,
+    resources::{operations::ResourceCordon, ResourceUid},
+};
+use grpc::operations::pool::traits::{
+    ClearErrorsRequest, ListPoolsSmartRequest, PoolCordonRequest, PoolCreateError,
+};
 use snafu::OptionExt;
 
 #[derive(Debug, Clone)]
@@ -142,6 +147,16 @@ impl PoolOperations for Service {
         let service = self.clone();
         let pool = Context::spawn(async move { service.drain(request).await }).await??;
         Ok(pool)
+    }
+    async fn list_pools_smart(
+        &self,
+        request: &ListPoolsSmartRequest,
+    ) -> Result<ListPoolsSmartResponse, ReplyError> {
+        let request = request.clone();
+        let service = self.clone();
+        let response =
+            Context::spawn(async move { service.list_pools_smart_all(&request).await }).await??;
+        Ok(response)
     }
 }
 
@@ -493,5 +508,26 @@ impl Service {
         let spec = guarded_pool.drain(&self.registry, request).await?;
         let state = self.registry.ctrl_pool_state(guarded_pool.uid()).await.ok();
         Ok(Pool::new(spec, state))
+    }
+
+    /// List SMART / health information across pools on all nodes.
+    #[tracing::instrument(level = "info", skip(self), err)]
+    async fn list_pools_smart_all(
+        &self,
+        request: &ListPoolsSmartRequest,
+    ) -> Result<ListPoolsSmartResponse, SvcError> {
+        let nodes = self.registry.node_wrappers().await;
+        let mut all_pools = Vec::<PoolSmart>::new();
+
+        for node in &nodes {
+            match node.list_pools_smart(request).await {
+                Ok(resp) => all_pools.extend(resp.pools),
+                Err(error) => {
+                    let node_id = node.read().await.id().clone();
+                    tracing::warn!(%node_id, %error, "Failed to list SMART info from node");
+                }
+            }
+        }
+        Ok(ListPoolsSmartResponse { pools: all_pools })
     }
 }

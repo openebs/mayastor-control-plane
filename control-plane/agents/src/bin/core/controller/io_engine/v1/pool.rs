@@ -1,13 +1,18 @@
 use super::translation::{rpc_pool_to_agent, AgentToIoEngine};
-use crate::controller::io_engine::types::{ProbePoolRequest, ProbePoolResponse};
+use crate::controller::io_engine::{
+    translation::IoEngineToAgent,
+    types::{ProbePoolRequest, ProbePoolResponse},
+};
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::pool::ListPoolOptions;
 use stor_port::{
     transport_api::ResourceKind,
-    types::v0::transport::{CreatePool, DestroyPool, ExpandPool, ImportPool, PoolState},
+    types::v0::transport::{
+        CreatePool, DestroyPool, ExpandPool, ImportPool, ListPoolsSmartResponse, PoolState,
+    },
 };
 
-use grpc::operations::pool::traits::ClearErrorsRequest;
+use grpc::operations::pool::traits::{ClearErrorsRequest, ListPoolsSmartRequest};
 use snafu::ResultExt;
 
 #[async_trait::async_trait]
@@ -145,5 +150,20 @@ impl crate::controller::io_engine::PoolApi for super::RpcClient {
                 request: "probe_pool",
             })?;
         Ok(probed.into_inner().into())
+    }
+
+    async fn list_pools_smart(
+        &self,
+        request: &ListPoolsSmartRequest,
+    ) -> Result<ListPoolsSmartResponse, SvcError> {
+        let response = self
+            .pool()
+            .list_pools_smart(request.to_rpc())
+            .await
+            .context(GrpcRequestError {
+                resource: ResourceKind::Pool,
+                request: "list_pools_smart",
+            })?;
+        Ok(response.into_inner().to_agent())
     }
 }

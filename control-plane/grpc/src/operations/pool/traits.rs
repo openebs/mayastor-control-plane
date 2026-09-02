@@ -19,11 +19,13 @@ use stor_port::{
             PoolUsage, SnapshotPolicy, SpareReplica, UnwindSpare, POOL_BS_CLUSTER_SIZE_DEFAULT,
         },
         transport::{
-            CreatePool, CtrlPoolState, DestroyPool, DiskInfo, ExpandPool, Filter, LabelPool,
-            NodeId, Pool, PoolAlert, PoolAlertStatus, PoolAlerts, PoolDef, PoolDeleteResult,
-            PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolErrorInfo,
-            PoolId, PoolState, PoolStatus, ReplicaId, SnapshotLossDetail, SnapshotLossInfo,
-            UnlabelPool, VolumeId, VolumeLossDetail, VolumeLossInfo,
+            CreatePool, CtrlPoolState, DestroyPool, DeviceHealth, DeviceIdentity, DiskHealth,
+            DiskInfo, ExpandPool, Filter, LabelPool, ListPoolsSmartResponse, NodeId,
+            NvmeErrorLogEntry, Pool, PoolAlert, PoolAlertStatus, PoolAlerts, PoolDef,
+            PoolDeleteResult, PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode,
+            PoolErrorInfo, PoolId, PoolSmart, PoolState, PoolStatus, ReplicaId, SmartAttribute,
+            SnapshotLossDetail, SnapshotLossInfo, UnlabelPool, VolumeId, VolumeLossDetail,
+            VolumeLossInfo,
         },
     },
     IntoOption, IntoVec, TryIntoOption, TryIntoVec,
@@ -146,6 +148,11 @@ pub trait PoolOperations: Send + Sync {
     async fn clear_errors(&self, request: &ClearErrorsRequest) -> Result<Pool, ReplyError>;
     /// Initiates drain of a pool using user specified config.
     async fn drain(&self, request: &PoolDrainRequest) -> Result<Pool, ReplyError>;
+    /// List pools SMART / health information.
+    async fn list_pools_smart(
+        &self,
+        request: &ListPoolsSmartRequest,
+    ) -> Result<ListPoolsSmartResponse, ReplyError>;
 }
 
 impl TryFrom<pool::PoolDefinition> for PoolSpec {
@@ -1719,5 +1726,234 @@ impl TryFrom<pool::PoolDeleteResult> for PoolDeleteResult {
             volume_loss,
             snapshot_loss,
         })
+    }
+}
+
+// ── ListPoolsSmart conversions (control-plane proto <-> transport) ──
+
+/// List pools SMART request.
+#[derive(Debug, Clone, Default)]
+pub struct ListPoolsSmartRequest {
+    /// Filter by pool name.
+    pub pool_name: Option<String>,
+    /// Filter by pool UUID.
+    pub pool_uuid: Option<String>,
+}
+
+impl From<pool::ListPoolsSmartRequest> for ListPoolsSmartRequest {
+    fn from(value: pool::ListPoolsSmartRequest) -> Self {
+        Self {
+            pool_name: value.pool_name,
+            pool_uuid: value.pool_uuid,
+        }
+    }
+}
+
+impl From<&ListPoolsSmartRequest> for pool::ListPoolsSmartRequest {
+    fn from(value: &ListPoolsSmartRequest) -> Self {
+        Self {
+            pool_name: value.pool_name.clone(),
+            pool_uuid: value.pool_uuid.clone(),
+        }
+    }
+}
+
+impl From<ListPoolsSmartResponse> for pool::ListPoolsSmartResponse {
+    fn from(value: ListPoolsSmartResponse) -> Self {
+        Self {
+            pools: value.pools.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<pool::ListPoolsSmartResponse> for ListPoolsSmartResponse {
+    fn from(value: pool::ListPoolsSmartResponse) -> Self {
+        Self {
+            pools: value.pools.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<PoolSmart> for pool::PoolSmartInfo {
+    fn from(p: PoolSmart) -> Self {
+        Self {
+            name: p.name,
+            uuid: p.uuid,
+            disks: p.disks.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<pool::PoolSmartInfo> for PoolSmart {
+    fn from(p: pool::PoolSmartInfo) -> Self {
+        Self {
+            name: p.name,
+            uuid: p.uuid,
+            disks: p.disks.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<DiskHealth> for pool::DiskHealthInfo {
+    fn from(d: DiskHealth) -> Self {
+        Self {
+            disk_uri: d.disk_uri,
+            supported: d.supported,
+            health: d.health.map(Into::into),
+            error: d.error,
+        }
+    }
+}
+
+impl From<pool::DiskHealthInfo> for DiskHealth {
+    fn from(d: pool::DiskHealthInfo) -> Self {
+        Self {
+            disk_uri: d.disk_uri,
+            supported: d.supported,
+            health: d.health.map(Into::into),
+            error: d.error,
+        }
+    }
+}
+
+impl From<DeviceHealth> for pool::DeviceHealthInfo {
+    fn from(h: DeviceHealth) -> Self {
+        Self {
+            critical_warning: h.critical_warning,
+            healthy: h.healthy,
+            temperature_celsius: h.temperature_celsius,
+            available_spare_percent: h.available_spare_percent,
+            available_spare_threshold_percent: h.available_spare_threshold_percent,
+            percentage_used: h.percentage_used,
+            data_units_read: h.data_units_read,
+            data_units_written: h.data_units_written,
+            host_reads: h.host_reads,
+            host_writes: h.host_writes,
+            controller_busy_minutes: h.controller_busy_minutes,
+            power_cycles: h.power_cycles,
+            power_on_hours: h.power_on_hours,
+            unsafe_shutdowns: h.unsafe_shutdowns,
+            media_errors: h.media_errors,
+            num_error_log_entries: h.num_error_log_entries,
+            identity: h.identity.map(Into::into),
+            smart_attributes: h.smart_attributes.into_iter().map(Into::into).collect(),
+            error_log_entries: h.error_log_entries.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<pool::DeviceHealthInfo> for DeviceHealth {
+    fn from(h: pool::DeviceHealthInfo) -> Self {
+        Self {
+            critical_warning: h.critical_warning,
+            healthy: h.healthy,
+            temperature_celsius: h.temperature_celsius,
+            available_spare_percent: h.available_spare_percent,
+            available_spare_threshold_percent: h.available_spare_threshold_percent,
+            percentage_used: h.percentage_used,
+            data_units_read: h.data_units_read,
+            data_units_written: h.data_units_written,
+            host_reads: h.host_reads,
+            host_writes: h.host_writes,
+            controller_busy_minutes: h.controller_busy_minutes,
+            power_cycles: h.power_cycles,
+            power_on_hours: h.power_on_hours,
+            unsafe_shutdowns: h.unsafe_shutdowns,
+            media_errors: h.media_errors,
+            num_error_log_entries: h.num_error_log_entries,
+            identity: h.identity.map(Into::into),
+            smart_attributes: h.smart_attributes.into_iter().map(Into::into).collect(),
+            error_log_entries: h.error_log_entries.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<DeviceIdentity> for pool::DeviceIdentityInfo {
+    fn from(i: DeviceIdentity) -> Self {
+        Self {
+            model: i.model,
+            model_family: i.model_family,
+            serial_number: i.serial_number,
+            firmware_revision: i.firmware_revision,
+            wwn: i.wwn,
+            capacity_bytes: i.capacity_bytes,
+            logical_sector_size: i.logical_sector_size,
+            physical_sector_size: i.physical_sector_size,
+            rotation_rate: i.rotation_rate,
+            form_factor: i.form_factor,
+            transport: i.transport,
+            link_speed: i.link_speed,
+        }
+    }
+}
+
+impl From<pool::DeviceIdentityInfo> for DeviceIdentity {
+    fn from(i: pool::DeviceIdentityInfo) -> Self {
+        Self {
+            model: i.model,
+            model_family: i.model_family,
+            serial_number: i.serial_number,
+            firmware_revision: i.firmware_revision,
+            wwn: i.wwn,
+            capacity_bytes: i.capacity_bytes,
+            logical_sector_size: i.logical_sector_size,
+            physical_sector_size: i.physical_sector_size,
+            rotation_rate: i.rotation_rate,
+            form_factor: i.form_factor,
+            transport: i.transport,
+            link_speed: i.link_speed,
+        }
+    }
+}
+
+impl From<SmartAttribute> for pool::SmartAttributeInfo {
+    fn from(a: SmartAttribute) -> Self {
+        Self {
+            id: a.id,
+            name: a.name,
+            value: a.value,
+            worst: a.worst,
+            threshold: a.threshold,
+            raw_value: a.raw_value,
+        }
+    }
+}
+
+impl From<pool::SmartAttributeInfo> for SmartAttribute {
+    fn from(a: pool::SmartAttributeInfo) -> Self {
+        Self {
+            id: a.id,
+            name: a.name,
+            value: a.value,
+            worst: a.worst,
+            threshold: a.threshold,
+            raw_value: a.raw_value,
+        }
+    }
+}
+
+impl From<NvmeErrorLogEntry> for pool::NvmeErrorLogEntryInfo {
+    fn from(e: NvmeErrorLogEntry) -> Self {
+        Self {
+            error_count: e.error_count,
+            submission_queue_id: e.submission_queue_id,
+            command_id: e.command_id,
+            status_field: e.status_field,
+            lba: e.lba,
+            namespace_id: e.namespace_id,
+        }
+    }
+}
+
+impl From<pool::NvmeErrorLogEntryInfo> for NvmeErrorLogEntry {
+    fn from(e: pool::NvmeErrorLogEntryInfo) -> Self {
+        Self {
+            error_count: e.error_count,
+            submission_queue_id: e.submission_queue_id,
+            command_id: e.command_id,
+            status_field: e.status_field,
+            lba: e.lba,
+            namespace_id: e.namespace_id,
+        }
     }
 }
