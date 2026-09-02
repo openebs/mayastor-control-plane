@@ -30,7 +30,7 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 paste = { workspace = true }
 humantime = { workspace = true }
-reqwest = { workspace = true, default-features = false, features = ["multipart"] }
+reqwest = { workspace = true, default-features = false, features = ["multipart", "query"] }
 futures = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
