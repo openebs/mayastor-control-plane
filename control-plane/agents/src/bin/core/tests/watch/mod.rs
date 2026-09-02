@@ -12,7 +12,7 @@ use stor_port::{
     },
 };
 use tokio::net::{TcpListener, TcpStream};
-use tonic::body::BoxBody;
+use tonic::body::Body;
 
 static CALLBACK: OnceCell<tokio::sync::mpsc::Sender<()>> = OnceCell::new();
 
@@ -33,9 +33,9 @@ async fn setup_watch(client: &dyn VolumeOperations) -> (Volume, tokio::sync::mps
     let (s, r) = tokio::sync::mpsc::channel(1);
     CALLBACK.set(s).unwrap();
 
-    async fn notify(_req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody>, Infallible> {
+    async fn notify(_req: Request<hyper::body::Incoming>) -> Result<Response<Body>, Infallible> {
         CALLBACK.get().cloned().unwrap().send(()).await.unwrap();
-        Ok(Response::new(BoxBody::default()))
+        Ok(Response::new(Body::default()))
     }
 
     let addr = SocketAddr::from(([10, 1, 0, 1], 8082));

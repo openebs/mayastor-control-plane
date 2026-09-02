@@ -4,7 +4,7 @@ pub use opentelemetry::{global, trace};
 /// OpenTelemetry KeyVal for Processor Tags
 pub use opentelemetry::{Context, KeyValue};
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{propagation::TraceContextPropagator, trace as sdktrace, Resource};
+use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::SdkTracerProvider, Resource};
 use tracing::Level;
 use tracing_subscriber::{filter, layer::SubscriberExt, util::SubscriberInitExt, Layer, Registry};
 
@@ -165,18 +165,19 @@ impl TracingTelemetry {
 
             set_jaeger_env();
             global::set_text_map_propagator(TraceContextPropagator::new());
-            opentelemetry_otlp::new_pipeline()
-                .tracing()
-                .with_exporter(
-                    opentelemetry_otlp::new_exporter()
-                        .tonic()
-                        .with_endpoint(jaeger),
+            let exporter = opentelemetry_otlp::SpanExporter::builder()
+                .with_tonic()
+                .with_endpoint(jaeger)
+                .build()
+                .expect("Should be able to initialise the exporter");
+            SdkTracerProvider::builder()
+                .with_batch_exporter(exporter)
+                .with_resource(
+                    Resource::builder_empty()
+                        .with_attributes(tracing_tags)
+                        .build(),
                 )
-                .with_trace_config(
-                    sdktrace::Config::default().with_resource(Resource::new(tracing_tags)),
-                )
-                .install_batch(opentelemetry_sdk::runtime::TokioCurrentThread)
-                .expect("Should be able to initialise the exporter")
+                .build()
         });
         let tracer = tracer.map(|tracer_provider| {
             global::set_tracer_provider(tracer_provider.clone());
@@ -259,12 +260,10 @@ impl TracingTelemetry {
 
 /// We have to force flush the tracer provider as it lives in a global context.
 /// todo: return provider on [`TracingTelemetry::init`] and let the caller manage this.
-static TRACER_PROVIDER: std::sync::OnceLock<opentelemetry_sdk::trace::TracerProvider> =
-    std::sync::OnceLock::new();
+static TRACER_PROVIDER: std::sync::OnceLock<SdkTracerProvider> = std::sync::OnceLock::new();
 
 /// Flush the traces from the provider.
 pub fn flush_traces() {
-    global::shutdown_tracer_provider();
     if let Some(trace_provider) = TRACER_PROVIDER.get() {
         trace_provider.shutdown().ok();
     }

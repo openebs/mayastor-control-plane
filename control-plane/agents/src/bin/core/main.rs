@@ -307,10 +307,11 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
 
     let service = agents::Service::builder()
         .with_shared_state(
-            utils::tracing_telemetry::global::tracer_provider()
-                .tracer_builder("core-agent")
-                .with_version(env!("CARGO_PKG_VERSION"))
-                .build(),
+            utils::tracing_telemetry::global::tracer_provider().tracer_with_scope(
+                opentelemetry::InstrumentationScope::builder("core-agent")
+                    .with_version(env!("CARGO_PKG_VERSION"))
+                    .build(),
+            ),
         )
         .with_shared_state(registry.clone())
         .with_shared_state(cli_args.grpc_server_addr)

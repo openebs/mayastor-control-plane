@@ -20,7 +20,7 @@ rustls = { workspace = true, default-features = false }
 rustls-pemfile = { workspace = true }
 actix-web = { workspace = true }
 actix-service = { workspace = true }
-tracing-actix-web = { workspace = true, features = ["opentelemetry_0_26"] }
+tracing-actix-web = { workspace = true, features = ["opentelemetry_0_30"] }
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 once_cell = { workspace = true }

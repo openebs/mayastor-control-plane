@@ -8,7 +8,7 @@ use deployer_lib::{
     ComposeTestNt, StartOptions,
 };
 use opentelemetry::{global, KeyValue};
-use opentelemetry_sdk::{propagation::TraceContextPropagator, trace as sdktrace};
+use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::SdkTracerProvider};
 
 use stor_port::{transport_api::TimeoutOptions, types::v0::transport};
 
@@ -1163,22 +1163,19 @@ impl ClusterBuilder {
                 ));
 
                 global::set_text_map_propagator(TraceContextPropagator::new());
-                let provider = opentelemetry_otlp::new_pipeline()
-                    .tracing()
-                    .with_exporter(
-                        opentelemetry_otlp::new_exporter()
-                            .tonic()
-                            .with_endpoint("http://127.0.0.1:4317"),
-                    )
-                    .with_trace_config(
-                        sdktrace::Config::default().with_resource(Resource::new(tracing_tags)),
-                    )
-                    // TODO: there's currently a few bugs on opentelemetry
-                    // 1. We can't use simple exporter on a tokio environment
-                    // 2. Even wit the tokio batch exporter, we can't shutdown properly,
-                    // meaning that we might not flush traces to jaeger :(
-                    .install_batch(opentelemetry_sdk::runtime::TokioCurrentThread)
+                let exporter = opentelemetry_otlp::SpanExporter::builder()
+                    .with_tonic()
+                    .with_endpoint("http://127.0.0.1:4317")
+                    .build()
                     .expect("Should be able to initialise the exporter");
+                let provider = SdkTracerProvider::builder()
+                    .with_batch_exporter(exporter)
+                    .with_resource(
+                        Resource::builder_empty()
+                            .with_attributes(tracing_tags)
+                            .build(),
+                    )
+                    .build();
                 global::set_tracer_provider(provider.clone());
                 let tracer = provider.tracer("tracing-otel-subscriber");
                 let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);

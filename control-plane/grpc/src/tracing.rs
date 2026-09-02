@@ -41,7 +41,7 @@ impl<S> OpenTelClientService<S> {
     }
 }
 
-type TonicClientRequest = Request<tonic::body::BoxBody>;
+type TonicClientRequest = Request<tonic::body::Body>;
 type BoxedFuture<Resp, Err> = Pin<Box<dyn Future<Output = Result<Resp, Err>> + Send>>;
 
 impl tower::Service<TonicClientRequest> for OpenTelClientService<Channel> {
@@ -115,8 +115,8 @@ impl<S> OpenTelServerService<S> {
     }
 }
 
-type TonicServerRequest = Request<tonic::body::BoxBody>;
-type TonicServerResponse = Response<tonic::body::BoxBody>;
+type TonicServerRequest = Request<tonic::body::Body>;
+type TonicServerResponse = Response<tonic::body::Body>;
 impl<S> tower::Service<TonicServerRequest> for OpenTelServerService<S>
 where
     S: tower::Service<TonicServerRequest, Response = TonicServerResponse> + Send + Clone + 'static,
@@ -139,10 +139,10 @@ where
             return http_service_call(&mut self.service, request);
         }
 
-        let tracer = global::tracer_provider()
-            .tracer_builder("grpc-server")
+        let scope = opentelemetry::InstrumentationScope::builder("grpc-server")
             .with_version(env!("CARGO_PKG_VERSION"))
             .build();
+        let tracer = global::tracer_provider().tracer_with_scope(scope);
 
         let extractor = opentelemetry_http::HeaderExtractor(request.headers());
 
