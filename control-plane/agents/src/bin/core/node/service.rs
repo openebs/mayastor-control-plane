@@ -216,7 +216,10 @@ impl Service {
                         api_versions: None,
                         instance_uuid: None,
                         node_nqn: node.node_nqn().clone(),
-                        features: None,
+                        // Carry the persisted features so the gRPC transport (http/https) for the
+                        // initial liveness probe matches what the io-engine last advertised. The
+                        // features are refreshed from the probe result immediately afterwards.
+                        features: node.features().clone(),
                         bugfixes: None,
                         version: None,
                     },

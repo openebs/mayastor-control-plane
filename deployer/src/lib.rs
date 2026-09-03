@@ -100,6 +100,10 @@ pub struct StartOptions {
     #[clap(long)]
     pub no_rest: bool,
 
+    /// Disable gRPC TLS.
+    #[clap(long)]
+    pub no_grpc_tls: bool,
+
     /// Enable the CSI Controller plugin.
     #[clap(long)]
     pub csi_controller: bool,
@@ -500,6 +504,11 @@ impl StartOptions {
     #[must_use]
     pub fn with_http_restrict(mut self, enabled: bool) -> Self {
         self.http_restrict = enabled;
+        self
+    }
+    #[must_use]
+    pub fn with_grpc_tls(mut self, enabled: bool) -> Self {
+        self.no_grpc_tls = !enabled;
         self
     }
     #[must_use]

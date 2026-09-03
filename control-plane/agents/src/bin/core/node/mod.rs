@@ -21,12 +21,16 @@ use stor_port::{
 pub(crate) async fn configure(builder: agents::ServiceEmpty) -> Service {
     let node_service = create_node_service(&builder).await;
     let node_grpc_service = NodeServer::new(Arc::new(node_service.clone()));
-    let registration_service = RegistrationServer::new(Arc::new(node_service));
+    let registration_service = registration_service(node_service);
 
     builder
         .with_service(node_grpc_service.into_grpc_server())
         .with_service(registration_service.clone().into_v1_grpc_server())
         .with_service(registration_service.into_v1_alpha_grpc_server())
+}
+
+fn registration_service(node_service: service::Service) -> RegistrationServer {
+    RegistrationServer::new(Arc::new(node_service))
 }
 
 async fn create_node_service<S>(builder: &Service<S>) -> service::Service {

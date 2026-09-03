@@ -157,6 +157,33 @@ async fn main() -> anyhow::Result<()> {
                 .value_parser(clap::value_parser!(std::path::PathBuf))
                 .help("path to a file containing the JWT bearer token for REST authentication")
         )
+        .arg(
+            Arg::new("grpc-tls-ca-file")
+                .long("grpc-tls-ca-file")
+                .value_parser(clap::value_parser!(std::path::PathBuf))
+                .help("path to the CA certificate file used to verify node plugin gRPC servers")
+        )
+        .arg(
+            Arg::new("grpc-tls-cert-file")
+                .long("grpc-tls-cert-file")
+                .requires("grpc-tls-key-file")
+                .value_parser(clap::value_parser!(std::path::PathBuf))
+                .help("path to the TLS client certificate file used for node plugin gRPC connections")
+        )
+        .arg(
+            Arg::new("grpc-tls-key-file")
+                .long("grpc-tls-key-file")
+                .requires("grpc-tls-cert-file")
+                .value_parser(clap::value_parser!(std::path::PathBuf))
+                .help("path to the TLS client private key file used for node plugin gRPC connections")
+        )
+        .arg(
+            Arg::new("grpc-auto-tls")
+                .long("grpc-auto-tls")
+                .action(clap::ArgAction::SetTrue)
+                .conflicts_with_all(["grpc-tls-ca-file", "grpc-tls-cert-file", "grpc-tls-key-file"])
+                .help("connect to node plugin gRPC servers over TLS without certificate verification")
+        )
         .get_matches();
 
     utils::print_package_info!();

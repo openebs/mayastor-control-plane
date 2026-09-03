@@ -129,6 +129,7 @@ impl RegisterInfo for RegisterRequest {
                 // if it's greater, then assume it's the latest version we support, which is V2.
                 _ => NexusVersion::V2,
             },
+            grpc_tls: features.grpc_tls,
         })
     }
 

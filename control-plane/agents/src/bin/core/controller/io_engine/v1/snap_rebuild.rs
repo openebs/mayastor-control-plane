@@ -135,6 +135,7 @@ mod test {
             None,
             ApiVersion::V1,
             false,
+            false,
         )
         .unwrap();
         let io_engine = GrpcClient::new(&ctx).await.unwrap();

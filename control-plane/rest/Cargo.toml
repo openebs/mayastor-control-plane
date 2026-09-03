@@ -20,7 +20,7 @@ rustls = { workspace = true, default-features = false }
 rustls-pemfile = { workspace = true }
 actix-web = { workspace = true }
 actix-service = { workspace = true }
-tracing-actix-web = { workspace = true, features = ["opentelemetry_0_26"] }
+tracing-actix-web = { workspace = true, features = ["opentelemetry_0_30"] }
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 once_cell = { workspace = true }
@@ -42,10 +42,8 @@ humantime = { workspace = true }
 grpc = { path = "../grpc" }
 num_cpus = { workspace = true }
 rcgen = { workspace = true }
-
 # certificate file watching for TLS auto-reload; Linux/inotify only
-[target.'cfg(target_os = "linux")'.dependencies]
-inotify = { workspace = true }
+cert-watcher = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

@@ -147,13 +147,39 @@ fn tonic_endpoint(endpoint: String) -> Result<tonic::transport::Endpoint, Status
         .concurrency_limit(utils::DEFAULT_GRPC_CLIENT_CONCURRENCY))
 }
 
+/// Connect to a node plugin gRPC server at the given `host:port` endpoint, using TLS when the
+/// controller is so configured.
+async fn node_plugin_channel(endpoint: &str) -> Result<tonic::transport::Channel, Status> {
+    let config = CsiControllerConfig::get_config();
+    if config.grpc_auto_tls() {
+        // The auto-tls connector performs the TLS handshake itself, so the endpoint uses an
+        // http scheme to stop tonic from applying (and rejecting) its own TLS logic.
+        let endpoint = tonic_endpoint(format!("http://{endpoint}"))?;
+        grpc::tls::auto_tls_connect(&endpoint)
+            .await
+            .map_err(|error| Status::unavailable(error.to_string()))
+    } else if let Some(tls) = config.grpc_tls() {
+        let tls_config = tls
+            .client_config()
+            .map_err(|error| Status::internal(error.to_string()))?;
+        tonic_endpoint(format!("https://{endpoint}"))?
+            .tls_config(tls_config)
+            .map_err(|error| Status::internal(error.to_string()))?
+            .connect()
+            .await
+            .map_err(|error| Status::unavailable(error.to_string()))
+    } else {
+        tonic_endpoint(format!("http://{endpoint}"))?
+            .connect()
+            .await
+            .map_err(|error| Status::unavailable(error.to_string()))
+    }
+}
+
 #[tracing::instrument(err, skip_all)]
 async fn issue_fs_freeze(endpoint: String, volume_id: String) -> Result<(), Status> {
     trace!("Issuing fs freeze");
-    let channel = tonic_endpoint(format!("http://{endpoint}"))?
-        .connect()
-        .await
-        .map_err(|error| Status::unavailable(error.to_string()))?;
+    let channel = node_plugin_channel(&endpoint).await?;
     let mut client = NodePluginClient::new(channel);
 
     match client
@@ -174,10 +200,7 @@ async fn issue_fs_freeze(endpoint: String, volume_id: String) -> Result<(), Stat
 #[tracing::instrument(err, skip_all)]
 async fn issue_fs_unfreeze(endpoint: String, volume_id: String) -> Result<(), Status> {
     trace!("Issuing fs unfreeze");
-    let channel = tonic_endpoint(format!("http://{endpoint}"))?
-        .connect()
-        .await
-        .map_err(|error| Status::unavailable(error.to_string()))?;
+    let channel = node_plugin_channel(&endpoint).await?;
     let mut client = NodePluginClient::new(channel);
 
     match client
@@ -203,10 +226,7 @@ async fn force_unstage(app_node: AppNode, volume_id: String) -> Result<(), Statu
         app_node.id,
         app_node.spec.endpoint
     );
-    let channel = tonic_endpoint(format!("http://{}", app_node.spec.endpoint))?
-        .connect()
-        .await
-        .map_err(|error| Status::unavailable(error.to_string()))?;
+    let channel = node_plugin_channel(&app_node.spec.endpoint).await?;
     let mut client = NodePluginClient::new(channel);
 
     client

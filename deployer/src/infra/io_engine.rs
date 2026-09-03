@@ -3,7 +3,7 @@ use composer::{Binary, ContainerSpec};
 use rpc::io_engine::{IoEngineApiVersion, RpcHandle};
 use std::net::{IpAddr, SocketAddr};
 use stor_port::types::v0::openapi::apis::Uuid;
-use utils::DEFAULT_GRPC_CLIENT_ADDR;
+use utils::DEFAULT_GRPC_REGISTRATION_CLIENT_ADDR;
 
 #[async_trait]
 impl ComponentAction for IoEngine {
@@ -38,7 +38,7 @@ impl ComponentAction for IoEngine {
             }
             .with_args(vec!["-N", &reg_name])
             .with_args(vec!["-g", &io_engine_socket])
-            .with_args(vec!["-R", DEFAULT_GRPC_CLIENT_ADDR])
+            .with_args(vec!["-R", DEFAULT_GRPC_REGISTRATION_CLIENT_ADDR])
             .with_args(vec![
                 "--api-versions".to_string(),
                 IoEngineApiVersion::vec_to_str(options.io_engine_api_versions.clone()),
@@ -148,7 +148,7 @@ impl ComponentAction for IoEngine {
                 cfg.exec(&name, vec![rm.as_str(), "-rf", Self::ptpl().1])
                     .await?;
             }
-            super::CoreAgent::wait_node_online(cfg, &name).await;
+            super::CoreAgent::wait_node_online(cfg, &name, options.no_grpc_tls).await;
         }
         Ok(())
     }

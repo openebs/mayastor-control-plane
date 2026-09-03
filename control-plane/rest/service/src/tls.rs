@@ -193,7 +193,9 @@ fn build_client_verifier(
     let ca_file = &mut BufReader::new(File::open(ca_path)?);
     let client_certs = certs(ca_file)
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| anyhow::anyhow!("Failed to retrieve certificates from client CA file"))?;
+        .map_err(|error| {
+            anyhow::anyhow!("Failed to retrieve certificates from client CA file: {error}")
+        })?;
     if client_certs.is_empty() {
         anyhow::bail!("No certificates found in the client CA file");
     }
@@ -229,26 +231,21 @@ struct WatchContext {
 }
 
 /// Spawn the certificate watch loop on a background OS thread.
-///
-/// A plain OS thread is used because the watch blocks in `inotify` reads and the reload path is
-/// fully synchronous/blocking.
-#[cfg(target_os = "linux")]
-fn spawn_cert_watcher(ctx: WatchContext) {
-    std::thread::Builder::new()
-        .name("tls-cert-watch".into())
-        .spawn(move || ctx.watch())
-        .ok();
-}
+fn spawn_cert_watcher(mut ctx: WatchContext) {
+    ctx.targets = cert_watcher::watch_targets(ctx.paths());
+    let targets = ctx.targets.clone();
 
-#[cfg(not(target_os = "linux"))]
-fn spawn_cert_watcher(_ctx: WatchContext) {
-    tracing::warn!(
-        "TLS certificate watch is only supported on Linux; automatic reload is disabled"
-    );
+    // Prime the last-modified guards with the material just loaded, so the initial catch-up
+    // reload performed when the watch is armed is a no-op.
+    let mut last_cert = modified(&ctx.cert_path).zip(modified(&ctx.key_path));
+    let mut last_ca = ctx.client_ca_path.as_deref().and_then(modified);
+
+    cert_watcher::spawn("tls-cert-watcher", targets, move || {
+        ctx.reload_all(&mut last_cert, &mut last_ca)
+    });
 }
 
 /// Last-modified time of a file, used to skip redundant reloads.
-#[cfg(target_os = "linux")]
 fn modified(path: &Path) -> Option<std::time::SystemTime> {
     std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
@@ -260,7 +257,6 @@ fn modified(path: &Path) -> Option<std::time::SystemTime> {
 /// since the last reload, and `Err` when the modification times cannot be read or the certificate
 /// material fails to load (a rotation can briefly leave the files inconsistent; the next event
 /// retries).
-#[cfg(target_os = "linux")]
 fn maybe_reload_cert(
     ctx: &WatchContext,
     last: &mut Option<(std::time::SystemTime, std::time::SystemTime)>,
@@ -284,7 +280,6 @@ fn maybe_reload_cert(
 /// Returns `Ok(true)` when the verifier was reloaded, `Ok(false)` when the file was unchanged (or
 /// client authentication is disabled), and `Err` when the modification time cannot be read or the
 /// CA bundle fails to load.
-#[cfg(target_os = "linux")]
 fn maybe_reload_verifier(
     ctx: &WatchContext,
     last: &mut Option<std::time::SystemTime>,
@@ -304,24 +299,11 @@ fn maybe_reload_verifier(
 }
 
 impl WatchContext {
-    /// Filesystem paths to watch for certificate changes.
-    ///
-    /// If all certs share a parent, watch that directory. This catches atomic
-    /// symlink-swap rotations where individual file symlinks may not emit events.
-    #[cfg(target_os = "linux")]
+    /// Certificate files that must be watched for automatic reload.
     fn paths(&self) -> Vec<PathBuf> {
         let mut paths = vec![self.cert_path.clone(), self.key_path.clone()];
         if let Some(ca_path) = &self.client_ca_path {
             paths.push(ca_path.clone());
-        }
-        if paths.is_empty() || std::env::var("KUBERNETES_SERVICE_HOST").is_err() {
-            return paths;
-        }
-        let mut parents = paths.iter().map(|path| path.parent().map(PathBuf::from));
-        if let Some(Some(first)) = parents.next() {
-            if parents.all(|parent| parent.as_ref() == Some(&first)) {
-                return vec![first];
-            }
         }
         paths
     }
@@ -351,89 +333,6 @@ impl WatchContext {
             Err(error) => {
                 tracing::warn!(?targets, %error, "Failed to reload TLS certificates");
             }
-        }
-    }
-
-    /// Watch the certificate files and reload after changes.
-    ///
-    /// The parent directories are watched (rather than the files) so atomic symlink-swap rotations,
-    /// as used by Kubernetes secret mounts, are observed even when the individual file symlinks do
-    /// not emit events. Fingerprint guards collapse the batch of events a single rotation produces
-    /// into one reload each. When inotify cannot be armed, this falls back to a polling reload on a
-    /// timer.
-    #[cfg(target_os = "linux")]
-    fn watch(mut self) {
-        use inotify::{Inotify, WatchMask};
-        use std::time::Duration;
-
-        /// The polling interval used whenever the inotify watch is unavailable.
-        const POLL_INTERVAL: Duration = Duration::from_secs(60);
-
-        self.targets = self.paths();
-
-        let mut last_cert = modified(&self.cert_path).zip(modified(&self.key_path));
-        let mut last_ca = self.client_ca_path.as_deref().and_then(modified);
-
-        let mut inotify = loop {
-            match Inotify::init() {
-                Ok(inotify) => break inotify,
-                Err(error) => {
-                    tracing::warn!(%error, "Failed to initialise inotify for TLS watch; polling for changes");
-                    std::thread::sleep(POLL_INTERVAL);
-                    if let Err(error) = self.reload_all_(&mut last_cert, &mut last_ca) {
-                        tracing::warn!(%error, "Failed to reload TLS certificates during polling fallback");
-                    }
-                }
-            }
-        };
-
-        let mask = WatchMask::MODIFY | WatchMask::MOVED_TO;
-        let mut buffer = [0u8; 4096];
-        'outer: loop {
-            for target in &self.targets {
-                if let Err(error) = inotify.watches().add(target, mask) {
-                    tracing::warn!(%error, path = %target.display(), "Failed to watch TLS path; will retry");
-                    std::thread::sleep(POLL_INTERVAL);
-                    if let Err(error) = self.reload_all_(&mut last_cert, &mut last_ca) {
-                        tracing::warn!(%error, "Failed to reload TLS certificates during polling fallback");
-                    }
-                    continue 'outer;
-                }
-            }
-
-            // Catch up on any change that happened before the watches were (re-)armed, since
-            // such changes emit no events; the fingerprint guards make this a no-op otherwise.
-            self.reload_all(&mut last_cert, &mut last_ca);
-
-            loop {
-                // Blocks until an event is available, then returns the whole batch of
-                // currently-queued events in one read.
-                let events = match inotify.read_events_blocking(&mut buffer) {
-                    Ok(events) => events,
-                    Err(error) => {
-                        tracing::warn!(%error, "TLS watch read error; re-arming");
-                        break;
-                    }
-                };
-
-                tracing::debug!(targets = ?self.targets, "TLS watch events received");
-
-                // The watch descriptor is only dropped when the watched inode itself is
-                // removed (delivered as `IGNORED`); in-directory rotations keep the inode
-                // and the watch keeps reporting `MOVED_TO`/`MODIFY`.
-                let ignored = events
-                    .into_iter()
-                    .any(|event| event.mask.contains(inotify::EventMask::IGNORED));
-
-                self.reload_all(&mut last_cert, &mut last_ca);
-
-                if ignored {
-                    break;
-                }
-            }
-
-            // Brief settle time before re-arming.
-            std::thread::sleep(Duration::from_millis(100));
         }
     }
 }

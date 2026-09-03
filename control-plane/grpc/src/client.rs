@@ -29,7 +29,7 @@ pub struct CoreClient {
 
 impl CoreClient {
     /// generates a new CoreClient to get the individual clients
-    pub async fn new<O: Into<Option<TimeoutOptions>>>(addr: Uri, opts: O) -> Self {
+    pub async fn new<O: Into<Option<TimeoutOptions>> + Clone>(addr: Uri, opts: O) -> Self {
         let timeout_opts = opts.into();
         let pool_client = PoolClient::new(addr.clone(), timeout_opts.clone()).await;
         let replica_client = ReplicaClient::new(addr.clone(), timeout_opts.clone()).await;
@@ -49,6 +49,41 @@ impl CoreClient {
             nexus: nexus_client,
             watch: watch_client,
         }
+    }
+
+    /// Generates a TLS-enabled CoreClient whose certificate files are reloaded after rotation.
+    pub async fn new_with_tls<O: Into<Option<TimeoutOptions>> + Clone>(
+        addr: Uri,
+        opts: O,
+        tls: crate::tls::TlsConfig,
+    ) -> anyhow::Result<Self> {
+        let timeout_opts = opts.into();
+        let pool =
+            PoolClient::new_with_tls(addr.clone(), timeout_opts.clone(), tls.clone()).await?;
+        let replica =
+            ReplicaClient::new_with_tls(addr.clone(), timeout_opts.clone(), tls.clone()).await?;
+        let volume =
+            VolumeClient::new_with_tls(addr.clone(), timeout_opts.clone(), tls.clone()).await?;
+        let node =
+            NodeClient::new_with_tls(addr.clone(), timeout_opts.clone(), tls.clone()).await?;
+        let app_node =
+            AppNodeClient::new_with_tls(addr.clone(), timeout_opts.clone(), tls.clone()).await?;
+        let registry =
+            RegistryClient::new_with_tls(addr.clone(), timeout_opts.clone(), tls.clone()).await?;
+        let nexus =
+            NexusClient::new_with_tls(addr.clone(), timeout_opts.clone(), tls.clone()).await?;
+        let watch = WatchClient::new_with_tls(addr, timeout_opts, tls).await?;
+
+        Ok(Self {
+            pool,
+            replica,
+            volume,
+            node,
+            app_node,
+            registry,
+            nexus,
+            watch,
+        })
     }
     /// retrieve the corresponding pool client
     pub fn pool(&self) -> impl PoolOperations {

@@ -53,6 +53,7 @@ impl Action {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    utils::init_rustls_crypto_provider();
     init_tracing();
 
     let mut cli_args = CliArgs::parse();

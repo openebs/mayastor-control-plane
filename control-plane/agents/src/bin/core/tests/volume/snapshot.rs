@@ -338,6 +338,7 @@ async fn snapshot_timeout() {
         .with_reconcile_period(Duration::from_secs(10), Duration::from_secs(10))
         .with_req_timeouts(req_timeout, req_timeout)
         .with_grpc_timeouts(grpc_timeout_opts(grpc_timeout))
+        .with_grpc_tls(false)
         .build()
         .await
         .unwrap();

@@ -8,7 +8,7 @@ use deployer_lib::{
     ComposeTestNt, StartOptions,
 };
 use opentelemetry::{global, KeyValue};
-use opentelemetry_sdk::{propagation::TraceContextPropagator, trace as sdktrace};
+use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::SdkTracerProvider};
 
 use stor_port::{transport_api::TimeoutOptions, types::v0::transport};
 
@@ -111,7 +111,12 @@ impl Cluster {
 
     pub async fn new_grpc_client(&self, grpc_timeout: TimeoutOptions) -> CoreClient {
         let core_ip = self.composer.container_ip("core");
-        CoreClient::new(Uri::try_from(grpc_addr(core_ip)).unwrap(), grpc_timeout).await
+        let no_grpc_tls = self.builder.opts.no_grpc_tls;
+        CoreClient::new(
+            Uri::try_from(grpc_addr(core_ip, no_grpc_tls)).unwrap(),
+            grpc_timeout,
+        )
+        .await
     }
 
     /// volume service liveness checks whether the volume service responds to the
@@ -360,8 +365,9 @@ impl Cluster {
         let csi_endpoint = self
             .composer()
             .container_ip(&CsiNode::container_name(index));
-        let internal = csi_driver::node::internal::node_plugin_client::NodePluginClient::connect(
-            format!("http://{csi_endpoint}:50055"),
+        let internal = nodeplugin_client(
+            &format!("{csi_endpoint}:50055"),
+            self.builder.opts.no_grpc_tls,
         )
         .await?;
 
@@ -379,8 +385,9 @@ impl Cluster {
         let csi =
             rpc::csi::node_client::NodeClient::connect(format!("http://{csi_endpoint}:50059"))
                 .await?;
-        let internal = csi_driver::node::internal::node_plugin_client::NodePluginClient::connect(
-            format!("http://{csi_endpoint}:50056"),
+        let internal = nodeplugin_client(
+            &format!("{csi_endpoint}:50056"),
+            self.builder.opts.no_grpc_tls,
         )
         .await?;
 
@@ -598,7 +605,11 @@ impl Cluster {
         let grpc_client = if components.core_enabled() {
             Some(
                 CoreClient::new(
-                    Uri::try_from(grpc_addr(composer.container_ip("core"))).unwrap(),
+                    Uri::try_from(grpc_addr(
+                        composer.container_ip("core"),
+                        components.options().no_grpc_tls,
+                    ))
+                    .unwrap(),
                     grpc_timeout.clone(),
                 )
                 .await,
@@ -1022,6 +1033,12 @@ impl ClusterBuilder {
         self.grpc_timeout = timeout;
         self
     }
+    /// Specify whether gRPC TLS is enabled or not.
+    #[must_use]
+    pub fn with_grpc_tls(mut self, tls: bool) -> Self {
+        self.opts = self.opts.with_grpc_tls(tls);
+        self
+    }
     /// Specify whether rest is enabled or not.
     #[must_use]
     pub fn with_rest(mut self, enabled: bool) -> Self {
@@ -1163,22 +1180,19 @@ impl ClusterBuilder {
                 ));
 
                 global::set_text_map_propagator(TraceContextPropagator::new());
-                let provider = opentelemetry_otlp::new_pipeline()
-                    .tracing()
-                    .with_exporter(
-                        opentelemetry_otlp::new_exporter()
-                            .tonic()
-                            .with_endpoint("http://127.0.0.1:4317"),
-                    )
-                    .with_trace_config(
-                        sdktrace::Config::default().with_resource(Resource::new(tracing_tags)),
-                    )
-                    // TODO: there's currently a few bugs on opentelemetry
-                    // 1. We can't use simple exporter on a tokio environment
-                    // 2. Even wit the tokio batch exporter, we can't shutdown properly,
-                    // meaning that we might not flush traces to jaeger :(
-                    .install_batch(opentelemetry_sdk::runtime::TokioCurrentThread)
+                let exporter = opentelemetry_otlp::SpanExporter::builder()
+                    .with_tonic()
+                    .with_endpoint("http://127.0.0.1:4317")
+                    .build()
                     .expect("Should be able to initialise the exporter");
+                let provider = SdkTracerProvider::builder()
+                    .with_batch_exporter(exporter)
+                    .with_resource(
+                        Resource::builder_empty()
+                            .with_attributes(tracing_tags)
+                            .build(),
+                    )
+                    .build();
                 global::set_tracer_provider(provider.clone());
                 let tracer = provider.tracer("tracing-otel-subscriber");
                 let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
@@ -1299,8 +1313,32 @@ impl Pool {
     }
 }
 
-fn grpc_addr(ip: String) -> String {
-    format!("https://{ip}:50051")
+fn grpc_addr(ip: String, no_grpc_tls: bool) -> String {
+    let scheme = if no_grpc_tls { "http" } else { "https" };
+    format!("{scheme}://{ip}:50051")
+}
+
+/// Connect an internal node plugin client to `host:port`.
+///
+/// The nodeplugin server is TLS-only when gRPC TLS is enabled, so connect over auto-TLS in that
+/// case; otherwise a plaintext connection is used.
+async fn nodeplugin_client(
+    endpoint: &str,
+    no_grpc_tls: bool,
+) -> Result<
+    csi_driver::node::internal::node_plugin_client::NodePluginClient<tonic::transport::Channel>,
+    Error,
+> {
+    use csi_driver::node::internal::node_plugin_client::NodePluginClient;
+    if no_grpc_tls {
+        Ok(NodePluginClient::connect(format!("http://{endpoint}")).await?)
+    } else {
+        // The auto-tls connector performs the TLS handshake itself, so the endpoint uses an
+        // http scheme to stop tonic from applying (and rejecting) its own TLS logic.
+        let endpoint = tonic::transport::Endpoint::try_from(format!("http://{endpoint}"))?;
+        let channel = grpc::tls::auto_tls_connect(&endpoint).await?;
+        Ok(NodePluginClient::new(channel))
+    }
 }
 
 /// Bundles both the csi and the internal node service.

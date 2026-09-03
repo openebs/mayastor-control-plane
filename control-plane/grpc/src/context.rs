@@ -5,10 +5,7 @@ use stor_port::{
     transport_api::{ClientId, MessageId},
     types::v0::transport::MessageIdVs,
 };
-use tonic::{
-    transport::{Channel, Uri},
-    IntoRequest,
-};
+use tonic::{transport::Uri, IntoRequest};
 use utils::tracing_telemetry::trace::FutureExt;
 
 use utils::DEFAULT_REQ_TIMEOUT;
@@ -133,7 +130,14 @@ impl Context {
 
     /// Create a new endpoint that connects to the provided Uri.
     /// This endpoint has default connect and request timeouts.
-    fn endpoint(&self, uri: Uri) -> tonic::transport::Endpoint {
+    fn endpoint(&self, uri: Uri, auto_tls: bool) -> tonic::transport::Endpoint {
+        let uri = if auto_tls {
+            let mut parts = uri.into_parts();
+            parts.scheme = Some(http::uri::Scheme::HTTP);
+            Uri::from_parts(parts).expect("gRPC URI is valid")
+        } else {
+            uri
+        };
         let timeout = self.base_timeout();
         tonic::transport::Endpoint::from(uri)
             // we use the same timeout for the connection so we can pass the existing nats tests
@@ -158,8 +162,8 @@ impl Context {
     }
 }
 
-/// Tonic Channel with added gRPC tracing
-pub(crate) type TracedChannel = crate::tracing::OpenTelClientService<Channel>;
+/// Tonic Channel with added gRPC tracing and TLS certificate auto-reload.
+pub(crate) type TracedChannel = crate::tracing::OpenTelClientService<crate::tls::ReloadableChannel>;
 
 /// Generic RPC Client.
 #[derive(Clone)]
@@ -172,20 +176,35 @@ impl<C: Clone> Client<C> {
     /// Creates a generic RPC client based on the provided arguments.
     /// options: Timeout options which are used for connection and request timeouts.
     /// make_client: Creates a client of the appropriate type.
-    pub(crate) async fn new<O, M>(uri: Uri, options: O, make_client: M) -> Self
+    pub(crate) async fn new<O, M>(uri: Uri, options: O, make_client: M) -> anyhow::Result<Self>
+    where
+        O: Into<Option<TimeoutOptions>>,
+        M: FnOnce(TracedChannel) -> C,
+    {
+        Self::new_with_tls(uri, options, None, make_client).await
+    }
+
+    /// Creates a generic RPC client with optional file-backed TLS configuration.
+    pub(crate) async fn new_with_tls<O, M>(
+        uri: Uri,
+        options: O,
+        tls: Option<crate::tls::TlsConfig>,
+        make_client: M,
+    ) -> anyhow::Result<Self>
     where
         O: Into<Option<TimeoutOptions>>,
         M: FnOnce(TracedChannel) -> C,
     {
         let context = Context::new(options);
-        let endpoint = context.endpoint(uri);
-        let channel = endpoint.connect_lazy();
+        let auto_tls = tls.is_none() && uri.scheme_str() == Some("https");
+        let endpoint = context.endpoint(uri, auto_tls);
+        let channel = crate::tls::ReloadableChannel::new(endpoint, tls, auto_tls)?;
 
         let channel = tower::ServiceBuilder::new()
             .layer(OpenTelClient::new())
             .service(channel);
         let client = make_client(channel);
-        Self { context, client }
+        Ok(Self { context, client })
     }
 
     /// Prepares a new `tonic::Request<T>` for the given request `R: Into<T>`.

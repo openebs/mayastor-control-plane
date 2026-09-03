@@ -52,6 +52,15 @@ pub(crate) struct CliArgs {
     /// The CORE gRPC Server URL or address to connect to the services.
     #[clap(long, short = 'z', default_value = DEFAULT_GRPC_CLIENT_ADDR)]
     core_grpc: Uri,
+    /// Path to the CA bundle used to verify the Core gRPC server.
+    #[clap(long = "grpc-tls-ca-file")]
+    grpc_tls_ca_file: Option<PathBuf>,
+    /// Path to the TLS client certificate used for Core gRPC mTLS.
+    #[clap(long = "grpc-tls-cert-file", requires = "grpc_tls_key_file")]
+    grpc_tls_cert_file: Option<PathBuf>,
+    /// Path to the TLS client private key used for Core gRPC mTLS.
+    #[clap(long = "grpc-tls-key-file", requires = "grpc_tls_cert_file")]
+    grpc_tls_key_file: Option<PathBuf>,
 
     /// Set the frequency of probing the agent-core for a liveness check.
     #[arg(long = "core-health-freq", value_parser = humantime::parse_duration, default_value = "2m")]
@@ -137,6 +146,21 @@ impl CliArgs {
         } else {
             timeout_opts.with_min_req_timeout(RequestMinTimeout::default())
         }
+    }
+    fn grpc_tls(&self) -> anyhow::Result<Option<grpc::tls::TlsConfig>> {
+        let tls = grpc::tls::TlsConfig::new(
+            self.grpc_tls_ca_file.clone(),
+            self.grpc_tls_cert_file.clone(),
+            self.grpc_tls_key_file.clone(),
+        )?;
+
+        if !tls.enabled() {
+            return Ok(None);
+        }
+        if self.core_grpc.scheme_str() != Some("https") {
+            anyhow::bail!("a TLS-enabled gRPC client requires an https:// URL");
+        }
+        Ok(Some(tls))
     }
     fn certificates(&self) -> anyhow::Result<ServerConfig> {
         let client_ca_file = self.client_ca_file.clone();
@@ -330,6 +354,7 @@ async fn probes_only_on_insecure(
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
+    utils::init_rustls_crypto_provider();
     utils::print_package_info!();
     let cli_args = CliArgs::args();
     println!("Using options: {cli_args:?}");
@@ -343,8 +368,15 @@ async fn main() -> anyhow::Result<()> {
         .init("rest-server");
 
     // Initialize the core client to be used in rest
+    let core_client = match cli_args.grpc_tls()? {
+        Some(tls) => {
+            CoreClient::new_with_tls(cli_args.core_grpc.clone(), cli_args.timeout_opts(), tls)
+                .await?
+        }
+        None => CoreClient::new(cli_args.core_grpc.clone(), cli_args.timeout_opts()).await,
+    };
     CORE_CLIENT
-        .set(CoreClient::new(cli_args.core_grpc.clone(), cli_args.timeout_opts()).await)
+        .set(core_client)
         .ok()
         .expect("Expect to be initialised only once");
 

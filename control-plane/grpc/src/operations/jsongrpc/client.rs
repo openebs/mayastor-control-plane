@@ -20,7 +20,9 @@ pub struct JsonGrpcClient {
 impl JsonGrpcClient {
     /// creates a new base tonic endpoint with the timeout options and the address
     pub async fn new<O: Into<Option<TimeoutOptions>>>(addr: Uri, opts: O) -> Self {
-        let client = Client::new(addr, opts, json_grpc_client::JsonGrpcClient::new).await;
+        let client = Client::new(addr, opts, json_grpc_client::JsonGrpcClient::new)
+            .await
+            .expect("a plaintext gRPC channel cannot fail to initialise");
         Self { inner: client }
     }
     /// Try to wait until the JsonGrpc Service is ready, up to a timeout, by using the Probe method.

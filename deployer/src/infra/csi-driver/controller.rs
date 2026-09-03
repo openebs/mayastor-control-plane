@@ -32,6 +32,10 @@ impl ComponentAction for CsiController {
                 // Disable force unstage volume. TODO: remove the flag and fix test.
                 .with_args(vec!["--force-unstage-volume", "false"]);
 
+            if !options.no_grpc_tls {
+                binary = binary.with_arg("--grpc-auto-tls");
+            }
+
             if cfg.container_exists("jaeger") {
                 let jaeger_config = format!("jaeger.{}", cfg.get_name());
                 binary = binary.with_args(vec!["--jaeger", &jaeger_config])

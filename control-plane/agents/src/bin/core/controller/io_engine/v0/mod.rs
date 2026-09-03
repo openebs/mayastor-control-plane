@@ -32,12 +32,11 @@ impl RpcClient {
         })
     }
     async fn make_client(context: &GrpcContext) -> Result<IoEngineClientV0<Channel>, SvcError> {
-        IoEngineClientV0::connect(context.tonic_endpoint())
-            .await
-            .context(GrpcConnect {
-                node_id: context.node().to_owned(),
-                endpoint: context.endpoint().to_string(),
-            })
+        let channel = context.connect_channel().await.context(GrpcConnect {
+            node_id: context.node().to_owned(),
+            endpoint: context.endpoint().to_string(),
+        })?;
+        Ok(IoEngineClientV0::new(channel))
     }
     async fn fetcher_client(&self) -> Result<Self, SvcError> {
         let mut context = self.context.clone();

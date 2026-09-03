@@ -233,6 +233,7 @@ fn test_deserialization_v1_to_v2() {
                     rdma_capable_io_engine: Some(true),
                     diskpool_encryption: None,
                     nexus_label_version: NexusVersion::V1,
+                    grpc_tls: None,
                 }),
                 None,
                 None,

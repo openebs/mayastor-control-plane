@@ -11,10 +11,11 @@ rls = ["event-publisher/rls-aws-lc-rs"]
 tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 tracing-opentelemetry = { workspace = true }
 tracing = { workspace = true }
+rustls = { workspace = true }
 
 opentelemetry = { workspace = true }
 
-opentelemetry_sdk = { workspace = true, features = ["rt-tokio-current-thread"] }
+opentelemetry_sdk = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
 

@@ -239,6 +239,11 @@ impl Components {
     pub fn core_enabled(&self) -> bool {
         self.0.contains(&Component::CoreAgent(Default::default()))
     }
+
+    /// The deployment start options.
+    pub fn options(&self) -> &StartOptions {
+        &self.1
+    }
 }
 
 #[macro_export]

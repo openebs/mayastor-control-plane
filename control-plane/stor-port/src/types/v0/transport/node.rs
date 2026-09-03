@@ -238,6 +238,9 @@ pub struct NodeFeatures {
     /// Max version of the nexus label supported by the node.
     #[serde(default)]
     pub nexus_label_version: NexusVersion,
+    /// The io-engine gRPC server has TLS enabled and expects TLS connections.
+    #[serde(default)]
+    pub grpc_tls: Option<bool>,
 }
 
 /// Bug fixe in enum format

@@ -29,6 +29,6 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tracing-opentelemetry = { workspace = true }
 # Open Telemetry
 opentelemetry = { workspace = true }
-opentelemetry_sdk = { workspace = true, features = ["rt-tokio-current-thread"] }
+opentelemetry_sdk = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }

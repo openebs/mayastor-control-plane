@@ -269,6 +269,20 @@ impl NodeWrapper {
         }
     }
 
+    /// Whether the io-engine advertises gRPC TLS support in its registration.
+    /// Simulated nodes never use TLS. Defaults to plaintext when the capability is not advertised,
+    /// which preserves compatibility with older io-engines and rolling upgrades.
+    fn node_grpc_tls(&self) -> bool {
+        if self.sim_socket.is_some() {
+            return false;
+        }
+        self.node_state()
+            .features
+            .as_ref()
+            .and_then(|features| features.grpc_tls)
+            .unwrap_or(false)
+    }
+
     /// Get `GrpcContext` for this node.
     /// It will be used to execute the `request` operation.
     pub(crate) fn grpc_context_ext(&self, request: MessageId) -> Result<GrpcContext, SvcError> {
@@ -281,6 +295,7 @@ impl NodeWrapper {
                 Some(request),
                 api_version,
                 self.sim_socket.is_some(),
+                self.node_grpc_tls(),
             )?)
         } else {
             Err(SvcError::InvalidApiVersion { api_version: None })
@@ -301,6 +316,7 @@ impl NodeWrapper {
                 None,
                 api_version,
                 self.sim_socket.is_some(),
+                self.node_grpc_tls(),
             )?)
         } else {
             Err(SvcError::InvalidApiVersion { api_version: None })
@@ -318,6 +334,7 @@ impl NodeWrapper {
                 None,
                 api_version,
                 self.sim_socket.is_some(),
+                self.node_grpc_tls(),
             )?)
         } else {
             Err(SvcError::InvalidApiVersion { api_version: None })

@@ -45,6 +45,7 @@ impl ComponentAction for CsiNode {
                     options.enable_app_node_registration,
                     options.csi_node_rest,
                     options.io_engine_cores,
+                    !options.no_grpc_tls,
                 )?;
             }
             cfg
@@ -126,6 +127,7 @@ impl CsiNode {
         enable_registration: bool,
         enable_rest: bool,
         io_queues: u32,
+        grpc_auto_tls: bool,
     ) -> Result<Builder, Error> {
         let container_name = Self::container_name(index);
         let node_name = Self::name(index);
@@ -139,6 +141,7 @@ impl CsiNode {
             enable_registration,
             enable_rest,
             io_queues,
+            grpc_auto_tls,
         )
     }
     fn with_local_node(index: u32, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
@@ -154,11 +157,13 @@ impl CsiNode {
             options.enable_app_node_registration,
             options.csi_node_rest,
             options.io_engine_cores,
+            !options.no_grpc_tls,
         )
     }
     fn vm_node(index: u32, option: &StartOptions) -> bool {
         index == 1 && option.rwx_vm
     }
+    #[allow(clippy::too_many_arguments)]
     fn with_node(
         container_name: &str,
         node_name: &str,
@@ -167,6 +172,7 @@ impl CsiNode {
         enable_registration: bool,
         enable_rest: bool,
         io_queues: u32,
+        grpc_auto_tls: bool,
     ) -> Result<Builder, Error> {
         let io_queues = io_queues.max(1);
         let mut binary = Binary::from_dbg(CSI_NODE)
@@ -175,6 +181,10 @@ impl CsiNode {
             // Make sure that CSI socket is always under shared directory
             // regardless of what its default value is.
             .with_args(vec!["--csi-socket", socket]);
+
+        if grpc_auto_tls {
+            binary = binary.with_arg("--grpc-auto-tls");
+        }
 
         if enable_registration || enable_rest {
             binary = binary.with_args(vec!["--rest-endpoint", "http://rest:8081"]);

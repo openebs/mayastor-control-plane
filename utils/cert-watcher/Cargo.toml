@@ -1,0 +1,11 @@
+[package]
+name = "cert-watcher"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tracing = { workspace = true }
+
+# certificate file watching for TLS auto-reload; Linux/inotify only
+[target.'cfg(target_os = "linux")'.dependencies]
+inotify = { workspace = true }

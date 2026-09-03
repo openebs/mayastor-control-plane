@@ -39,6 +39,7 @@ struct CliArgs {
 
 #[tokio::main]
 async fn main() {
+    utils::init_rustls_crypto_provider();
     let cli_args = CliArgs::args();
     let _trace_flush = cli_args.args.init_tracing();
     if let Err(error) = cli_args.execute().await {

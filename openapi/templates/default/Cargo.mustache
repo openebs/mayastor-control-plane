@@ -39,6 +39,8 @@ tokio = { version = "1.32.0", features = ["full"], optional = true }
 http-body = { version = "0.4.5", optional = true }
 futures = { version = "0.3.28", optional = true }
 pin-project = { version = "1.1.3", optional = true }
+# certificate file watching for TLS auto-reload (tower client); Linux/inotify only
+cert-watcher = { path = "../utils/cert-watcher" }
 
 # SSL
 rustls = { version = "0.21.12", optional = true, features = [ "dangerous_configuration" ] }

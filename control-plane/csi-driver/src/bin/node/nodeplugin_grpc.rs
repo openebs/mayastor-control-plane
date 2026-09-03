@@ -155,19 +155,38 @@ impl NodePluginGrpcServer {
     pub(crate) async fn run(
         endpoint: std::net::SocketAddr,
         kubelet_path: String,
+        tls: Option<grpc::tls::TlsConfig>,
+        auto_tls: bool,
     ) -> anyhow::Result<()> {
         info!(
             "node plugin gRPC server configured at address {:?}",
             endpoint
         );
-        Server::builder()
-            .add_service(NodePluginServer::new(NodePluginSvc { kubelet_path }))
-            .serve_with_shutdown(endpoint, Shutdown::wait())
-            .await
-            .map_err(|error| {
-                use stor_port::transport_api::ErrorChain;
-                error!(error = error.full_string(), "NodePluginGrpcServer failed");
-                error.into()
-            })
+        let server =
+            Server::builder().add_service(NodePluginServer::new(NodePluginSvc { kubelet_path }));
+        let result = match (auto_tls, tls) {
+            (true, _) => {
+                let config = grpc::tls::auto_server_config(vec!["localhost".to_string()])?;
+                // Only the csi-controller connects here and it is always TLS-aware, so the
+                // listener does not need to sniff for plaintext clients.
+                let incoming =
+                    grpc::tls::incoming_with_server_config(endpoint, config, false).await?;
+                server
+                    .serve_with_incoming_shutdown(incoming, Shutdown::wait())
+                    .await
+            }
+            (false, Some(tls)) => {
+                let incoming = grpc::tls::incoming(endpoint, tls, false).await?;
+                server
+                    .serve_with_incoming_shutdown(incoming, Shutdown::wait())
+                    .await
+            }
+            (false, None) => server.serve_with_shutdown(endpoint, Shutdown::wait()).await,
+        };
+        result.map_err(|error| {
+            use stor_port::transport_api::ErrorChain;
+            error!(error = error.full_string(), "NodePluginGrpcServer failed");
+            error.into()
+        })
     }
 }

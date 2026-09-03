@@ -43,6 +43,8 @@ http-body = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 pin-project = { workspace = true, optional = true }
 hyper-body = { workspace = true }
+# certificate file watching for TLS auto-reload (tower client); Linux/inotify only
+cert-watcher = { workspace = true }
 
 # SSL
 rustls = { workspace = true, default-features = false, optional = true }
@@ -56,7 +58,3 @@ opentelemetry = { workspace = true, optional = true }
 opentelemetry-http = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"], optional = true }
-
-# certificate file watching for TLS auto-reload (tower client); Linux/inotify only
-[target.'cfg(target_os = "linux")'.dependencies]
-inotify = { workspace = true }
