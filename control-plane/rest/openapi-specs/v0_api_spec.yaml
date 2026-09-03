@@ -1522,6 +1522,71 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  '/nodes/{node_id}/pools/{pool_id}/drain':
+    put:
+      tags:
+        - Pools
+      operationId: put_node_pool_drain
+      parameters:
+        - in: path
+          name: node_id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: pool_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoolDrainReq'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pool'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
+  '/pools/{pool_id}/drain':
+    put:
+      tags:
+        - Pools
+      operationId: put_pool_drain
+      parameters:
+        - in: path
+          name: pool_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoolDrainReq'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pool'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/pools/{pool_id}/errors':
     delete:
       tags:
@@ -3551,6 +3616,13 @@ components:
           description: A tally of all snapshots configured on this pool
           type: integer
           format: uint64
+        drain:
+          description: |-
+            The pool's drain, if one has been admitted. Persists after the drain reaches a
+            terminal phase as the pool's last-drain artifact, so read `phase` before treating
+            a pool as actively draining.
+          allOf:
+            - $ref: '#/components/schemas/PoolDrainRecord'
     PoolDiag:
       description: Pool diagnostic information
       type: object
@@ -5008,9 +5080,13 @@ components:
       properties:
         cordoned:
           $ref: '#/components/schemas/PoolCordon'
+        drain:
+          $ref: '#/components/schemas/PoolDrainSpec'
       oneOf:
         - required:
             - cordoned
+        - required:
+            - drain
     PoolCordonReq:
       description: Cordon or uncordon the following resources
       type: object
@@ -5049,6 +5125,143 @@ components:
         - snapshots
         - restores
         - import
+    PoolDrainSpec:
+      description: The drain specification for a pool
+      type: object
+      properties:
+        requestTimestamp:
+          description: Time at which the drain was requested (UTC)
+          type: string
+          format: date-time
+        policy:
+          $ref: '#/components/schemas/PoolDrainPolicy'
+        userCordon:
+          description: |-
+            The user's own cordon, set before the drain began and restored if the drain is
+            aborted. Absent when the pool was not cordoned before the drain. Gets updated
+            if the user changes the cordon while the drain is in progress.
+          allOf:
+            - $ref: '#/components/schemas/PoolCordon'
+      required:
+        - requestTimestamp
+        - policy
+    PoolDrainPolicy:
+      description: The drain policy for a draining pool
+      type: object
+      properties:
+        snapshotPolicy:
+          $ref: '#/components/schemas/PoolDrainSnapshotPolicy'
+        unsafeRebuildOtherwiseEvict:
+          description: |-
+            Grace period in seconds, after which an unplaceable replica is force-evicted.
+            Absent disables forced eviction entirely.
+          type: integer
+          format: uint64
+        unsafeEvict:
+          description: Skip the safe over-replicate flow and evict replicas directly
+          type: boolean
+      required:
+        - snapshotPolicy
+        - unsafeEvict
+    PoolDrainSnapshotPolicy:
+      description: |-
+        What the drain does with the snapshots left on the pool once all replicas are
+        evacuated. Ignore leaves them in place, AcceptLoss destroys them from the pool.
+      type: string
+      enum:
+        - Ignore
+        - AcceptLoss
+    PoolDrainReq:
+      description: |-
+        Drain the pool under the following policy. By default, snapshots are left in place,
+        no forced eviction, and the safe over-replicate flow is used.
+      type: object
+      properties:
+        snapshotPolicy:
+          $ref: '#/components/schemas/PoolDrainSnapshotPolicy'
+        unsafeRebuildOtherwiseEvict:
+          description: |-
+            Grace period in seconds, after which an unplaceable replica is force-evicted.
+            Absent disables forced eviction entirely. Attempt only once if passed as 0.
+          type: integer
+          format: uint64
+        unsafeEvict:
+          description: Skip the safe over-replicate flow and evict replicas directly
+          type: boolean
+      example:
+        snapshotPolicy: Ignore
+        unsafeEvict: false
+    PoolDrainRecord:
+      description: |-
+        Progress of a pool drain. Persists after the drain reaches a terminal phase, as the
+        pool's last-drain record; it is cleared only when a drain is aborted.
+      type: object
+      properties:
+        phase:
+          $ref: '#/components/schemas/PoolDrainPhase'
+        phaseReason:
+          $ref: '#/components/schemas/PoolDrainPhaseReason'
+        initial:
+          description: |-
+            Pool usage captured when the drain entered the Draining phase. Absent while the
+            drain is still queued.
+          allOf:
+            - $ref: '#/components/schemas/PoolDrainUsage'
+        drainingReplicas:
+          description: |-
+            The replicas this drain is currently moving off the pool.
+          type: array
+          items:
+            $ref: '#/components/schemas/ReplicaId'
+      required:
+        - phase
+        - drainingReplicas
+    PoolDrainPhase:
+      description: The phase of the pool drain state machine
+      type: string
+      enum:
+        - Unknown
+        - Queued
+        - Draining
+        - AwaitingCleanup
+        - PartiallyDrained
+        - Drained
+        - Aborted
+    PoolDrainPhaseReason:
+      description: Why the pool is in its current drain phase
+      type: string
+      enum:
+        - Unknown
+        - WaitingForSlot
+        - OfflinePool
+        - SingleReplicaUnsafeEviction
+        - ImportCordoned
+        - SnapshotsRetained
+    PoolDrainUsage:
+      description: Pool usage snapshot
+      type: object
+      properties:
+        replicaCount:
+          description: Number of replicas present on the pool
+          type: integer
+          format: uint64
+        snapshotCount:
+          description: Number of snapshots present on the pool
+          type: integer
+          format: uint64
+        used:
+          description: Used capacity, in bytes
+          type: integer
+          format: uint64
+        committed:
+          description: |-
+            Committed capacity, in bytes
+          type: integer
+          format: uint64
+      required:
+        - replicaCount
+        - snapshotCount
+        - used
     PoolClearErrReq:
       description: The cordon and drain state
       type: object

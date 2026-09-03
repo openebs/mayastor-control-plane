@@ -663,7 +663,9 @@ impl From<Pool> for models::Pool {
         let (spec, meta) = match def {
             None => (None, None),
             Some(def) => {
-                let meta = models::PoolMeta::new_all(def.replica_count, def.snapshot_count);
+                let drain: Option<models::PoolDrainRecord> =
+                    def.persisted_metadata.drain_record.into_opt();
+                let meta = models::PoolMeta::new_all(def.replica_count, def.snapshot_count, drain);
                 (Some(def.spec), Some(meta))
             }
         };
