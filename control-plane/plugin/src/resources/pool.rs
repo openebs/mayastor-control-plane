@@ -977,12 +977,28 @@ fn cordon_resources(rsc: &models::PoolCordon) -> String {
     }
     cordon
 }
+/// The cordon in effect on a pool, mirroring `CordonDrainState::effective_cordon` control-plane
+/// side: a draining pool is always self-cordoned for replicas, snapshots and restores, and only
+/// the import cordon is carried over from the user's own cordon, if they had one before the drain.
+pub(crate) fn effective_pool_cordon(cordon_drain: &PoolCordonDrain) -> models::PoolCordon {
+    match cordon_drain {
+        PoolCordonDrain::cordoned(cordon) => cordon.clone(),
+        PoolCordonDrain::drain(spec) => models::PoolCordon {
+            replicas: true,
+            snapshots: true,
+            restores: true,
+            import: spec
+                .user_cordon
+                .as_ref()
+                .is_some_and(|cordon| cordon.import),
+        },
+    }
+}
+
 fn pool_cordon_resources(pool: &models::Pool) -> String {
     match &pool.spec {
         Some(spec) => match &spec.cordon_drain {
-            Some(cds) => match cds {
-                PoolCordonDrain::cordoned(rsc) => cordon_resources(rsc),
-            },
+            Some(cds) => cordon_resources(&effective_pool_cordon(cds)),
             None => String::new(),
         },
         None => String::new(),

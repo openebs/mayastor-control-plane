@@ -1,12 +1,13 @@
 use crate::{
     resources::{
         error::Error,
+        pool::effective_pool_cordon,
         utils::{optional_cell, print_table, CreateRow, GetHeaderRow, OutputFormat},
         NodeId, PoolId, SnapshotId, VolumeId,
     },
     rest_wrapper::RestClient,
 };
-use openapi::models::{self, PoolCordonDrain};
+use openapi::models;
 use prettytable::Row;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -434,7 +435,15 @@ pub fn print_purge_loss(
 pub fn pool_cordon_state(pool: &models::Pool) -> CordonState {
     match pool.spec.as_ref().and_then(|s| s.cordon_drain.as_ref()) {
         None => CordonState::NotCordoned,
-        Some(PoolCordonDrain::cordoned(state)) => {
+        Some(cordon_drain) => {
+            let state = effective_pool_cordon(cordon_drain);
+            tracing::info!(
+                "Pool {} cordon state: replicas={}, snapshots={}, import: {}",
+                pool.spec.as_ref().map(|s| &s.id).unwrap_or(&String::new()),
+                state.replicas,
+                state.snapshots,
+                state.import,
+            );
             if state.replicas && state.snapshots {
                 CordonState::Ready
             } else {

@@ -1,6 +1,6 @@
 use super::*;
 use grpc::operations::pool::traits::{
-    ClearErrors, ClearErrorsRequest, PoolCordonRequest, PoolOperations,
+    ClearErrors, ClearErrorsRequest, PoolCordonRequest, PoolDrainRequest, PoolOperations,
 };
 use openapi::apis::pools_api::actix::server::{delNodePoolResponse, delPoolResponse};
 use rest_client::versions::v0::{apis::Uuid, models::PoolClearErr};
@@ -194,6 +194,18 @@ impl apis::actix_server::Pools for RestApi {
             import: body.import,
         };
         let pool = client().uncordon(request).await?;
+        Ok(pool.into())
+    }
+
+    async fn put_pool_drain(
+        Path(pool_id): Path<String>,
+        Body(body): Body<models::PoolDrainReq>,
+    ) -> Result<models::Pool, RestError<RestJsonError>> {
+        let request = PoolDrainRequest {
+            pool_id: pool_id.into(),
+            policy: body.into(),
+        };
+        let pool = client().drain(&request).await?;
         Ok(pool.into())
     }
 

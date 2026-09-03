@@ -201,7 +201,8 @@ enum DrainPhase {
 /// Gets applied when the pool transitions into Draining state.
 message PoolDrainStatistics {
   // The initial usage stats of the pool when the pool transitions into Draining state.
-  PoolUsage initial = 1;
+  // Unset while the drain is still queued.
+  optional PoolUsage initial = 1;
   // A live pool usage snapshot, as the drain's progress counterpart to `initial`.
   // `None` when the pool has no reported state (node offline / not imported): progress is
   // then unknown, not zero.

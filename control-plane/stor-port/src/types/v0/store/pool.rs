@@ -1028,17 +1028,135 @@ impl CordonDrainState {
     }
 }
 
-impl From<CordonDrainState> for models::PoolCordonDrain {
-    fn from(pool_ds: CordonDrainState) -> Self {
-        let state = pool_ds.effective_cordon();
-        // TODO: We don't currently report the drain policy, will be added in a future PR.
-        // This mapping will change when Drain is added to openapi.
-        Self::cordoned(models::PoolCordon {
+impl From<CordonedState> for models::PoolCordon {
+    fn from(state: CordonedState) -> Self {
+        Self {
             replicas: state.replicas,
             snapshots: state.snapshots,
             restores: state.restores,
             import: state.import,
-        })
+        }
+    }
+}
+
+impl From<CordonDrainState> for models::PoolCordonDrain {
+    fn from(pool_ds: CordonDrainState) -> Self {
+        match pool_ds {
+            CordonDrainState::Cordoned(state) => Self::cordoned(state.into()),
+            CordonDrainState::Drain(spec) => Self::drain(spec.into()),
+        }
+    }
+}
+
+/// Format a timestamp as RFC 3339, the encoding behind the openapi `date-time` format.
+fn rfc3339(time: SystemTime) -> String {
+    chrono::DateTime::<chrono::Utc>::from(time).to_rfc3339()
+}
+
+impl From<DrainSpec> for models::PoolDrainSpec {
+    fn from(spec: DrainSpec) -> Self {
+        Self {
+            request_timestamp: rfc3339(spec.request_timestamp),
+            policy: spec.policy.into(),
+            user_cordon: spec.user_cordon.into_opt(),
+        }
+    }
+}
+
+impl From<DrainPolicy> for models::PoolDrainPolicy {
+    fn from(policy: DrainPolicy) -> Self {
+        Self {
+            snapshot_policy: policy.snapshot_policy.into(),
+            unsafe_rebuild_otherwise_evict: policy
+                .unsafe_rebuild_otherwise_evict
+                .map(|grace| grace.as_secs()),
+            unsafe_evict: policy.unsafe_evict,
+        }
+    }
+}
+
+/// A drain request with any field left out takes the policy defaults: snapshots are left in
+/// place, no forced eviction, and the safe over-replicate flow is used.
+impl From<models::PoolDrainReq> for DrainPolicy {
+    fn from(req: models::PoolDrainReq) -> Self {
+        Self {
+            snapshot_policy: req.snapshot_policy.map(Into::into).unwrap_or_default(),
+            unsafe_rebuild_otherwise_evict: req
+                .unsafe_rebuild_otherwise_evict
+                .map(Duration::from_secs),
+            unsafe_evict: req.unsafe_evict.unwrap_or_default(),
+        }
+    }
+}
+
+impl From<SnapshotPolicy> for models::DrainSnapshotPolicy {
+    fn from(policy: SnapshotPolicy) -> Self {
+        match policy {
+            SnapshotPolicy::Ignore => Self::Ignore,
+            SnapshotPolicy::AcceptLoss => Self::AcceptLoss,
+        }
+    }
+}
+
+impl From<models::DrainSnapshotPolicy> for SnapshotPolicy {
+    fn from(policy: models::DrainSnapshotPolicy) -> Self {
+        match policy {
+            models::DrainSnapshotPolicy::Ignore => Self::Ignore,
+            models::DrainSnapshotPolicy::AcceptLoss => Self::AcceptLoss,
+        }
+    }
+}
+
+impl From<PoolDrainRecord> for models::PoolDrain {
+    fn from(record: PoolDrainRecord) -> Self {
+        Self {
+            phase: record.phase.into(),
+            phase_reason: record.phase_reason.into_opt(),
+            initial: record.initial_stats.into_opt(),
+            draining_replicas: record
+                .replica_moves
+                .into_iter()
+                .filter_map(|config| config.draining_replica)
+                .map(Into::into)
+                .collect(),
+        }
+    }
+}
+
+impl From<DrainPhase> for models::PoolDrainPhase {
+    fn from(phase: DrainPhase) -> Self {
+        match phase {
+            DrainPhase::Unknown => Self::Unknown,
+            DrainPhase::Queued => Self::Queued,
+            DrainPhase::Draining => Self::Draining,
+            DrainPhase::AwaitingCleanup => Self::AwaitingCleanup,
+            DrainPhase::PartiallyDrained => Self::PartiallyDrained,
+            DrainPhase::Drained => Self::Drained,
+            DrainPhase::Aborted => Self::Aborted,
+        }
+    }
+}
+
+impl From<PhaseReason> for models::PoolDrainPhaseReason {
+    fn from(reason: PhaseReason) -> Self {
+        match reason {
+            PhaseReason::WaitingForSlot => Self::WaitingForSlot,
+            PhaseReason::OfflinePool => Self::OfflinePool,
+            PhaseReason::SingleReplicaUnsafeEviction => Self::SingleReplicaUnsafeEviction,
+            PhaseReason::ImportCordoned => Self::ImportCordoned,
+            PhaseReason::SnapshotsRetained => Self::SnapshotsRetained,
+        }
+    }
+}
+
+impl From<PoolUsage> for models::PoolUsage {
+    fn from(usage: PoolUsage) -> Self {
+        Self {
+            replica_count: usage.repl_count,
+            snapshot_count: usage.snap_count,
+            used: usage.used,
+            committed: usage.committed,
+        }
     }
 }
 
