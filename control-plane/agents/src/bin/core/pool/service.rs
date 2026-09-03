@@ -29,14 +29,18 @@ use stor_port::{
     types::v0::{
         store::{pool::PoolSpec, replica::ReplicaSpec},
         transport::{
-            CreatePool, CreateReplica, DestroyPool, DestroyReplica, ExpandPool, Filter, GetPools,
-            GetReplicas, LabelPool, NodeId, Pool, PoolDeleteResult, PoolId, Replica, ResizeReplica,
-            ShareReplica, UnlabelPool, UnshareReplica, VolumeId,
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, ExpandPool, Filter,
+            GetPoolHealthResponse, GetPools, GetReplicas, LabelPool, NodeId, Pool,
+            PoolDeleteResult, PoolId, Replica, ResizeReplica, ShareReplica, UnlabelPool,
+            UnshareReplica, VolumeId,
         },
     },
 };
 
-use crate::controller::resources::{operations::ResourceCordon, ResourceUid};
+use crate::controller::{
+    io_engine::{types::GetPoolHealthRequest, PoolApi},
+    resources::{operations::ResourceCordon, ResourceUid},
+};
 use grpc::operations::pool::traits::{ClearErrorsRequest, PoolCordonRequest, PoolCreateError};
 use snafu::OptionExt;
 
@@ -133,6 +137,13 @@ impl PoolOperations for Service {
         let service = self.clone();
         let pool = Context::spawn(async move { service.clear_errors(request).await }).await??;
         Ok(pool)
+    }
+
+    async fn get_pool_health(&self, pool_id: &PoolId) -> Result<GetPoolHealthResponse, ReplyError> {
+        let pool_id = pool_id.clone();
+        let service = self.clone();
+        let health = Context::spawn(async move { service.pool_health(&pool_id).await }).await??;
+        Ok(health)
     }
 }
 
@@ -458,5 +469,25 @@ impl Service {
         let mut guarded_pool = self.specs().guarded_pool(&request.pool_id).await?;
         let pool = guarded_pool.clear_errors(&self.registry, &request).await?;
         Ok(pool)
+    }
+
+    /// Get health information for the disks backing the specified pool.
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %pool_id))]
+    async fn pool_health(&self, pool_id: &PoolId) -> Result<GetPoolHealthResponse, SvcError> {
+        let pool = self.registry.ctrl_pool(pool_id).await?;
+        let node_id = pool.node();
+        let node = self.registry.node_wrapper(&node_id).await?;
+
+        let pool_uuid = pool
+            .state()
+            .and_then(|s| s.uuid.as_ref())
+            .map(|u| u.to_string());
+
+        let request = GetPoolHealthRequest {
+            pool_name: pool_id.to_string(),
+            pool_uuid,
+        };
+
+        node.get_pool_health(&request).await
     }
 }

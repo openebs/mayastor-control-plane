@@ -200,6 +200,7 @@ pub enum MessageIdVs {
     ListAppNodes,
     ClearPoolErrors,
     ProbePool,
+    GetPoolHealth,
 }
 
 impl From<MessageIdVs> for MessageId {

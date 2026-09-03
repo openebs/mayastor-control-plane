@@ -3,12 +3,13 @@ use crate::{
     operations::pool::traits::PoolOperations,
     pool::{
         self, clear_errors_reply, cordon_pool_reply, create_pool_reply, expand_pool_reply,
-        get_pools_reply, label_pool_reply,
+        get_pool_health_reply, get_pools_reply, label_pool_reply,
         pool_grpc_server::{PoolGrpc, PoolGrpcServer},
         unlabel_pool_reply, ClearErrorsReply, ClearErrorsRequest, CordonPoolReply,
         CordonPoolRequest, CreatePoolReply, CreatePoolRequest, DestroyPoolReply,
-        DestroyPoolRequest, ExpandPoolReply, ExpandPoolRequest, GetPoolsReply, GetPoolsRequest,
-        LabelPoolReply, LabelPoolRequest, UnlabelPoolReply, UnlabelPoolRequest,
+        DestroyPoolRequest, ExpandPoolReply, ExpandPoolRequest, GetPoolHealthReply,
+        GetPoolHealthRequest, GetPoolsReply, GetPoolsRequest, LabelPoolReply, LabelPoolRequest,
+        UnlabelPoolReply, UnlabelPoolRequest,
     },
 };
 use std::sync::Arc;
@@ -180,6 +181,21 @@ impl PoolGrpc for PoolServer {
             })),
             Err(err) => Ok(Response::new(ClearErrorsReply {
                 reply: Some(clear_errors_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn get_pool_health(
+        &self,
+        request: Request<GetPoolHealthRequest>,
+    ) -> Result<tonic::Response<GetPoolHealthReply>, tonic::Status> {
+        let request = request.into_inner();
+        match self.service.get_pool_health(&request.pool_id.into()).await {
+            Ok(health) => Ok(Response::new(GetPoolHealthReply {
+                reply: Some(get_pool_health_reply::Reply::Health(health.into())),
+            })),
+            Err(err) => Ok(Response::new(GetPoolHealthReply {
+                reply: Some(get_pool_health_reply::Reply::Error(err.into())),
             })),
         }
     }

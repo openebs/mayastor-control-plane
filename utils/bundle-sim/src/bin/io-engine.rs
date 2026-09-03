@@ -389,6 +389,13 @@ impl rpc::v1::pb::pool_rpc_server::PoolRpc for IoEngine {
     ) -> Result<tonic::Response<ProbePoolResponse>, tonic::Status> {
         Err(tonic::Status::unimplemented(""))
     }
+
+    async fn get_pool_health(
+        &self,
+        _request: tonic::Request<rpc::v1::pool::GetPoolHealthRequest>,
+    ) -> Result<tonic::Response<rpc::v1::pool::GetPoolHealthResponse>, tonic::Status> {
+        Err(tonic::Status::unimplemented(""))
+    }
 }
 
 #[tonic::async_trait]
