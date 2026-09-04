@@ -209,7 +209,12 @@ def volume_creation_should_fail_with_a_precondition_failed_error(create_request)
         ApiClient.volumes_api().put_volume(VOLUME_UUID, request)
     except Exception as e:
         exception_info = e.__dict__
-        assert exception_info["status"] == requests.codes["precondition_failed"]
+        # test is racy because if the io-engine is detected as down, the error will be
+        # insufficient storage instead of precondition failed
+        assert exception_info["status"] in [
+            requests.codes["precondition_failed"],
+            requests.codes["insufficient_storage"],
+        ]
 
     # Check that the volume wasn't created.
     volumes = ApiClient.volumes_api().get_volumes(max_entries=0).entries

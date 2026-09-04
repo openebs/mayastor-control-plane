@@ -27,6 +27,10 @@ __pycache__
 /rpc/mayastor-api
 /local-fio-0-verify.state
 /report.xml
+/sbom/
+# never commit a signing key
+cosign.key
+cosign.pub
 /docker-logs.txt
 /.tmp
 /ci-report/
