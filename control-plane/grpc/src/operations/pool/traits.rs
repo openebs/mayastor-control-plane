@@ -19,11 +19,13 @@ use stor_port::{
             PoolUsage, SnapshotPolicy, SpareReplica, UnwindSpare, POOL_BS_CLUSTER_SIZE_DEFAULT,
         },
         transport::{
-            CreatePool, CtrlPoolState, DestroyPool, DiskInfo, ExpandPool, Filter, LabelPool,
-            NodeId, Pool, PoolAlert, PoolAlertStatus, PoolAlerts, PoolDef, PoolDeleteResult,
-            PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolErrorInfo,
-            PoolId, PoolState, PoolStatus, ReplicaId, SnapshotLossDetail, SnapshotLossInfo,
-            UnlabelPool, VolumeId, VolumeLossDetail, VolumeLossInfo,
+            CreatePool, CtrlPoolState, DestroyPool, DeviceHealth, DeviceIdentity, DiskHealth,
+            DiskInfo, ExpandPool, Filter, GetPoolHealthResponse, LabelPool, NodeId,
+            NvmeErrorLogEntry, Pool, PoolAlert, PoolAlertStatus, PoolAlerts, PoolDef,
+            PoolDeleteResult, PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode,
+            PoolErrorInfo, PoolId, PoolState, PoolStatus, ReplicaId, SmartAttribute,
+            SnapshotLossDetail, SnapshotLossInfo, UnlabelPool, VolumeId, VolumeLossDetail,
+            VolumeLossInfo,
         },
     },
     IntoOption, IntoVec, TryIntoOption, TryIntoVec,
@@ -144,6 +146,8 @@ pub trait PoolOperations: Send + Sync {
     async fn expand(&self, info: &dyn ExpandPoolInfo) -> Result<Pool, ReplyError>;
     /// Clears runtime errors from the specified pool.
     async fn clear_errors(&self, request: &ClearErrorsRequest) -> Result<Pool, ReplyError>;
+    /// Get pool health (SMART) information.
+    async fn get_pool_health(&self, pool_id: &PoolId) -> Result<GetPoolHealthResponse, ReplyError>;
 }
 
 impl TryFrom<pool::PoolDefinition> for PoolSpec {
@@ -1674,5 +1678,187 @@ impl TryFrom<pool::PoolDeleteResult> for PoolDeleteResult {
             volume_loss,
             snapshot_loss,
         })
+    }
+}
+
+// ── GetPoolHealth conversions (control-plane proto <-> transport) ──
+
+impl From<GetPoolHealthResponse> for pool::PoolHealthResponse {
+    fn from(value: GetPoolHealthResponse) -> Self {
+        Self {
+            disks: value.disks.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<pool::PoolHealthResponse> for GetPoolHealthResponse {
+    fn from(value: pool::PoolHealthResponse) -> Self {
+        Self {
+            disks: value.disks.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<DiskHealth> for pool::DiskHealthInfo {
+    fn from(d: DiskHealth) -> Self {
+        Self {
+            disk_uri: d.disk_uri,
+            supported: d.supported,
+            health: d.health.map(Into::into),
+            error: d.error,
+        }
+    }
+}
+
+impl From<pool::DiskHealthInfo> for DiskHealth {
+    fn from(d: pool::DiskHealthInfo) -> Self {
+        Self {
+            disk_uri: d.disk_uri,
+            supported: d.supported,
+            health: d.health.map(Into::into),
+            error: d.error,
+        }
+    }
+}
+
+impl From<DeviceHealth> for pool::DeviceHealthInfo {
+    fn from(h: DeviceHealth) -> Self {
+        Self {
+            critical_warning: h.critical_warning,
+            healthy: h.healthy,
+            temperature_celsius: h.temperature_celsius,
+            available_spare_percent: h.available_spare_percent,
+            available_spare_threshold_percent: h.available_spare_threshold_percent,
+            percentage_used: h.percentage_used,
+            data_units_read: h.data_units_read,
+            data_units_written: h.data_units_written,
+            host_reads: h.host_reads,
+            host_writes: h.host_writes,
+            controller_busy_minutes: h.controller_busy_minutes,
+            power_cycles: h.power_cycles,
+            power_on_hours: h.power_on_hours,
+            unsafe_shutdowns: h.unsafe_shutdowns,
+            media_errors: h.media_errors,
+            num_error_log_entries: h.num_error_log_entries,
+            identity: h.identity.map(Into::into),
+            smart_attributes: h.smart_attributes.into_iter().map(Into::into).collect(),
+            error_log_entries: h.error_log_entries.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<pool::DeviceHealthInfo> for DeviceHealth {
+    fn from(h: pool::DeviceHealthInfo) -> Self {
+        Self {
+            critical_warning: h.critical_warning,
+            healthy: h.healthy,
+            temperature_celsius: h.temperature_celsius,
+            available_spare_percent: h.available_spare_percent,
+            available_spare_threshold_percent: h.available_spare_threshold_percent,
+            percentage_used: h.percentage_used,
+            data_units_read: h.data_units_read,
+            data_units_written: h.data_units_written,
+            host_reads: h.host_reads,
+            host_writes: h.host_writes,
+            controller_busy_minutes: h.controller_busy_minutes,
+            power_cycles: h.power_cycles,
+            power_on_hours: h.power_on_hours,
+            unsafe_shutdowns: h.unsafe_shutdowns,
+            media_errors: h.media_errors,
+            num_error_log_entries: h.num_error_log_entries,
+            identity: h.identity.map(Into::into),
+            smart_attributes: h.smart_attributes.into_iter().map(Into::into).collect(),
+            error_log_entries: h.error_log_entries.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<DeviceIdentity> for pool::DeviceIdentityInfo {
+    fn from(i: DeviceIdentity) -> Self {
+        Self {
+            model: i.model,
+            model_family: i.model_family,
+            serial_number: i.serial_number,
+            firmware_revision: i.firmware_revision,
+            wwn: i.wwn,
+            capacity_bytes: i.capacity_bytes,
+            logical_sector_size: i.logical_sector_size,
+            physical_sector_size: i.physical_sector_size,
+            rotation_rate: i.rotation_rate,
+            form_factor: i.form_factor,
+            transport: i.transport,
+            link_speed: i.link_speed,
+        }
+    }
+}
+
+impl From<pool::DeviceIdentityInfo> for DeviceIdentity {
+    fn from(i: pool::DeviceIdentityInfo) -> Self {
+        Self {
+            model: i.model,
+            model_family: i.model_family,
+            serial_number: i.serial_number,
+            firmware_revision: i.firmware_revision,
+            wwn: i.wwn,
+            capacity_bytes: i.capacity_bytes,
+            logical_sector_size: i.logical_sector_size,
+            physical_sector_size: i.physical_sector_size,
+            rotation_rate: i.rotation_rate,
+            form_factor: i.form_factor,
+            transport: i.transport,
+            link_speed: i.link_speed,
+        }
+    }
+}
+
+impl From<SmartAttribute> for pool::SmartAttributeInfo {
+    fn from(a: SmartAttribute) -> Self {
+        Self {
+            id: a.id,
+            name: a.name,
+            value: a.value,
+            worst: a.worst,
+            threshold: a.threshold,
+            raw_value: a.raw_value,
+        }
+    }
+}
+
+impl From<pool::SmartAttributeInfo> for SmartAttribute {
+    fn from(a: pool::SmartAttributeInfo) -> Self {
+        Self {
+            id: a.id,
+            name: a.name,
+            value: a.value,
+            worst: a.worst,
+            threshold: a.threshold,
+            raw_value: a.raw_value,
+        }
+    }
+}
+
+impl From<NvmeErrorLogEntry> for pool::NvmeErrorLogEntryInfo {
+    fn from(e: NvmeErrorLogEntry) -> Self {
+        Self {
+            error_count: e.error_count,
+            submission_queue_id: e.submission_queue_id,
+            command_id: e.command_id,
+            status_field: e.status_field,
+            lba: e.lba,
+            namespace_id: e.namespace_id,
+        }
+    }
+}
+
+impl From<pool::NvmeErrorLogEntryInfo> for NvmeErrorLogEntry {
+    fn from(e: pool::NvmeErrorLogEntryInfo) -> Self {
+        Self {
+            error_count: e.error_count,
+            submission_queue_id: e.submission_queue_id,
+            command_id: e.command_id,
+            status_field: e.status_field,
+            lba: e.lba,
+            namespace_id: e.namespace_id,
+        }
     }
 }

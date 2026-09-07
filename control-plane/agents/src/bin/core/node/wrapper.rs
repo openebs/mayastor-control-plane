@@ -2,7 +2,8 @@ use crate::{
     controller::{
         io_engine::{
             types::{
-                CreateNexusSnapshot, CreateNexusSnapshotResp, ProbePoolRequest, ProbePoolResponse,
+                CreateNexusSnapshot, CreateNexusSnapshotResp, GetPoolHealthRequest,
+                GetPoolHealthResponse, ProbePoolRequest, ProbePoolResponse,
             },
             GrpcClient, GrpcClientLocked, GrpcContext, HostApi, NexusApi, NexusChildActionApi,
             NexusChildApi, NexusShareApi, NexusSnapshotApi, PoolApi, ReplicaApi,
@@ -1383,6 +1384,25 @@ impl PoolApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
             {
                 tracing::warn!(node=%request.import.node, pool=%request.import.id, "Node does not implement probing...");
                 Ok(ProbePoolResponse::new_unimpl())
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    async fn get_pool_health(
+        &self,
+        request: &GetPoolHealthRequest,
+    ) -> Result<GetPoolHealthResponse, SvcError> {
+        let dataplane = self
+            .grpc_client_locked(MessageIdVs::GetPoolHealth.into())
+            .await?;
+        match dataplane.get_pool_health(request).await {
+            Ok(resp) => Ok(resp),
+            Err(SvcError::GrpcRequestError { source, .. })
+                if source.code() == tonic::Code::Unimplemented =>
+            {
+                tracing::warn!(pool=%request.pool_name, "Node does not implement pool health...");
+                Ok(GetPoolHealthResponse::default())
             }
             Err(error) => Err(error),
         }

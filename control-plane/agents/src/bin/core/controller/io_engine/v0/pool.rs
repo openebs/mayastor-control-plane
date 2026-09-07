@@ -1,5 +1,7 @@
 use super::translation::{rpc_pool_to_agent, AgentToIoEngine};
-use crate::controller::io_engine::types::{ProbePoolRequest, ProbePoolResponse};
+use crate::controller::io_engine::types::{
+    GetPoolHealthRequest, GetPoolHealthResponse, ProbePoolRequest, ProbePoolResponse,
+};
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::io_engine::Null;
 use stor_port::{
@@ -102,6 +104,17 @@ impl crate::controller::io_engine::PoolApi for super::RpcClient {
         Err(SvcError::GrpcRequestError {
             resource: ResourceKind::Pool,
             request: "probe_pool".to_string(),
+            source: tonic::Status::unimplemented("not supported on v0"),
+        })
+    }
+
+    async fn get_pool_health(
+        &self,
+        _request: &GetPoolHealthRequest,
+    ) -> Result<GetPoolHealthResponse, SvcError> {
+        Err(SvcError::GrpcRequestError {
+            resource: ResourceKind::Pool,
+            request: "get_pool_health".to_string(),
             source: tonic::Status::unimplemented("not supported on v0"),
         })
     }
