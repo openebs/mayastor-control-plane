@@ -48,6 +48,7 @@ use stor_port::{
 };
 
 use std::convert::From;
+use stor_port::types::v0::store::nexus_persistence::NexusInfo;
 
 /// CreateReplicaCandidate for volume and Affinity Group.
 pub(crate) struct CreateReplicaCandidate {
@@ -302,6 +303,94 @@ pub(crate) async fn create_volume_replicas(
         }))
     } else {
         Ok(CreateReplicaCandidate::new(node_replicas, ag_guard))
+    }
+}
+
+/// Maximum time to wait for the volume's expected-healthy replicas to come back
+/// online before proceeding with a republish.
+/// IMPORTANT: this MUST stay below the HA failover trigger timeout and the
+/// client I/O timeout, otherwise the wait converts an avoided rebuild into an
+/// apparent node failure / client I/O error. Wire it to config rather than
+/// trusting this literal.
+pub(crate) const REPUBLISH_REPLICA_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Poll interval while waiting for expected replicas to come online.
+pub(crate) const REPUBLISH_REPLICA_POLL: std::time::Duration =
+    std::time::Duration::from_millis(250);
+
+/// Wait (bounded, with early exit) for the replicas that were healthy in the
+/// persisted nexus info to become online again.
+///
+/// This addresses the slow-pool-import race: if a `republish` arrives before a
+/// pool finishes importing, its local replica is not yet `Online` and would be
+/// silently dropped from the nexus children, forcing a full rebuild of the
+/// most-current copy. By giving the known-good replicas a brief chance to
+/// re-register, we avoid that rebuild in the common case.
+///
+/// Behaviour:
+/// - returns immediately if there is no persisted nexus info, or if every
+///   previously-healthy replica is already online (the healthy path pays ~0);
+/// - otherwise polls until all expected-healthy replicas are online, or until
+///   `deadline` elapses, then returns regardless.
+pub(crate) async fn wait_for_expected_replicas(
+    registry: &Registry,
+    nexus_info: &Option<NexusInfo>,
+    deadline: std::time::Duration,
+    poll: std::time::Duration,
+) {
+    let Some(info) = nexus_info else {
+        return;
+    };
+
+    // Only wait for replicas that were healthy at last shutdown — these are the
+    // copies worth avoiding a rebuild for. Unhealthy/uncertain children are not
+    // waited on.
+    let expected: Vec<ReplicaId> = info
+        .children
+        .iter()
+        .filter(|c| c.healthy)
+        .map(|c| c.uuid.clone())
+        .collect();
+
+    if expected.is_empty() {
+        return;
+    }
+
+    let start = std::time::Instant::now();
+    let mut ticker = tokio::time::interval(poll);
+
+    loop {
+        // A replica is "back" when the registry can see it and it reports Online.
+        // A still-importing pool's replica returns Err (ReplicaNotFound) or a
+        // non-online status, so it counts as not-yet-online.
+        let mut missing = 0usize;
+        for id in &expected {
+            let online = matches!(registry.replica(id).await, Ok(r) if r.status.online());
+            if !online {
+                missing += 1;
+            }
+        }
+
+        if missing == 0 {
+            tracing::debug!(
+                expected = expected.len(),
+                "republish: all expected-healthy replicas are online"
+            );
+            return; // early exit — nothing to wait for
+        }
+
+        if start.elapsed() >= deadline {
+            tracing::warn!(
+                missing,
+                expected = expected.len(),
+                waited_ms = start.elapsed().as_millis(),
+                "republish: proceeding before all expected replicas came online \
+                 (bounded wait elapsed); a rebuild may be required"
+            );
+            return; // bounded — proceed with whatever is online
+        }
+
+        ticker.tick().await;
     }
 }
 

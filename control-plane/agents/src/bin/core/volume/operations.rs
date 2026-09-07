@@ -21,7 +21,8 @@ use crate::{
         snapshot_operations::DestroyVolumeSnapshotRequest,
         specs::{
             create_volume_replicas, healthy_volume_replicas, resizeable_replicas,
-            volume_move_replica_candidates, CreateReplicaCandidate,
+            volume_move_replica_candidates, wait_for_expected_replicas, CreateReplicaCandidate,
+            REPUBLISH_REPLICA_POLL, REPUBLISH_REPLICA_WAIT,
         },
     },
 };
@@ -483,6 +484,22 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
         let mut older_nexus = specs.nexus(target_cfg.target().nexus()).await?;
         let mut move_nexus = true;
         let mut nexus_node = None;
+        // Give a slow-importing pool's replicas a brief, bounded chance to come
+        // back online before we snapshot the candidate children, so we don't
+        // drop the (usually most-current) local replica and force a full
+        // rebuild. On timeout this proceeds exactly as before.
+        if let Ok(nexus_info) = registry
+            .nexus_info(Some(&request.uuid), Some(older_nexus.uuid()), false, None)
+            .await
+        {
+            wait_for_expected_replicas(
+                registry,
+                &nexus_info,
+                REPUBLISH_REPLICA_WAIT,
+                REPUBLISH_REPLICA_POLL,
+            )
+            .await;
+        }
         let healthy_replicas_result =
             healthy_volume_replicas(&spec, &older_nexus.as_ref().node, registry).await;
         let healthy_replicas = healthy_replicas_result.is_ok();
