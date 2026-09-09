@@ -281,12 +281,9 @@ impl rpc::v1::pb::host_rpc_server::HostRpc for IoEngine {
             registration_info: Some(RegisterRequest {
                 id: node.id.clone(),
                 grpc_endpoint: node.endpoint.to_string(),
-                instance_uuid: None,
                 api_version: vec![1],
-                hostnqn: None,
-                features: None,
-                bugfixes: None,
                 version: Some(node.version.clone()),
+                ..Default::default()
             }),
         };
         Ok(tonic::Response::new(info))
