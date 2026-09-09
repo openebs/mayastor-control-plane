@@ -1,6 +1,7 @@
 use crate::{
     controller::{
         reconciler::{PollContext, TaskPoller},
+        registry::NumRebuilds,
         resources::{
             operations::ResourcePublishing, operations_helper::OperationSequenceGuard,
             OperationGuardArc, ResourceMutex,
@@ -51,11 +52,68 @@ impl TaskPoller for OfflineRebuildReconciler {
 
         let mut results = vec![];
         let volumes = context.specs().volumes_rsc();
+
+        // Offline rebuilds also consume `max_rebuilds` slots, so left alone a batch
+        // of them can crowd out published volumes which are serving I/O. Budget is
+        // whatever headroom is left under `max_offline_rebuilds` once the offline
+        // rebuilds already running are accounted for, and it is spent as we go so a
+        // single poll cannot overshoot.
+        let mut budget = offline_rebuild_budget(&volumes, context).await;
+
         for mut volume in volumes {
-            results.push(offline_rebuild_reconcile(&mut volume, context).await);
+            results.push(offline_rebuild_reconcile(&mut volume, context, &mut budget).await);
         }
         Self::squash_results(results)
     }
+}
+
+/// Slots one standing offline-rebuild target consumes, given the rebuild jobs its
+/// nexus reports, or `None` if the nexus could not be read.
+///
+/// Counted in jobs rather than nexuses so the cap means the same thing as
+/// `max_rebuilds`: one temp nexus restoring two replicas is two jobs, not one.
+///
+/// Floored at one. A target whose rebuild has not started yet reports zero, and
+/// taking that at face value would admit another volume and let the two of them
+/// exceed the cap once both get going. A nexus we cannot read is floored for the
+/// same reason: it is standing, so it is holding a slot. Over-counting only
+/// delays a rebuild; under-counting breaks the limit the knob exists to enforce.
+fn target_slots(reported_rebuilds: Option<NumRebuilds>) -> NumRebuilds {
+    reported_rebuilds.unwrap_or(0).max(1)
+}
+
+/// Remaining offline rebuilds that may be started this poll, or `None` when
+/// unlimited.
+async fn offline_rebuild_budget(
+    volumes: &[ResourceMutex<VolumeSpec>],
+    context: &PollContext,
+) -> Option<NumRebuilds> {
+    let max = context.registry().max_offline_rebuilds()?;
+
+    // Must read through the lock: `immutable_ref` is a snapshot of the spec as first
+    // loaded, so it would miss targets this reconciler stood up since then.
+    let targets: Vec<_> = volumes
+        .iter()
+        .filter_map(|volume| {
+            let volume = volume.lock();
+            let unshared_ours = volume.is_offline_rebuild_target()
+                && volume.target().is_some_and(|t| t.protocol().is_none());
+            unshared_ours.then(|| volume.target().map(|t| t.nexus().clone()))?
+        })
+        .collect();
+
+    let mut in_flight: NumRebuilds = 0;
+    for nexus_id in targets {
+        let reported = context
+            .registry()
+            .nexus(&nexus_id)
+            .await
+            .map(|nexus| nexus.rebuilds)
+            .ok();
+        in_flight = in_flight.saturating_add(target_slots(reported));
+    }
+
+    Some(max.saturating_sub(in_flight))
 }
 
 #[tracing::instrument(
@@ -66,6 +124,7 @@ impl TaskPoller for OfflineRebuildReconciler {
 async fn offline_rebuild_reconcile(
     volume_spec: &mut ResourceMutex<VolumeSpec>,
     context: &PollContext,
+    budget: &mut Option<NumRebuilds>,
 ) -> PollResult {
     let mut volume = match volume_spec.operation_guard() {
         Ok(guard) => guard,
@@ -141,7 +200,14 @@ async fn offline_rebuild_reconcile(
         );
     }
 
-    initiate_offline_rebuild(&mut volume, &volume_state, context, has_in_place_target).await
+    initiate_offline_rebuild(
+        &mut volume,
+        &volume_state,
+        context,
+        has_in_place_target,
+        budget,
+    )
+    .await
 }
 
 /// Returns `true` when a scale-up left an Online replica that the
@@ -206,6 +272,7 @@ async fn initiate_offline_rebuild(
     volume_state: &VolumeState,
     context: &PollContext,
     has_in_place_target: bool,
+    budget: &mut Option<NumRebuilds>,
 ) -> PollResult {
     let registry = context.registry();
 
@@ -214,6 +281,15 @@ async fn initiate_offline_rebuild(
         tracing::debug!(
             volume.uuid = %volume.uuid(),
             "Offline rebuild deferred: max concurrent rebuilds reached"
+        );
+        return PollResult::Ok(PollerState::Busy);
+    }
+
+    // And the offline-specific one, which keeps slots free for published volumes.
+    if *budget == Some(0) {
+        tracing::debug!(
+            volume.uuid = %volume.uuid(),
+            "Offline rebuild deferred: max concurrent offline rebuilds reached"
         );
         return PollResult::Ok(PollerState::Busy);
     }
@@ -279,6 +355,12 @@ async fn initiate_offline_rebuild(
                 "Offline rebuild nexus created; HotSpareReconciler will handle the rebuild"
             );
             volume.lock().metadata.clear_offline_rebuild_degraded();
+            // Spend the slot so later volumes in this poll see the smaller budget;
+            // the next poll recounts from the live targets. One here matches the
+            // floor the count applies to a target whose rebuild hasn't started.
+            if let Some(budget) = budget.as_mut() {
+                *budget = budget.saturating_sub(1);
+            }
             PollResult::Ok(PollerState::Idle)
         }
         Err(error) => {
@@ -354,4 +436,29 @@ async fn teardown_if_rebuilt(
     // we wait on — tearing down would either churn against the grace timer
     // or kill a healthy in-progress rebuild during a brief hiccup.
     PollResult::Ok(PollerState::Idle)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::target_slots;
+
+    /// A standing target always costs at least one slot, whether its rebuild has
+    /// yet to start (reports zero) or its nexus could not be read at all. Were
+    /// either taken at face value, a second volume would be admitted and the two
+    /// could exceed the cap once both rebuilds were running.
+    #[test]
+    fn target_not_yet_rebuilding_still_holds_a_slot() {
+        assert_eq!(target_slots(Some(0)), 1);
+        assert_eq!(target_slots(None), 1);
+    }
+
+    /// Past the floor the real job count is what matters, so that the cap means
+    /// the same thing as `max_rebuilds`: a temp nexus restoring two replicas
+    /// costs two, not one.
+    #[test]
+    fn target_costs_one_slot_per_rebuild_job() {
+        assert_eq!(target_slots(Some(1)), 1);
+        assert_eq!(target_slots(Some(2)), 2);
+        assert_eq!(target_slots(Some(5)), 5);
+    }
 }

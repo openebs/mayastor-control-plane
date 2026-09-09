@@ -59,6 +59,14 @@ pub(crate) struct CliArgs {
     #[clap(long, env = "OFFLINE_REBUILD_GRACE_PERIOD", default_value = "10m")]
     pub(crate) offline_rebuild_grace_period: humantime::Duration,
 
+    /// The maximum number of offline rebuilds permitted at any given time,
+    /// counted in rebuild jobs like `max_rebuilds` rather than in nexuses.
+    /// These also count towards `max_rebuilds`, so setting this lower than
+    /// `max_rebuilds` reserves the remainder for volumes which are published
+    /// and serving I/O. If `None` only `max_rebuilds` applies.
+    #[clap(long, env = "MAX_OFFLINE_REBUILDS")]
+    pub(crate) max_offline_rebuilds: Option<NumRebuilds>,
+
     /// When the pool creation gRPC times out, the actual call in the io-engine
     /// may still progress.
     /// We wait up to this period before considering the operation a failure and
@@ -298,6 +306,19 @@ async fn main() -> anyhow::Result<()> {
 
 async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
     stor_port::platform::init_cluster_info_or_panic().await;
+    // Offline rebuilds are also bound by `max_rebuilds`, so an offline cap at or
+    // above it never binds and the reservation it was set up to make doesn't
+    // happen. Harmless, but silently not what the operator asked for.
+    if let (Some(offline), Some(total)) = (cli_args.max_offline_rebuilds, cli_args.max_rebuilds) {
+        if offline >= total {
+            tracing::warn!(
+                max_offline_rebuilds = offline,
+                max_rebuilds = total,
+                "max-offline-rebuilds is not below max-rebuilds, so it reserves \
+                no capacity for published volumes"
+            );
+        }
+    }
     let sim_args: Option<SimArgs> = (&cli_args).try_into()?;
     let grpc_tls = cli_args.grpc_tls()?;
     let grpc_auto_tls = cli_args.grpc_auto_tls;
@@ -331,6 +352,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         sim_args,
         cli_args.offline_rebuild_enabled,
         cli_args.offline_rebuild_grace_period.into(),
+        cli_args.max_offline_rebuilds,
     )
     .await?;
 
