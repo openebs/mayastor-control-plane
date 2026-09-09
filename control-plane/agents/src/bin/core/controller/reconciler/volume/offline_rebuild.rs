@@ -1,6 +1,7 @@
 use crate::{
     controller::{
         reconciler::{PollContext, TaskPoller},
+        registry::NumRebuilds,
         resources::{
             operations::ResourcePublishing, operations_helper::OperationSequenceGuard,
             OperationGuardArc, ResourceMutex,
@@ -51,11 +52,63 @@ impl TaskPoller for OfflineRebuildReconciler {
 
         let mut results = vec![];
         let volumes = context.specs().volumes_rsc();
+
+        // Offline rebuilds also consume `max_rebuilds` slots, so left alone a batch
+        // of them can crowd out published volumes which are serving I/O. Budget is
+        // whatever headroom is left under `max_offline_rebuilds` once the offline
+        // rebuilds already running are accounted for, and it is spent as we go so a
+        // single poll cannot overshoot.
+        let mut budget = offline_rebuild_budget(&volumes, context).await;
+
         for mut volume in volumes {
-            results.push(offline_rebuild_reconcile(&mut volume, context).await);
+            results.push(offline_rebuild_reconcile(&mut volume, context, &mut budget).await);
         }
         Self::squash_results(results)
     }
+}
+
+/// Remaining offline rebuilds that may be started this poll, or `None` when
+/// unlimited.
+///
+/// Counted in rebuild jobs rather than nexuses, to match what `max_rebuilds`
+/// limits: one temp nexus restoring two replicas is two jobs, not one.
+///
+/// A standing target counts as at least one job even when its nexus reports
+/// none. Its rebuild may not have started yet, and taking that at face value
+/// would admit another volume and let the two of them exceed the cap once both
+/// get going. Over-counting only delays a rebuild; under-counting breaks the
+/// limit the knob exists to enforce.
+async fn offline_rebuild_budget(
+    volumes: &[ResourceMutex<VolumeSpec>],
+    context: &PollContext,
+) -> Option<NumRebuilds> {
+    let max = context.registry().max_offline_rebuilds()?;
+
+    // Must read through the lock: `immutable_ref` is a snapshot of the spec as first
+    // loaded, so it would miss targets this reconciler stood up since then.
+    let targets: Vec<_> = volumes
+        .iter()
+        .filter_map(|volume| {
+            let volume = volume.lock();
+            let unshared_ours = volume.is_offline_rebuild_target()
+                && volume.target().is_some_and(|t| t.protocol().is_none());
+            unshared_ours.then(|| volume.target().map(|t| t.nexus().clone()))?
+        })
+        .collect();
+
+    let mut in_flight: NumRebuilds = 0;
+    for nexus_id in targets {
+        // An unreachable nexus still holds its slot; fall back to the floor of one.
+        let rebuilds = context
+            .registry()
+            .nexus(&nexus_id)
+            .await
+            .map(|nexus| nexus.rebuilds)
+            .unwrap_or(0);
+        in_flight = in_flight.saturating_add(rebuilds.max(1));
+    }
+
+    Some(max.saturating_sub(in_flight))
 }
 
 #[tracing::instrument(
@@ -66,6 +119,7 @@ impl TaskPoller for OfflineRebuildReconciler {
 async fn offline_rebuild_reconcile(
     volume_spec: &mut ResourceMutex<VolumeSpec>,
     context: &PollContext,
+    budget: &mut Option<NumRebuilds>,
 ) -> PollResult {
     let mut volume = match volume_spec.operation_guard() {
         Ok(guard) => guard,
@@ -141,7 +195,14 @@ async fn offline_rebuild_reconcile(
         );
     }
 
-    initiate_offline_rebuild(&mut volume, &volume_state, context, has_in_place_target).await
+    initiate_offline_rebuild(
+        &mut volume,
+        &volume_state,
+        context,
+        has_in_place_target,
+        budget,
+    )
+    .await
 }
 
 /// Returns `true` when a scale-up left an Online replica that the
@@ -206,6 +267,7 @@ async fn initiate_offline_rebuild(
     volume_state: &VolumeState,
     context: &PollContext,
     has_in_place_target: bool,
+    budget: &mut Option<NumRebuilds>,
 ) -> PollResult {
     let registry = context.registry();
 
@@ -214,6 +276,15 @@ async fn initiate_offline_rebuild(
         tracing::debug!(
             volume.uuid = %volume.uuid(),
             "Offline rebuild deferred: max concurrent rebuilds reached"
+        );
+        return PollResult::Ok(PollerState::Busy);
+    }
+
+    // And the offline-specific one, which keeps slots free for published volumes.
+    if *budget == Some(0) {
+        tracing::debug!(
+            volume.uuid = %volume.uuid(),
+            "Offline rebuild deferred: max concurrent offline rebuilds reached"
         );
         return PollResult::Ok(PollerState::Busy);
     }
@@ -279,6 +350,12 @@ async fn initiate_offline_rebuild(
                 "Offline rebuild nexus created; HotSpareReconciler will handle the rebuild"
             );
             volume.lock().metadata.clear_offline_rebuild_degraded();
+            // Spend the slot so later volumes in this poll see the smaller budget;
+            // the next poll recounts from the live targets. One here matches the
+            // floor the count applies to a target whose rebuild hasn't started.
+            if let Some(budget) = budget.as_mut() {
+                *budget = budget.saturating_sub(1);
+            }
             PollResult::Ok(PollerState::Idle)
         }
         Err(error) => {
