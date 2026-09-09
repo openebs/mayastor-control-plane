@@ -5,7 +5,7 @@ use crate::{
         openapi::models::{self, PoolSpecEncryption},
         store::{
             definitions::{ObjectKey, StorableObject, StorableObjectType},
-            AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
+            AsOperationSequencer, Display, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{
             self, CreatePool, ImportPool, NodeId, PoolDeviceUri, PoolDiag, PoolId, ReplicaId,
@@ -221,9 +221,48 @@ pub struct PoolDrainRecord {
     pub replica_moves: Vec<DrainConfig>,
 }
 
+impl Default for PoolDrainRecord {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PoolDrainRecord {
+    fn new() -> Self {
+        Self {
+            phase: DrainPhase::Queued,
+            phase_reason: Some(PhaseReason::WaitingForSlot),
+            initial_stats: None,
+            replica_moves: vec![],
+        }
+    }
+
+    /// Returns the current phase of the drain state machine.
+    pub fn phase(&self) -> &DrainPhase {
+        &self.phase
+    }
+
+    /// Returns the reason for the current phase of the drain state machine.
+    pub fn phase_reason(&self) -> &Option<PhaseReason> {
+        &self.phase_reason
+    }
+
+    /// Returns the initial usage stats of the pool when the pool transitions into Draining state.
+    pub fn initial_stats(&self) -> &Option<PoolUsage> {
+        &self.initial_stats
+    }
+
+    /// Returns the in-flight replica moves for this drain.
+    pub fn replica_moves(&self) -> &Vec<DrainConfig> {
+        &self.replica_moves
+    }
+}
+
 /// Why the pool is in its current drain phase.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum PhaseReason {
+    /// Could not determine the actual drain phase reason.
+    Unknown,
     /// The pool is waiting for a slot to start draining, as the number of concurrent drains is
     /// capped cluster-wide.
     WaitingForSlot,
@@ -238,9 +277,9 @@ pub enum PhaseReason {
 }
 
 /// The phase of the pool drain state machine.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Display, Clone, PartialEq)]
 pub enum DrainPhase {
-    /// Could not determine the actual drain state.
+    /// Could not determine the actual drain phase.
     Unknown,
     /// The drain has been admitted and the pool is self-cordoned, but no replica has been moved
     /// yet, the pool is waiting for a concurrency slot.
@@ -449,6 +488,30 @@ impl PoolSpec {
         }
     }
 
+    /// If pool has only cordon config then its allowed to set drain config.
+    /// If pool has drain config already set then check if the update on drain
+    /// config is allowed.
+    pub fn validate_drain(&self, op: &PoolDrainOp) -> Result<(), DrainRefused> {
+        match &self.cordon_drain {
+            Some(ds) => {
+                if let Some(record) = self.drain_record() {
+                    // No point on updating drain config when phase is terminal.
+                    if record.phase == DrainPhase::Drained
+                        || record.phase == DrainPhase::AwaitingCleanup
+                        || record.phase == DrainPhase::Aborted
+                    {
+                        Err(DrainRefused::Terminal(record.phase.clone()))
+                    } else {
+                        ds.validate_drain(op)
+                    }
+                } else {
+                    Ok(())
+                }
+            }
+            None => Ok(()),
+        }
+    }
+
     /// May retry the pool import.
     /// Otherwise, try again next time.
     pub fn can_retry_import(&self) -> bool {
@@ -459,13 +522,22 @@ impl PoolSpec {
     }
 
     /// Sets drain configuration on the pool, carrying over the user's own cordon, if any.
-    pub fn start_drain(&mut self, policy: DrainPolicy) {
-        let user_cordon = self.cordon_drain.as_ref().and_then(|s| match s {
-            CordonDrainState::Drain(drain) => drain.user_cordon.clone(),
-            CordonDrainState::Cordoned(cordoned) => Some(cordoned.clone()),
-        });
-        let drain_spec = DrainSpec::new(policy, user_cordon);
+    /// Existing drain record is preserved, if any, to keep track of the drain progress.
+    /// If no drain record exists, a new one is created.
+    pub fn set_drain(&mut self, op: PoolDrainOp) {
+        let (user_cordon, request_ts) = match self.cordon_drain.as_ref() {
+            Some(CordonDrainState::Drain(drain)) => {
+                (drain.user_cordon.clone(), Some(drain.request_timestamp))
+            }
+            Some(CordonDrainState::Cordoned(cordoned)) => (Some(cordoned.clone()), None),
+            None => (None, None),
+        };
+        let drain_spec = DrainSpec::new(op.policy, user_cordon, request_ts);
         self.cordon_drain = Some(CordonDrainState::Drain(drain_spec));
+        if self.metadata.persisted.drain_record.is_none() {
+            let drain_record = PoolDrainRecord::default();
+            self.metadata.persisted.drain_record = Some(drain_record);
+        }
     }
 
     /// Removes drain configuration from the pool, restoring the user's own cordon, if they had
@@ -477,6 +549,7 @@ impl PoolSpec {
                 .as_ref()
                 .map(|uc| CordonDrainState::Cordoned(uc.clone()));
         }
+        self.metadata.persisted.drain_record = None
     }
 
     /// Returns the applied drain configuration on the pool.
@@ -492,6 +565,22 @@ impl PoolSpec {
     pub fn effective_cordon(&self) -> Option<CordonedState> {
         self.cordon_drain.as_ref().map(|s| s.effective_cordon())
     }
+
+    /// Returns the drain record of the pool, if a drain has been admitted.
+    pub fn drain_record(&self) -> Option<&PoolDrainRecord> {
+        self.metadata.persisted.drain_record.as_ref()
+    }
+}
+
+/// Why a drain request was refused.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DrainRefused {
+    /// The drain has already finished: Drained, AwaitingCleanup or Aborted.
+    Terminal(DrainPhase),
+    /// An applied drain's unsafe_evict/unsafe_rebuild_otherwise_evict cannot be changed.
+    EvictPolicyImmutable,
+    /// The request leaves the applied snapshot policy unchanged, so there is nothing to update.
+    Unchanged,
 }
 
 impl From<&PoolSpec> for ImportPool {
@@ -585,6 +674,9 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
                 PoolOperation::Import(_) => {
                     self.metadata.runtime.diag = None;
                 }
+                PoolOperation::Drain(op) => {
+                    self.set_drain(op);
+                }
             }
         }
         self.clear_op();
@@ -630,6 +722,7 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
             PoolOperation::Cordon(_) => (false, true),
             PoolOperation::Uncordon(_) => (false, true),
             PoolOperation::Import(_) => (false, false),
+            PoolOperation::Drain(_) => (false, true),
         }
     }
 }
@@ -644,6 +737,7 @@ pub enum PoolOperation {
     Cordon(PoolCordonOp),
     Uncordon(PoolCordonOp),
     Import(PoolImportOp),
+    Drain(PoolDrainOp),
 }
 
 /// Pool importing info.
@@ -692,6 +786,13 @@ impl PoolCordonOp {
         .collect::<Vec<&str>>()
         .join(",")
     }
+}
+
+/// Parameter for draining a pool.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PoolDrainOp {
+    /// Drain policy to be applied to the pool.
+    pub policy: DrainPolicy,
 }
 
 /// Parameter for adding pool labels.
@@ -885,6 +986,8 @@ impl CordonDrainState {
             CordonDrainState::Drain(state) => {
                 if let Some(uc) = state.user_cordon.as_mut() {
                     uc.add_cordon(cordon);
+                } else {
+                    state.user_cordon = Some(CordonedState::from(cordon));
                 }
             }
         }
@@ -928,19 +1031,160 @@ impl CordonDrainState {
             }
         }
     }
+
+    /// Update of already existing is only allowed to change snapshot policy. unsafe_evict or
+    /// unsafe_rebuild_otherwise_evict should not be updated.
+    pub fn validate_drain(&self, op: &PoolDrainOp) -> Result<(), DrainRefused> {
+        match self {
+            CordonDrainState::Cordoned(_) => Ok(()),
+            CordonDrainState::Drain(spec) => {
+                let applied_policy = &spec.policy;
+                let request_policy = &op.policy;
+                if applied_policy.unsafe_evict != request_policy.unsafe_evict
+                    || applied_policy.unsafe_rebuild_otherwise_evict
+                        != request_policy.unsafe_rebuild_otherwise_evict
+                {
+                    Err(DrainRefused::EvictPolicyImmutable)
+                } else if applied_policy.snapshot_policy != request_policy.snapshot_policy {
+                    Ok(())
+                } else {
+                    Err(DrainRefused::Unchanged)
+                }
+            }
+        }
+    }
 }
 
-impl From<CordonDrainState> for models::PoolCordonDrain {
-    fn from(pool_ds: CordonDrainState) -> Self {
-        let state = pool_ds.effective_cordon();
-        // TODO: We don't currently report the drain policy, will be added in a future PR.
-        // This mapping will change when Drain is added to openapi.
-        Self::cordoned(models::PoolCordon {
+impl From<CordonedState> for models::PoolCordon {
+    fn from(state: CordonedState) -> Self {
+        Self {
             replicas: state.replicas,
             snapshots: state.snapshots,
             restores: state.restores,
             import: state.import,
-        })
+        }
+    }
+}
+
+impl From<CordonDrainState> for models::PoolCordonDrain {
+    fn from(pool_ds: CordonDrainState) -> Self {
+        match pool_ds {
+            CordonDrainState::Cordoned(state) => Self::cordoned(state.into()),
+            CordonDrainState::Drain(spec) => Self::drain(spec.into()),
+        }
+    }
+}
+
+/// Format a timestamp as RFC 3339, the encoding behind the openapi `date-time` format.
+fn rfc3339(time: SystemTime) -> String {
+    chrono::DateTime::<chrono::Utc>::from(time).to_rfc3339()
+}
+
+impl From<DrainSpec> for models::PoolDrainSpec {
+    fn from(spec: DrainSpec) -> Self {
+        Self {
+            request_timestamp: rfc3339(spec.request_timestamp),
+            policy: spec.policy.into(),
+            user_cordon: spec.user_cordon.into_opt(),
+        }
+    }
+}
+
+impl From<DrainPolicy> for models::PoolDrainPolicy {
+    fn from(policy: DrainPolicy) -> Self {
+        Self {
+            snapshot_policy: policy.snapshot_policy.into(),
+            unsafe_rebuild_otherwise_evict: policy
+                .unsafe_rebuild_otherwise_evict
+                .map(|grace| grace.as_secs()),
+            unsafe_evict: policy.unsafe_evict,
+        }
+    }
+}
+
+/// A drain request with any field left out takes the policy defaults: snapshots are left in
+/// place, no forced eviction, and the safe over-replicate flow is used.
+impl From<models::PoolDrainReq> for DrainPolicy {
+    fn from(req: models::PoolDrainReq) -> Self {
+        Self {
+            snapshot_policy: req.snapshot_policy.map(Into::into).unwrap_or_default(),
+            unsafe_rebuild_otherwise_evict: req
+                .unsafe_rebuild_otherwise_evict
+                .map(Duration::from_secs),
+            unsafe_evict: req.unsafe_evict.unwrap_or_default(),
+        }
+    }
+}
+
+impl From<SnapshotPolicy> for models::PoolDrainSnapshotPolicy {
+    fn from(policy: SnapshotPolicy) -> Self {
+        match policy {
+            SnapshotPolicy::Ignore => Self::Ignore,
+            SnapshotPolicy::AcceptLoss => Self::AcceptLoss,
+        }
+    }
+}
+
+impl From<models::PoolDrainSnapshotPolicy> for SnapshotPolicy {
+    fn from(policy: models::PoolDrainSnapshotPolicy) -> Self {
+        match policy {
+            models::PoolDrainSnapshotPolicy::Ignore => Self::Ignore,
+            models::PoolDrainSnapshotPolicy::AcceptLoss => Self::AcceptLoss,
+        }
+    }
+}
+
+impl From<PoolDrainRecord> for models::PoolDrainRecord {
+    fn from(record: PoolDrainRecord) -> Self {
+        Self {
+            phase: record.phase.into(),
+            phase_reason: record.phase_reason.into_opt(),
+            initial: record.initial_stats.into_opt(),
+            draining_replicas: record
+                .replica_moves
+                .into_iter()
+                .filter_map(|config| config.draining_replica)
+                .map(Into::into)
+                .collect(),
+        }
+    }
+}
+
+impl From<DrainPhase> for models::PoolDrainPhase {
+    fn from(phase: DrainPhase) -> Self {
+        match phase {
+            DrainPhase::Unknown => Self::Unknown,
+            DrainPhase::Queued => Self::Queued,
+            DrainPhase::Draining => Self::Draining,
+            DrainPhase::AwaitingCleanup => Self::AwaitingCleanup,
+            DrainPhase::PartiallyDrained => Self::PartiallyDrained,
+            DrainPhase::Drained => Self::Drained,
+            DrainPhase::Aborted => Self::Aborted,
+        }
+    }
+}
+
+impl From<PhaseReason> for models::PoolDrainPhaseReason {
+    fn from(reason: PhaseReason) -> Self {
+        match reason {
+            PhaseReason::Unknown => Self::Unknown,
+            PhaseReason::WaitingForSlot => Self::WaitingForSlot,
+            PhaseReason::OfflinePool => Self::OfflinePool,
+            PhaseReason::SingleReplicaUnsafeEviction => Self::SingleReplicaUnsafeEviction,
+            PhaseReason::ImportCordoned => Self::ImportCordoned,
+            PhaseReason::SnapshotsRetained => Self::SnapshotsRetained,
+        }
+    }
+}
+
+impl From<PoolUsage> for models::PoolDrainUsage {
+    fn from(usage: PoolUsage) -> Self {
+        Self {
+            replica_count: usage.repl_count,
+            snapshot_count: usage.snap_count,
+            used: usage.used,
+            committed: usage.committed,
+        }
     }
 }
 
@@ -957,9 +1201,13 @@ pub struct DrainSpec {
 
 impl DrainSpec {
     /// Create a new drain spec with the given policy.
-    pub fn new(policy: DrainPolicy, user_cordon: Option<CordonedState>) -> Self {
+    pub fn new(
+        policy: DrainPolicy,
+        user_cordon: Option<CordonedState>,
+        req_tsc: Option<SystemTime>,
+    ) -> Self {
         Self {
-            request_timestamp: SystemTime::now(),
+            request_timestamp: req_tsc.unwrap_or(SystemTime::now()),
             policy,
             user_cordon,
         }

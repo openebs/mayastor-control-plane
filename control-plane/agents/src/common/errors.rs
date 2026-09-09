@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use stor_port::{
     transport_api::{ErrorChain, ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
-        store::definitions::StoreError,
+        store::{definitions::StoreError, pool::DrainPhase},
         transport::{
             pool::PoolDeviceUri, ApiVersion, Filter, NodeId, NvmeNqnParseError, PoolDiag, PoolId,
             PoolStatus, ReplicaId, SnapshotLossInfo, VolumeLossInfo,
@@ -540,6 +540,12 @@ pub enum SvcError {
         code: tonic::Code,
         kind: ReplyErrorKind,
     },
+    #[snafu(display("Only snapshot policy can be updated for an ongoing drain of {name}"))]
+    UnsupportedDrainUpdate { name: PoolId },
+    #[snafu(display("No changes on existing snapshot policy on ongoing drain of {name}"))]
+    NoSnapPolicyUpdateOnDrain { name: PoolId },
+    #[snafu(display("Pool {name} is already in a {phase} state"))]
+    PoolAlreadyDrained { name: PoolId, phase: DrainPhase },
 }
 
 impl SvcError {
@@ -566,6 +572,9 @@ impl SvcError {
             Self::ReplaceNqnNotFound { .. } => tonic::Code::FailedPrecondition,
             Self::PoolCreateError { code, .. } => *code,
             Self::MaxRebuilds { .. } => tonic::Code::OutOfRange,
+            Self::UnsupportedDrainUpdate { .. } => tonic::Code::InvalidArgument,
+            Self::NoSnapPolicyUpdateOnDrain { .. } => tonic::Code::InvalidArgument,
+            Self::PoolAlreadyDrained { .. } => tonic::Code::FailedPrecondition,
             _ => tonic::Code::Internal,
         }
     }
@@ -1385,6 +1394,24 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::PoolCreateError { kind, .. } => ReplyError {
                 kind,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::UnsupportedDrainUpdate { .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::NoSnapPolicyUpdateOnDrain { .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::PoolAlreadyDrained { .. } => ReplyError {
+                kind: ReplyErrorKind::NotAcceptable,
                 resource: ResourceKind::Pool,
                 source,
                 extra,

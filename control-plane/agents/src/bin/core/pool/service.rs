@@ -1,7 +1,9 @@
 use crate::controller::{
     registry::Registry,
     resources::{
-        operations::{ResourceLabel, ResourceLifecycle, ResourceResize, ResourceSharing},
+        operations::{
+            ResourceDrain, ResourceLabel, ResourceLifecycle, ResourceResize, ResourceSharing,
+        },
         operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
         OperationGuardArc, ResourceMutex,
     },
@@ -12,8 +14,8 @@ use grpc::{
     context::Context,
     operations::{
         pool::traits::{
-            CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo, PoolOperations,
-            UnlabelPoolInfo,
+            CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo, PoolDrainRequest,
+            PoolOperations, UnlabelPoolInfo,
         },
         replica::traits::{
             CreateReplicaInfo, DestroyReplicaInfo, ReplicaOperations, ResizeReplicaInfo,
@@ -132,6 +134,13 @@ impl PoolOperations for Service {
         let request = request.clone();
         let service = self.clone();
         let pool = Context::spawn(async move { service.clear_errors(request).await }).await??;
+        Ok(pool)
+    }
+
+    async fn drain(&self, request: &PoolDrainRequest) -> Result<Pool, ReplyError> {
+        let request = request.clone();
+        let service = self.clone();
+        let pool = Context::spawn(async move { service.drain(request).await }).await??;
         Ok(pool)
     }
 }
@@ -346,6 +355,21 @@ impl Service {
             Some(pool) => Some(pool.operation_guard_wait().await?),
         })
     }
+    /// Get the guarded PoolSpec for the given pool `id`, which must reside on the given node,
+    /// if a node is specified. A pool which exists but resides elsewhere is reported as not found.
+    pub(crate) async fn guarded_pool_on_node(
+        &self,
+        pool: &PoolId,
+        node: Option<&NodeId>,
+    ) -> Result<OperationGuardArc<PoolSpec>, SvcError> {
+        let guarded_pool = self.specs().guarded_pool(pool).await?;
+        match node {
+            Some(node) if &guarded_pool.as_ref().node != node => Err(SvcError::PoolNotFound {
+                pool_id: pool.to_owned(),
+            }),
+            _ => Ok(guarded_pool),
+        }
+    }
 
     /// Create a pool using the given parameters.
     #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %request.id))]
@@ -458,5 +482,16 @@ impl Service {
         let mut guarded_pool = self.specs().guarded_pool(&request.pool_id).await?;
         let pool = guarded_pool.clear_errors(&self.registry, &request).await?;
         Ok(pool)
+    }
+
+    /// Drain the specified pool.
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %request.pool_id))]
+    async fn drain(&self, request: PoolDrainRequest) -> Result<Pool, SvcError> {
+        let mut guarded_pool = self
+            .guarded_pool_on_node(&request.pool_id, request.node_id.as_ref())
+            .await?;
+        let spec = guarded_pool.drain(&self.registry, request).await?;
+        let state = self.registry.ctrl_pool_state(guarded_pool.uid()).await.ok();
+        Ok(Pool::new(spec, state))
     }
 }
