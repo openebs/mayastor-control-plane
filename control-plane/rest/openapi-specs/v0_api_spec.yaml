@@ -1557,6 +1557,34 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+    delete:
+      tags:
+        - Pools
+      operationId: del_node_pool_drain
+      parameters:
+        - in: path
+          name: node_id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: pool_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pool'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/pools/{pool_id}/drain':
     put:
       tags:
@@ -1574,6 +1602,29 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PoolDrainReq'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pool'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
+    delete:
+      tags:
+        - Pools
+      operationId: del_pool_drain
+      parameters:
+        - in: path
+          name: pool_id
+          required: true
+          schema:
+            type: string
       responses:
         '200':
           description: OK
