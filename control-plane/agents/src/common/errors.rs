@@ -55,7 +55,9 @@ pub enum SvcError {
         id: String,
         resources: String,
     },
-    #[snafu(display("{kind} {id} does not have any of the cordon resources '{resources}'"))]
+    #[snafu(display(
+        "Uncordon request would not modify {kind} {id} in its current cordon/drain state"
+    ))]
     UncordonResources {
         kind: ResourceKind,
         id: String,

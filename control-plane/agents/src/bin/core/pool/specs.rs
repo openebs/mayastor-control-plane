@@ -114,7 +114,9 @@ impl SpecOperationsHelper for PoolSpec {
                     Ok(())
                 }
             },
-            PoolOperation::Uncordon(uncordon) => match self.uncordon_would_modify(uncordon) {
+            PoolOperation::Uncordon(uncordon) => match self.uncordon_would_modify(uncordon)
+                || (self.drain_cancellable() && uncordon.drain.unwrap_or(false))
+            {
                 false => Err(SvcError::UncordonResources {
                     kind: ResourceKind::Pool,
                     id: self.id().to_string(),

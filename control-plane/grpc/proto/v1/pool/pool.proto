@@ -145,9 +145,9 @@ enum PhaseReason {
 // Contains the reason for unwinding a spare replica, which is used to determine how
 // to proceed with the drain procedure.
 enum UnwindSpare {
-  // The drain was aborted (`DrainPhase → Aborted`): remove the spare and end the
+  // The drain was cancelled (`DrainPhase → Cancelled`): remove the spare and end the
   // move, keeping `moving_replica` where it is.
-  Abort = 0;
+  Cancelled = 0;
   // The pool hosting the still-rebuilding spare has itself entered a drain: remove
   // the spare and let this move place a fresh one on another eligible pool.
   Respare = 1;
@@ -191,7 +191,7 @@ enum DrainPhase {
   // The user has cancelled the drain and the control plane is undoing the changes it made.
   // Transient rather than terminal: once cleanup completes the drain record is cleared and the
   // self-cordon dropped. A new drain is rejected while the pool is in this phase.
-  DrainAborted = 4;
+  DrainCancelled = 4;
   // Transitioned from Draining when we can't make any progress on drain operation. Awaiting on
   // state change or user intervention to continue.
   PartiallyDrained = 5;
@@ -494,6 +494,7 @@ message CordonPoolRequest {
   bool snapshots = 4;
   bool restores = 5;
   bool import = 6;
+  optional bool drain = 7;
 }
 message CordonPoolReply {
   oneof reply {

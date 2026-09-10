@@ -371,6 +371,7 @@ impl OperationGuardArc<NodeSpec> {
                 snapshots: true,
                 restores: false,
                 import: false,
+                drain: None,
             };
             if let Err(error) = pool_guard.cordon(registry, cordon_request).await {
                 tracing::warn!(

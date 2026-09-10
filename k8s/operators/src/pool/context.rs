@@ -707,6 +707,7 @@ impl ResourceContext {
             true,  // snapshots
             false, // restores (implicitly blocked by replica placement block)
             false, // import
+            None,
         );
         match self.pools_api().put_pool_cordon(&pool_name, body).await {
             Ok(_) => {
