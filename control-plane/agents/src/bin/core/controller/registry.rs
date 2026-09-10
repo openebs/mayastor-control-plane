@@ -122,6 +122,8 @@ pub(crate) struct RegistryInner<S: Store> {
     /// Blobstore cluster size(in bytes) required for pool creation and replica scheduling.
     /// This is not per-pool.
     pool_cluster_size: Option<u32>,
+    /// Enable snapshot clone resize to larger PVC sizes.
+    enable_snapshot_resize_on_clone: bool,
     deprecated_access_mode: bool,
     /// Running in simulation mode.
     sim_args: Option<SimArgs>,
@@ -160,6 +162,7 @@ impl Registry {
         allow_non_persistent_devlinks: bool,
         encrypted_pools_soft_scheduling: bool,
         pool_cluster_size: Option<u32>,
+        enable_snapshot_resize_on_clone: bool,
         deprecated_access_mode: bool,
         sim_args: Option<SimArgs>,
         offline_rebuild_enabled: bool,
@@ -226,6 +229,7 @@ impl Registry {
                 allow_non_persistent_devlinks,
                 encrypted_pools_soft_scheduling,
                 pool_cluster_size: pool_cluster_size.or(Some(POOL_BS_CLUSTER_SIZE_DEFAULT)),
+                enable_snapshot_resize_on_clone,
                 deprecated_access_mode,
                 sim_args,
                 offline_rebuild_enabled,
@@ -309,6 +313,11 @@ impl Registry {
     /// Get the configured pool cluster_size.
     pub(crate) fn pool_cluster_size(&self) -> Option<u32> {
         self.pool_cluster_size
+    }
+
+    /// Check if snapshot resize on clone is enabled.
+    pub(crate) fn snapshot_resize_on_clone_enabled(&self) -> bool {
+        self.enable_snapshot_resize_on_clone
     }
 
     /// Check if the partial rebuilds are disabled.
