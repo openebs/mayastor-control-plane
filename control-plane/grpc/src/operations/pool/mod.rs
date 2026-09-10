@@ -127,9 +127,9 @@ mod test {
             operations::pool::{
                 test::TimeoutTester,
                 traits::{
-                    ClearErrorsRequest, CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo,
-                    LabelPoolInfo, PoolCordonRequest, PoolCreateError, PoolDrainRequest,
-                    PoolOperations, UnlabelPoolInfo,
+                    AbortPoolDrainRequest, ClearErrorsRequest, CreatePoolInfo, DestroyPoolInfo,
+                    ExpandPoolInfo, LabelPoolInfo, PoolCordonRequest, PoolCreateError,
+                    PoolDrainRequest, PoolOperations, UnlabelPoolInfo,
                 },
             },
         };
@@ -201,6 +201,12 @@ mod test {
             }
 
             async fn drain(&self, _request: &PoolDrainRequest) -> Result<Pool, ReplyError> {
+                todo!()
+            }
+            async fn abort_drain(
+                &self,
+                _request: &AbortPoolDrainRequest,
+            ) -> Result<Pool, ReplyError> {
                 todo!()
             }
         }

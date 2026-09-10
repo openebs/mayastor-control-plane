@@ -540,16 +540,21 @@ impl PoolSpec {
         }
     }
 
-    /// Removes drain configuration from the pool, restoring the user's own cordon, if they had
-    /// one set before the drain.
+    /// Sets the drain phase as Aborted.
     pub fn abort_drain(&mut self) {
-        if let Some(CordonDrainState::Drain(drain)) = &self.cordon_drain {
-            self.cordon_drain = drain
-                .user_cordon
-                .as_ref()
-                .map(|uc| CordonDrainState::Cordoned(uc.clone()));
+        if let Some(drain_record) = self.metadata.persisted.drain_record.as_mut() {
+            if drain_record.phase == DrainPhase::Draining {
+                drain_record.phase = DrainPhase::Aborted
+            } else {
+                if let Some(CordonDrainState::Drain(drain)) = &self.cordon_drain {
+                    self.cordon_drain = drain
+                        .user_cordon
+                        .as_ref()
+                        .map(|uc| CordonDrainState::Cordoned(uc.clone()));
+                    self.metadata.persisted.drain_record = None
+                }
+            }
         }
-        self.metadata.persisted.drain_record = None
     }
 
     /// Returns the applied drain configuration on the pool.
@@ -677,6 +682,9 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
                 PoolOperation::Drain(op) => {
                     self.set_drain(op);
                 }
+                PoolOperation::AbortDrain => {
+                    self.abort_drain();
+                }
             }
         }
         self.clear_op();
@@ -723,6 +731,7 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
             PoolOperation::Uncordon(_) => (false, true),
             PoolOperation::Import(_) => (false, false),
             PoolOperation::Drain(_) => (false, true),
+            PoolOperation::AbortDrain => (false, true),
         }
     }
 }
@@ -738,6 +747,7 @@ pub enum PoolOperation {
     Uncordon(PoolCordonOp),
     Import(PoolImportOp),
     Drain(PoolDrainOp),
+    AbortDrain,
 }
 
 /// Pool importing info.

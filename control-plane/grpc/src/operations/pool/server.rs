@@ -2,14 +2,14 @@ use crate::{
     misc::traits::ValidateRequestTypes,
     operations::pool::traits::PoolOperations,
     pool::{
-        self, clear_errors_reply, cordon_pool_reply, create_pool_reply, drain_pool_reply,
-        expand_pool_reply, get_pools_reply, label_pool_reply,
+        self, abort_pool_drain_reply, clear_errors_reply, cordon_pool_reply, create_pool_reply,
+        drain_pool_reply, expand_pool_reply, get_pools_reply, label_pool_reply,
         pool_grpc_server::{PoolGrpc, PoolGrpcServer},
-        unlabel_pool_reply, ClearErrorsReply, ClearErrorsRequest, CordonPoolReply,
-        CordonPoolRequest, CreatePoolReply, CreatePoolRequest, DestroyPoolReply,
-        DestroyPoolRequest, DrainPoolReply, DrainPoolRequest, ExpandPoolReply, ExpandPoolRequest,
-        GetPoolsReply, GetPoolsRequest, LabelPoolReply, LabelPoolRequest, UnlabelPoolReply,
-        UnlabelPoolRequest,
+        unlabel_pool_reply, AbortPoolDrainReply, AbortPoolDrainRequest, ClearErrorsReply,
+        ClearErrorsRequest, CordonPoolReply, CordonPoolRequest, CreatePoolReply, CreatePoolRequest,
+        DestroyPoolReply, DestroyPoolRequest, DrainPoolReply, DrainPoolRequest, ExpandPoolReply,
+        ExpandPoolRequest, GetPoolsReply, GetPoolsRequest, LabelPoolReply, LabelPoolRequest,
+        UnlabelPoolReply, UnlabelPoolRequest,
     },
 };
 use std::sync::Arc;
@@ -196,6 +196,21 @@ impl PoolGrpc for PoolServer {
             })),
             Err(err) => Ok(Response::new(DrainPoolReply {
                 reply: Some(drain_pool_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn abort_pool_drain(
+        &self,
+        request: Request<AbortPoolDrainRequest>,
+    ) -> Result<tonic::Response<AbortPoolDrainReply>, tonic::Status> {
+        let request = request.into_inner();
+        match self.service.abort_drain(&request.try_into()?).await {
+            Ok(pool) => Ok(Response::new(AbortPoolDrainReply {
+                reply: Some(abort_pool_drain_reply::Reply::Pool(pool.into())),
+            })),
+            Err(err) => Ok(Response::new(AbortPoolDrainReply {
+                reply: Some(abort_pool_drain_reply::Reply::Error(err.into())),
             })),
         }
     }

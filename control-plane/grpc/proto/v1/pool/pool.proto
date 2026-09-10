@@ -632,6 +632,21 @@ message DrainPoolReply {
   }
 }
 
+message AbortPoolDrainRequest {
+  /// The id of the node where the pool resides on.
+  /// This is optional and may be used for stricter checks.
+  optional string node_id = 1;
+  /// The id of the pool to abort the ongoing drain.
+  string pool_id = 2;
+}
+
+message AbortPoolDrainReply {
+  oneof reply {
+    Pool pool = 1;
+    common.ReplyError error = 2;
+  }
+}
+
 // Service for managing storage pools
 service PoolGrpc {
   rpc CreatePool (CreatePoolRequest) returns (CreatePoolReply) {}
@@ -649,4 +664,5 @@ service PoolGrpc {
   // Clear error counters and alerts
   rpc ClearErrors (ClearErrorsRequest) returns (ClearErrorsReply) {}
   rpc DrainPool (DrainPoolRequest) returns (DrainPoolReply) {}
+  rpc AbortPoolDrain(AbortPoolDrainRequest) returns (AbortPoolDrainReply) {}
 }

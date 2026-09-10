@@ -546,6 +546,8 @@ pub enum SvcError {
     NoSnapPolicyUpdateOnDrain { name: PoolId },
     #[snafu(display("Pool {name} is already in a {phase} state"))]
     PoolAlreadyDrained { name: PoolId, phase: DrainPhase },
+    #[snafu(display("Pool {name} does not have drain config"))]
+    NoDrainConfig { name: PoolId },
 }
 
 impl SvcError {
@@ -575,6 +577,7 @@ impl SvcError {
             Self::UnsupportedDrainUpdate { .. } => tonic::Code::InvalidArgument,
             Self::NoSnapPolicyUpdateOnDrain { .. } => tonic::Code::InvalidArgument,
             Self::PoolAlreadyDrained { .. } => tonic::Code::FailedPrecondition,
+            Self::NoDrainConfig { .. } => tonic::Code::FailedPrecondition,
             _ => tonic::Code::Internal,
         }
     }
@@ -1412,6 +1415,12 @@ impl From<SvcError> for ReplyError {
             },
             SvcError::PoolAlreadyDrained { .. } => ReplyError {
                 kind: ReplyErrorKind::NotAcceptable,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::NoDrainConfig { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::Pool,
                 source,
                 extra,

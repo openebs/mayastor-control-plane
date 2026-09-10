@@ -332,6 +332,15 @@ impl ResourceDrain for OperationGuardArc<PoolSpec> {
     async fn set_drained(&mut self, _registry: &Registry) -> Result<Self::Output, SvcError> {
         unimplemented!()
     }
+
+    async fn abort_drain(&mut self, registry: &Registry) -> Result<Self::Output, SvcError> {
+        let spec_clone = self.lock().clone();
+        let spec_clone = self
+            .start_update(registry, &spec_clone, PoolOperation::AbortDrain)
+            .await?;
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
+    }
 }
 
 impl OperationGuardArc<PoolSpec> {
