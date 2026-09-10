@@ -540,6 +540,7 @@ pub struct RequestMinTimeout {
     replica_snapshot: Duration,
     nexus: Duration,
     pool: Duration,
+    pool_import: Option<Duration>,
     nexus_shutdown: Duration,
     nexus_snapshot: Duration,
     nvme_reconnect: Duration,
@@ -552,6 +553,7 @@ impl Default for RequestMinTimeout {
             replica_snapshot: Duration::from_secs(10),
             nexus: Duration::from_secs(30),
             pool: Duration::from_secs(20),
+            pool_import: None,
             nexus_shutdown: Duration::from_secs(15),
             nexus_snapshot: Duration::from_secs(30),
             nvme_reconnect: Duration::from_secs(62),
@@ -583,6 +585,16 @@ impl RequestMinTimeout {
     /// Minimum timeout for a pool operation.
     pub fn pool(&self) -> Duration {
         self.pool
+    }
+    /// Minimum timeout for a pool import operation.
+    /// Falls back to `pool * 3` when not explicitly configured.
+    pub fn pool_import(&self) -> Duration {
+        self.pool_import.unwrap_or(self.pool * 3)
+    }
+    /// Set an explicit timeout for pool import operations.
+    pub fn with_pool_import_timeout(mut self, timeout: Duration) -> Self {
+        self.pool_import = Some(timeout);
+        self
     }
     /// Minimum timeout for nexus shutdown.
     pub fn nexus_shutdown(&self) -> Duration {
