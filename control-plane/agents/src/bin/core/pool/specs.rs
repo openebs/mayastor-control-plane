@@ -142,6 +142,16 @@ impl SpecOperationsHelper for PoolSpec {
                 self.start_op(op);
                 Ok(())
             }
+            PoolOperation::AbortDrain => {
+                if self.drain_policy().is_some() {
+                    self.start_op(op);
+                    Ok(())
+                } else {
+                    Err(SvcError::NoDrainConfig {
+                        name: self.id().clone(),
+                    })
+                }
+            }
             _ => {
                 self.start_op(op);
                 Ok(())

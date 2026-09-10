@@ -131,6 +131,10 @@ impl ResourceDrain for OperationGuardArc<NodeSpec> {
         self.complete_update(registry, Ok(()), spec_clone).await?;
         Ok(self.as_ref().clone())
     }
+
+    async fn abort_drain(&mut self, _registry: &Registry) -> Result<Self::Output, SvcError> {
+        unimplemented!()
+    }
 }
 
 #[async_trait::async_trait]

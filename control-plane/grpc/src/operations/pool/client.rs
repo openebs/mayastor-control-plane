@@ -3,14 +3,14 @@ use crate::{
     common::{CommonFilter, NodeFilter, NodePoolFilter, PoolFilter},
     context::{Client, Context, TracedChannel},
     operations::pool::traits::{
-        CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo, PoolCreateError,
-        PoolDrainRequest, PoolOperations,
+        AbortDrainPoolRequest, CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo,
+        PoolCreateError, PoolDrainRequest, PoolOperations,
     },
     pool::{
-        self, clear_errors_reply, cordon_pool_reply, create_pool_reply, destroy_pool_reply,
-        drain_pool_reply, expand_pool_reply, get_pools_reply, get_pools_request, label_pool_reply,
-        pool_grpc_client::PoolGrpcClient, unlabel_pool_reply, CordonPoolRequest, ExpandPoolRequest,
-        GetPoolsRequest,
+        self, abort_drain_pool_reply, clear_errors_reply, cordon_pool_reply, create_pool_reply,
+        destroy_pool_reply, drain_pool_reply, expand_pool_reply, get_pools_reply,
+        get_pools_request, label_pool_reply, pool_grpc_client::PoolGrpcClient, unlabel_pool_reply,
+        CordonPoolRequest, ExpandPoolRequest, GetPoolsRequest,
     },
 };
 use std::{convert::TryFrom, ops::Deref};
@@ -230,6 +230,19 @@ impl PoolOperations for PoolClient {
             Some(reply) => match reply {
                 drain_pool_reply::Reply::Pool(pool) => Ok(Pool::try_from(pool)?),
                 drain_pool_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
+        }
+    }
+
+    #[tracing::instrument(name = "PoolClient::drain", level = "info", skip(self), err)]
+    async fn abort_drain(&self, request: &AbortDrainPoolRequest) -> Result<Pool, ReplyError> {
+        let request = pool::AbortDrainPoolRequest::from(request.clone());
+        let response = self.client().abort_drain_pool(request).await?.into_inner();
+        match response.reply {
+            Some(reply) => match reply {
+                abort_drain_pool_reply::Reply::Pool(pool) => Ok(Pool::try_from(pool)?),
+                abort_drain_pool_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
         }
