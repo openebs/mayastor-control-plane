@@ -146,6 +146,8 @@ pub trait PoolOperations: Send + Sync {
     async fn clear_errors(&self, request: &ClearErrorsRequest) -> Result<Pool, ReplyError>;
     /// Initiates drain of a pool using user specified config.
     async fn drain(&self, request: &PoolDrainRequest) -> Result<Pool, ReplyError>;
+    /// Abort the ongoing drain of a pool.
+    async fn abort_drain(&self, request: &AbortPoolDrainRequest) -> Result<Pool, ReplyError>;
 }
 
 impl TryFrom<pool::PoolDefinition> for PoolSpec {
@@ -1496,6 +1498,27 @@ pub struct PoolDrainRequest {
     pub policy: DrainPolicy,
 }
 
+/// Pool drain information.
+#[derive(Debug, Clone)]
+pub struct AbortPoolDrainRequest {
+    /// Node ID of where the pool resides on.
+    /// This is optional and may be used for stricter checks.
+    pub node_id: Option<NodeId>,
+    /// The ID of the pool to abort the ongoing drain.
+    pub pool_id: PoolId,
+}
+
+impl TryFrom<pool::AbortPoolDrainRequest> for AbortPoolDrainRequest {
+    type Error = ReplyError;
+
+    fn try_from(value: pool::AbortPoolDrainRequest) -> Result<Self, Self::Error> {
+        Ok(Self {
+            node_id: value.node_id.map(Into::into),
+            pool_id: value.pool_id.into(),
+        })
+    }
+}
+
 impl TryFrom<pool::DrainPoolRequest> for PoolDrainRequest {
     type Error = ReplyError;
 
@@ -1517,6 +1540,15 @@ impl From<PoolDrainRequest> for pool::DrainPoolRequest {
             node_id: value.node_id.map(Into::into),
             pool_id: value.pool_id.into(),
             policy: Some(value.policy.into()),
+        }
+    }
+}
+
+impl From<AbortPoolDrainRequest> for pool::AbortPoolDrainRequest {
+    fn from(value: AbortPoolDrainRequest) -> Self {
+        Self {
+            node_id: value.node_id.map(Into::into),
+            pool_id: value.pool_id.into(),
         }
     }
 }

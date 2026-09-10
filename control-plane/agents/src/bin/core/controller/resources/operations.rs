@@ -58,6 +58,8 @@ pub(crate) trait ResourceDrain {
     ) -> Result<Self::Output, SvcError>;
     /// Mark the resource as drained.
     async fn set_drained(&mut self, registry: &Registry) -> Result<Self::Output, SvcError>;
+    /// Abort the drain in progress.
+    async fn abort_drain(&mut self, rgistry: &Registry) -> Result<Self::Output, SvcError>;
 }
 
 /// Resource Lifecycle Operations.

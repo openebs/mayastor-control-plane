@@ -14,8 +14,8 @@ use grpc::{
     context::Context,
     operations::{
         pool::traits::{
-            CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo, PoolDrainRequest,
-            PoolOperations, UnlabelPoolInfo,
+            AbortPoolDrainRequest, CreatePoolInfo, DestroyPoolInfo, ExpandPoolInfo, LabelPoolInfo,
+            PoolDrainRequest, PoolOperations, UnlabelPoolInfo,
         },
         replica::traits::{
             CreateReplicaInfo, DestroyReplicaInfo, ReplicaOperations, ResizeReplicaInfo,
@@ -141,6 +141,13 @@ impl PoolOperations for Service {
         let request = request.clone();
         let service = self.clone();
         let pool = Context::spawn(async move { service.drain(request).await }).await??;
+        Ok(pool)
+    }
+
+    async fn abort_drain(&self, request: &AbortPoolDrainRequest) -> Result<Pool, ReplyError> {
+        let request = request.clone();
+        let service = self.clone();
+        let pool = Context::spawn(async move { service.abort_drain(request).await }).await??;
         Ok(pool)
     }
 }
@@ -491,6 +498,16 @@ impl Service {
             .guarded_pool_on_node(&request.pool_id, request.node_id.as_ref())
             .await?;
         let spec = guarded_pool.drain(&self.registry, request).await?;
+        let state = self.registry.ctrl_pool_state(guarded_pool.uid()).await.ok();
+        Ok(Pool::new(spec, state))
+    }
+
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %request.pool_id))]
+    async fn abort_drain(&self, request: AbortPoolDrainRequest) -> Result<Pool, SvcError> {
+        let mut guarded_pool = self
+            .guarded_pool_on_node(&request.pool_id, request.node_id.as_ref())
+            .await?;
+        let spec = guarded_pool.abort_drain(&self.registry).await?;
         let state = self.registry.ctrl_pool_state(guarded_pool.uid()).await.ok();
         Ok(Pool::new(spec, state))
     }
