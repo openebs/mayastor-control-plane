@@ -161,6 +161,107 @@ async fn offline_rebuild_scale_up_bypasses_grace() {
     volume_api.del_volume(&uid).await.unwrap();
 }
 
+/// `max_offline_rebuilds` caps how many offline rebuilds run at once, so they
+/// cannot take every slot `max_rebuilds` allows and starve volumes which are
+/// published and serving I/O.
+///
+/// Driven with the cap at 0, which admits none: the volume is degraded and
+/// otherwise immediately eligible, so a temp nexus would appear if the cap were
+/// not consulted. This is deliberately the same scale-up scenario as
+/// [`offline_rebuild_scale_up_bypasses_grace`], which shows the target arriving
+/// well inside `START_WINDOW_SECS` when no cap is set; the pair is what
+/// attributes the deferral here to the cap rather than to the grace period or a
+/// viability check.
+#[tokio::test]
+async fn offline_rebuild_respects_max_offline_rebuilds() {
+    // Comfortably longer than the window the uncapped test needs to stand a
+    // target up, so "nothing appeared" means blocked rather than merely slow.
+    const OBSERVE_SECS: u64 = 12;
+
+    let reconcile = Duration::from_millis(RECONCILE_PERIOD_MS);
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_io_engines(3)
+        .with_tmpfs_pool(52428800)
+        .with_cache_period("250ms")
+        .with_reconcile_period(reconcile, reconcile)
+        .with_options(|o| {
+            o.with_isolated_io_engine(true)
+                .with_agents_env("OFFLINE_REBUILD_ENABLED", "true")
+                .with_agents_env(
+                    "OFFLINE_REBUILD_GRACE_PERIOD",
+                    &format!("{GRACE_PERIOD_SECS}s"),
+                )
+                .with_agents_env("MAX_OFFLINE_REBUILDS", "0")
+        })
+        .build()
+        .await
+        .unwrap();
+
+    let api_client = cluster.rest_v00();
+    let volume_api = api_client.volumes_api();
+
+    let volid = VolumeId::new();
+    let body = models::CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false, false);
+    let volume = volume_api.put_volume(&volid, body).await.unwrap();
+    let uid = volume.spec.uuid;
+
+    // Publish then unpublish so the volume has a health_info_id and is a
+    // candidate for offline rebuild once it degrades.
+    volume_api
+        .put_volume_target(
+            &uid,
+            models::PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                cluster.node(0).to_string(),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+                cluster.csi_node(0),
+                None,
+            ),
+        )
+        .await
+        .expect("Should publish volume");
+    volume_api
+        .del_volume_target(&uid, None, None)
+        .await
+        .expect("Should unpublish volume");
+
+    // Scale up: the added replica is absent from the persisted NexusInfo, so the
+    // volume degrades and the grace period is bypassed.
+    volume_api
+        .put_volume_replica_count(&uid, 3)
+        .await
+        .expect("Should scale up to 3 replicas");
+
+    wait_till_volume_status(
+        &cluster,
+        &uid,
+        VolumeStatus::Degraded,
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("Volume should become Degraded after scale-up");
+
+    // The cap admits nothing, so no temp nexus may be stood up.
+    tokio::time::sleep(Duration::from_secs(OBSERVE_SECS)).await;
+
+    let vol = volume_api.get_volume(&uid).await.unwrap();
+    assert!(
+        vol.state.target.is_none(),
+        "No offline rebuild may start while max_offline_rebuilds is 0; got target={:?}",
+        vol.state.target
+    );
+    assert_eq!(
+        vol.state.status,
+        VolumeStatus::Degraded,
+        "Volume should stay Degraded while the rebuild is capped out"
+    );
+
+    volume_api.del_volume(&uid).await.unwrap();
+}
+
 /// Happy path scenario, see [`offline_rebuild_e2e`] doc.
 async fn happy_path(cluster: &deployer_cluster::Cluster) {
     let api_client = cluster.rest_v00();
