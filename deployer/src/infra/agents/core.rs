@@ -85,7 +85,8 @@ impl ComponentAction for CoreAgent {
         }
 
         Ok(cfg.add_container_spec(
-            ContainerSpec::from_binary(name, binary).with_portmap("50051", "50051"),
+            ContainerSpec::from_binary(name, options.fips_env(binary))
+                .with_portmap("50051", "50051"),
         ))
     }
     async fn start(

@@ -387,8 +387,9 @@ async fn main() -> anyhow::Result<()> {
                 .long("jwt")
                 .value_parser(clap::value_parser!(PathBuf))
                 .help("path to a file containing the JWT bearer token for REST authentication"),
-        )
-        .get_matches();
+        );
+    let matches = <utils::CryptoArgs as clap::Args>::augment_args(matches).get_matches();
+    <utils::CryptoArgs as clap::FromArgMatches>::from_arg_matches(&matches)?.init()?;
 
     utils::print_package_info!();
 

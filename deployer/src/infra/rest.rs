@@ -68,7 +68,7 @@ impl ComponentAction for Rest {
             }
 
             cfg.add_container_spec(
-                ContainerSpec::from_binary("rest", binary)
+                ContainerSpec::from_binary("rest", options.fips_env(binary))
                     .with_portmap("8080", "8080")
                     .with_portmap("8081", "8081"),
             )

@@ -104,6 +104,10 @@ pub struct StartOptions {
     #[clap(long)]
     pub no_grpc_tls: bool,
 
+    /// Don't run the components in FIPS mode.
+    #[clap(long)]
+    pub no_fips: bool,
+
     /// Enable the CSI Controller plugin.
     #[clap(long)]
     pub csi_controller: bool,
@@ -507,6 +511,11 @@ impl StartOptions {
         self
     }
     #[must_use]
+    pub fn with_fips(mut self, enabled: bool) -> Self {
+        self.no_fips = !enabled;
+        self
+    }
+    #[must_use]
     pub fn with_grpc_tls(mut self, enabled: bool) -> Self {
         self.no_grpc_tls = !enabled;
         self
@@ -718,6 +727,16 @@ impl StartOptions {
 }
 
 impl StartOptions {
+    /// Puts a component's binary in FIPS mode, unless the deployer was asked
+    /// not to run the components that way.
+    #[must_use]
+    pub fn fips_env(&self, binary: composer::Binary) -> composer::Binary {
+        match self.no_fips {
+            false => binary.with_env("ENABLE_FIPS", "true"),
+            true => binary,
+        }
+    }
+
     pub async fn start(&self) -> Result<ComposeTestNt, Error> {
         let components = Components::new(self.clone());
         let compose_builder = Builder::new()

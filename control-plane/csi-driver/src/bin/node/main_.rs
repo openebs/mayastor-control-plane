@@ -277,8 +277,9 @@ pub(super) async fn main() -> anyhow::Result<()> {
                         .required(true)
                         .help("Uuid of the volume to unfreeze")
                 )
-        )
-        .get_matches();
+        );
+    let matches = <utils::CryptoArgs as clap::Args>::augment_args(matches).get_matches();
+    <utils::CryptoArgs as clap::FromArgMatches>::from_arg_matches(&matches)?.init()?;
     let tags = utils::tracing_telemetry::default_tracing_tags(
         utils::raw_version_str(),
         env!("CARGO_PKG_VERSION"),

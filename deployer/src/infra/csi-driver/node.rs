@@ -46,6 +46,7 @@ impl ComponentAction for CsiNode {
                     options.csi_node_rest,
                     options.io_engine_cores,
                     !options.no_grpc_tls,
+                    !options.no_fips,
                 )?;
             }
             cfg
@@ -128,6 +129,7 @@ impl CsiNode {
         enable_rest: bool,
         io_queues: u32,
         grpc_auto_tls: bool,
+        fips: bool,
     ) -> Result<Builder, Error> {
         let container_name = Self::container_name(index);
         let node_name = Self::name(index);
@@ -142,6 +144,7 @@ impl CsiNode {
             enable_rest,
             io_queues,
             grpc_auto_tls,
+            fips,
         )
     }
     fn with_local_node(index: u32, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
@@ -158,6 +161,7 @@ impl CsiNode {
             options.csi_node_rest,
             options.io_engine_cores,
             !options.no_grpc_tls,
+            !options.no_fips,
         )
     }
     fn vm_node(index: u32, option: &StartOptions) -> bool {
@@ -173,6 +177,7 @@ impl CsiNode {
         enable_rest: bool,
         io_queues: u32,
         grpc_auto_tls: bool,
+        fips: bool,
     ) -> Result<Builder, Error> {
         let io_queues = io_queues.max(1);
         let mut binary = Binary::from_dbg(CSI_NODE)
@@ -201,6 +206,10 @@ impl CsiNode {
         } else {
             binary.with_args(vec!["--grpc-endpoint", "[::]:50055"])
         };
+
+        if fips {
+            binary = binary.with_env("ENABLE_FIPS", "true");
+        }
 
         let path = format!(
             "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:{}",

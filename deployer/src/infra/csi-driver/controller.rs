@@ -46,7 +46,7 @@ impl ComponentAction for CsiController {
             }
 
             cfg.add_container_spec(
-                ContainerSpec::from_binary("csi-controller", binary)
+                ContainerSpec::from_binary("csi-controller", options.fips_env(binary))
                     .with_bypass_default_mounts(true)
                     .with_bind("/var/tmp", "/var/tmp"),
             )

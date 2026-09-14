@@ -33,6 +33,10 @@ struct CliArgs {
     /// Auto-generate an ephemeral self-signed certificate for the JsonGrpc gRPC server.
     #[clap(long = "grpc-auto-tls", conflicts_with_all = ["grpc_tls_cert_file", "grpc_tls_key_file", "grpc_tls_ca_file"])]
     grpc_auto_tls: bool,
+
+    /// Crypto options.
+    #[clap(flatten)]
+    crypto: utils::CryptoArgs,
 }
 
 impl CliArgs {
@@ -55,6 +59,7 @@ pub(crate) static CORE_CLIENT: OnceCell<CoreClient> = OnceCell::new();
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli_args = CliArgs::parse();
+    cli_args.crypto.init()?;
     utils::print_package_info!();
     utils::tracing_telemetry::TracingTelemetry::builder().init("agent-jsongrpc");
     info!("Using options: {:?}", &cli_args);

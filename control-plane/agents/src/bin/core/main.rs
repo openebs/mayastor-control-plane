@@ -211,6 +211,10 @@ pub(crate) struct CliArgs {
     /// Disable most start-time reconcilers (other than the pstor cleanup).
     #[clap(long = "sim-no-start", env = "SIM_NO_START_EVENT")]
     no_start: bool,
+
+    /// Crypto options.
+    #[clap(flatten)]
+    crypto: utils::CryptoArgs,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -290,6 +294,7 @@ fn value_parse_percent(value: &str) -> Result<u64, ParseIntError> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli_args = CliArgs::args();
+    cli_args.crypto.init()?;
     utils::print_package_info!();
     println!("Using options: {cli_args:?}");
     utils::tracing_telemetry::TracingTelemetry::builder()
