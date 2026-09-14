@@ -1,6 +1,9 @@
 { stdenv
 , clang
+, cmake
 , git
+, go
+, perl
 , lib
 , llvmPackages
 , makeRustPlatform
@@ -69,7 +72,10 @@ let
     GIT_VERSION = "${gitVersions.tag_or_long}";
 
     inherit LIBCLANG_PATH PROTOC PROTOC_INCLUDE;
-    nativeBuildInputs = [ clang pkg-config paperclip which git llvmPackages.bintools ];
+    # cmake, go and perl build aws-lc-fips-sys.
+    nativeBuildInputs = [ clang cmake go perl pkg-config paperclip which git llvmPackages.bintools ];
+    # cmake is for aws-lc-fips-sys' own build, it must not take over ours.
+    dontUseCmakeConfigure = true;
     buildInputs = [ llvmPackages.libclang protobuf systemdMinimal.dev utillinux.dev rdma-core ];
     doCheck = false;
   };

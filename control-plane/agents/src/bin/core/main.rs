@@ -289,7 +289,6 @@ fn value_parse_percent(value: &str) -> Result<u64, ParseIntError> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    utils::init_rustls_crypto_provider();
     let cli_args = CliArgs::args();
     utils::print_package_info!();
     println!("Using options: {cli_args:?}");

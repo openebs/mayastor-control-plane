@@ -54,7 +54,6 @@ pub(crate) static CORE_CLIENT: OnceCell<CoreClient> = OnceCell::new();
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    utils::init_rustls_crypto_provider();
     let cli_args = CliArgs::parse();
     utils::print_package_info!();
     utils::tracing_telemetry::TracingTelemetry::builder().init("agent-jsongrpc");

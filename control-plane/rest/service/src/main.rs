@@ -354,7 +354,6 @@ async fn probes_only_on_insecure(
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
-    utils::init_rustls_crypto_provider();
     utils::print_package_info!();
     let cli_args = CliArgs::args();
     println!("Using options: {cli_args:?}");

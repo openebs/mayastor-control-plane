@@ -131,7 +131,6 @@ fn initialize_tracing(args: &Cli) {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    utils::init_rustls_crypto_provider();
     utils::print_package_info!();
     let cli = Cli::args();
     println!("Using options: {cli:?}");

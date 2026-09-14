@@ -188,7 +188,6 @@ impl Cli {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    utils::init_rustls_crypto_provider();
     let cli_args = Cli::args();
     utils::print_package_info!();
     println!("Using options: {cli_args:?}");

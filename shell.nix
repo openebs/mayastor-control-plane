@@ -34,6 +34,10 @@ mkShellNoCC {
   buildInputs = [
     llvmPackages.bintools
     clang
+    # aws-lc-rs fips
+    cmake
+    go
+    perl
     commitlint
     cowsay
     docker

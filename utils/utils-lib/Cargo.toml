@@ -11,7 +11,8 @@ rls = ["event-publisher/rls-aws-lc-rs"]
 tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 tracing-opentelemetry = { workspace = true }
 tracing = { workspace = true }
-rustls = { workspace = true }
+fips = { workspace = true }
+clap = { workspace = true }
 
 opentelemetry = { workspace = true }
 
