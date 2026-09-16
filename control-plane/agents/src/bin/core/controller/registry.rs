@@ -131,6 +131,9 @@ pub(crate) struct RegistryInner<S: Store> {
     /// Grace period before initiating an offline rebuild for a degraded
     /// unpublished volume. Prevents unnecessary rebuilds for transient failures.
     offline_rebuild_grace_period: std::time::Duration,
+    /// Cap on offline rebuilds running at once, so they cannot consume every
+    /// slot allowed by `max_rebuilds` and starve published volumes.
+    max_offline_rebuilds: Option<NumRebuilds>,
 }
 
 impl Registry {
@@ -164,6 +167,7 @@ impl Registry {
         sim_args: Option<SimArgs>,
         offline_rebuild_enabled: bool,
         offline_rebuild_grace_period: std::time::Duration,
+        max_offline_rebuilds: Option<NumRebuilds>,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -230,6 +234,7 @@ impl Registry {
                 sim_args,
                 offline_rebuild_enabled,
                 offline_rebuild_grace_period,
+                max_offline_rebuilds,
             }),
         };
         registry.init().await?;
@@ -451,6 +456,10 @@ impl Registry {
     /// Grace period before initiating an offline rebuild.
     pub(crate) fn offline_rebuild_grace_period(&self) -> std::time::Duration {
         self.offline_rebuild_grace_period
+    }
+    /// Maximum number of offline rebuilds allowed to run at once.
+    pub(crate) fn max_offline_rebuilds(&self) -> Option<NumRebuilds> {
+        self.max_offline_rebuilds
     }
     /// Allow for this given time before assuming failure and allowing the pool to get deleted.
     pub(crate) fn pool_async_creat_tmo(&self) -> std::time::Duration {
