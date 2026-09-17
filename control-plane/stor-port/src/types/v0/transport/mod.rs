@@ -158,6 +158,8 @@ pub enum MessageIdVs {
     SetVolumeReplica,
     /// Set volume property.
     SetVolumeProperty,
+    /// Trigger a rebuild.
+    TriggerRebuild,
     /// Create volume snapshot.
     CreateVolumeSnapshot,
     /// Delete volume snapshot.

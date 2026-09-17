@@ -51,7 +51,14 @@ impl TaskPoller for OfflineRebuildReconciler {
         }
 
         let mut results = vec![];
-        let volumes = context.specs().volumes_rsc();
+        let mut volumes = context.specs().volumes_rsc();
+
+        // Requested volumes go first. The budget below is spent as we walk the list,
+        // and `volumes_rsc` returns insertion order, which does not change between
+        // polls, so without this a requested volume sitting behind others would keep
+        // losing the slot on every poll rather than just once. Stable, so volumes
+        // which were not requested keep their relative order.
+        volumes.sort_by_key(|volume| !volume.lock().metadata.offline_rebuild_requested());
 
         // Offline rebuilds also consume `max_rebuilds` slots, so left alone a batch
         // of them can crowd out published volumes which are serving I/O. Budget is
@@ -170,7 +177,9 @@ async fn offline_rebuild_reconcile(
     // Volume is unpublished with prior health info. Wait for it to actually be
     // Degraded, then enforce the grace period before initiating rebuild.
     if volume_state.status != VolumeStatus::Degraded {
-        volume.lock().metadata.clear_offline_rebuild_degraded();
+        // Drops any outstanding request too, so it cannot silently skip the grace
+        // period on some later, unrelated degradation.
+        volume.clear_offline_rebuild_marks();
         return PollResult::Ok(PollerState::Idle);
     }
 
@@ -182,7 +191,20 @@ async fn offline_rebuild_reconcile(
     let has_in_place_target =
         has_scale_up_rebuild_target(&volume, &volume_state.replica_topology, context).await?;
 
-    if !has_in_place_target {
+    // Skips the wait only: the checks below still apply.
+    let requested = volume.offline_rebuild_requested();
+
+    if requested {
+        tracing::info!(
+            volume.uuid = %volume.uuid(),
+            "Bypassing grace period: rebuild requested by operator"
+        );
+    } else if has_in_place_target {
+        tracing::info!(
+            volume.uuid = %volume.uuid(),
+            "Bypassing grace period: replica added since last publish"
+        );
+    } else {
         let degraded_for = volume.lock().metadata.offline_rebuild_degraded();
         let grace_period = context.registry().offline_rebuild_grace_period();
         if degraded_for < grace_period {
@@ -193,11 +215,6 @@ async fn offline_rebuild_reconcile(
             );
             return PollResult::Ok(PollerState::Busy);
         }
-    } else {
-        tracing::info!(
-            volume.uuid = %volume.uuid(),
-            "Bypassing grace period: replica added since last publish"
-        );
     }
 
     initiate_offline_rebuild(
@@ -354,7 +371,8 @@ async fn initiate_offline_rebuild(
                 volume.uuid = %volume.uuid(),
                 "Offline rebuild nexus created; HotSpareReconciler will handle the rebuild"
             );
-            volume.lock().metadata.clear_offline_rebuild_degraded();
+            // Acted upon, so neither mark carries over to a future degradation.
+            volume.clear_offline_rebuild_marks();
             // Spend the slot so later volumes in this poll see the smaller budget;
             // the next poll recounts from the live targets. One here matches the
             // floor the count applies to a target whose rebuild hasn't started.
@@ -427,6 +445,9 @@ async fn teardown_if_rebuilt(
         }
         // Restart the grace timer from scratch when viability returns, so a
         // recovering node has to clear the same wait window a fresh degradation would.
+        // An operator request is deliberately left standing: it was not honoured, and
+        // nothing about losing viability says they stopped wanting the rebuild. It
+        // still only skips the wait, so the checks above continue to apply.
         volume.lock().metadata.clear_offline_rebuild_degraded();
         return PollResult::Ok(PollerState::Idle);
     }
