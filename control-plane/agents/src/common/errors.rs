@@ -405,7 +405,7 @@ pub enum SvcError {
     SnapshotMaxTransactions { snap_id: String },
     #[snafu(display("Cloned snapshot volumes must be thin provisioned"))]
     ClonedSnapshotVolumeThin {},
-    #[snafu(display("Cloned snapshot volume must match the snapshot size"))]
+    #[snafu(display("Cloned snapshot volume size must be greater than or equal to the snapshot size"))]
     ClonedSnapshotVolumeSize {},
     #[snafu(display("Cloned snapshot volume only supported for 1 replica"))]
     ClonedSnapshotVolumeRepl {},
