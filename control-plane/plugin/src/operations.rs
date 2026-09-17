@@ -1,6 +1,7 @@
 use crate::resources::{
     error::Error, utils, ClearErrors, CordonResources, DeleteArgs, DrainResources, ExpandResources,
-    GetResources, LabelResources, ScaleResources, SetPropertyResources, UnCordonResources,
+    GetResources, LabelResources, RebuildResources, ScaleResources, SetPropertyResources,
+    UnCordonResources,
 };
 use async_trait::async_trait;
 
@@ -37,8 +38,19 @@ pub enum Operations {
     /// 'Label' resources.
     #[clap(subcommand)]
     Label(LabelResources),
+    /// 'Rebuild' resources.
+    #[clap(subcommand)]
+    Rebuild(RebuildResources),
     /// 'Delete' resources.
     Delete(DeleteArgs),
+}
+
+/// Rebuild trait.
+/// To be implemented by resources which support the 'rebuild' operation.
+#[async_trait(?Send)]
+pub trait Rebuild {
+    type ID;
+    async fn rebuild(id: &Self::ID, output: &utils::OutputFormat) -> PluginResult;
 }
 
 /// Drain trait.
