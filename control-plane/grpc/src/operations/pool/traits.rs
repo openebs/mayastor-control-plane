@@ -593,8 +593,8 @@ impl From<PoolDrainRecord> for pool::PoolDrainRecord {
     fn from(value: PoolDrainRecord) -> Self {
         Self {
             phase: pool::DrainPhase::from(value.phase) as i32,
-            phase_reason: value
-                .phase_reason
+            reason: value
+                .reason
                 .map(|reason| pool::PhaseReason::from(reason) as i32),
             drain_statistics: Some(pool::PoolDrainStatistics {
                 initial: value.initial_stats.into_opt(),
@@ -677,8 +677,8 @@ impl TryFrom<pool::PoolDrainRecord> for PoolDrainRecord {
             .and_then(|statistics| statistics.initial);
         Ok(Self {
             phase: phase.into(),
-            phase_reason: value
-                .phase_reason
+            reason: value
+                .reason
                 .and_then(|reason| pool::PhaseReason::try_from(reason).ok())
                 .map(Into::into),
             initial_stats: initial_stats.into_opt(),
@@ -693,7 +693,7 @@ impl From<PhaseReason> for pool::PhaseReason {
             PhaseReason::Unknown => Self::ReasonUnknown,
             PhaseReason::WaitingForSlot => Self::WaitingForSlot,
             PhaseReason::OfflinePool => Self::OfflinePool,
-            PhaseReason::SingleReplicaUnsafeEviction => Self::SingleReplicaUnsafeEviction,
+            PhaseReason::SingleReplicaEviction => Self::SingleReplicaEviction,
             PhaseReason::ImportCordoned => Self::ImportCordoned,
             PhaseReason::SnapshotsRetained => Self::SnapshotsRetained,
         }
@@ -706,7 +706,7 @@ impl From<pool::PhaseReason> for PhaseReason {
             pool::PhaseReason::ReasonUnknown => Self::Unknown,
             pool::PhaseReason::WaitingForSlot => Self::WaitingForSlot,
             pool::PhaseReason::OfflinePool => Self::OfflinePool,
-            pool::PhaseReason::SingleReplicaUnsafeEviction => Self::SingleReplicaUnsafeEviction,
+            pool::PhaseReason::SingleReplicaEviction => Self::SingleReplicaEviction,
             pool::PhaseReason::ImportCordoned => Self::ImportCordoned,
             pool::PhaseReason::SnapshotsRetained => Self::SnapshotsRetained,
         }

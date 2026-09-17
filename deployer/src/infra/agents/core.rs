@@ -77,6 +77,9 @@ impl ComponentAction for CoreAgent {
         if let Some(cluster_size) = options.pool_cluster_size {
             binary = binary.with_args(vec!["--pool-cluster-size", &cluster_size.to_string()]);
         }
+        if let Some(max_drains) = options.max_concurrent_pool_drain {
+            binary = binary.with_args(vec!["--max-concurrent-pool-drain", &max_drains.to_string()]);
+        }
         if !options.no_deprecated_access_mode {
             binary = binary.with_arg("--deprecated-access-mode");
         }
