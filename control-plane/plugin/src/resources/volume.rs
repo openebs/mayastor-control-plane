@@ -1,6 +1,7 @@
 use crate::{
     operations::{
-        Delete, Get, ListExt, PluginResult, RebuildHistory, ReplicaTopology, Scale, SetProperty,
+        Delete, Get, ListExt, PluginResult, Rebuild, RebuildHistory, ReplicaTopology, Scale,
+        SetProperty,
     },
     resources::{
         error::Error,
@@ -369,6 +370,41 @@ impl ReplicaTopology for Volume {
             }
             Err(e) => {
                 return Err(Error::GetVolumeError {
+                    id: id.to_string(),
+                    source: e,
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+#[async_trait(?Send)]
+impl Rebuild for Volume {
+    type ID = VolumeId;
+    async fn rebuild(id: &Self::ID, now: bool, force: bool, output: &OutputFormat) -> PluginResult {
+        match RestClient::client()
+            .volumes_api()
+            .put_volume_rebuild(id, Some(now), Some(force))
+            .await
+        {
+            Ok(volume) => match output {
+                OutputFormat::None if now => {
+                    println!("Rebuild started for volume {id}.");
+                }
+                OutputFormat::None => {
+                    println!(
+                        "Rebuild requested for volume {id}. The grace period wait is skipped \
+                        and the volume is taken ahead of other offline rebuilds, oldest \
+                        request first. This does not raise the rebuild limits, so it starts \
+                        once it is viable and a slot is free. Use --now to start it as part \
+                        of the command instead."
+                    );
+                }
+                _ => utils::print_table(output, volume.into_body()),
+            },
+            Err(e) => {
+                return Err(Error::RebuildVolume {
                     id: id.to_string(),
                     source: e,
                 });

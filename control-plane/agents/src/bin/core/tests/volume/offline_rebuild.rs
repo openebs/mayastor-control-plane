@@ -12,6 +12,8 @@ use uuid::Uuid;
 const RECONCILE_PERIOD_MS: u64 = 250;
 const GRACE_PERIOD_SECS: u64 = 2;
 const REBUILD_TIMEOUT_SECS: u64 = 30;
+/// Long enough that nothing starts on its own for the length of the operator test.
+const OPERATOR_GRACE_SECS: u64 = 60;
 
 /// End-to-end coverage for the offline-rebuild reconciler. Drives four
 /// scenarios sequentially on a single shared cluster (each scenario takes a
@@ -256,6 +258,214 @@ async fn offline_rebuild_respects_max_offline_rebuilds() {
         VolumeStatus::Degraded,
         "Volume should stay Degraded while the rebuild is capped out"
     );
+
+    // Asking for it to start in line hits the same cap, but now there is a caller to
+    // tell, so it is an error rather than a volume which quietly stays put.
+    volume_api
+        .put_volume_rebuild(&uid, Some(true), None)
+        .await
+        .expect_err("A rebuild cannot be started while the cap admits none");
+
+    // ...and `force` is what lets an operator overrule the cap they set, which is the
+    // only way the temp nexus appears in this cluster at all.
+    let started = volume_api
+        .put_volume_rebuild(&uid, Some(true), Some(true))
+        .await
+        .expect("force should start the rebuild despite the cap");
+    assert!(
+        started.state.target.is_some(),
+        "force should have started the rebuild, so the volume must carry a target"
+    );
+
+    volume_api.del_volume(&uid).await.unwrap();
+}
+
+/// Operator-requested rebuilds, both ways of asking, on one cluster.
+///
+/// The grace period is long so that nothing starts on its own for the length of the
+/// test: whatever happens, happens because it was asked for. Each scenario takes a
+/// node down and brings it back before handing over.
+///
+/// 1. **Queued**: the plain request skips the grace period, and the temp nexus turns
+///    up well inside the window the volume would otherwise still be waiting out.
+/// 2. **Started in line**: with `now` the rebuild is started as part of the request,
+///    so the volume handed back by the call already carries the target.
+#[tokio::test]
+async fn offline_rebuild_operator_requests() {
+    let reconcile = Duration::from_millis(RECONCILE_PERIOD_MS);
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_io_engines(3)
+        .with_tmpfs_pool(52428800)
+        .with_cache_period("250ms")
+        .with_reconcile_period(reconcile, reconcile)
+        .with_options(|o| {
+            o.with_isolated_io_engine(true)
+                .with_agents_env("OFFLINE_REBUILD_ENABLED", "true")
+                .with_agents_env(
+                    "OFFLINE_REBUILD_GRACE_PERIOD",
+                    &format!("{OPERATOR_GRACE_SECS}s"),
+                )
+        })
+        .build()
+        .await
+        .unwrap();
+
+    requested_rebuild_skips_grace(&cluster).await;
+    requested_rebuild_now_starts_in_line(&cluster).await;
+}
+
+/// Queued request scenario, see [`offline_rebuild_operator_requests`] doc.
+async fn requested_rebuild_skips_grace(cluster: &deployer_cluster::Cluster) {
+    const START_WINDOW_SECS: u64 = 15;
+
+    let api_client = cluster.rest_v00();
+    let volume_api = api_client.volumes_api();
+
+    let volid = VolumeId::new();
+    let body = models::CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false, false);
+    let volume = volume_api.put_volume(&volid, body).await.unwrap();
+    let uid = volume.spec.uuid;
+
+    volume_api
+        .put_volume_target(
+            &uid,
+            models::PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                cluster.node(0).to_string(),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+                cluster.csi_node(0),
+                None,
+            ),
+        )
+        .await
+        .expect("Should publish volume");
+    volume_api
+        .del_volume_target(&uid, None, None)
+        .await
+        .expect("Should unpublish volume");
+
+    let victim_node = pick_victim_node(&api_client, &cluster.node(0).to_string(), uid).await;
+    cluster
+        .composer()
+        .stop(&victim_node)
+        .await
+        .expect("Should stop io-engine node");
+
+    wait_till_volume_status(
+        cluster,
+        &uid,
+        VolumeStatus::Degraded,
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("Volume should become Degraded");
+
+    // The grace period is long enough that nothing starts on its own within the
+    // window this test runs in, so no settle-and-check is needed first.
+    let vol = volume_api.get_volume(&uid).await.unwrap();
+    assert!(
+        vol.state.target.is_none(),
+        "No rebuild should start before the request; got target={:?}",
+        vol.state.target
+    );
+
+    let t0 = std::time::Instant::now();
+    volume_api
+        .put_volume_rebuild(&uid, None, None)
+        .await
+        .expect("Should accept the offline rebuild request");
+
+    wait_for_unshared_target(cluster, &uid, Duration::from_secs(START_WINDOW_SECS))
+        .await
+        .expect("Offline rebuild should start once requested, without the grace period");
+
+    assert!(
+        t0.elapsed() < Duration::from_secs(OPERATOR_GRACE_SECS),
+        "Requested rebuild took {:?}, which is not inside the grace period of \
+        {OPERATOR_GRACE_SECS}s",
+        t0.elapsed()
+    );
+
+    restart_node(cluster, &victim_node).await;
+    wait_till_volume_online_no_target(cluster, &uid, Duration::from_secs(REBUILD_TIMEOUT_SECS))
+        .await
+        .expect("Volume should be Online with no target after the rebuild completes");
+
+    volume_api.del_volume(&uid).await.unwrap();
+}
+
+/// Started-in-line scenario, see [`offline_rebuild_operator_requests`] doc.
+async fn requested_rebuild_now_starts_in_line(cluster: &deployer_cluster::Cluster) {
+    let api_client = cluster.rest_v00();
+    let volume_api = api_client.volumes_api();
+
+    let volid = VolumeId::new();
+    let body = models::CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false, false);
+    let volume = volume_api.put_volume(&volid, body).await.unwrap();
+    let uid = volume.spec.uuid;
+
+    volume_api
+        .put_volume_target(
+            &uid,
+            models::PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                cluster.node(0).to_string(),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+                cluster.csi_node(0),
+                None,
+            ),
+        )
+        .await
+        .expect("Should publish volume");
+    volume_api
+        .del_volume_target(&uid, None, None)
+        .await
+        .expect("Should unpublish volume");
+
+    let victim_node = pick_victim_node(&api_client, &cluster.node(0).to_string(), uid).await;
+    cluster
+        .composer()
+        .stop(&victim_node)
+        .await
+        .expect("Should stop io-engine node");
+
+    wait_till_volume_status(
+        cluster,
+        &uid,
+        VolumeStatus::Degraded,
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("Volume should become Degraded");
+
+    // The whole point of `now` is that the rebuild is started as part of the request,
+    // so the volume the call hands back already has the target. Asserting on the
+    // response rather than on a later poll is what separates this from the queued
+    // case, which would still be waiting out the grace period at this point.
+    let started = volume_api
+        .put_volume_rebuild(&uid, Some(true), None)
+        .await
+        .expect("Should start the rebuild in line with the request");
+
+    let target = started
+        .state
+        .target
+        .expect("A rebuild started with `now` must return a volume which has its target");
+    assert_eq!(
+        target.protocol,
+        models::Protocol::None,
+        "The offline-rebuild target must not be shared"
+    );
+
+    restart_node(cluster, &victim_node).await;
+    wait_till_volume_online_no_target(cluster, &uid, Duration::from_secs(REBUILD_TIMEOUT_SECS))
+        .await
+        .expect("Volume should be Online with no target after the rebuild completes");
 
     volume_api.del_volume(&uid).await.unwrap();
 }
