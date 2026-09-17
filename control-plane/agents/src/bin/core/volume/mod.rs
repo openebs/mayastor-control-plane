@@ -13,6 +13,7 @@ mod snapshot_operations;
 mod specs;
 
 pub(crate) use operations::MoveReplicaRequest;
+pub(crate) use operations_helper::offline_rebuild_budget;
 pub(crate) use scheduling::volume_pool_candidates;
 pub(crate) use snapshot_operations::DestroyVolumeSnapshotRequest;
 

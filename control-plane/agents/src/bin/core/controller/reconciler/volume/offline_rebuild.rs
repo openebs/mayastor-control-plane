@@ -1,27 +1,17 @@
-use crate::{
-    controller::{
-        reconciler::{PollContext, TaskPoller},
-        registry::NumRebuilds,
-        resources::{
-            operations::ResourcePublishing, operations_helper::OperationSequenceGuard,
-            OperationGuardArc, ResourceMutex,
-        },
-        scheduling::volume::GetSuitablePools,
-        task_poller::{PollResult, PollerState},
+use crate::controller::{
+    reconciler::{PollContext, TaskPoller},
+    registry::NumRebuilds,
+    resources::{
+        operations::ResourcePublishing, operations_helper::OperationSequenceGuard,
+        OperationGuardArc, ResourceMutex,
     },
-    volume::volume_pool_candidates,
+    task_poller::{PollResult, PollerState},
 };
 
 use stor_port::types::v0::{
     store::volume::VolumeSpec,
-    transport::{
-        PublishVolume, ReplicaId, ReplicaTopology, UnpublishVolume, VolumeState, VolumeStatus,
-        VolumeTargetMode,
-    },
+    transport::{UnpublishVolume, VolumeState, VolumeStatus},
 };
-
-use agents::errors::SvcError;
-use std::collections::{HashMap, HashSet};
 
 /// Offline Volume Rebuild.
 ///
@@ -50,70 +40,65 @@ impl TaskPoller for OfflineRebuildReconciler {
             return PollResult::Ok(PollerState::Idle);
         }
 
+        // Nothing can start while the system-wide limit is already met, so don't walk
+        // the volumes at all. Once is enough: the count behind this is refreshed when
+        // node state is, on another thread, so re-reading it as we go would give the
+        // same answer.
+        if context.registry().rebuild_allowed().await.is_err() {
+            tracing::debug!("Offline rebuilds deferred: max concurrent rebuilds reached");
+            return PollResult::Ok(PollerState::Idle);
+        }
+
         let mut results = vec![];
-        let volumes = context.specs().volumes_rsc();
+        let mut volumes = context.specs().volumes_rsc();
+
+        // Requested volumes go first, oldest request first, so the queue is ordered by
+        // when the operator asked rather than by where the volume happens to sit.
+        // `volumes_rsc` returns insertion order, which does not change between polls,
+        // so without this a requested volume sitting behind others would keep losing
+        // the slot on every poll rather than just once. Stable, so volumes which were
+        // not requested keep their relative order behind those which were.
+        volumes.sort_by_key(|volume| {
+            volume
+                .lock()
+                .metadata
+                .offline_rebuild_requested_at()
+                .map_or(RequestOrder::Unrequested, RequestOrder::RequestedAt)
+        });
 
         // Offline rebuilds also consume `max_rebuilds` slots, so left alone a batch
         // of them can crowd out published volumes which are serving I/O. Budget is
         // whatever headroom is left under `max_offline_rebuilds` once the offline
         // rebuilds already running are accounted for, and it is spent as we go so a
         // single poll cannot overshoot.
-        let mut budget = offline_rebuild_budget(&volumes, context).await;
+        let mut budget = crate::volume::offline_rebuild_budget(&volumes, context.registry()).await;
 
         for mut volume in volumes {
+            // Unlike the system-wide limit above, the budget is spent as we go, so it
+            // is worth re-reading. Stop once it runs out rather than carrying on down
+            // the queue. The check belongs here and not in the per-volume reconcile,
+            // which returns Busy for unrelated reasons too, such as a volume still
+            // inside its grace period; breaking on that would let one waiting volume
+            // hold up the rest.
+            if budget == Some(0) {
+                tracing::debug!(
+                    "Offline rebuilds deferred: max concurrent offline rebuilds reached"
+                );
+                results.push(PollResult::Ok(PollerState::Busy));
+                break;
+            }
             results.push(offline_rebuild_reconcile(&mut volume, context, &mut budget).await);
         }
         Self::squash_results(results)
     }
 }
 
-/// Slots one standing offline-rebuild target consumes, given the rebuild jobs its
-/// nexus reports, or `None` if the nexus could not be read.
-///
-/// Counted in jobs rather than nexuses so the cap means the same thing as
-/// `max_rebuilds`: one temp nexus restoring two replicas is two jobs, not one.
-///
-/// Floored at one. A target whose rebuild has not started yet reports zero, and
-/// taking that at face value would admit another volume and let the two of them
-/// exceed the cap once both get going. A nexus we cannot read is floored for the
-/// same reason: it is standing, so it is holding a slot. Over-counting only
-/// delays a rebuild; under-counting breaks the limit the knob exists to enforce.
-fn target_slots(reported_rebuilds: Option<NumRebuilds>) -> NumRebuilds {
-    reported_rebuilds.unwrap_or(0).max(1)
-}
-
-/// Remaining offline rebuilds that may be started this poll, or `None` when
-/// unlimited.
-async fn offline_rebuild_budget(
-    volumes: &[ResourceMutex<VolumeSpec>],
-    context: &PollContext,
-) -> Option<NumRebuilds> {
-    let max = context.registry().max_offline_rebuilds()?;
-
-    // Must read through the lock: `immutable_ref` is a snapshot of the spec as first
-    // loaded, so it would miss targets this reconciler stood up since then.
-    let targets: Vec<_> = volumes
-        .iter()
-        .filter_map(|volume| {
-            let volume = volume.lock();
-            let unshared_ours = volume.is_offline_rebuild_target()
-                && volume.target().is_some_and(|t| t.protocol().is_none());
-            unshared_ours.then(|| volume.target().map(|t| t.nexus().clone()))?
-        })
-        .collect();
-
-    let mut in_flight: NumRebuilds = 0;
-    for nexus_id in targets {
-        let reported = context
-            .registry()
-            .nexus(&nexus_id)
-            .await
-            .map(|nexus| nexus.rebuilds)
-            .ok();
-        in_flight = in_flight.saturating_add(target_slots(reported));
-    }
-
-    Some(max.saturating_sub(in_flight))
+/// Queue order for one poll: requested volumes first, oldest request first, then
+/// everything else in the order it already had.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum RequestOrder {
+    RequestedAt(std::time::Instant),
+    Unrequested,
 }
 
 #[tracing::instrument(
@@ -170,7 +155,9 @@ async fn offline_rebuild_reconcile(
     // Volume is unpublished with prior health info. Wait for it to actually be
     // Degraded, then enforce the grace period before initiating rebuild.
     if volume_state.status != VolumeStatus::Degraded {
-        volume.lock().metadata.clear_offline_rebuild_degraded();
+        // Drops any outstanding request too, so it cannot silently skip the grace
+        // period on some later, unrelated degradation.
+        volume.clear_offline_rebuild_marks();
         return PollResult::Ok(PollerState::Idle);
     }
 
@@ -179,10 +166,24 @@ async fn offline_rebuild_reconcile(
     // grace period is meant to absorb. If that replica is also currently
     // online it can serve as an in-place rebuild target, so no fresh pool is
     // needed either.
-    let has_in_place_target =
-        has_scale_up_rebuild_target(&volume, &volume_state.replica_topology, context).await?;
+    let has_in_place_target = volume
+        .has_scale_up_rebuild_target(&volume_state.replica_topology, context.registry())
+        .await?;
 
-    if !has_in_place_target {
+    // Skips the wait only: the checks below still apply.
+    let requested = volume.offline_rebuild_requested();
+
+    if requested {
+        tracing::info!(
+            volume.uuid = %volume.uuid(),
+            "Bypassing grace period: rebuild requested by operator"
+        );
+    } else if has_in_place_target {
+        tracing::info!(
+            volume.uuid = %volume.uuid(),
+            "Bypassing grace period: replica added since last publish"
+        );
+    } else {
         let degraded_for = volume.lock().metadata.offline_rebuild_degraded();
         let grace_period = context.registry().offline_rebuild_grace_period();
         if degraded_for < grace_period {
@@ -193,11 +194,6 @@ async fn offline_rebuild_reconcile(
             );
             return PollResult::Ok(PollerState::Busy);
         }
-    } else {
-        tracing::info!(
-            volume.uuid = %volume.uuid(),
-            "Bypassing grace period: replica added since last publish"
-        );
     }
 
     initiate_offline_rebuild(
@@ -208,56 +204,6 @@ async fn offline_rebuild_reconcile(
         budget,
     )
     .await
-}
-
-/// Returns `true` when a scale-up left an Online replica that the
-/// last-published nexus never had, making it an in-place rebuild destination.
-///
-/// Such a replica is known-out-of-sync by definition rather than transiently
-/// degraded, and being Online it is also reachable, so the rebuild can start
-/// without waiting on the grace period or standing up a fresh pool.
-///
-/// The Online guard matters: a spec-only replica whose node is currently down
-/// would still be in `replica_topology` and absent from `NexusInfo`, but the
-/// temp nexus would come up short one child and the rebuild would never make
-/// progress.
-///
-/// Known caveat: if the last publish itself came up short because a replica
-/// was unavailable then, `children.len()` already trails `num_replicas` and a
-/// replacement reads as a scale-up. That only costs an earlier rebuild.
-///
-/// If the `NexusInfo` cannot be loaded (missing key, transient store error),
-/// falls back to the safe default of *not* bypassing the grace period.
-async fn has_scale_up_rebuild_target(
-    volume: &OperationGuardArc<VolumeSpec>,
-    replica_topology: &HashMap<ReplicaId, ReplicaTopology>,
-    context: &PollContext,
-) -> Result<bool, SvcError> {
-    let Some(nexus_info) = context
-        .registry()
-        .nexus_info(
-            Some(volume.uuid()),
-            volume.as_ref().health_info_id(),
-            false,
-            None,
-        )
-        .await?
-    else {
-        return Ok(false);
-    };
-
-    // The replica count reconciler also adds replicas that are absent from
-    // NexusInfo, to replace a failed one. Those must still serve out the grace
-    // period in case the original comes back, so require the desired count to
-    // have outgrown the last-published child count.
-    if usize::from(volume.as_ref().num_replicas) <= nexus_info.children.len() {
-        return Ok(false);
-    }
-
-    let known: HashSet<_> = nexus_info.children.iter().map(|c| &c.uuid).collect();
-    Ok(replica_topology
-        .iter()
-        .any(|(uuid, topo)| topo.status().online() && !known.contains(uuid)))
 }
 
 /// Creates a non-shared nexus for the volume so the existing rebuild engine
@@ -294,67 +240,11 @@ async fn initiate_offline_rebuild(
         return PollResult::Ok(PollerState::Busy);
     }
 
-    // Pre-flight viability: only stand up the temp nexus if the rebuild can
-    // actually make progress. Needs both a source (a healthy replica to copy
-    // from) and a target (either an in-place replica flagged unhealthy, or
-    // a candidate pool with room for a replacement replica).
-    //
-    // Prefer the strict health signal — `online_clean_replicas > 0` — when
-    // available; that's the CP's own trust decision and already accounts for
-    // NexusInfo state. Volume health is optional (can be disabled via
-    // `--no-volume-health`), so fall back to a plain online-status check on
-    // the replica topology when it's missing rather than deferring the
-    // rebuild indefinitely.
-    let source_viable = volume_state
-        .health
-        .as_ref()
-        .map(|h| h.online_clean_replicas > 0)
-        .unwrap_or_else(|| {
-            volume_state
-                .replica_topology
-                .values()
-                .any(|r| r.status().online())
-        });
-    let target_viable = has_in_place_target
-        || !volume_pool_candidates(GetSuitablePools::new(volume.as_ref(), None), registry)
-            .await
-            .is_empty();
-
-    if !source_viable || !target_viable {
-        tracing::debug!(
-            volume.uuid = %volume.uuid(),
-            source_viable,
-            has_in_place_target,
-            "Offline rebuild deferred: rebuild not viable \
-            (no healthy source replica and/or no rebuild destination)"
-        );
-        return PollResult::Ok(PollerState::Idle);
-    }
-
-    tracing::info!(
-        volume.uuid = %volume.uuid(),
-        "Initiating offline rebuild: creating non-shared nexus"
-    );
-
-    let request = PublishVolume::new(
-        volume.uuid().clone(),
-        None, // auto-select target node (prefers node with healthy replica)
-        None, // share = None → nexus won't be shared
-        Default::default(),
-        vec![],
-        Default::default(),
-    );
-
     match volume
-        .publish_with_mode(registry, &request, VolumeTargetMode::OfflineRebuild)
+        .start_offline_rebuild(volume_state, registry, has_in_place_target)
         .await
     {
-        Ok(_) => {
-            tracing::info!(
-                volume.uuid = %volume.uuid(),
-                "Offline rebuild nexus created; HotSpareReconciler will handle the rebuild"
-            );
-            volume.lock().metadata.clear_offline_rebuild_degraded();
+        Ok(()) => {
             // Spend the slot so later volumes in this poll see the smaller budget;
             // the next poll recounts from the live targets. One here matches the
             // floor the count applies to a target whose rebuild hasn't started.
@@ -363,14 +253,8 @@ async fn initiate_offline_rebuild(
             }
             PollResult::Ok(PollerState::Idle)
         }
-        Err(error) => {
-            tracing::warn!(
-                volume.uuid = %volume.uuid(),
-                %error,
-                "Failed to create offline rebuild nexus"
-            );
-            PollResult::Ok(PollerState::Idle)
-        }
+        // The reconciler keeps trying on later polls, so nothing to escalate here.
+        Err(_) => PollResult::Ok(PollerState::Idle),
     }
 }
 
@@ -427,6 +311,9 @@ async fn teardown_if_rebuilt(
         }
         // Restart the grace timer from scratch when viability returns, so a
         // recovering node has to clear the same wait window a fresh degradation would.
+        // An operator request is deliberately left standing: it was not honoured, and
+        // nothing about losing viability says they stopped wanting the rebuild. It
+        // still only skips the wait, so the checks above continue to apply.
         volume.lock().metadata.clear_offline_rebuild_degraded();
         return PollResult::Ok(PollerState::Idle);
     }
@@ -436,29 +323,4 @@ async fn teardown_if_rebuilt(
     // we wait on — tearing down would either churn against the grace timer
     // or kill a healthy in-progress rebuild during a brief hiccup.
     PollResult::Ok(PollerState::Idle)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::target_slots;
-
-    /// A standing target always costs at least one slot, whether its rebuild has
-    /// yet to start (reports zero) or its nexus could not be read at all. Were
-    /// either taken at face value, a second volume would be admitted and the two
-    /// could exceed the cap once both rebuilds were running.
-    #[test]
-    fn target_not_yet_rebuilding_still_holds_a_slot() {
-        assert_eq!(target_slots(Some(0)), 1);
-        assert_eq!(target_slots(None), 1);
-    }
-
-    /// Past the floor the real job count is what matters, so that the cap means
-    /// the same thing as `max_rebuilds`: a temp nexus restoring two replicas
-    /// costs two, not one.
-    #[test]
-    fn target_costs_one_slot_per_rebuild_job() {
-        assert_eq!(target_slots(Some(1)), 1);
-        assert_eq!(target_slots(Some(2)), 2);
-        assert_eq!(target_slots(Some(5)), 5);
-    }
 }
