@@ -885,6 +885,20 @@ impl SetVolumeReplica {
     }
 }
 
+/// Ask for a volume's offline rebuild to start without waiting out the grace period.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TriggerOfflineRebuild {
+    /// The uuid of the volume.
+    pub uuid: VolumeId,
+}
+impl TriggerOfflineRebuild {
+    /// Create new `Self` for the given volume.
+    pub fn new(uuid: VolumeId) -> Self {
+        Self { uuid }
+    }
+}
+
 /// Set the volume property.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]

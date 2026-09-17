@@ -22,8 +22,8 @@ use grpc::{
             CreateVolumeSnapshotInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo,
             DestroyVolumeSnapshot, DestroyVolumeSnapshotInfo, PublishVolumeInfo,
             RepublishVolumeInfo, ResizeVolumeInfo, SetVolumePropertyInfo, SetVolumeReplicaInfo,
-            ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
-            VolumeSnapshot, VolumeSnapshots,
+            ShareVolumeInfo, TriggerOfflineRebuildInfo, UnpublishVolumeInfo, UnshareVolumeInfo,
+            VolumeOperations, VolumeSnapshot, VolumeSnapshots,
         },
         Pagination,
     },
@@ -38,7 +38,7 @@ use stor_port::{
         transport::{
             CreateSnapshotVolume, CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter,
             PublishVolume, RepublishVolume, ResizeVolume, SetVolumeProperty, SetVolumeReplica,
-            ShareVolume, UnpublishVolume, UnshareVolume, Volume,
+            ShareVolume, TriggerOfflineRebuild, UnpublishVolume, UnshareVolume, Volume,
         },
     },
 };
@@ -172,6 +172,18 @@ impl VolumeOperations for Service {
         let volume =
             Context::spawn(async move { service.set_volume_property(&set_volume_property).await })
                 .await??;
+        Ok(volume)
+    }
+
+    async fn trigger_offline_rebuild(
+        &self,
+        req: &dyn TriggerOfflineRebuildInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let request = TriggerOfflineRebuild::from(req);
+        let service = self.clone();
+        let volume = Context::spawn(async move { service.trigger_offline_rebuild(&request).await })
+            .await??;
         Ok(volume)
     }
 
@@ -426,6 +438,25 @@ impl Service {
     ) -> Result<Volume, SvcError> {
         let mut volume = self.specs().volume(&request.uuid).await?;
         volume.set_property(&self.registry, request).await?;
+        self.registry.volume(&request.uuid).await
+    }
+    /// Ask for the volume's offline rebuild to skip the grace period. The reconciler
+    /// still applies its viability and concurrency checks, so this only shortens the
+    /// wait, it does not force a rebuild that could not otherwise run.
+    #[tracing::instrument(level = "info", skip(self, request), err, fields(volume.uuid = %request.uuid))]
+    pub(super) async fn trigger_offline_rebuild(
+        &self,
+        request: &TriggerOfflineRebuild,
+    ) -> Result<Volume, SvcError> {
+        // Refuse rather than accept a request that can never be honoured: the
+        // reconciler does not run at all when disabled, and since enabling it needs a
+        // restart, which clears the runtime marker, the request could never take
+        // effect later either.
+        if !self.registry.offline_rebuild_enabled() {
+            return Err(SvcError::OfflineRebuildDisabled {});
+        }
+        let volume = self.specs().volume(&request.uuid).await?;
+        volume.lock().metadata.request_offline_rebuild();
         self.registry.volume(&request.uuid).await
     }
     /// Create a volume snapshot.

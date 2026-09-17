@@ -8,7 +8,8 @@ use stor_port::types::v0::{
     transport::{
         DestroyShutdownTargets, DestroyVolume, Filter, GetRebuildRecord, PublishVolume,
         RebuildHistory, RebuildJobState, RebuildRecord, RepublishVolume, ResizeVolume,
-        SetVolumeProperty, SetVolumeReplica, ShareVolume, UnpublishVolume, UnshareVolume, Volume,
+        SetVolumeProperty, SetVolumeReplica, ShareVolume, TriggerOfflineRebuild, UnpublishVolume,
+        UnshareVolume, Volume,
     },
 };
 
@@ -193,6 +194,15 @@ impl apis::actix_server::Volumes for RestApi {
                 },
                 None,
             )
+            .await?;
+        Ok(volume.into())
+    }
+
+    async fn put_volume_rebuild(
+        Path(volume_id): Path<Uuid>,
+    ) -> Result<models::Volume, RestError<RestJsonError>> {
+        let volume = client()
+            .trigger_offline_rebuild(&TriggerOfflineRebuild::new(volume_id.into()), None)
             .await?;
         Ok(volume.into())
     }

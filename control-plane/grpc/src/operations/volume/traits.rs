@@ -11,7 +11,8 @@ use crate::{
         get_volumes_request, AccessMode, CreateSnapshotVolumeRequest, CreateVolumeRequest,
         DestroyShutdownTargetRequest, DestroyVolumeRequest, PublishVolumeRequest,
         RegisteredTargets, RepublishVolumeRequest, ResizeVolumeRequest, SetVolumePropertyRequest,
-        SetVolumeReplicaRequest, ShareVolumeRequest, UnpublishVolumeRequest, UnshareVolumeRequest,
+        SetVolumeReplicaRequest, ShareVolumeRequest, TriggerOfflineRebuildRequest,
+        UnpublishVolumeRequest, UnshareVolumeRequest,
     },
 };
 use events_api::event::{EventAction, EventCategory, EventMessage, EventMeta, EventSource};
@@ -32,9 +33,9 @@ use stor_port::{
             NexusNvmfConfig, NexusVersion, NodeId, NodeTopology, NvmeNqn, PoolTopology,
             PublishVolume, ReplicaId, ReplicaStatus, ReplicaTopology, ReplicaUsage,
             RepublishVolume, ResizeVolume, SetVolumeProperty, SetVolumeReplica, ShareVolume,
-            SnapshotId, SnapshotRestorePolicy, Topology, UnpublishVolume, UnshareVolume, Volume,
-            VolumeAccessMode, VolumeHealth, VolumeId, VolumeLabels, VolumePolicy, VolumeProperty,
-            VolumeShareProtocol, VolumeState, VolumeUsage,
+            SnapshotId, SnapshotRestorePolicy, Topology, TriggerOfflineRebuild, UnpublishVolume,
+            UnshareVolume, Volume, VolumeAccessMode, VolumeHealth, VolumeId, VolumeLabels,
+            VolumePolicy, VolumeProperty, VolumeShareProtocol, VolumeState, VolumeUsage,
         },
     },
     IntoOption, IntoVec, TryIntoOption,
@@ -103,6 +104,12 @@ pub trait VolumeOperations: Send + Sync {
     async fn set_property(
         &self,
         req: &dyn SetVolumePropertyInfo,
+        ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError>;
+    /// Ask for the volume's offline rebuild to skip the grace period.
+    async fn trigger_offline_rebuild(
+        &self,
+        req: &dyn TriggerOfflineRebuildInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError>;
     /// Liveness probe for volume service
@@ -1927,6 +1934,53 @@ impl From<&dyn SetVolumeReplicaInfo> for SetVolumeReplicaRequest {
         }
     }
 }
+/// Trait to be implemented for the TriggerOfflineRebuild operation.
+pub trait TriggerOfflineRebuildInfo: Send + Sync + std::fmt::Debug {
+    /// Uuid of the concerned volume.
+    fn uuid(&self) -> VolumeId;
+}
+
+impl TriggerOfflineRebuildInfo for TriggerOfflineRebuild {
+    fn uuid(&self) -> VolumeId {
+        self.uuid.clone()
+    }
+}
+
+/// Intermediate structure that validates the conversion to TriggerOfflineRebuildRequest.
+#[derive(Debug)]
+pub struct ValidatedTriggerOfflineRebuildRequest {
+    uuid: VolumeId,
+}
+
+impl TriggerOfflineRebuildInfo for ValidatedTriggerOfflineRebuildRequest {
+    fn uuid(&self) -> VolumeId {
+        self.uuid.clone()
+    }
+}
+
+impl ValidateRequestTypes for TriggerOfflineRebuildRequest {
+    type Validated = ValidatedTriggerOfflineRebuildRequest;
+    fn validated(self) -> Result<Self::Validated, ReplyError> {
+        Ok(ValidatedTriggerOfflineRebuildRequest {
+            uuid: VolumeId::try_from(StringValue(Some(self.uuid)))?,
+        })
+    }
+}
+
+impl From<&dyn TriggerOfflineRebuildInfo> for TriggerOfflineRebuild {
+    fn from(data: &dyn TriggerOfflineRebuildInfo) -> Self {
+        Self { uuid: data.uuid() }
+    }
+}
+
+impl From<&dyn TriggerOfflineRebuildInfo> for TriggerOfflineRebuildRequest {
+    fn from(data: &dyn TriggerOfflineRebuildInfo) -> Self {
+        Self {
+            uuid: data.uuid().to_string(),
+        }
+    }
+}
+
 /// Trait to be implemented for SetVolumeProperty operation.
 pub trait SetVolumePropertyInfo: Send + Sync + std::fmt::Debug {
     /// Uuid of the concerned volume.

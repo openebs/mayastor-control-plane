@@ -416,6 +416,10 @@ pub enum SvcError {
     #[snafu(display("Target switchover is not allowed without HA"))]
     SwitchoverNotAllowedWhenHAisDisabled {},
     #[snafu(display(
+        "An offline rebuild cannot be requested while the offline rebuild reconciler is disabled"
+    ))]
+    OfflineRebuildDisabled {},
+    #[snafu(display(
         "The volume would exceed the cluster capacity limit of {}B by {}B",
         cluster_capacity_limit,
         excess
@@ -1275,6 +1279,12 @@ impl From<SvcError> for ReplyError {
             SvcError::SwitchoverNotAllowedWhenHAisDisabled {} => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::Nexus,
+                source,
+                extra,
+            },
+            SvcError::OfflineRebuildDisabled {} => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Volume,
                 source,
                 extra,
             },
