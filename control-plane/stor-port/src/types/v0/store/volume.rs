@@ -994,10 +994,22 @@ impl SpecTransaction<VolumeOperation> for VolumeSpec {
                     self.deactivate_target();
                 }
                 VolumeOperation::Unpublish(args) => {
+                    let demote = args.demote;
                     if let Some(target_config) = &mut self.target_config {
                         target_config.frontend_mut().remove_acls(args.host_acls);
                         if target_config.frontend().nodes_info().is_empty() {
-                            self.deactivate_target();
+                            if demote {
+                                // The target stays, unshared, so the rebuild running on it can
+                                // finish. It must remain active or the offline-rebuild
+                                // reconciler cannot see it, and nothing would tear it down.
+                                target_config.target_mut().set_protocol(None);
+                                target_config
+                                    .target_mut()
+                                    .set_target_mode(VolumeTargetMode::OfflineRebuild);
+                                self.publish_context = None;
+                            } else {
+                                self.deactivate_target();
+                            }
                         }
                     }
                 }
@@ -1177,11 +1189,29 @@ impl PublishOperation {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct UnpublishOperation {
     host_acls: Vec<InitiatorAC>,
+    /// Keep the target alive, unshared, so an in-progress rebuild can finish.
+    /// Defaulted so entries persisted before this existed still load.
+    #[serde(default)]
+    demote: bool,
 }
 impl UnpublishOperation {
     /// Create a new `Self` from the given initiators.
     pub fn new(host_acls: Vec<InitiatorAC>) -> Self {
-        Self { host_acls }
+        Self {
+            host_acls,
+            demote: false,
+        }
+    }
+    /// Create a new `Self` which demotes the target rather than tearing it down.
+    pub fn new_demote(host_acls: Vec<InitiatorAC>) -> Self {
+        Self {
+            host_acls,
+            demote: true,
+        }
+    }
+    /// Whether the target is being demoted rather than torn down.
+    pub fn demote(&self) -> bool {
+        self.demote
     }
 }
 
@@ -1398,4 +1428,55 @@ impl AffinityGroupSpec {
     pub fn is_empty(&self) -> bool {
         self.volumes.is_empty()
     }
+}
+
+#[cfg(test)]
+fn unpublished_spec_after(demote: bool) -> VolumeSpec {
+    let target = VolumeTarget::new(
+        "io-engine-1".into(),
+        "1e3cf927-80c2-47a8-adf0-95c486bdd7b7".try_into().unwrap(),
+        Some(VolumeShareProtocol::Nvmf),
+    );
+    let mut spec = VolumeSpec {
+        target_config: Some(TargetConfig::new(
+            target,
+            NexusNvmfConfig::default(),
+            FrontendConfig::default(),
+        )),
+        ..Default::default()
+    };
+    let op = if demote {
+        UnpublishOperation::new_demote(vec![])
+    } else {
+        UnpublishOperation::new(vec![])
+    };
+    spec.start_op(VolumeOperation::Unpublish(op));
+    spec.commit_op();
+    spec
+}
+
+/// A plain unpublish retires the target, so nothing looks at it again.
+#[test]
+fn unpublish_deactivates_the_target() {
+    let spec = unpublished_spec_after(false);
+    assert!(
+        spec.target().is_none(),
+        "target should no longer be visible after unpublish"
+    );
+}
+
+/// A demoting unpublish keeps the target visible and unshared, and hands it to
+/// the offline-rebuild reconciler. Were it deactivated instead, `target()` would
+/// return `None`, the reconciler would never see it, and the nexus would be left
+/// running with nothing to tear it down.
+#[test]
+fn unpublish_demote_hands_the_target_to_offline_rebuild() {
+    let spec = unpublished_spec_after(true);
+    let target = spec.target().expect("target should still be visible");
+    assert_eq!(target.protocol(), None, "target should be unshared");
+    assert_eq!(
+        spec.target_mode(),
+        VolumeTargetMode::OfflineRebuild,
+        "target should be owned by the offline-rebuild reconciler"
+    );
 }

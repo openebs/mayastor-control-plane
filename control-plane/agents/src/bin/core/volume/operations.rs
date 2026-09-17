@@ -371,8 +371,21 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
             }
         }
 
-        let op = VolumeOperation::Unpublish(UnpublishOperation::new(host_acls.clone()));
         let state = registry.volume_state(&request.uuid).await?;
+
+        // Tearing the target down mid-rebuild throws away work that is already
+        // part-done, and the offline-rebuild reconciler would then redo it from
+        // scratch once the grace period expires. Instead hand the target back to
+        // that reconciler, unshared, to finish and clean up. Only worth doing when
+        // the reconciler is running, since otherwise nothing would own the target.
+        let demote = registry.offline_rebuild_enabled()
+            && state.target.as_ref().is_some_and(|t| t.rebuilds > 0);
+
+        let op = VolumeOperation::Unpublish(if demote {
+            UnpublishOperation::new_demote(host_acls.clone())
+        } else {
+            UnpublishOperation::new(host_acls.clone())
+        });
         let spec_clone = self.start_update(registry, &state, op).await?;
 
         let volume_target = spec_clone.target().expect("already validated");
@@ -386,6 +399,12 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 
         let result = match specs.nexus_opt(volume_target.nexus()).await? {
             None => Ok(()),
+            // Demote: drop the share but leave the target running for the rebuild.
+            Some(mut nexus) if last_node && demote => {
+                // `demote` was derived from `state.target`, so it is present here.
+                let target = state.target.as_ref().expect("demote implies a target");
+                nexus.unshare(registry, &UnshareNexus::from(target)).await
+            }
             Some(mut nexus) if last_node => {
                 let nexus_clone = nexus.lock().clone();
                 let destroy = DestroyNexus::from(&nexus_clone).with_disown(&request.uuid);
