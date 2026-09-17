@@ -26,7 +26,7 @@ impl ComponentAction for IoEngine {
             };
 
             let mut spec = if let Some(binary) = binary {
-                ContainerSpec::from_binary(&name, Binary::from_path(&binary))
+                ContainerSpec::from_binary(&name, options.fips_env(Binary::from_path(&binary)))
                     .with_bind_binary_dir(true)
             } else {
                 let image = match options.prev_io_engine() {

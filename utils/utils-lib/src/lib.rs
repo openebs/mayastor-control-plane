@@ -11,9 +11,41 @@ pub mod version;
 pub use version::{long_raw_version_str, raw_version_str, raw_version_string};
 pub use version_info::{version_info as version_info_inner, VersionInfo};
 
-/// Select aws-lc-rs as Rustls's process-wide crypto provider when one has not been selected yet.
-pub fn init_rustls_crypto_provider() {
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+/// Cli arguments for a component's process-wide crypto setup, for flattening
+/// into its own, so that every binary spells them the same way:
+///
+/// ```ignore
+/// #[derive(clap::Parser)]
+/// struct CliArgs {
+///     #[clap(flatten)]
+///     crypto: utils::CryptoArgs,
+/// }
+/// ```
+///
+/// Then call [`CryptoArgs::init`] as early in `main` as possible.
+#[derive(Debug, Clone, clap::Args)]
+pub struct CryptoArgs {
+    /// Run in FIPS mode. {n}
+    /// Our TLS is put on a FIPS validated crypto module, and startup fails if
+    /// the module this was built against turns out not to be one.
+    #[clap(long = "enable-fips", env = "ENABLE_FIPS")]
+    pub fips: bool,
+}
+
+impl CryptoArgs {
+    /// Sets up FIPS mode, if it was asked for. See [`fips::init`].
+    pub fn init(&self) -> Result<(), fips::Error> {
+        fips::init_if(self.fips)
+    }
+
+    /// Same as [`Self::init`], but terminates the process on failure, for the
+    /// binaries whose `main` returns no error we can carry this in.
+    pub fn init_or_exit(&self) {
+        if let Err(error) = self.init() {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+    }
 }
 
 /// Byte conversion helpers.

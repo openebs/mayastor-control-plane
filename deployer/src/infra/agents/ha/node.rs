@@ -19,7 +19,7 @@ impl ComponentAction for HaNodeAgent {
         if !options.no_grpc_tls {
             binary = binary.with_arg("--grpc-auto-tls");
         }
-        let mut spec = ContainerSpec::from_binary("agent-ha-node", binary)
+        let mut spec = ContainerSpec::from_binary("agent-ha-node", options.fips_env(binary))
             .with_bypass_default_mounts(true)
             .with_bind("/var/tmp", "/var/tmp")
             .with_bind("/run/udev", "/run/udev:ro")

@@ -183,8 +183,9 @@ async fn main() -> anyhow::Result<()> {
                 .action(clap::ArgAction::SetTrue)
                 .conflicts_with_all(["grpc-tls-ca-file", "grpc-tls-cert-file", "grpc-tls-key-file"])
                 .help("connect to node plugin gRPC servers over TLS without certificate verification")
-        )
-        .get_matches();
+        );
+    let args = <utils::CryptoArgs as clap::Args>::augment_args(args).get_matches();
+    <utils::CryptoArgs as clap::FromArgMatches>::from_arg_matches(&args)?.init()?;
 
     utils::print_package_info!();
 

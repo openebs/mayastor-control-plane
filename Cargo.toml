@@ -60,7 +60,13 @@ nvmeadm = { path = "./utils/dependencies/nvmeadm" }
 sysfs = { path = "./utils/dependencies/sysfs" }
 composer = { path = "./utils/dependencies/composer", default-features = false }
 
-rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
+fips = { path = "./utils/dependencies/fips" }
+# crypto: these put every transitive user of them onto the FIPS validated
+# backend, and are what the fips crate's `workspace = true` resolves against
+# when built as part of this workspace, so keep them in step with the ones in
+# utils/dependencies.
+aws-lc-rs = { version = "1.18", default-features = false, features = ["alloc", "ring-io", "ring-sig-verify", "fips"] }
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "fips"] }
 rustls-pemfile = "2.2.0"
 tokio-rustls = "0.26.2"
 webpki = "0.22.4"

@@ -75,6 +75,10 @@ struct Cli {
     /// Enable ansi colors for logs.
     #[clap(long, default_value_t = true, action = clap::ArgAction::Set)]
     ansi_colors: bool,
+
+    /// Crypto options.
+    #[clap(flatten)]
+    crypto: utils::CryptoArgs,
 }
 
 impl Cli {
@@ -131,9 +135,9 @@ fn initialize_tracing(args: &Cli) {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    utils::init_rustls_crypto_provider();
     utils::print_package_info!();
     let cli = Cli::args();
+    cli.crypto.init()?;
     println!("Using options: {cli:?}");
     initialize_tracing(&cli);
 

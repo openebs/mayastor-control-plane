@@ -122,6 +122,10 @@ struct Cli {
     /// Enable ansi colors for logs.
     #[clap(long, default_value_t = true, action = clap::ArgAction::Set)]
     ansi_colors: bool,
+
+    /// Crypto options.
+    #[clap(flatten)]
+    crypto: utils::CryptoArgs,
 }
 
 static CLUSTER_AGENT_CLIENT: OnceCell<ClusterAgentClient> = OnceCell::new();
@@ -188,8 +192,8 @@ impl Cli {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    utils::init_rustls_crypto_provider();
     let cli_args = Cli::args();
+    cli_args.crypto.init()?;
     utils::print_package_info!();
     println!("Using options: {cli_args:?}");
 

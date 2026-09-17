@@ -31,7 +31,7 @@ impl ComponentAction for JsonGrpcAgent {
         if let Some(size) = &options.otel_max_batch_size {
             binary = binary.with_env("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", size);
         }
-        Ok(cfg.add_container_bin(name, binary))
+        Ok(cfg.add_container_bin(name, options.fips_env(binary)))
     }
     async fn start(
         &self,

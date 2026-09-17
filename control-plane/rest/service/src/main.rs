@@ -131,6 +131,10 @@ pub(crate) struct CliArgs {
     /// Use ANSI colors for logs.
     #[clap(long, default_value_t = true, action = clap::ArgAction::Set)]
     ansi_colors: bool,
+
+    /// Crypto options.
+    #[clap(flatten)]
+    crypto: utils::CryptoArgs,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -354,9 +358,9 @@ async fn probes_only_on_insecure(
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
-    utils::init_rustls_crypto_provider();
     utils::print_package_info!();
     let cli_args = CliArgs::args();
+    cli_args.crypto.init()?;
     println!("Using options: {cli_args:?}");
 
     utils::tracing_telemetry::TracingTelemetry::builder()

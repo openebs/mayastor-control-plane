@@ -12,8 +12,8 @@ impl ComponentAction for HaClusterAgent {
         if !options.no_grpc_tls {
             binary = binary.with_arg("--grpc-auto-tls");
         }
-        let mut spec =
-            ContainerSpec::from_binary("agent-ha-cluster", binary).with_portmap("11500", "11500");
+        let mut spec = ContainerSpec::from_binary("agent-ha-cluster", options.fips_env(binary))
+            .with_portmap("11500", "11500");
 
         if let Some(env) = &options.agents_env {
             for kv in env {
