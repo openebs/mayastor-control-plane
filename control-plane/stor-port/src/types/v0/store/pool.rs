@@ -540,6 +540,31 @@ impl PoolSpec {
         }
     }
 
+    /// Updates the drain phase of the pool.
+    pub fn set_drain_phase(&mut self, op: DrainPhaseOp) {
+        if let Some(record) = self.drain_record_mut() {
+            record.phase = op.phase;
+            record.phase_reason = op.phase_reason;
+            record.initial_stats = op.initial_stats;
+        }
+    }
+
+    /// Returns true if the pool is in Queued phase.
+    pub fn is_drain_queued(&self) -> bool {
+        matches!(
+            self.drain_record().map(|r| r.phase()),
+            Some(DrainPhase::Queued)
+        )
+    }
+
+    /// Returns true if the pool is in Draining phase.
+    pub fn is_draining(&self) -> bool {
+        matches!(
+            self.drain_record().map(|r| r.phase()),
+            Some(DrainPhase::Draining)
+        )
+    }
+
     /// Removes drain configuration from the pool, restoring the user's own cordon, if they had
     /// one set before the drain.
     pub fn abort_drain(&mut self) {
@@ -550,6 +575,14 @@ impl PoolSpec {
                 .map(|uc| CordonDrainState::Cordoned(uc.clone()));
         }
         self.metadata.persisted.drain_record = None
+    }
+
+    /// Returns the applied drain spec on the pool, if a drain has been admitted.
+    pub fn drain_spec(&self) -> Option<&DrainSpec> {
+        match self.cordon_drain.as_ref()? {
+            CordonDrainState::Drain(drain) => Some(drain),
+            CordonDrainState::Cordoned(_) => None,
+        }
     }
 
     /// Returns the applied drain configuration on the pool.
@@ -569,6 +602,10 @@ impl PoolSpec {
     /// Returns the drain record of the pool, if a drain has been admitted.
     pub fn drain_record(&self) -> Option<&PoolDrainRecord> {
         self.metadata.persisted.drain_record.as_ref()
+    }
+
+    pub fn drain_record_mut(&mut self) -> Option<&mut PoolDrainRecord> {
+        self.metadata.persisted.drain_record.as_mut()
     }
 }
 
@@ -677,6 +714,9 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
                 PoolOperation::Drain(op) => {
                     self.set_drain(op);
                 }
+                PoolOperation::DrainProgress(op) => match op {
+                    DrainProgressOp::PhaseUpdate(phase_op) => self.set_drain_phase(phase_op),
+                },
             }
         }
         self.clear_op();
@@ -723,6 +763,7 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
             PoolOperation::Uncordon(_) => (false, true),
             PoolOperation::Import(_) => (false, false),
             PoolOperation::Drain(_) => (false, true),
+            PoolOperation::DrainProgress(_) => (false, true),
         }
     }
 }
@@ -738,6 +779,7 @@ pub enum PoolOperation {
     Uncordon(PoolCordonOp),
     Import(PoolImportOp),
     Drain(PoolDrainOp),
+    DrainProgress(DrainProgressOp),
 }
 
 /// Pool importing info.
@@ -793,6 +835,36 @@ impl PoolCordonOp {
 pub struct PoolDrainOp {
     /// Drain policy to be applied to the pool.
     pub policy: DrainPolicy,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum DrainProgressOp {
+    /// Update on drain phase and related fields.
+    PhaseUpdate(DrainPhaseOp),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct DrainPhaseOp {
+    /// Phase of the drain to be set.
+    pub phase: DrainPhase,
+    /// Phase reason, if applicable.
+    pub phase_reason: Option<PhaseReason>,
+    /// Pool usage when transitioning to Draining for the first time.
+    pub initial_stats: Option<PoolUsage>,
+}
+
+impl DrainPhaseOp {
+    pub fn new(
+        phase: DrainPhase,
+        phase_reason: Option<PhaseReason>,
+        initial_stats: Option<PoolUsage>,
+    ) -> Self {
+        Self {
+            phase,
+            phase_reason,
+            initial_stats,
+        }
+    }
 }
 
 /// Parameter for adding pool labels.

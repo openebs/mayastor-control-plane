@@ -215,6 +215,13 @@ pub(crate) struct CliArgs {
     /// Crypto options.
     #[clap(flatten)]
     crypto: utils::CryptoArgs,
+
+    /// Maximum number of concurrent pool drain. If number of pools
+    /// in Draining state match this value then newer drain request stay in
+    /// Queued state. Pools are enqueued to Draining state in FIFO order by
+    /// drain reqeusted timestamp.
+    #[clap(long = "max-concurrent-pool-drain", default_value_t = 3)]
+    max_concurrent_pool_drain: u8,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -357,6 +364,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         cli_args.offline_rebuild_enabled,
         cli_args.offline_rebuild_grace_period.into(),
         cli_args.max_offline_rebuilds,
+        cli_args.max_concurrent_pool_drain,
     )
     .await?;
 

@@ -3,8 +3,9 @@ use crate::controller::{
     wrapper::{GetterOps, *},
 };
 use agents::errors::{SvcError, SvcError::PoolNotFound};
-use stor_port::types::v0::transport::{
-    CtrlPoolState, NodeId, Pool, PoolId, Replica, ReplicaId, VolumeId,
+use stor_port::types::v0::{
+    store::pool::PoolUsage,
+    transport::{CtrlPoolState, NodeId, Pool, PoolId, Replica, ReplicaId, VolumeId},
 };
 
 /// Pool helpers.
@@ -97,6 +98,17 @@ impl Registry {
         }
         Err(PoolNotFound {
             pool_id: pool_id.to_owned(),
+        })
+    }
+
+    /// Get the pool usage for the pool ID.
+    pub(crate) async fn pool_usage(&self, pool_id: &PoolId) -> Result<PoolUsage, SvcError> {
+        let pool_wrapper = self.pool_wrapper(pool_id).await?;
+        Ok(PoolUsage {
+            repl_count: pool_wrapper.replicas().len() as u64,
+            snap_count: pool_wrapper.snap_count.unwrap_or_default(),
+            used: pool_wrapper.used,
+            committed: Some(pool_wrapper.commitment()),
         })
     }
 
