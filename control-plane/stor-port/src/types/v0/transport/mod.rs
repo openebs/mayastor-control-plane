@@ -158,6 +158,8 @@ pub enum MessageIdVs {
     SetVolumeReplica,
     /// Set volume property.
     SetVolumeProperty,
+    /// Request an offline rebuild, skipping the grace period.
+    TriggerOfflineRebuild,
     /// Create volume snapshot.
     CreateVolumeSnapshot,
     /// Delete volume snapshot.

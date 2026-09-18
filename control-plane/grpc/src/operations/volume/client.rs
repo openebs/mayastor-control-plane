@@ -7,8 +7,8 @@ use crate::{
                 CreateSnapshotVolumeInfo, CreateVolumeInfo, CreateVolumeSnapshotInfo,
                 DestroyShutdownTargetsInfo, DestroyVolumeInfo, PublishVolumeInfo,
                 RepublishVolumeInfo, ResizeVolumeInfo, SetVolumePropertyInfo, SetVolumeReplicaInfo,
-                ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
-                VolumeSnapshot, VolumeSnapshots,
+                ShareVolumeInfo, TriggerOfflineRebuildInfo, UnpublishVolumeInfo, UnshareVolumeInfo,
+                VolumeOperations, VolumeSnapshot, VolumeSnapshots,
             },
             traits_snapshots::DestroyVolumeSnapshotInfo,
         },
@@ -19,8 +19,8 @@ use crate::{
         get_snapshots_reply, get_snapshots_request, get_volumes_reply, get_volumes_request,
         publish_volume_reply, republish_volume_reply, resize_volume_reply,
         set_volume_property_reply, set_volume_replica_reply, share_volume_reply,
-        unpublish_volume_reply, volume_grpc_client::VolumeGrpcClient, GetSnapshotsRequest,
-        GetVolumesRequest, ProbeRequest,
+        trigger_offline_rebuild_reply, unpublish_volume_reply,
+        volume_grpc_client::VolumeGrpcClient, GetSnapshotsRequest, GetVolumesRequest, ProbeRequest,
     },
 };
 use stor_port::{
@@ -259,6 +259,33 @@ impl VolumeOperations for VolumeClient {
             Some(set_volume_property_reply) => match set_volume_property_reply {
                 set_volume_property_reply::Reply::Volume(volume) => Ok(Volume::try_from(volume)?),
                 set_volume_property_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Volume)),
+        }
+    }
+    #[tracing::instrument(
+        name = "VolumeClient::trigger_offline_rebuild",
+        level = "info",
+        skip(self),
+        err
+    )]
+    async fn trigger_offline_rebuild(
+        &self,
+        req: &dyn TriggerOfflineRebuildInfo,
+        ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let req = self.request(req, ctx, MessageIdVs::TriggerOfflineRebuild);
+        let response = self
+            .client()
+            .trigger_offline_rebuild(req)
+            .await?
+            .into_inner();
+        match response.reply {
+            Some(trigger_offline_rebuild_reply) => match trigger_offline_rebuild_reply {
+                trigger_offline_rebuild_reply::Reply::Volume(volume) => {
+                    Ok(Volume::try_from(volume)?)
+                }
+                trigger_offline_rebuild_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Volume)),
         }
