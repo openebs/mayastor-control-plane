@@ -128,16 +128,19 @@ impl SpecOperationsHelper for PoolSpec {
             PoolOperation::Drain(drain) => {
                 self.validate_drain(drain)
                     .map_err(|refused| match refused {
-                        DrainRefused::EvictPolicyImmutable => SvcError::UnsupportedDrainUpdate {
+                        DrainRefused::Unchanged => SvcError::NoPolicyUpdateOnDrain {
                             name: self.id().clone(),
                         },
-                        DrainRefused::Unchanged => SvcError::NoSnapPolicyUpdateOnDrain {
-                            name: self.id().clone(),
-                        },
-                        DrainRefused::Terminal(phase) => SvcError::PoolAlreadyDrained {
+                        DrainRefused::Terminal(phase) => SvcError::AlreadyTerminal {
                             name: self.id().clone(),
                             phase,
                         },
+                        DrainRefused::InDraining => SvcError::PoolAlreadyDraining {
+                            name: self.id().clone(),
+                        },
+                        DrainRefused::UnsafeEvictPolicyConflict => {
+                            SvcError::UnsafeEvictPolicyConflict {}
+                        }
                     })?;
                 self.start_op(op);
                 Ok(())

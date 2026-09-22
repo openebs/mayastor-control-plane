@@ -489,9 +489,12 @@ impl PoolSpec {
     }
 
     /// If pool has only cordon config then its allowed to set drain config.
-    /// If pool has drain config already set then check if the update on drain
-    /// config is allowed.
+    /// If pool has drain config then spec update is allowed if its not in Terminal
+    /// or Draining state.
     pub fn validate_drain(&self, op: &PoolDrainOp) -> Result<(), DrainRefused> {
+        if op.policy.unsafe_evict && op.policy.unsafe_rebuild_otherwise_evict.is_some() {
+            return Err(DrainRefused::UnsafeEvictPolicyConflict);
+        }
         match &self.cordon_drain {
             Some(ds) => {
                 if let Some(record) = self.drain_record() {
@@ -501,6 +504,8 @@ impl PoolSpec {
                         || record.phase == DrainPhase::Aborted
                     {
                         Err(DrainRefused::Terminal(record.phase.clone()))
+                    } else if record.phase == DrainPhase::Draining {
+                        Err(DrainRefused::InDraining)
                     } else {
                         ds.validate_drain(op)
                     }
@@ -577,10 +582,12 @@ impl PoolSpec {
 pub enum DrainRefused {
     /// The drain has already finished: Drained, AwaitingCleanup or Aborted.
     Terminal(DrainPhase),
-    /// An applied drain's unsafe_evict/unsafe_rebuild_otherwise_evict cannot be changed.
-    EvictPolicyImmutable,
-    /// The request leaves the applied snapshot policy unchanged, so there is nothing to update.
+    /// The pool is already in the draining phase, so the drain configuration cannot be changed.
+    InDraining,
+    /// The request leaves the applied policy unchanged, so there is nothing to update.
     Unchanged,
+    /// Cannot set both unsafe_evict and unsafe_rebuild_otherwise_evict together.
+    UnsafeEvictPolicyConflict,
 }
 
 impl From<&PoolSpec> for ImportPool {
@@ -1040,12 +1047,13 @@ impl CordonDrainState {
             CordonDrainState::Drain(spec) => {
                 let applied_policy = &spec.policy;
                 let request_policy = &op.policy;
-                if applied_policy.unsafe_evict != request_policy.unsafe_evict
+                let evict_policy_changed = applied_policy.unsafe_evict
+                    != request_policy.unsafe_evict
                     || applied_policy.unsafe_rebuild_otherwise_evict
-                        != request_policy.unsafe_rebuild_otherwise_evict
+                        != request_policy.unsafe_rebuild_otherwise_evict;
+                if evict_policy_changed
+                    || applied_policy.snapshot_policy != request_policy.snapshot_policy
                 {
-                    Err(DrainRefused::EvictPolicyImmutable)
-                } else if applied_policy.snapshot_policy != request_policy.snapshot_policy {
                     Ok(())
                 } else {
                     Err(DrainRefused::Unchanged)
