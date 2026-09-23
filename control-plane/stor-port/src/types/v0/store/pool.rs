@@ -318,12 +318,12 @@ pub struct PoolUsage {
 pub struct DrainConfig {
     /// When this move first attempted to place its spare.
     pub placement_started_at: Option<SystemTime>,
-    /// Id of the volume draining_replica belongs to.
+    /// Id of the volume moving_replica belongs to.
     pub volume: VolumeId,
-    /// Id of the pool draining_replica belongs to.
+    /// Id of the pool moving_replica belongs to.
     pub pool: PoolId,
     /// Id of the draining replica. It's None when it's evacuated successfully.
-    pub draining_replica: Option<ReplicaId>,
+    pub moving_replica: Option<ReplicaId>,
     /// Id of the spare replica created as part of drain procedure.
     pub spare_replica: Option<SpareReplica>,
     /// Why a move's over-replicated spare is being removed.
@@ -343,7 +343,7 @@ pub struct SpareReplica {
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnwindSpare {
     /// The drain was aborted (`DrainPhase → Aborted`): remove the spare and end the
-    /// move, keeping `draining_replica` where it is.
+    /// move, keeping `moving_replica` where it is.
     Abort,
     /// The pool hosting the still-rebuilding spare has itself entered a drain: remove
     /// the spare and let this move place a fresh one on another eligible pool.
@@ -1140,10 +1140,10 @@ impl From<PoolDrainRecord> for models::PoolDrainRecord {
             phase: record.phase.into(),
             phase_reason: record.phase_reason.into_opt(),
             initial: record.initial_stats.into_opt(),
-            draining_replicas: record
+            moving_replicas: record
                 .replica_moves
                 .into_iter()
-                .filter_map(|config| config.draining_replica)
+                .filter_map(|config| config.moving_replica)
                 .map(Into::into)
                 .collect(),
         }
