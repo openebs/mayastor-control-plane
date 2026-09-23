@@ -540,12 +540,14 @@ pub enum SvcError {
         code: tonic::Code,
         kind: ReplyErrorKind,
     },
-    #[snafu(display("Only snapshot policy can be updated for an ongoing drain of {name}"))]
-    UnsupportedDrainUpdate { name: PoolId },
-    #[snafu(display("No changes on existing snapshot policy on ongoing drain of {name}"))]
-    NoSnapPolicyUpdateOnDrain { name: PoolId },
-    #[snafu(display("Pool {name} is already in a {phase} state"))]
-    PoolAlreadyDrained { name: PoolId, phase: DrainPhase },
+    #[snafu(display("No changes on existing policy on ongoing drain of {name}"))]
+    NoPolicyUpdateOnDrain { name: PoolId },
+    #[snafu(display("Cannot update policy, Pool {name} is already in a {phase} state"))]
+    AlreadyTerminal { name: PoolId, phase: DrainPhase },
+    #[snafu(display("Cannot update {name} drain spec as its already in Draining state"))]
+    PoolAlreadyDraining { name: PoolId },
+    #[snafu(display("Either one of unsafe evict option can be used"))]
+    UnsafeEvictPolicyConflict {},
 }
 
 impl SvcError {
@@ -572,9 +574,10 @@ impl SvcError {
             Self::ReplaceNqnNotFound { .. } => tonic::Code::FailedPrecondition,
             Self::PoolCreateError { code, .. } => *code,
             Self::MaxRebuilds { .. } => tonic::Code::OutOfRange,
-            Self::UnsupportedDrainUpdate { .. } => tonic::Code::InvalidArgument,
-            Self::NoSnapPolicyUpdateOnDrain { .. } => tonic::Code::InvalidArgument,
-            Self::PoolAlreadyDrained { .. } => tonic::Code::FailedPrecondition,
+            Self::NoPolicyUpdateOnDrain { .. } => tonic::Code::InvalidArgument,
+            Self::AlreadyTerminal { .. } => tonic::Code::FailedPrecondition,
+            Self::PoolAlreadyDraining { .. } => tonic::Code::FailedPrecondition,
+            Self::UnsafeEvictPolicyConflict { .. } => tonic::Code::InvalidArgument,
             _ => tonic::Code::Internal,
         }
     }
@@ -1398,20 +1401,26 @@ impl From<SvcError> for ReplyError {
                 source,
                 extra,
             },
-            SvcError::UnsupportedDrainUpdate { .. } => ReplyError {
+            SvcError::NoPolicyUpdateOnDrain { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::Pool,
                 source,
                 extra,
             },
-            SvcError::NoSnapPolicyUpdateOnDrain { .. } => ReplyError {
-                kind: ReplyErrorKind::InvalidArgument,
-                resource: ResourceKind::Pool,
-                source,
-                extra,
-            },
-            SvcError::PoolAlreadyDrained { .. } => ReplyError {
+            SvcError::AlreadyTerminal { .. } => ReplyError {
                 kind: ReplyErrorKind::NotAcceptable,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::PoolAlreadyDraining { .. } => ReplyError {
+                kind: ReplyErrorKind::NotAcceptable,
+                resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::UnsafeEvictPolicyConflict { .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::Pool,
                 source,
                 extra,
