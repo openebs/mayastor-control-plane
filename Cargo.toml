@@ -61,12 +61,14 @@ sysfs = { path = "./utils/dependencies/sysfs" }
 composer = { path = "./utils/dependencies/composer", default-features = false }
 
 fips = { path = "./utils/dependencies/fips" }
-# crypto: these put every transitive user of them onto the FIPS validated
-# backend, and are what the fips crate's `workspace = true` resolves against
-# when built as part of this workspace, so keep them in step with the ones in
-# utils/dependencies.
-aws-lc-rs = { version = "1.18", default-features = false, features = ["alloc", "ring-io", "ring-sig-verify", "fips"] }
-rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "fips"] }
+# crypto: the fips crate is the single place that opts rustls and aws-lc-rs onto
+# the FIPS validated backend (per-target - not on Windows, where aws-lc-fips-sys
+# cannot be cross-compiled), pulling every transitive user along via cargo's
+# feature unification. These pins are what its `workspace = true` resolves
+# against when built as part of this workspace, so keep them in step with the
+# ones in utils/dependencies.
+aws-lc-rs = { version = "1.18", default-features = false, features = ["alloc", "ring-io", "ring-sig-verify"] }
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
 rustls-pemfile = "2.2.0"
 tokio-rustls = "0.26.2"
 webpki = "0.22.4"
