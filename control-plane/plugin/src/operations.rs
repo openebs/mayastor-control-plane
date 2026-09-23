@@ -46,12 +46,8 @@ pub enum Operations {
 #[async_trait(?Send)]
 pub trait Drain {
     type ID;
-    async fn drain(
-        id: &Self::ID,
-        label: String,
-        drain_timeout: Option<humantime::Duration>,
-        output: &utils::OutputFormat,
-    ) -> PluginResult;
+    type Args;
+    async fn drain(id: &Self::ID, args: &Self::Args, output: &utils::OutputFormat) -> PluginResult;
 }
 
 /// Label trait.

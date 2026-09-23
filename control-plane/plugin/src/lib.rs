@@ -132,8 +132,15 @@ impl ExecuteOperation for DrainResources {
             DrainResources::Node(drain_node_args) => {
                 node::Node::drain(
                     &drain_node_args.node_id(),
-                    drain_node_args.label(),
-                    drain_node_args.drain_timeout(),
+                    drain_node_args,
+                    &cli_args.output,
+                )
+                .await
+            }
+            DrainResources::Pool(drain_pool_args) => {
+                pool::Pool::drain(
+                    drain_pool_args.pool_id(),
+                    drain_pool_args.policy(),
                     &cli_args.output,
                 )
                 .await
