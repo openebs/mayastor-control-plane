@@ -75,7 +75,7 @@ jobs:
 
       - name: Run BDD Tests
         run: |
-          nix-shell --run "deployer start --image-pull-policy always -w 60s && deployer stop"
+          nix-shell --run "deployer start --image-pull-policy always -w 100s && deployer stop"
           nix-shell --run "./scripts/python/test.sh"
 
       - name: Cleanup

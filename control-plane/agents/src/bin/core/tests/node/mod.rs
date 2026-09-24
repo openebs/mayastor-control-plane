@@ -55,6 +55,7 @@ async fn node() {
         .with_rest(false)
         .with_node_deadline(&humantime::Duration::from(deadline).to_string())
         .with_req_timeouts(rpc_timeout.connect_timeout(), rpc_timeout.base_timeout())
+        .with_options(|o| o.with_io_engine_env("MAYASTOR_HB_INTERVAL_SEC", "1"))
         .build()
         .await
         .unwrap();

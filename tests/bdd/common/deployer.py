@@ -193,7 +193,16 @@ class Deployer(object):
         print(f"DeployerStart: {datetime.now()}")
         deployer_path = os.environ["ROOT_DIR"] + "/target/debug/deployer"
         # todo: get logs out to specific location
-        subprocess.run([deployer_path, "start"] + options.args(), check=True)
+        result = subprocess.run(
+            [deployer_path, "start"] + options.args(),
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print(f"DeployerStart failed (exit code {result.returncode})")
+            print(f"stdout:\n{result.stdout}")
+            print(f"stderr:\n{result.stderr}")
+            result.check_returncode()
 
     # Stop containers
     @staticmethod

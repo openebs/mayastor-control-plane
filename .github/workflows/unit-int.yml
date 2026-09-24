@@ -82,7 +82,7 @@ jobs:
       - name: Run Tests
         run: |
           # pre-pull the required container images
-          nix-shell --run "deployer start --image-pull-policy always -w 60s && deployer stop"
+          nix-shell --run "deployer start --image-pull-policy always -w 100s && deployer stop"
           # includes both unit and integration tests
           nix-shell --run "./scripts/rust/test.sh"
 

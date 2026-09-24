@@ -386,6 +386,13 @@ impl rpc::v1::pb::pool_rpc_server::PoolRpc for IoEngine {
     ) -> Result<tonic::Response<ProbePoolResponse>, tonic::Status> {
         Err(tonic::Status::unimplemented(""))
     }
+    #[tracing::instrument(skip(self), err, level = "info")]
+    async fn list_pools_smart(
+        &self,
+        _request: tonic::Request<ListPoolsSmartOptions>,
+    ) -> Result<tonic::Response<ListPoolsSmartResponse>, tonic::Status> {
+        Err(tonic::Status::unimplemented(""))
+    }
 }
 
 #[tonic::async_trait]
