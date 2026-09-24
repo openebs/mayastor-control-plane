@@ -5207,7 +5207,7 @@ components:
             drain is still queued.
           allOf:
             - $ref: '#/components/schemas/PoolDrainUsage'
-        drainingReplicas:
+        movingReplicas:
           description: |-
             The replicas this drain is currently moving off the pool.
           type: array
@@ -5215,7 +5215,7 @@ components:
             $ref: '#/components/schemas/ReplicaId'
       required:
         - phase
-        - drainingReplicas
+        - movingReplicas
     PoolDrainPhase:
       description: The phase of the pool drain state machine
       type: string

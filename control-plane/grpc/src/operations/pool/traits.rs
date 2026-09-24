@@ -611,7 +611,7 @@ impl From<DrainConfig> for pool::DrainConfig {
             placement_started_at: value.placement_started_at.map(prost_types::Timestamp::from),
             volume: value.volume.to_string(),
             pool: value.pool.to_string(),
-            draining_replica: value.draining_replica.map(|replica| replica.to_string()),
+            moving_replica: value.moving_replica.map(|replica| replica.to_string()),
             spare_replica: value.spare_replica.into_opt(),
             unwind_spare: value
                 .unwind_spare
@@ -768,8 +768,8 @@ impl TryFrom<pool::DrainConfig> for DrainConfig {
             placement_started_at,
             volume: VolumeId::try_from(StringValue(Some(value.volume)))?,
             pool: PoolId::from(value.pool),
-            draining_replica: value
-                .draining_replica
+            moving_replica: value
+                .moving_replica
                 .map(|replica| ReplicaId::try_from(StringValue(Some(replica))))
                 .transpose()?,
             spare_replica: value.spare_replica.try_into_opt()?,
