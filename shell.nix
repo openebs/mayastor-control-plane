@@ -92,6 +92,12 @@ mkShellNoCC {
       pre-commit install
       pre-commit install --hook commit-msg
     fi
+    # Looks like vscode with the nix plugin is running commands in different shells without setting the temp variables
+    # Since nix-shell by default nests the temp variables, we need to set them here
+    if [ "$VSCODE_CLI" = "1" ]; then
+      export TMPDIR=/tmp
+      export TMP=/tmp
+    fi
 
     ${pkgs.lib.optionalString (norust) "cowsay ${norust_moth}"}
     ${pkgs.lib.optionalString (norust) "echo"}
