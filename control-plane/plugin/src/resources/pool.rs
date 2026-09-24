@@ -744,15 +744,16 @@ impl Default for CordonReq {
 impl From<CordonReq> for models::PoolCordonReq {
     fn from(value: CordonReq) -> Self {
         if value.all {
-            models::PoolCordonReq::new_all(true, true, true, false)
+            models::PoolCordonReq::new_all(true, true, true, false, None)
         } else if value.all_sub {
-            models::PoolCordonReq::new_all(true, true, true, value.import)
+            models::PoolCordonReq::new_all(true, true, true, value.import, None)
         } else {
             models::PoolCordonReq::new_all(
                 value.replicas,
                 value.snapshots,
                 value.restores,
                 value.import,
+                None,
             )
         }
     }
@@ -772,6 +773,9 @@ pub struct UncordonReq {
     /// Pool may be imported again.
     #[clap(long)]
     pub import: bool,
+    /// Cancels the ongoing drain operation.
+    #[clap(long)]
+    pub drain: bool,
     /// Remove all cordon constraints (default).
     #[clap(long)]
     pub all: bool,
@@ -783,6 +787,7 @@ impl Default for UncordonReq {
             snapshots: true,
             restores: true,
             import: true,
+            drain: true,
             all: true,
         }
     }
@@ -790,13 +795,14 @@ impl Default for UncordonReq {
 impl From<UncordonReq> for models::PoolCordonReq {
     fn from(value: UncordonReq) -> Self {
         if value.all {
-            models::PoolCordonReq::new_all(true, true, true, true)
+            models::PoolCordonReq::new_all(true, true, true, true, true)
         } else {
             models::PoolCordonReq::new_all(
                 value.replicas,
                 value.snapshots,
                 value.restores,
                 value.import,
+                value.drain,
             )
         }
     }

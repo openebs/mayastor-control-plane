@@ -5099,6 +5099,8 @@ components:
           type: boolean
         import:
           type: boolean
+        drain:
+          type: boolean
       required:
         - replicas
         - snapshots
@@ -5138,7 +5140,7 @@ components:
         userCordon:
           description: |-
             The user's own cordon, set before the drain began and restored if the drain is
-            aborted. Absent when the pool was not cordoned before the drain. Gets updated
+            canceled. Absent when the pool was not cordoned before the drain. Gets updated
             if the user changes the cordon while the drain is in progress.
           allOf:
             - $ref: '#/components/schemas/PoolCordon'
@@ -5194,7 +5196,7 @@ components:
     PoolDrainRecord:
       description: |-
         Progress of a pool drain. Persists after the drain reaches a terminal phase, as the
-        pool's last-drain record; it is cleared only when a drain is aborted.
+        pool's last-drain record; it is cleared only when a drain is cancelled.
       type: object
       properties:
         phase:
@@ -5226,7 +5228,7 @@ components:
         - AwaitingCleanup
         - PartiallyDrained
         - Drained
-        - Aborted
+        - Cancelled
     PoolDrainPhaseReason:
       description: Why the pool is in its current drain phase
       type: string

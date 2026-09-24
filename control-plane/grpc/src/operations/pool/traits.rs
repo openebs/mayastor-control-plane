@@ -631,7 +631,7 @@ impl From<SpareReplica> for pool::SpareReplica {
 impl From<UnwindSpare> for pool::UnwindSpare {
     fn from(value: UnwindSpare) -> Self {
         match value {
-            UnwindSpare::Abort => Self::Abort,
+            UnwindSpare::Cancelled => Self::Cancelled,
             UnwindSpare::Respare => Self::Respare,
         }
     }
@@ -655,7 +655,7 @@ impl From<DrainPhase> for pool::DrainPhase {
             DrainPhase::Queued => Self::Queued,
             DrainPhase::Draining => Self::Draining,
             DrainPhase::AwaitingCleanup => Self::AwaitingCleanup,
-            DrainPhase::Aborted => Self::DrainAborted,
+            DrainPhase::Cancelled => Self::DrainCancelled,
             DrainPhase::PartiallyDrained => Self::PartiallyDrained,
             DrainPhase::Drained => Self::Drained,
         }
@@ -720,7 +720,7 @@ impl From<pool::DrainPhase> for DrainPhase {
             pool::DrainPhase::Queued => Self::Queued,
             pool::DrainPhase::Draining => Self::Draining,
             pool::DrainPhase::AwaitingCleanup => Self::AwaitingCleanup,
-            pool::DrainPhase::DrainAborted => Self::Aborted,
+            pool::DrainPhase::DrainCancelled => Self::Cancelled,
             pool::DrainPhase::PartiallyDrained => Self::PartiallyDrained,
             pool::DrainPhase::Drained => Self::Drained,
         }
@@ -793,7 +793,7 @@ impl TryFrom<pool::SpareReplica> for SpareReplica {
 impl From<pool::UnwindSpare> for UnwindSpare {
     fn from(value: pool::UnwindSpare) -> Self {
         match value {
-            pool::UnwindSpare::Abort => Self::Abort,
+            pool::UnwindSpare::Cancelled => Self::Cancelled,
             pool::UnwindSpare::Respare => Self::Respare,
         }
     }
@@ -1457,6 +1457,8 @@ pub struct PoolCordonRequest {
     pub restores: bool,
     /// Importing the pool after node/engine restart.
     pub import: bool,
+    /// Applicable for uncordon only. Used to cancel ongoing drain.
+    pub drain: Option<bool>,
 }
 
 impl From<CordonPoolRequest> for PoolCordonRequest {
@@ -1468,6 +1470,7 @@ impl From<CordonPoolRequest> for PoolCordonRequest {
             snapshots: value.snapshots,
             restores: value.restores,
             import: value.import,
+            drain: value.drain,
         }
     }
 }
@@ -1480,6 +1483,7 @@ impl From<PoolCordonRequest> for CordonPoolRequest {
             snapshots: value.snapshots,
             restores: value.restores,
             import: value.import,
+            drain: value.drain,
         }
     }
 }

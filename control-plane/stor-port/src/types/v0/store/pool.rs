@@ -297,7 +297,7 @@ pub enum DrainPhase {
     Drained,
     /// The user has cancelled the drain and the control plane is undoing the changes the drain
     /// made, unwinding in-flight moves and their spare replicas.
-    Aborted,
+    Cancelled,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
@@ -342,9 +342,9 @@ pub struct SpareReplica {
 /// the drain procedure.
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnwindSpare {
-    /// The drain was aborted (`DrainPhase → Aborted`): remove the spare and end the
+    /// The drain was cancelled (`DrainPhase → Cancelled`): remove the spare and end the
     /// move, keeping `moving_replica` where it is.
-    Abort,
+    Cancelled,
     /// The pool hosting the still-rebuilding spare has itself entered a drain: remove
     /// the spare and let this move place a fresh one on another eligible pool.
     Respare,
@@ -501,7 +501,7 @@ impl PoolSpec {
                     // No point on updating drain config when phase is terminal.
                     if record.phase == DrainPhase::Drained
                         || record.phase == DrainPhase::AwaitingCleanup
-                        || record.phase == DrainPhase::Aborted
+                        || record.phase == DrainPhase::Cancelled
                     {
                         Err(DrainRefused::Terminal(record.phase.clone()))
                     } else if record.phase == DrainPhase::Draining {
@@ -545,16 +545,22 @@ impl PoolSpec {
         }
     }
 
-    /// Removes drain configuration from the pool, restoring the user's own cordon, if they had
-    /// one set before the drain.
-    pub fn abort_drain(&mut self) {
-        if let Some(CordonDrainState::Drain(drain)) = &self.cordon_drain {
-            self.cordon_drain = drain
-                .user_cordon
-                .as_ref()
-                .map(|uc| CordonDrainState::Cordoned(uc.clone()));
+    /// Sets the drain phase as Cancelled if in Draining phase,
+    /// otherwise removes the drain record and reverts to the user's cordon, if any.
+    pub fn cancel_drain(&mut self) {
+        if let Some(drain_record) = self.metadata.persisted.drain_record.as_mut() {
+            if drain_record.phase == DrainPhase::Draining {
+                drain_record.phase = DrainPhase::Cancelled
+            } else {
+                if let Some(CordonDrainState::Drain(drain)) = &self.cordon_drain {
+                    self.cordon_drain = drain
+                        .user_cordon
+                        .as_ref()
+                        .map(|uc| CordonDrainState::Cordoned(uc.clone()));
+                    self.metadata.persisted.drain_record = None
+                }
+            }
         }
-        self.metadata.persisted.drain_record = None
     }
 
     /// Returns the applied drain configuration on the pool.
@@ -574,6 +580,15 @@ impl PoolSpec {
     /// Returns the drain record of the pool, if a drain has been admitted.
     pub fn drain_record(&self) -> Option<&PoolDrainRecord> {
         self.metadata.persisted.drain_record.as_ref()
+    }
+
+    /// Returns true if the drain can be cancelled.
+    pub fn drain_cancellable(&self) -> bool {
+        if let Some(record) = self.metadata.persisted.drain_record.as_ref() {
+            record.phase != DrainPhase::Cancelled
+        } else {
+            false
+        }
     }
 }
 
@@ -676,7 +691,10 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
                     self.cordon(op);
                 }
                 PoolOperation::Uncordon(op) => {
-                    self.uncordon(op);
+                    self.uncordon(op.clone());
+                    if op.drain.unwrap_or(false) && self.drain_cancellable() {
+                        self.cancel_drain();
+                    }
                 }
                 PoolOperation::Import(_) => {
                     self.metadata.runtime.diag = None;
@@ -771,6 +789,9 @@ pub struct PoolCordonOp {
     pub restores: bool,
     /// Pool cannot be imported after node/engine restart.
     pub import: bool,
+    /// Cancel the drain if the pool is currently draining.
+    /// Appicable only when uncordoning a pool.
+    pub drain: Option<bool>,
 }
 impl PoolCordonOp {
     fn resource(yes: bool, name: &str) -> &str {
@@ -1167,7 +1188,7 @@ impl From<DrainPhase> for models::PoolDrainPhase {
             DrainPhase::AwaitingCleanup => Self::AwaitingCleanup,
             DrainPhase::PartiallyDrained => Self::PartiallyDrained,
             DrainPhase::Drained => Self::Drained,
-            DrainPhase::Aborted => Self::Aborted,
+            DrainPhase::Cancelled => Self::Cancelled,
         }
     }
 }

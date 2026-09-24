@@ -109,6 +109,7 @@ async fn pool_purge() {
             snapshots: true,
             restores: false,
             import: false,
+            drain: None,
         })
         .await
         .unwrap();
@@ -183,6 +184,7 @@ async fn purge_rejected_insufficient_cordon(pool_client: &dyn PoolOperations, po
             snapshots: false,
             restores: false,
             import: false,
+            drain: None,
         })
         .await
         .unwrap();
@@ -205,6 +207,7 @@ async fn purge_rejected_insufficient_cordon(pool_client: &dyn PoolOperations, po
             snapshots: false,
             restores: false,
             import: false,
+            drain: None,
         })
         .await
         .unwrap();
@@ -341,6 +344,7 @@ async fn purge_reconciler_resumes_interrupted(cluster: &Cluster) {
             snapshots: true,
             restores: false,
             import: false,
+            drain: None,
         })
         .await
         .expect("Cordon should succeed");
@@ -553,6 +557,7 @@ async fn purge_skips_replica_creation_on_last_healthy_loss(cluster: &Cluster) {
             snapshots: true,
             restores: false,
             import: false,
+            drain: None,
         })
         .await
         .expect("Cordon should succeed");
