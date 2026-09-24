@@ -146,7 +146,7 @@ enum PhaseReason {
 // to proceed with the drain procedure.
 enum UnwindSpare {
   // The drain was aborted (`DrainPhase → Aborted`): remove the spare and end the
-  // move, keeping `draining_replica` where it is.
+  // move, keeping `moving_replica` where it is.
   Abort = 0;
   // The pool hosting the still-rebuilding spare has itself entered a drain: remove
   // the spare and let this move place a fresh one on another eligible pool.
@@ -157,12 +157,12 @@ enum UnwindSpare {
 message DrainConfig {
   // When this move first attempted to place its spare.
   optional google.protobuf.Timestamp placement_started_at = 1;
-  // Id of the volume draining_replica belongs to.
+  // Id of the volume moving_replica belongs to.
   string volume = 2;
-  // Id of the pool draining_replica belongs to.
+  // Id of the pool moving_replica belongs to.
   string pool = 3;
   // Id of the draining replica. It's None when it's evacuated successfully.
-  optional string draining_replica = 4;
+  optional string moving_replica = 4;
   // Id of the spare replica created as part of drain procedure.
   optional SpareReplica spare_replica = 5;
   // Why a move's over-replicated spare is being removed.
