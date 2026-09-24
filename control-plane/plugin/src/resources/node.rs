@@ -557,12 +557,10 @@ impl DrainNodeArgs {
 #[async_trait(?Send)]
 impl Drain for Node {
     type ID = NodeId;
-    async fn drain(
-        id: &Self::ID,
-        label: String,
-        drain_timeout: Option<humantime::Duration>,
-        output: &utils::OutputFormat,
-    ) -> PluginResult {
+    type Args = DrainNodeArgs;
+    async fn drain(id: &Self::ID, args: &Self::Args, output: &utils::OutputFormat) -> PluginResult {
+        let label = args.label();
+        let drain_timeout = args.drain_timeout();
         let mut timeout_instant: Option<time::Instant> = None;
         if let Some(dt) = drain_timeout {
             timeout_instant = time::Instant::now().checked_add(dt.into());

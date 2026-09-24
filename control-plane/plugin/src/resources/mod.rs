@@ -2,7 +2,7 @@ use crate::resources::{
     app_node::{GetAppNodeArgs, GetAppNodesArgs},
     blockdevice::BlockDeviceArgs,
     node::{DrainNodeArgs, GetNodeArgs, GetNodesArgs},
-    pool::{GetPoolArgs, GetPoolsArgs},
+    pool::{DrainPoolArgs, GetPoolArgs, GetPoolsArgs},
     snapshot::VolumeSnapshotArgs,
     volume::{VolumeTopologiesArgs, VolumeTopologyArgs, VolumesArgs},
 };
@@ -185,6 +185,11 @@ pub enum GetCordonArgs {
 pub enum DrainResources {
     /// Drain node with the given ID.
     Node(DrainNodeArgs),
+    /// Drain the pool with the given ID, moving all of its replicas onto other pools.{n}
+    /// The drain runs in the background; track its progress with `get pool`.{n}
+    /// Re-issuing the drain on a pool is possible only if drain is in `Queued`
+    /// or `PartiallyDrained` state.
+    Pool(DrainPoolArgs),
 }
 
 /// The types of resources that support the 'label' operation.

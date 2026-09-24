@@ -49,6 +49,15 @@ pub enum Error {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
+    /// Error when put pool drain request fails.
+    #[snafu(display("Failed to initiate pool drain {id}. Error {source}"))]
+    PoolDrainError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
+    /// Error when the pool returned by a successful drain request carries no drain record.
+    #[snafu(display("Pool {id} drain was accepted but the response carries no drain record"))]
+    PoolDrainRecordMissing { id: String },
     /// Error when put node drain request fails.
     #[snafu(display("Failed to put node drain {id}. Error {source}"))]
     PutNodeDrainError {

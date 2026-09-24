@@ -2,7 +2,7 @@ extern crate utils as external_utils;
 use super::VolumeId;
 use crate::{
     operations::{
-        Cordoning, Delete, Errors, Expand, GetWithArgs, Label, ListWithArgs, PluginResult,
+        Cordoning, Delete, Drain, Errors, Expand, GetWithArgs, Label, ListWithArgs, PluginResult,
     },
     resources::{
         error::{Error, LabelAssignSnafu, OpError, TopologyError},
@@ -799,6 +799,100 @@ impl From<UncordonReq> for models::PoolCordonReq {
                 value.import,
             )
         }
+    }
+}
+
+/// What the drain does with the snapshots left on the pool once all replicas are evacuated.
+#[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
+pub enum DrainSnapshotPolicy {
+    /// Leave the snapshots in place.
+    #[default]
+    Ignore,
+    /// Destroy the snapshots from the pool.
+    AcceptLoss,
+}
+impl From<DrainSnapshotPolicy> for models::PoolDrainSnapshotPolicy {
+    fn from(value: DrainSnapshotPolicy) -> Self {
+        match value {
+            DrainSnapshotPolicy::Ignore => Self::Ignore,
+            DrainSnapshotPolicy::AcceptLoss => Self::AcceptLoss,
+        }
+    }
+}
+
+/// Policy options for the pool drain operation.
+#[derive(Debug, Clone, clap::Args)]
+pub struct DrainReq {
+    /// What to do with the snapshots left on the pool once all replicas are evacuated.
+    #[clap(long, value_enum, default_value_t)]
+    pub snapshot_policy: DrainSnapshotPolicy,
+    /// Seconds to wait before force-evicting a replica which cannot be placed elsewhere.{n}
+    /// Use 0 to attempt the placement only once.{n}
+    /// Warning: force-evicting a replica reduces the redundancy of its volume.{n}
+    /// When not set, replicas are never force-evicted.
+    #[clap(long, value_name = "SECONDS")]
+    pub unsafe_rebuild_otherwise_evict: Option<u64>,
+    // Skip the safe over-replicate flow and evict the replicas directly.
+    // Hidden from the help as it's meant for testing only.
+    #[clap(long, hide = true)]
+    pub unsafe_evict: bool,
+}
+/// Arguments for the pool drain operation.
+#[derive(Debug, Clone, clap::Args)]
+pub struct DrainPoolArgs {
+    /// Id of the pool to drain.
+    pool_id: PoolId,
+    #[clap(flatten)]
+    policy: DrainReq,
+}
+
+impl DrainPoolArgs {
+    /// Return the pool ID.
+    pub fn pool_id(&self) -> &PoolId {
+        &self.pool_id
+    }
+    /// Return the drain policy.
+    pub fn policy(&self) -> &DrainReq {
+        &self.policy
+    }
+}
+
+impl From<&DrainReq> for models::PoolDrainReq {
+    fn from(value: &DrainReq) -> Self {
+        models::PoolDrainReq::new_all(
+            models::PoolDrainSnapshotPolicy::from(value.snapshot_policy),
+            value.unsafe_rebuild_otherwise_evict,
+            value.unsafe_evict,
+        )
+    }
+}
+
+#[async_trait(?Send)]
+impl Drain for Pool {
+    type ID = PoolId;
+    type Args = DrainReq;
+    async fn drain(id: &Self::ID, args: &Self::Args, output: &OutputFormat) -> PluginResult {
+        let pool = RestClient::client()
+            .pools_api()
+            .put_pool_drain(id, models::PoolDrainReq::from(args))
+            .await
+            .map_err(|source| Error::PoolDrainError {
+                id: id.to_string(),
+                source,
+            })?
+            .into_body();
+        match output {
+            OutputFormat::Yaml | OutputFormat::Json => {
+                utils::print_table(output, pool);
+            }
+            OutputFormat::None => {
+                let Some(record) = pool.meta.and_then(|meta| meta.drain) else {
+                    return Err(Error::PoolDrainRecordMissing { id: id.to_string() });
+                };
+                println!("Pool {id} drain requested. Current phase: {}", record.phase);
+            }
+        }
+        Ok(())
     }
 }
 
