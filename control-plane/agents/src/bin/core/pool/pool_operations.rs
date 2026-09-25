@@ -19,7 +19,10 @@ use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
         store::{
-            pool::{PoolCordonOp, PoolDrainOp, PoolOperation, PoolSpec},
+            pool::{
+                DrainPhase, DrainPhaseOp, DrainProgressOp, PoolCordonOp, PoolDrainOp,
+                PoolOperation, PoolSpec,
+            },
             snapshots::replica::ReplicaSnapshot,
         },
         transport::{
@@ -337,6 +340,28 @@ impl ResourceDrain for OperationGuardArc<PoolSpec> {
 }
 
 impl OperationGuardArc<PoolSpec> {
+    /// Sets the pool's drain phase to Draining and records the pool usage at the time of the request.
+    pub(crate) async fn set_draining(&mut self, registry: &Registry) -> Result<(), SvcError> {
+        let usage = registry.pool_usage(self.id()).await?;
+        let phase_op = DrainPhaseOp::new(DrainPhase::Draining, None, Some(usage));
+        let request = DrainProgressOp::PhaseUpdate(phase_op);
+        self.update_drain_record(registry, request).await?;
+        Ok(())
+    }
+
+    /// Update the drain record for a pool via operation guard functions.
+    pub(crate) async fn update_drain_record(
+        &mut self,
+        registry: &Registry,
+        request: DrainProgressOp,
+    ) -> Result<PoolSpec, SvcError> {
+        let spec_clone = self.lock().clone();
+        let spec_clone = self
+            .start_update(registry, &spec_clone, PoolOperation::DrainProgress(request))
+            .await?;
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+        Ok(self.as_ref().clone())
+    }
     /// Normal pool destruction via io-engine.
     async fn normal_destroy(
         &mut self,

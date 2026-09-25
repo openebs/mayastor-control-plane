@@ -134,6 +134,8 @@ pub(crate) struct RegistryInner<S: Store> {
     /// Cap on offline rebuilds running at once, so they cannot consume every
     /// slot allowed by `max_rebuilds` and starve published volumes.
     max_offline_rebuilds: Option<NumRebuilds>,
+    /// The maximum number of concurrent pool drain allowed.
+    max_concurrent_pool_drain: u16,
 }
 
 impl Registry {
@@ -168,6 +170,7 @@ impl Registry {
         offline_rebuild_enabled: bool,
         offline_rebuild_grace_period: std::time::Duration,
         max_offline_rebuilds: Option<NumRebuilds>,
+        max_concurrent_pool_drain: u16,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -235,6 +238,7 @@ impl Registry {
                 offline_rebuild_enabled,
                 offline_rebuild_grace_period,
                 max_offline_rebuilds,
+                max_concurrent_pool_drain,
             }),
         };
         registry.init().await?;
@@ -324,6 +328,11 @@ impl Registry {
     /// Check if the target acc is disabled.
     pub(crate) fn target_acc_disabled(&self) -> bool {
         self.disable_target_acc
+    }
+
+    /// Get the conccurent pool drain limit.
+    pub(crate) fn max_concurrent_pool_drain(&self) -> u16 {
+        self.max_concurrent_pool_drain
     }
 
     /// Get the simulation Args.

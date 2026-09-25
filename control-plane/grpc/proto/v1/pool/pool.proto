@@ -117,7 +117,7 @@ message PoolDrainRecord {
   // Current phase of the drain state machine.
   DrainPhase phase = 1;
   // Why pool is in the aforementioned phase.
-  optional PhaseReason phase_reason = 2;
+  optional PhaseReason reason = 2;
   // Statistics about the pool's usage at the time the drain was requested, and a live snapshot
   // of its current usage.
   optional PoolDrainStatistics drain_statistics = 3;
@@ -135,7 +135,7 @@ enum PhaseReason {
   // The pool is degraded and cannot safely drain without risking data loss.
   OfflinePool = 2;
   // The pool has a single replica that cannot be safely evicted without risking data loss.
-  SingleReplicaUnsafeEviction = 3;
+  SingleReplicaEviction = 3;
   // The node containing pool is back but pool is cordoned for import, so it cannot be drained.
   ImportCordoned = 4;
   // Snapshots are left behind due to user chosen drain policy.

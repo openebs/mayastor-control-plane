@@ -481,6 +481,41 @@ impl ResourceSpecsLocked {
         let specs = self.read();
         specs.pools.to_vec()
     }
+
+    /// Returns the number of pools currently in draining phase.
+    pub(crate) fn pools_rsc_draining_len(&self) -> usize {
+        let specs = self.read();
+        specs
+            .pools
+            .to_vec()
+            .iter()
+            .filter(|pool| {
+                let pool = pool.lock();
+                pool.is_draining()
+            })
+            .count()
+    }
+
+    /// Returns list of PoolId whose drain is `Queued`, ordered by the drain request timestamp.
+    pub(crate) fn pools_rsc_drain_queued(&self) -> Vec<PoolId> {
+        let specs = self.read();
+        let mut queued = specs
+            .pools
+            .to_vec()
+            .iter()
+            .filter_map(|pool| {
+                let pool = pool.lock();
+                if !pool.is_drain_queued() {
+                    return None;
+                }
+                let request_ts = pool.drain_spec()?.request_timestamp;
+                Some((request_ts, pool.id.clone()))
+            })
+            .collect::<Vec<_>>();
+        queued.sort_by_key(|(ts, _)| *ts);
+        queued.into_iter().map(|(_, pool)| pool).collect()
+    }
+
     /// Get a vector of PoolSpec's.
     pub(crate) fn pools(&self) -> Vec<PoolSpec> {
         self.read().pools()

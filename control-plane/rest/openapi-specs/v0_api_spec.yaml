@@ -5201,7 +5201,7 @@ components:
       properties:
         phase:
           $ref: '#/components/schemas/PoolDrainPhase'
-        phaseReason:
+        reason:
           $ref: '#/components/schemas/PoolDrainPhaseReason'
         initial:
           description: |-
@@ -5236,7 +5236,7 @@ components:
         - Unknown
         - WaitingForSlot
         - OfflinePool
-        - SingleReplicaUnsafeEviction
+        - SingleReplicaEviction
         - ImportCordoned
         - SnapshotsRetained
     PoolDrainUsage:

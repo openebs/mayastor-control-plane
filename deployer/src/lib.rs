@@ -374,6 +374,10 @@ pub struct StartOptions {
     /// to configure cluster size per-pool.
     #[clap(long)]
     pool_cluster_size: Option<u32>,
+    /// Maximum number of pools allowed to be draining concurrently.
+    /// Drain requests beyond this stay queued.
+    #[clap(long)]
+    pub max_concurrent_pool_drain: Option<u16>,
     #[clap(long, hide = true)]
     no_deprecated_access_mode: bool,
 
@@ -691,6 +695,13 @@ impl StartOptions {
     /// blobstore cluster size to be used for disk pools.
     pub fn with_pool_cluster_size(mut self, cluster_size: Option<u32>) -> Self {
         self.pool_cluster_size = cluster_size;
+        self
+    }
+
+    /// Maximum number of pools allowed to be draining concurrently.
+    #[must_use]
+    pub fn with_max_concurrent_pool_drain(mut self, max: Option<u16>) -> Self {
+        self.max_concurrent_pool_drain = max;
         self
     }
 

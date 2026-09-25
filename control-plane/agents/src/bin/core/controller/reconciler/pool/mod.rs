@@ -1,4 +1,5 @@
 mod capacity;
+mod drain;
 
 use crate::controller::{
     reconciler::{GarbageCollect, ReCreate},
@@ -55,6 +56,9 @@ impl TaskPoller for PoolReconciler {
             ]))
         }
         capacity::remove_larger_replicas(context.registry()).await;
+        // TODO: See if we can move this somewhere else,
+        // would be easier to figure that out when we have other reconciler.
+        drain::drain_state_promoter(context).await;
         Self::squash_results(results)
     }
 
