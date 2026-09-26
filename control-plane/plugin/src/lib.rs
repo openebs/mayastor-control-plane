@@ -11,14 +11,15 @@ use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 use crate::{
     operations::{
         Cordoning, Delete, Drain, Errors, Expand, Get, GetBlockDevices, GetSnapshotTopology,
-        GetSnapshots, GetWithArgs, List, ListExt, ListWithArgs, Operations, PluginResult,
+        GetSnapshots, GetWithArgs, List, ListExt, ListWithArgs, Operations, PluginResult, Rebuild,
         RebuildHistory, ReplicaTopology, Scale,
     },
     resources::{
         app_node, blockdevice, cordon, drain, node, pool, snapshot, volume,
         volume::VolumeTopologiesArgs, ClearErrors, CordonResources, DeleteArgs, DeleteResources,
-        DrainResources, ExpandResources, GetCordonArgs, GetDrainArgs, GetResources, ScaleResources,
-        SetPropertyResources, SetVolumeProperties, UnCordonResources,
+        DrainResources, ExpandResources, GetCordonArgs, GetDrainArgs, GetResources,
+        RebuildResources, ScaleResources, SetPropertyResources, SetVolumeProperties,
+        UnCordonResources,
     },
 };
 
@@ -118,6 +119,7 @@ impl ExecuteOperation for Operations {
             Operations::Cordon(resource) => resource.execute(cli_args).await,
             Operations::Uncordon(resource) => resource.execute(cli_args).await,
             Operations::Label(resource) => resource.execute(cli_args).await,
+            Operations::Rebuild(resource) => resource.execute(cli_args).await,
             Operations::Delete(resource) => resource.execute(cli_args).await,
         }
     }
@@ -271,6 +273,17 @@ impl ExecuteOperation for ClearErrors {
             ClearErrors::Pool { id, options } => {
                 pool::Pool::clear(id, options, &cli_args.output).await
             }
+        }
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl ExecuteOperation for RebuildResources {
+    type Args = CliArgs;
+    type Error = crate::resources::Error;
+    async fn execute(&self, cli_args: &CliArgs) -> PluginResult {
+        match self {
+            RebuildResources::Volume { id } => volume::Volume::rebuild(id, &cli_args.output).await,
         }
     }
 }

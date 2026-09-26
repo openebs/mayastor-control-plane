@@ -397,6 +397,18 @@ impl VolumeMetadata {
     pub fn clear_offline_rebuild_degraded(&mut self) {
         self.runtime.clear_offline_rebuild_degraded();
     }
+    /// Ask for the offline rebuild to skip the grace period.
+    pub fn request_offline_rebuild(&mut self) {
+        self.runtime.request_offline_rebuild();
+    }
+    /// Whether an operator has asked to skip the grace period.
+    pub fn offline_rebuild_requested(&self) -> bool {
+        self.runtime.offline_rebuild_requested()
+    }
+    /// Clear the offline-rebuild request.
+    pub fn clear_offline_rebuild_requested(&mut self) {
+        self.runtime.clear_offline_rebuild_requested();
+    }
     pub fn requested_size(&self) -> Option<u64> {
         self.persisted.requested_size
     }
@@ -429,6 +441,11 @@ pub struct VolumeRuntimeMetadata {
     /// Degraded; used to enforce the grace period before starting a rebuild.
     /// Tied to the volume's lifetime so it goes away when the volume is deleted.
     offline_rebuild_degraded_since: Option<std::time::Instant>,
+    /// An operator has asked for this volume's offline rebuild to start without
+    /// waiting out the grace period. Runtime-only and deliberately so: it is a
+    /// one-shot intent, cleared once the rebuild is under way, and re-issuing it
+    /// after a restart is cheaper than persisting it.
+    offline_rebuild_requested: bool,
     /// Configuration for the replica move operation, if any.
     replica_move: Option<ReplicaMoveRequester>,
 }
@@ -458,6 +475,18 @@ impl VolumeRuntimeMetadata {
     /// longer Degraded or rebuild has been initiated).
     pub fn clear_offline_rebuild_degraded(&mut self) {
         self.offline_rebuild_degraded_since = None;
+    }
+    /// Ask for the offline rebuild to skip the grace period.
+    pub fn request_offline_rebuild(&mut self) {
+        self.offline_rebuild_requested = true;
+    }
+    /// Whether an operator has asked to skip the grace period.
+    pub fn offline_rebuild_requested(&self) -> bool {
+        self.offline_rebuild_requested
+    }
+    /// Clear the request, once acted upon or no longer applicable.
+    pub fn clear_offline_rebuild_requested(&mut self) {
+        self.offline_rebuild_requested = false;
     }
 }
 

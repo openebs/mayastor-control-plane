@@ -113,6 +113,12 @@ pub enum Error {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
+    /// Error when an offline rebuild request for a volume fails.
+    #[snafu(display("Failed to request offline rebuild for volume {id}. Error {source}"))]
+    RebuildVolume {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
     /// Error when scale volume request fails.
     #[snafu(display("Failed to scale volume {id}. Error {source}"))]
     ScaleVolumeError {

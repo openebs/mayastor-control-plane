@@ -1903,6 +1903,35 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  '/volumes/{volume_id}/rebuild':
+    put:
+      tags:
+        - Volumes
+      operationId: put_volume_rebuild
+      description: |-
+        Request an offline rebuild for a degraded, unpublished volume without waiting
+        out the grace period. The rebuild still has to be viable and within the
+        configured concurrency limits, so this shortens the wait rather than forcing a
+        rebuild that could not otherwise run.
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Volume'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/volumes/{volume_id}/target':
     put:
       tags:

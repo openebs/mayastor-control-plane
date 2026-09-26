@@ -22,8 +22,8 @@ use grpc::{
             CreateVolumeSnapshotInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo,
             DestroyVolumeSnapshot, DestroyVolumeSnapshotInfo, PublishVolumeInfo,
             RepublishVolumeInfo, ResizeVolumeInfo, SetVolumePropertyInfo, SetVolumeReplicaInfo,
-            ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
-            VolumeSnapshot, VolumeSnapshots,
+            ShareVolumeInfo, TriggerRebuildInfo, UnpublishVolumeInfo, UnshareVolumeInfo,
+            VolumeOperations, VolumeSnapshot, VolumeSnapshots,
         },
         Pagination,
     },
@@ -38,7 +38,7 @@ use stor_port::{
         transport::{
             CreateSnapshotVolume, CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter,
             PublishVolume, RepublishVolume, ResizeVolume, SetVolumeProperty, SetVolumeReplica,
-            ShareVolume, UnpublishVolume, UnshareVolume, Volume,
+            ShareVolume, TriggerRebuild, UnpublishVolume, UnshareVolume, Volume, VolumeStatus,
         },
     },
 };
@@ -172,6 +172,18 @@ impl VolumeOperations for Service {
         let volume =
             Context::spawn(async move { service.set_volume_property(&set_volume_property).await })
                 .await??;
+        Ok(volume)
+    }
+
+    async fn trigger_rebuild(
+        &self,
+        req: &dyn TriggerRebuildInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let request = TriggerRebuild::from(req);
+        let service = self.clone();
+        let volume =
+            Context::spawn(async move { service.trigger_rebuild(&request).await }).await??;
         Ok(volume)
     }
 
@@ -426,6 +438,49 @@ impl Service {
     ) -> Result<Volume, SvcError> {
         let mut volume = self.specs().volume(&request.uuid).await?;
         volume.set_property(&self.registry, request).await?;
+        self.registry.volume(&request.uuid).await
+    }
+    /// Ask for the volume's rebuild to skip the wait it would otherwise serve out.
+    ///
+    /// Today the only wait that can be skipped is the offline-rebuild grace period, so
+    /// this applies to a degraded, unpublished volume. Anything else is rejected rather
+    /// than silently accepted. A published volume is already rebuilt by the hot-spare
+    /// path without a grace period, and a volume that is not degraded has nothing to
+    /// rebuild. Leaving the entry point generic so an online-rebuild trigger can be
+    /// added here later.
+    ///
+    /// The reconciler still applies its viability and concurrency checks, so this only
+    /// shortens the wait, it does not force through a rebuild that could not run.
+    #[tracing::instrument(level = "info", skip(self, request), err, fields(volume.uuid = %request.uuid))]
+    pub(super) async fn trigger_rebuild(
+        &self,
+        request: &TriggerRebuild,
+    ) -> Result<Volume, SvcError> {
+        // Refuse rather than accept a request that can never be honoured: the
+        // reconciler does not run at all when disabled, and since enabling it needs a
+        // restart, which clears the runtime marker, the request could never take
+        // effect later either.
+        if !self.registry.offline_rebuild_enabled() {
+            return Err(SvcError::OfflineRebuildDisabled {});
+        }
+
+        // Health-aware state: an unpublished volume's plain state derives its status
+        // from the replica spec count, which does not change when a node dies, so it
+        // would report Online and every legitimate request would be rejected here.
+        let state = self.registry.volume_state_health(&request.uuid).await?;
+        if state.target.is_some() {
+            return Err(SvcError::RebuildTriggerVolumePublished {
+                vol_id: request.uuid.to_string(),
+            });
+        }
+        if state.status != VolumeStatus::Degraded {
+            return Err(SvcError::RebuildTriggerVolumeNotDegraded {
+                vol_id: request.uuid.to_string(),
+            });
+        }
+
+        let volume = self.specs().volume(&request.uuid).await?;
+        volume.lock().metadata.request_offline_rebuild();
         self.registry.volume(&request.uuid).await
     }
     /// Create a volume snapshot.
