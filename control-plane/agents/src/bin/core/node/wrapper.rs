@@ -143,6 +143,7 @@ impl NodeWrapper {
                 std::time::Duration::from_secs(1),
                 std::time::Duration::from_secs(1),
                 false,
+                None,
             ),
             states: ResourceStatesLocked::new(),
             num_rebuilds: Arc::new(RwLock::new(0)),
@@ -400,6 +401,7 @@ impl NodeWrapper {
             self.comms_timeouts.connect(),
             self.comms_timeouts.connect(),
             true,
+            None,
         );
 
         let client = self.grpc_client_timeout(timeouts).await?;
@@ -419,6 +421,7 @@ impl NodeWrapper {
             self.comms_timeouts.connect(),
             self.comms_timeouts.connect(),
             true,
+            None,
         );
 
         // Set the api version to latest and make a call
