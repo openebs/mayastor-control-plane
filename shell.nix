@@ -94,7 +94,7 @@ mkShellNoCC {
     fi
     # Looks like vscode with the nix plugin is running commands in different shells without setting the temp variables
     # Since nix-shell by default nests the temp variables, we need to set them here
-    if [ "$VSCODE_CLI" = "1" ]; then
+    if [ "$VSCODE_CLI" = "1" ] || [ -n "$VSCODE_CWD" ]; then
       export TMPDIR=/tmp
       export TMP=/tmp
     fi
