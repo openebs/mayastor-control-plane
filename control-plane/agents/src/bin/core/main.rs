@@ -142,6 +142,15 @@ pub(crate) struct CliArgs {
     /// Auto-generate an ephemeral self-signed certificate for the Core gRPC server.
     #[clap(long = "grpc-auto-tls", conflicts_with_all = ["grpc_tls_cert_file", "grpc_tls_key_file", "grpc_tls_ca_file"])]
     grpc_auto_tls: bool,
+    /// Enforce TLS on the Core gRPC server by rejecting plaintext clients. {n}
+    /// By default the server also accepts plaintext connections on the same port, which allows
+    /// legacy io-engines to keep registering during a rolling upgrade. {n}
+    /// Enable this once every io-engine speaks TLS to fully enforce encrypted transport, as
+    /// required by some compliance and security frameworks. {n}
+    /// Requires TLS to be configured (`--grpc-auto-tls` or the
+    /// `--grpc-tls-cert-file`/`--grpc-tls-key-file` pair).
+    #[clap(long, env)]
+    grpc_enforce_tls: bool,
     /// The maximum number of system-wide rebuilds permitted at any given time.
     /// If `None` do not limit the number of rebuilds.
     #[clap(long)]
@@ -333,6 +342,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
     let sim_args: Option<SimArgs> = (&cli_args).try_into()?;
     let grpc_tls = cli_args.grpc_tls()?;
     let grpc_auto_tls = cli_args.grpc_auto_tls;
+    let grpc_tls_enforced = cli_args.grpc_enforce_tls;
     let grpc_server_addr = cli_args.grpc_server_addr;
     let registry = controller::registry::Registry::new(
         cli_args.cache_period.into(),
@@ -388,7 +398,14 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         .configure(app_node::configure);
 
     registry.start().await;
-    let result = run_grpc_server(service, grpc_server_addr, grpc_auto_tls, grpc_tls).await;
+    let result = run_grpc_server(
+        service,
+        grpc_server_addr,
+        grpc_auto_tls,
+        grpc_tls,
+        grpc_tls_enforced,
+    )
+    .await;
     registry.stop().await;
     utils::tracing_telemetry::flush_traces();
     result?;
@@ -400,13 +417,23 @@ async fn run_grpc_server(
     socket: SocketAddr,
     auto_tls: bool,
     tls: Option<grpc::tls::TlsConfig>,
+    tls_enforced: bool,
 ) -> Result<(), agents::ServiceError> {
+    // Core sits at a mixed-version boundary: io-engines register here and may still be plaintext
+    // during a rolling upgrade, so by default its listener sniffs and accepts both transports.
+    // When TLS is enforced the listener rejects plaintext clients, fully enforcing encrypted
+    // transport for compliance and security frameworks once every io-engine speaks TLS.
+    let sniff = !tls_enforced;
     match (auto_tls, tls) {
-        // Core sits at a mixed-version boundary: io-engines register here and may still be
-        // plaintext during a rolling upgrade, so its listener sniffs and accepts both transports.
-        (true, None) => service.run_auto_tls_err(socket, true).await,
+        (true, None) => service.run_auto_tls_err(socket, sniff).await,
         (true, Some(_)) => unreachable!("clap prevents combining gRPC TLS files and auto TLS"),
-        (false, Some(tls)) => service.run_tls_err(socket, tls, true).await,
+        (false, Some(tls)) => service.run_tls_err(socket, tls, sniff).await,
+        (false, None) if tls_enforced => Err(agents::ServiceError::GrpcTls {
+            source: anyhow::anyhow!(
+                "--grpc-tls-enforced requires gRPC TLS to be configured via --grpc-auto-tls or \
+                the --grpc-tls-cert-file/--grpc-tls-key-file pair"
+            ),
+        }),
         (false, None) => service.run_err(socket).await,
     }
 }
