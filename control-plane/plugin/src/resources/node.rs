@@ -454,7 +454,7 @@ impl CreateRows for NodeDisplay {
                 for node in self.inner.iter() {
                     let mut row = node.row();
 
-                    let drain_status_string = match &node.spec.as_ref().unwrap().cordondrainstate {
+                    let drain_state_string = match &node.spec.as_ref().unwrap().cordondrainstate {
                         Some(ds) => match ds {
                             CordonDrainState::cordonedstate(_) => "Not draining",
                             CordonDrainState::drainingstate(_) => "Draining",
@@ -465,7 +465,7 @@ impl CreateRows for NodeDisplay {
 
                     let labelstring = NodeDisplay::get_drain_label_list(node).join(", ");
                     // Add the drain labels to each row.
-                    row.add_cell(Cell::new(drain_status_string));
+                    row.add_cell(Cell::new(drain_state_string));
                     row.add_cell(Cell::new(&labelstring));
                     rows.push(row);
                 }

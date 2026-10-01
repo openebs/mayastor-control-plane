@@ -206,12 +206,12 @@ pub struct PoolPersistedMetadata {
     /// Populated when drain request is submitted.
     /// Stores states driving the drain procedure.
     #[serde(default, skip_serializing_if = "super::is_default")]
-    pub drain_record: Option<PoolDrainRecord>,
+    pub drain_state: Option<PoolDrainState>,
 }
 
 /// Record of an in-progress pool drain, driving the drain procedure and tracking its progress.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct PoolDrainRecord {
+pub struct PoolDrainState {
     /// Current phase of the drain state machine.
     pub phase: DrainPhase,
     /// Why pool is in the aforementioned phase.
@@ -222,13 +222,13 @@ pub struct PoolDrainRecord {
     pub moving_replicas: Vec<DrainConfig>,
 }
 
-impl Default for PoolDrainRecord {
+impl Default for PoolDrainState {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl PoolDrainRecord {
+impl PoolDrainState {
     fn new() -> Self {
         Self {
             phase: DrainPhase::Queued,
@@ -432,9 +432,9 @@ impl PoolSpec {
                     }
                 }
                 CordonDrainState::Drain(spec) => {
-                    if let Some(uc) = &spec.user_cordon {
+                    if let Some(uc) = &spec.pool_cordon {
                         if !uc.cordoned() {
-                            spec.user_cordon = None;
+                            spec.pool_cordon = None;
                         }
                     }
                 }
@@ -498,7 +498,7 @@ impl PoolSpec {
         }
         match &self.cordon_drain {
             Some(ds) => {
-                if let Some(record) = self.drain_record() {
+                if let Some(record) = self.drain_state() {
                     // No point on updating drain config when phase is terminal.
                     if record.phase == DrainPhase::Drained
                         || record.phase == DrainPhase::AwaitingCleanup
@@ -528,37 +528,37 @@ impl PoolSpec {
     }
 
     /// Sets drain configuration on the pool, carrying over the user's own cordon, if any.
-    /// Existing drain record is preserved, if any, to keep track of the drain progress.
-    /// If no drain record exists, a new one is created.
+    /// Existing drain state is preserved, if any, to keep track of the drain progress.
+    /// If no drain state exists, a new one is created.
     pub fn set_drain(&mut self, op: PoolDrainOp) {
-        let (user_cordon, request_ts) = match self.cordon_drain.as_ref() {
+        let (pool_cordon, request_ts) = match self.cordon_drain.as_ref() {
             Some(CordonDrainState::Drain(drain)) => {
-                (drain.user_cordon.clone(), Some(drain.request_timestamp))
+                (drain.pool_cordon.clone(), Some(drain.request_timestamp))
             }
             Some(CordonDrainState::Cordoned(cordoned)) => (Some(cordoned.clone()), None),
             None => (None, None),
         };
-        let drain_spec = DrainSpec::new(op.policy, user_cordon, request_ts);
+        let drain_spec = DrainSpec::new(op.policy, pool_cordon, request_ts);
         self.cordon_drain = Some(CordonDrainState::Drain(drain_spec));
-        if self.metadata.persisted.drain_record.is_none() {
-            let drain_record = PoolDrainRecord::default();
-            self.metadata.persisted.drain_record = Some(drain_record);
+        if self.metadata.persisted.drain_state.is_none() {
+            let drain_state = PoolDrainState::default();
+            self.metadata.persisted.drain_state = Some(drain_state);
         }
     }
 
     /// Sets the drain phase as Cancelled if in Draining phase,
-    /// otherwise removes the drain record and reverts to the user's cordon, if any.
+    /// otherwise removes the drain state and reverts to the user's cordon, if any.
     pub fn cancel_drain(&mut self) {
-        if let Some(drain_record) = self.metadata.persisted.drain_record.as_mut() {
-            if drain_record.phase == DrainPhase::Draining {
-                drain_record.phase = DrainPhase::Cancelled
+        if let Some(drain_state) = self.metadata.persisted.drain_state.as_mut() {
+            if drain_state.phase == DrainPhase::Draining {
+                drain_state.phase = DrainPhase::Cancelled
             } else {
                 if let Some(CordonDrainState::Drain(drain)) = &self.cordon_drain {
                     self.cordon_drain = drain
-                        .user_cordon
+                        .pool_cordon
                         .as_ref()
                         .map(|uc| CordonDrainState::Cordoned(uc.clone()));
-                    self.metadata.persisted.drain_record = None
+                    self.metadata.persisted.drain_state = None
                 }
             }
         }
@@ -566,7 +566,7 @@ impl PoolSpec {
 
     /// Updates the drain phase of the pool.
     pub fn set_drain_phase(&mut self, op: DrainPhaseOp) {
-        if let Some(record) = self.drain_record_mut() {
+        if let Some(record) = self.drain_state_mut() {
             record.phase = op.phase;
             record.reason = op.reason;
             if record.initial_stats.is_none() {
@@ -578,7 +578,7 @@ impl PoolSpec {
     /// Returns true if the pool is in Queued phase.
     pub fn is_drain_queued(&self) -> bool {
         matches!(
-            self.drain_record().map(|r| r.phase()),
+            self.drain_state().map(|r| r.phase()),
             Some(DrainPhase::Queued)
         )
     }
@@ -586,7 +586,7 @@ impl PoolSpec {
     /// Returns true if the pool is in Draining phase.
     pub fn is_draining(&self) -> bool {
         matches!(
-            self.drain_record().map(|r| r.phase()),
+            self.drain_state().map(|r| r.phase()),
             Some(DrainPhase::Draining)
         )
     }
@@ -613,31 +613,31 @@ impl PoolSpec {
         self.cordon_drain.as_ref().map(|s| s.effective_cordon())
     }
 
-    /// Returns the drain record of the pool, if a drain has been admitted.
-    pub fn drain_record(&self) -> Option<&PoolDrainRecord> {
-        self.metadata.persisted.drain_record.as_ref()
+    /// Returns the drain state of the pool, if a drain has been admitted.
+    pub fn drain_state(&self) -> Option<&PoolDrainState> {
+        self.metadata.persisted.drain_state.as_ref()
     }
 
     /// Returns true if the drain can be cancelled.
     pub fn drain_cancellable(&self) -> bool {
-        if let Some(record) = self.metadata.persisted.drain_record.as_ref() {
+        if let Some(record) = self.metadata.persisted.drain_state.as_ref() {
             record.phase != DrainPhase::Cancelled
         } else {
             false
         }
     }
 
-    /// Returns a mutable reference to the drain record of the pool, if a drain has been admitted.
-    pub fn drain_record_mut(&mut self) -> Option<&mut PoolDrainRecord> {
-        self.metadata.persisted.drain_record.as_mut()
+    /// Returns a mutable reference to the drain state of the pool, if a drain has been admitted.
+    pub fn drain_state_mut(&mut self) -> Option<&mut PoolDrainState> {
+        self.metadata.persisted.drain_state.as_mut()
     }
 
     /// Check if phase transition is allowed.
     pub fn phase_updateable(&self, op: &DrainPhaseOp) -> bool {
-        if let Some(drain_record) = self.drain_record() {
+        if let Some(drain_state) = self.drain_state() {
             match op.phase {
                 DrainPhase::Draining => {
-                    matches!(drain_record.phase, DrainPhase::Queued)
+                    matches!(drain_state.phase, DrainPhase::Queued)
                 }
                 // Will be extended as we add more phase transition callers.
                 _ => false,
@@ -1109,10 +1109,10 @@ impl CordonDrainState {
                 state.add_cordon(cordon);
             }
             CordonDrainState::Drain(state) => {
-                if let Some(uc) = state.user_cordon.as_mut() {
+                if let Some(uc) = state.pool_cordon.as_mut() {
                     uc.add_cordon(cordon);
                 } else {
-                    state.user_cordon = Some(CordonedState::from(cordon));
+                    state.pool_cordon = Some(CordonedState::from(cordon));
                 }
             }
         }
@@ -1125,7 +1125,7 @@ impl CordonDrainState {
                 state.rm_cordon(cordon);
             }
             CordonDrainState::Drain(spec) => {
-                if let Some(uc) = spec.user_cordon.as_mut() {
+                if let Some(uc) = spec.pool_cordon.as_mut() {
                     uc.rm_cordon(cordon);
                 }
             }
@@ -1138,7 +1138,7 @@ impl CordonDrainState {
         match self {
             CordonDrainState::Cordoned(cordoned) => cordoned.clone(),
             CordonDrainState::Drain(spec) => CordonedState {
-                import: spec.user_cordon.as_ref().is_some_and(|uc| uc.import),
+                import: spec.pool_cordon.as_ref().is_some_and(|uc| uc.import),
                 ..CordonedState::SELF_CORDON
             },
         }
@@ -1148,7 +1148,7 @@ impl CordonDrainState {
         match self {
             CordonDrainState::Cordoned(state) => state.would_modify(op, cordon),
             CordonDrainState::Drain(spec) => {
-                if let Some(uc) = &spec.user_cordon {
+                if let Some(uc) = &spec.pool_cordon {
                     uc.would_modify(op, cordon)
                 } else {
                     cordon
@@ -1211,7 +1211,7 @@ impl From<DrainSpec> for models::PoolDrainSpec {
         Self {
             request_timestamp: rfc3339(spec.request_timestamp),
             policy: spec.policy.into(),
-            user_cordon: spec.user_cordon.into_opt(),
+            pool_cordon: spec.pool_cordon.into_opt(),
         }
     }
 }
@@ -1271,18 +1271,13 @@ impl From<models::PoolDrainSnapshotPolicy> for SnapshotPolicy {
     }
 }
 
-impl From<PoolDrainRecord> for models::PoolDrainRecord {
-    fn from(record: PoolDrainRecord) -> Self {
+impl From<PoolDrainState> for models::PoolDrainState {
+    fn from(record: PoolDrainState) -> Self {
         Self {
             phase: record.phase.into(),
             reason: record.reason.into_opt(),
             initial: record.initial_stats.into_opt(),
-            moving_replicas: record
-                .moving_replicas
-                .into_iter()
-                .filter_map(|config| config.moving_replica)
-                .map(Into::into)
-                .collect(),
+            num_moving_replicas: record.moving_replicas.len() as u32,
         }
     }
 }
@@ -1357,20 +1352,20 @@ pub struct DrainSpec {
     /// Drain policy applied on the pool.
     pub policy: DrainPolicy,
     /// Holds user applied cordon configs if present before starting drain.
-    pub user_cordon: Option<CordonedState>,
+    pub pool_cordon: Option<CordonedState>,
 }
 
 impl DrainSpec {
     /// Create a new drain spec with the given policy.
     pub fn new(
         policy: DrainPolicy,
-        user_cordon: Option<CordonedState>,
+        pool_cordon: Option<CordonedState>,
         req_tsc: Option<SystemTime>,
     ) -> Self {
         Self {
             request_timestamp: req_tsc.unwrap_or(SystemTime::now()),
             policy,
-            user_cordon,
+            pool_cordon,
         }
     }
 }

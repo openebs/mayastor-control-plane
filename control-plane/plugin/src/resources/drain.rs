@@ -1,16 +1,19 @@
 pub struct NodeDrain {}
 pub struct NodeDrains {}
+pub struct PoolDrain {}
 
 use async_trait::async_trait;
-use openapi::models::CordonDrainState;
+use openapi::models::{CordonDrainState, PoolDrainStateExt, PoolDrainStats};
+use prettytable::Row;
+use serde::Serialize;
 
 use crate::{
     operations::{Get, List, PluginResult},
     resources::{
         error::Error,
         node::{node_display_print, node_display_print_one, NodeDisplayFormat},
-        utils::OutputFormat,
-        NodeId,
+        utils::{optional_cell, print_table, CreateRows, GetHeaderRow, OutputFormat},
+        NodeId, PoolId,
     },
     rest_wrapper::RestClient,
 };
@@ -59,6 +62,75 @@ impl List for NodeDrains {
                 return Err(Error::ListNodesError { source: e });
             }
         }
+        Ok(())
+    }
+}
+
+/// Pool drain progress, displayed as a single row of columns.
+/// The full state, including the moving replicas, is available in the json/yaml output.
+#[derive(Serialize)]
+struct PoolDrainDisplay {
+    #[serde(skip)]
+    id: PoolId,
+    #[serde(flatten)]
+    state: PoolDrainStateExt,
+}
+
+impl GetHeaderRow for PoolDrainDisplay {
+    fn get_header_row(&self) -> Row {
+        row![
+            "ID",
+            "PHASE",
+            "REASON",
+            "REPLICAS",
+            "SNAPSHOTS",
+            "ALLOCATED"
+        ]
+    }
+}
+
+impl CreateRows for PoolDrainDisplay {
+    fn create_rows(&self) -> Vec<Row> {
+        let initial = self.state.initial.as_ref();
+        let current = self.state.current.as_ref();
+        let pair = |value: fn(&PoolDrainStats) -> String| {
+            format!(
+                "{}/{}",
+                optional_cell(initial.map(value)),
+                optional_cell(current.map(value))
+            )
+        };
+        vec![row![
+            self.id,
+            self.state.phase,
+            optional_cell(self.state.reason),
+            pair(|u| u.replica_count.to_string()),
+            pair(|u| u.snapshot_count.to_string()),
+            pair(|u| ::utils::bytes::into_human(u.used)),
+        ]]
+    }
+}
+
+#[async_trait(?Send)]
+impl Get for PoolDrain {
+    type ID = PoolId;
+    async fn get(id: &Self::ID, output: &OutputFormat) -> PluginResult {
+        let state = RestClient::client()
+            .pools_api()
+            .get_pool_drain(id)
+            .await
+            .map_err(|source| Error::GetPoolDrainError {
+                id: id.to_string(),
+                source,
+            })?
+            .into_body();
+        print_table(
+            output,
+            PoolDrainDisplay {
+                id: id.clone(),
+                state,
+            },
+        );
         Ok(())
     }
 }

@@ -896,7 +896,7 @@ impl Drain for Pool {
             }
             OutputFormat::None => {
                 let Some(record) = pool.meta.and_then(|meta| meta.drain) else {
-                    return Err(Error::PoolDrainRecordMissing { id: id.to_string() });
+                    return Err(Error::PoolDrainStateMissing { id: id.to_string() });
                 };
                 println!("Pool {id} drain requested. Current phase: {}", record.phase);
             }
@@ -1091,7 +1091,7 @@ pub(crate) fn effective_pool_cordon(cordon_drain: &PoolCordonDrain) -> models::P
             snapshots: true,
             restores: true,
             import: spec
-                .user_cordon
+                .pool_cordon
                 .as_ref()
                 .is_some_and(|cordon| cordon.import),
         },

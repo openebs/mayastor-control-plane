@@ -531,6 +531,7 @@ pub struct PoolDef {
     pub replica_count: Option<u64>,
     /// How many snapshots are owned by the pool.
     pub snapshot_count: Option<u64>,
+    /// Pool metadata persisted to pstor.
     pub persisted_metadata: PoolPersistedMetadata,
 }
 
@@ -551,9 +552,9 @@ impl PoolConfig {
         self
     }
 
-    /// Return true if drain record exist.
-    pub fn drain_record_exist(&self) -> bool {
-        self.definition.persisted_metadata.drain_record.is_some()
+    /// Return true if drain state exist.
+    pub fn drain_state_exist(&self) -> bool {
+        self.definition.persisted_metadata.drain_state.is_some()
     }
 }
 
@@ -674,8 +675,8 @@ impl From<Pool> for models::Pool {
         let (spec, meta) = match def {
             None => (None, None),
             Some(def) => {
-                let drain: Option<models::PoolDrainRecord> =
-                    def.persisted_metadata.drain_record.into_opt();
+                let drain: Option<models::PoolDrainState> =
+                    def.persisted_metadata.drain_state.into_opt();
                 let meta = models::PoolMeta::new_all(def.replica_count, def.snapshot_count, drain);
                 (Some(def.spec), Some(meta))
             }
@@ -691,11 +692,11 @@ impl From<Pool> for models::Pool {
     }
 }
 
-impl TryFrom<Pool> for models::PoolDrainRecordExt {
+impl TryFrom<Pool> for models::PoolDrainStateExt {
     type Error = ReplyError;
 
     fn try_from(pool: Pool) -> Result<Self, Self::Error> {
-        let current = pool.current_usage();
+        let mut current = pool.current_usage();
         let Some(config) = pool.config else {
             return Err(ReplyError {
                 kind: ReplyErrorKind::Internal,
@@ -704,14 +705,17 @@ impl TryFrom<Pool> for models::PoolDrainRecordExt {
                 extra: "pool config does not exist".to_string(),
             });
         };
-        let Some(record) = config.definition.persisted_metadata.drain_record else {
+        let Some(record) = config.definition.persisted_metadata.drain_state else {
             return Err(ReplyError {
                 kind: ReplyErrorKind::NotFound,
                 resource: ResourceKind::Pool,
                 source: "get_pool_drain".to_string(),
-                extra: "pool does not have drain record".to_string(),
+                extra: "pool does not have drain state".to_string(),
             });
         };
+        if record.initial_stats.is_none() {
+            current = None;
+        }
         Ok(Self {
             phase: record.phase.into(),
             reason: record.reason.into_opt(),
