@@ -1,4 +1,5 @@
 mod purge;
+mod registration_tls;
 
 use deployer_cluster::ClusterBuilder;
 use grpc::operations::node::traits::NodeOperations;

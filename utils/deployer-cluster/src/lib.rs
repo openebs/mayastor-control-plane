@@ -1039,6 +1039,12 @@ impl ClusterBuilder {
         self.opts = self.opts.with_grpc_tls(tls);
         self
     }
+    /// Specify whether gRPC TLS is enforced by rejecting plaintext clients.
+    #[must_use]
+    pub fn with_grpc_tls_enforced(mut self, enforced: bool) -> Self {
+        self.opts = self.opts.with_grpc_tls_enforced(enforced);
+        self
+    }
     /// Specify whether rest is enabled or not.
     #[must_use]
     pub fn with_rest(mut self, enabled: bool) -> Self {
