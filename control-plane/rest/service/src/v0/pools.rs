@@ -4,7 +4,7 @@ use grpc::operations::pool::traits::{
 };
 use openapi::apis::pools_api::actix::server::{delNodePoolResponse, delPoolResponse};
 use rest_client::versions::v0::{apis::Uuid, models::PoolClearErr};
-use std::collections::HashMap;
+use std::{collections::HashMap, convert::TryFrom};
 use stor_port::{
     transport_api::{ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
@@ -223,6 +223,20 @@ impl apis::actix_server::Pools for RestApi {
         };
         let pool = client().drain(&request).await?;
         Ok(pool.into())
+    }
+
+    async fn get_pool_drain(
+        Path(pool_id): Path<String>,
+    ) -> Result<models::PoolDrainRecordExt, RestError<RestJsonError>> {
+        let pool = pool(
+            pool_id.clone(),
+            client()
+                .get(Filter::Pool(pool_id.into()), None)
+                .await?
+                .into_inner()
+                .first(),
+        )?;
+        Ok(models::PoolDrainRecordExt::try_from(pool)?)
     }
 
     async fn put_pool_expand(
