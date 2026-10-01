@@ -1,6 +1,7 @@
 use super::*;
 
 use crate::{
+    transport_api::{ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::store::pool::{
         Encryption, EncryptionSecret, PoolLabel, PoolPersistedMetadata, PoolRuntimeMetadata,
         PoolSpec, PoolUSpec, PoolUsage,
@@ -549,6 +550,11 @@ impl PoolConfig {
         }
         self
     }
+
+    /// Return true if drain record exist.
+    pub fn drain_record_exist(&self) -> bool {
+        self.definition.persisted_metadata.drain_record.is_some()
+    }
 }
 
 impl From<PoolSpec> for PoolConfig {
@@ -632,6 +638,10 @@ impl Pool {
             committed: state.committed,
         })
     }
+    /// Get pool config, if available.
+    pub fn config(&self) -> Option<&PoolConfig> {
+        self.config.as_ref()
+    }
     /// Get the pool identification.
     pub fn id(&self) -> &PoolId {
         &self.id
@@ -678,6 +688,37 @@ impl From<Pool> for models::Pool {
             diag.into_opt(),
             meta,
         )
+    }
+}
+
+impl TryFrom<Pool> for models::PoolDrainRecordExt {
+    type Error = ReplyError;
+
+    fn try_from(pool: Pool) -> Result<Self, Self::Error> {
+        let current = pool.current_usage();
+        let Some(config) = pool.config else {
+            return Err(ReplyError {
+                kind: ReplyErrorKind::Internal,
+                resource: ResourceKind::Pool,
+                source: "get_pool_drain".to_string(),
+                extra: "pool config does not exist".to_string(),
+            });
+        };
+        let Some(record) = config.definition.persisted_metadata.drain_record else {
+            return Err(ReplyError {
+                kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::Pool,
+                source: "get_pool_drain".to_string(),
+                extra: "pool does not have drain record".to_string(),
+            });
+        };
+        Ok(Self {
+            phase: record.phase.into(),
+            reason: record.reason.into_opt(),
+            initial: record.initial_stats.into_opt(),
+            current: current.into_opt(),
+            moving_replicas: record.moving_replicas.into_iter().map(Into::into).collect(),
+        })
     }
 }
 

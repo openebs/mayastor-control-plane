@@ -122,7 +122,7 @@ message PoolDrainRecord {
   // of its current usage.
   optional PoolDrainStatistics drain_statistics = 3;
   // In-flight replica moves for this drain.
-  repeated DrainConfig replica_moves = 4;
+  repeated DrainConfig moving_replicas = 4;
 }
 
 // Why the pool is in its current drain phase.

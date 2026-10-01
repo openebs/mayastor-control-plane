@@ -607,7 +607,7 @@ impl From<PoolDrainRecord> for pool::PoolDrainRecord {
                 initial: value.initial_stats.into_opt(),
                 current: None,
             }),
-            replica_moves: value.replica_moves.into_vec(),
+            moving_replicas: value.moving_replicas.into_vec(),
         }
     }
 }
@@ -689,7 +689,7 @@ impl TryFrom<pool::PoolDrainRecord> for PoolDrainRecord {
                 .and_then(|reason| pool::PhaseReason::try_from(reason).ok())
                 .map(Into::into),
             initial_stats: initial_stats.into_opt(),
-            replica_moves: value.replica_moves.try_into_vec()?,
+            moving_replicas: value.moving_replicas.try_into_vec()?,
         })
     }
 }
@@ -755,7 +755,7 @@ impl TryFrom<pool::DrainConfig> for DrainConfig {
             .map_err(|error| {
                 ReplyError::invalid_argument(
                     ResourceKind::Pool,
-                    "pool.metadata.drain_record.replica_moves.pool_drain.placement_started_at",
+                    "pool.metadata.drain_record.moving_replicas.pool_drain.placement_started_at",
                     error.to_string(),
                 )
             })?;
@@ -765,7 +765,7 @@ impl TryFrom<pool::DrainConfig> for DrainConfig {
                 pool::UnwindSpare::try_from(unwind).map_err(|error| {
                     ReplyError::invalid_argument(
                         ResourceKind::Pool,
-                        "pool.metadata.drain_record.replica_moves.pool_drain.unwind_spare",
+                        "pool.metadata.drain_record.moving_replicas.pool_drain.unwind_spare",
                         error.to_string(),
                     )
                 })
