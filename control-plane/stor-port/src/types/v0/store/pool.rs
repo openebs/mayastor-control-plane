@@ -1,6 +1,7 @@
 //! Definition of pool types that can be saved to the persistent store.
 
 use crate::{
+    transport_api::{ReplyError, ResourceKind},
     types::v0::{
         openapi::models::{self, PoolSpecEncryption},
         store::{
@@ -1221,7 +1222,7 @@ impl From<DrainPolicy> for models::PoolDrainPolicy {
             snapshot_policy: policy.snapshot_policy.into(),
             unsafe_rebuild_otherwise_evict: policy
                 .unsafe_rebuild_otherwise_evict
-                .map(|grace| grace.as_secs()),
+                .map(|grace| humantime::format_duration(grace).to_string()),
             unsafe_evict: policy.unsafe_evict,
         }
     }
@@ -1229,15 +1230,26 @@ impl From<DrainPolicy> for models::PoolDrainPolicy {
 
 /// A drain request with any field left out takes the policy defaults: snapshots are left in
 /// place, no forced eviction, and the safe over-replicate flow is used.
-impl From<models::PoolDrainReq> for DrainPolicy {
-    fn from(req: models::PoolDrainReq) -> Self {
-        Self {
+impl TryFrom<models::PoolDrainReq> for DrainPolicy {
+    type Error = ReplyError;
+
+    fn try_from(req: models::PoolDrainReq) -> Result<Self, Self::Error> {
+        let unsafe_rebuild_otherwise_evict = req
+            .unsafe_rebuild_otherwise_evict
+            .map(|grace| humantime::parse_duration(&grace))
+            .transpose()
+            .map_err(|error| {
+                ReplyError::invalid_argument(
+                    ResourceKind::Pool,
+                    "unsafe_rebuild_otherwise_evict",
+                    error,
+                )
+            })?;
+        Ok(Self {
             snapshot_policy: req.snapshot_policy.map(Into::into).unwrap_or_default(),
-            unsafe_rebuild_otherwise_evict: req
-                .unsafe_rebuild_otherwise_evict
-                .map(Duration::from_secs),
+            unsafe_rebuild_otherwise_evict,
             unsafe_evict: req.unsafe_evict.unwrap_or_default(),
-        }
+        })
     }
 }
 

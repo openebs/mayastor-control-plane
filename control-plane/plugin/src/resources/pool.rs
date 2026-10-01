@@ -832,12 +832,13 @@ pub struct DrainReq {
     /// What to do with the snapshots left on the pool once all replicas are evacuated.
     #[clap(long, value_enum, default_value_t)]
     pub snapshot_policy: DrainSnapshotPolicy,
-    /// Seconds to wait before force-evicting a replica which cannot be placed elsewhere.{n}
-    /// Use 0 to attempt the placement only once.{n}
+    /// Time to wait before force-evicting a replica which cannot be placed elsewhere, for
+    /// example 30s or 5m.{n}
+    /// Use 0s to attempt the placement only once.{n}
     /// Warning: force-evicting a replica reduces the redundancy of its volume.{n}
     /// When not set, replicas are never force-evicted.
-    #[clap(long, value_name = "SECONDS")]
-    pub unsafe_rebuild_otherwise_evict: Option<u64>,
+    #[clap(long, value_name = "DURATION")]
+    pub unsafe_rebuild_otherwise_evict: Option<humantime::Duration>,
     // Skip the safe over-replicate flow and evict the replicas directly.
     // Hidden from the help as it's meant for testing only.
     #[clap(long, hide = true)]
@@ -867,7 +868,9 @@ impl From<&DrainReq> for models::PoolDrainReq {
     fn from(value: &DrainReq) -> Self {
         models::PoolDrainReq::new_all(
             models::PoolDrainSnapshotPolicy::from(value.snapshot_policy),
-            value.unsafe_rebuild_otherwise_evict,
+            value
+                .unsafe_rebuild_otherwise_evict
+                .map(|grace| grace.to_string()),
             value.unsafe_evict,
         )
     }

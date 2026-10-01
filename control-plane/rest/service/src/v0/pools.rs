@@ -4,11 +4,12 @@ use grpc::operations::pool::traits::{
 };
 use openapi::apis::pools_api::actix::server::{delNodePoolResponse, delPoolResponse};
 use rest_client::versions::v0::{apis::Uuid, models::PoolClearErr};
-use std::collections::HashMap;
+use std::{collections::HashMap, convert::TryFrom};
 use stor_port::{
     transport_api::{ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::{
         openapi,
+        store::pool::DrainPolicy,
         transport::{DestroyPool, ExpandPool, Filter, UnlabelPool},
     },
 };
@@ -206,7 +207,7 @@ impl apis::actix_server::Pools for RestApi {
         let request = PoolDrainRequest {
             node_id: Some(node_id.into()),
             pool_id: pool_id.into(),
-            policy: body.into(),
+            policy: DrainPolicy::try_from(body)?,
         };
         let pool = client().drain(&request).await?;
         Ok(pool.into())
@@ -219,7 +220,7 @@ impl apis::actix_server::Pools for RestApi {
         let request = PoolDrainRequest {
             node_id: None,
             pool_id: pool_id.into(),
-            policy: body.into(),
+            policy: DrainPolicy::try_from(body)?,
         };
         let pool = client().drain(&request).await?;
         Ok(pool.into())

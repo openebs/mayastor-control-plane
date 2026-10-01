@@ -22,6 +22,7 @@ rand = { workspace = true }
 tonic = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 tracing = { workspace = true }
+humantime = { workspace = true }
 prost-types = { workspace = true }
 
 openapi = { workspace = true, features = [ "actix-server", "tower-client", "tower-trace", "tower-client-rls" ] }
