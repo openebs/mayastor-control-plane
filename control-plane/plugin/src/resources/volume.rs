@@ -1,6 +1,7 @@
 use crate::{
     operations::{
-        Delete, Get, ListExt, PluginResult, RebuildHistory, ReplicaTopology, Scale, SetProperty,
+        Delete, Get, ListExt, PluginResult, Rebuild, RebuildHistory, ReplicaTopology, Scale,
+        SetProperty,
     },
     resources::{
         error::Error,
@@ -369,6 +370,35 @@ impl ReplicaTopology for Volume {
             }
             Err(e) => {
                 return Err(Error::GetVolumeError {
+                    id: id.to_string(),
+                    source: e,
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+#[async_trait(?Send)]
+impl Rebuild for Volume {
+    type ID = VolumeId;
+    async fn rebuild(id: &Self::ID, output: &OutputFormat) -> PluginResult {
+        match RestClient::client()
+            .volumes_api()
+            .put_volume_rebuild(id)
+            .await
+        {
+            Ok(volume) => match output {
+                OutputFormat::None => {
+                    println!(
+                        "Offline rebuild requested for volume {id}. It will start on the next \
+                        reconcile if the rebuild is viable and within the configured limits."
+                    );
+                }
+                _ => utils::print_table(output, volume.into_body()),
+            },
+            Err(e) => {
+                return Err(Error::RebuildVolume {
                     id: id.to_string(),
                     source: e,
                 });

@@ -134,6 +134,17 @@ pub enum ClearErrors {
     },
 }
 
+/// The types of resources that support an operator-triggered rebuild.
+#[derive(clap::Subcommand, Debug)]
+pub enum RebuildResources {
+    /// Ask for the volume's offline rebuild to start without waiting out the
+    /// grace period.
+    Volume {
+        /// ID of the volume.
+        id: VolumeId,
+    },
+}
+
 /// The types of resources that support cordoning.
 #[derive(clap::Subcommand, Debug)]
 pub enum CordonResources {
