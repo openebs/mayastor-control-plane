@@ -108,7 +108,7 @@ impl CreateVolumeExeVal for SnapshotCloneOp<'_> {
         snafu::ensure!(new_volume.thin, errors::ClonedSnapshotVolumeThin {});
         snafu::ensure!(snapshot.status().created(), errors::SnapshotNotCreated {});
         snafu::ensure!(
-            new_volume.size == snapshot.metadata().spec_size(),
+            new_volume.size >= snapshot.metadata().spec_size(),
             errors::ClonedSnapshotVolumeSize {}
         );
 
