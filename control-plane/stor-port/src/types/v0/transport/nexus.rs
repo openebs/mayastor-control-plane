@@ -63,6 +63,7 @@ pub struct Nexus {
     /// host nqn's allowed to connect to the target.
     pub allowed_hosts: Vec<HostNqn>,
     /// The version of the nexus label.
+    #[serde(default)]
     pub version: NexusVersion,
     /// Size of the nexus bdev in bytes.
     pub bdev_size: Option<u64>,
