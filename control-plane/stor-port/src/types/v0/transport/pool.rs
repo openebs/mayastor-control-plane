@@ -268,6 +268,7 @@ pub struct PoolState {
     /// Maximum disk_capacity this pool can be expanded to, in bytes.
     pub max_expandable_size: Option<u64>,
     /// Information for each pool disk.
+    #[serde(default)]
     pub disk_info: Vec<DiskInfo>,
     /// Error information at the pool top-level.
     pub errors: Option<PoolErrorInfo>,

@@ -150,7 +150,12 @@ impl IoEngine {
                     replicav["name"] = replicav["uuid"].clone();
                     replicav["status"] = to_lower(replicav["state"].take()).into();
                     replicav["poolId"] = replicav["pool"].take();
-                    replicav["kind"] = to_lower(replicav["kind"].take()).into();
+                    replicav["kind"] = match replicav["kind"].take().as_str() {
+                        Some("Regular") => "regular".into(),
+                        Some("Snapshot") => "snapshot".into(),
+                        Some("SnapshotClone") => "snapshotClone".into(),
+                        _else => panic!("unexpected replica kind: {_else:?}"),
+                    };
                     replicav["allowedHosts"] = serde_json::Value::Array(vec![]);
                     replicav["space"]["allocated_clusters_snapshots"] = 0.into();
                     let mut replica: transport::Replica = serde_json::from_value(replicav.clone())?;
