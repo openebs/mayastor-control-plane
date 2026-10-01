@@ -241,6 +241,11 @@ pub enum GetDrainArgs {
         id: NodeId,
     },
     Nodes,
+    /// Get the drain progress for the pool with the given ID.
+    Pool {
+        /// The id of the pool to get the drain progress from.
+        id: PoolId,
+    },
 }
 
 /// Delete resources.
