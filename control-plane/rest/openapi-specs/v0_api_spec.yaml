@@ -5155,10 +5155,10 @@ components:
           $ref: '#/components/schemas/PoolDrainSnapshotPolicy'
         unsafeRebuildOtherwiseEvict:
           description: |-
-            Grace period in seconds, after which an unplaceable replica is force-evicted.
-            Absent disables forced eviction entirely.
-          type: integer
-          format: uint64
+            Grace period (humantime, e.g. "30s", "5m"), after which an unplaceable replica is
+            force-evicted. Absent disables forced eviction entirely.
+          type: string
+          example: 30s
         unsafeEvict:
           description: Skip the safe over-replicate flow and evict replicas directly
           type: boolean
@@ -5183,10 +5183,11 @@ components:
           $ref: '#/components/schemas/PoolDrainSnapshotPolicy'
         unsafeRebuildOtherwiseEvict:
           description: |-
-            Grace period in seconds, after which an unplaceable replica is force-evicted.
-            Absent disables forced eviction entirely. Attempt only once if passed as 0.
-          type: integer
-          format: uint64
+            Grace period (humantime, e.g. "30s", "5m"), after which an unplaceable replica is
+            force-evicted. Absent disables forced eviction entirely. Attempt only once if
+            passed as "0s".
+          type: string
+          example: 30s
         unsafeEvict:
           description: Skip the safe over-replicate flow and evict replicas directly
           type: boolean
