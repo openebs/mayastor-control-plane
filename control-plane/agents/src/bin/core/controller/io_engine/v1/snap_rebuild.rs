@@ -131,7 +131,7 @@ mod test {
             lock,
             &cluster.node(0),
             cluster.node_socket(0),
-            &NodeCommsTimeout::new(one_s, one_s, false),
+            &NodeCommsTimeout::new(one_s, one_s, false, None),
             None,
             ApiVersion::V1,
             false,
