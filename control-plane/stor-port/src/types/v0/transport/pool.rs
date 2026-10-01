@@ -1086,3 +1086,140 @@ impl From<models::EncryptionSecret> for EncryptionSecret {
         Self { name: value.name }
     }
 }
+
+/// Response from a ListPoolsSmart query.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct ListPoolsSmartResponse {
+    /// Per-pool SMART information.
+    pub pools: Vec<PoolSmart>,
+}
+
+/// SMART / health for all disks backing a single pool.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct PoolSmart {
+    /// Pool name.
+    pub name: String,
+    /// Pool UUID.
+    pub uuid: String,
+    /// Health information for each disk backing the pool.
+    pub disks: Vec<DiskHealth>,
+}
+
+/// Health for a single disk backing the pool.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct DiskHealth {
+    /// URI of the disk device (e.g. bdev or device path).
+    pub disk_uri: String,
+    /// Whether SMART is supported on this disk.
+    pub supported: bool,
+    /// SMART health data, present when supported and readable.
+    pub health: Option<DeviceHealth>,
+    /// Error message if SMART data could not be retrieved.
+    pub error: Option<String>,
+}
+
+/// SMART / health information for a backing device.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct DeviceHealth {
+    /// NVMe critical warning bitmap.
+    pub critical_warning: u32,
+    /// Overall health assessment.
+    pub healthy: bool,
+    /// Composite temperature in degrees Celsius.
+    pub temperature_celsius: Option<i32>,
+    /// Available spare capacity as a percentage.
+    pub available_spare_percent: Option<u32>,
+    /// Threshold below which spare capacity is critical.
+    pub available_spare_threshold_percent: Option<u32>,
+    /// Estimated percentage of device life used.
+    pub percentage_used: Option<u32>,
+    /// Number of 512-byte data units read.
+    pub data_units_read: Option<u64>,
+    /// Number of 512-byte data units written.
+    pub data_units_written: Option<u64>,
+    /// Number of host read commands.
+    pub host_reads: Option<u64>,
+    /// Number of host write commands.
+    pub host_writes: Option<u64>,
+    /// Controller busy time in minutes.
+    pub controller_busy_minutes: Option<u64>,
+    /// Number of power cycles.
+    pub power_cycles: Option<u64>,
+    /// Cumulative power-on hours.
+    pub power_on_hours: Option<u64>,
+    /// Number of unsafe shutdowns.
+    pub unsafe_shutdowns: Option<u64>,
+    /// Count of media and data integrity errors.
+    pub media_errors: Option<u64>,
+    /// Number of error information log entries.
+    pub num_error_log_entries: Option<u64>,
+    /// Device identity / inventory information.
+    pub identity: Option<DeviceIdentity>,
+    /// ATA SMART attribute table entries.
+    pub smart_attributes: Vec<SmartAttribute>,
+    /// NVMe error information log entries.
+    pub error_log_entries: Vec<NvmeErrorLogEntry>,
+}
+
+/// Device identity / inventory data.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct DeviceIdentity {
+    /// Model name.
+    pub model: Option<String>,
+    /// Model family.
+    pub model_family: Option<String>,
+    /// Serial number.
+    pub serial_number: Option<String>,
+    /// Firmware revision.
+    pub firmware_revision: Option<String>,
+    /// World Wide Name.
+    pub wwn: Option<String>,
+    /// Total capacity in bytes.
+    pub capacity_bytes: Option<u64>,
+    /// Logical sector size in bytes.
+    pub logical_sector_size: Option<u32>,
+    /// Physical sector size in bytes.
+    pub physical_sector_size: Option<u32>,
+    /// Rotation rate in RPM (0 for SSD).
+    pub rotation_rate: Option<u32>,
+    /// Form factor (e.g. "2.5 inches").
+    pub form_factor: Option<String>,
+    /// Transport type (e.g. "NVMe", "SATA").
+    pub transport: Option<String>,
+    /// Link speed.
+    pub link_speed: Option<String>,
+}
+
+/// A single SMART attribute table entry (ATA devices only).
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct SmartAttribute {
+    /// Attribute ID.
+    pub id: u32,
+    /// Attribute name.
+    pub name: String,
+    /// Current normalized value.
+    pub value: u32,
+    /// Worst normalized value recorded.
+    pub worst: u32,
+    /// Failure threshold.
+    pub threshold: u32,
+    /// Raw attribute value.
+    pub raw_value: u64,
+}
+
+/// A single NVMe Error Information Log entry.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct NvmeErrorLogEntry {
+    /// Error count.
+    pub error_count: u64,
+    /// Submission queue identifier.
+    pub submission_queue_id: u32,
+    /// Command identifier, if available.
+    pub command_id: Option<u32>,
+    /// Status field from the completion queue entry.
+    pub status_field: u32,
+    /// LBA associated with the error, if applicable.
+    pub lba: Option<u64>,
+    /// Namespace identifier, if applicable.
+    pub namespace_id: Option<u32>,
+}

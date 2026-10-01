@@ -13,17 +13,17 @@ use stor_port::{
         openapi::apis::IntoVec,
         store::pool::{Encryption, EncryptionSecret},
         transport::{
-            self, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
-            NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolAlertStatus, PoolAlerts,
-            PoolDiskError, PoolError, PoolErrorCode, PoolState, PoolUuid, Protocol, Replica,
-            ReplicaId, ReplicaKind, ReplicaName, ReplicaStatus, SetReplicaEntityId, SnapshotId,
-            VolumeId,
+            self, ChildState, ChildStateReason, ListPoolsSmartResponse, Nexus, NexusId,
+            NexusNvmePreemption, NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation,
+            PoolAlertStatus, PoolAlerts, PoolDiskError, PoolError, PoolErrorCode, PoolState,
+            PoolUuid, Protocol, Replica, ReplicaId, ReplicaKind, ReplicaName, ReplicaStatus,
+            SetReplicaEntityId, SnapshotId, VolumeId,
         },
     },
     IntoOption,
 };
 
-use grpc::operations::pool::traits::{ClearErrors, ClearErrorsRequest};
+use grpc::operations::pool::traits::{ClearErrors, ClearErrorsRequest, ListPoolsSmartRequest};
 use itertools::Itertools;
 use std::{convert::TryFrom, time::UNIX_EPOCH};
 
@@ -1098,6 +1098,128 @@ impl From<rpc::v1::pool::ProbeDiskInfo> for ProbeDiskInfo {
         });
         Self {
             error: errors.collect(),
+        }
+    }
+}
+
+impl AgentToIoEngine for ListPoolsSmartRequest {
+    type IoEngineMessage = v1::pool::ListPoolsSmartOptions;
+    fn to_rpc(&self) -> Self::IoEngineMessage {
+        v1::pool::ListPoolsSmartOptions {
+            name: self.pool_name.clone(),
+            uuid: self.pool_uuid.clone(),
+            pooltype: None,
+        }
+    }
+}
+
+impl IoEngineToAgent for v1::pool::ListPoolsSmartResponse {
+    type AgentMessage = ListPoolsSmartResponse;
+    fn to_agent(&self) -> Self::AgentMessage {
+        ListPoolsSmartResponse {
+            pools: self.pools.iter().map(|p| p.to_agent()).collect(),
+        }
+    }
+}
+
+impl IoEngineToAgent for v1::pool::PoolSmart {
+    type AgentMessage = transport::PoolSmart;
+    fn to_agent(&self) -> Self::AgentMessage {
+        transport::PoolSmart {
+            name: self.name.clone(),
+            uuid: self.uuid.clone(),
+            disks: self.disks.iter().map(|d| d.to_agent()).collect(),
+        }
+    }
+}
+
+impl IoEngineToAgent for v1::pool::DiskHealth {
+    type AgentMessage = transport::DiskHealth;
+    fn to_agent(&self) -> Self::AgentMessage {
+        transport::DiskHealth {
+            disk_uri: self.disk_uri.clone(),
+            supported: self.supported,
+            health: self.health.as_ref().map(|h| h.to_agent()),
+            error: self.error.clone(),
+        }
+    }
+}
+
+impl IoEngineToAgent for v1::pool::DeviceHealth {
+    type AgentMessage = transport::DeviceHealth;
+    fn to_agent(&self) -> Self::AgentMessage {
+        transport::DeviceHealth {
+            critical_warning: self.critical_warning,
+            healthy: self.healthy,
+            temperature_celsius: self.temperature_celsius,
+            available_spare_percent: self.available_spare_percent,
+            available_spare_threshold_percent: self.available_spare_threshold_percent,
+            percentage_used: self.percentage_used,
+            data_units_read: self.data_units_read,
+            data_units_written: self.data_units_written,
+            host_reads: self.host_reads,
+            host_writes: self.host_writes,
+            controller_busy_minutes: self.controller_busy_minutes,
+            power_cycles: self.power_cycles,
+            power_on_hours: self.power_on_hours,
+            unsafe_shutdowns: self.unsafe_shutdowns,
+            media_errors: self.media_errors,
+            num_error_log_entries: self.num_error_log_entries,
+            identity: self.identity.as_ref().map(|i| i.to_agent()),
+            smart_attributes: self.smart_attributes.iter().map(|a| a.to_agent()).collect(),
+            error_log_entries: self
+                .error_log_entries
+                .iter()
+                .map(|e| e.to_agent())
+                .collect(),
+        }
+    }
+}
+
+impl IoEngineToAgent for v1::pool::DeviceIdentity {
+    type AgentMessage = transport::DeviceIdentity;
+    fn to_agent(&self) -> Self::AgentMessage {
+        transport::DeviceIdentity {
+            model: self.model.clone(),
+            model_family: self.model_family.clone(),
+            serial_number: self.serial_number.clone(),
+            firmware_revision: self.firmware_revision.clone(),
+            wwn: self.wwn.clone(),
+            capacity_bytes: self.capacity_bytes,
+            logical_sector_size: self.logical_sector_size,
+            physical_sector_size: self.physical_sector_size,
+            rotation_rate: self.rotation_rate,
+            form_factor: self.form_factor.clone(),
+            transport: self.transport.clone(),
+            link_speed: self.link_speed.clone(),
+        }
+    }
+}
+
+impl IoEngineToAgent for v1::pool::SmartAttribute {
+    type AgentMessage = transport::SmartAttribute;
+    fn to_agent(&self) -> Self::AgentMessage {
+        transport::SmartAttribute {
+            id: self.id,
+            name: self.name.clone(),
+            value: self.value,
+            worst: self.worst,
+            threshold: self.threshold,
+            raw_value: self.raw_value,
+        }
+    }
+}
+
+impl IoEngineToAgent for v1::pool::NvmeErrorLogEntry {
+    type AgentMessage = transport::NvmeErrorLogEntry;
+    fn to_agent(&self) -> Self::AgentMessage {
+        transport::NvmeErrorLogEntry {
+            error_count: self.error_count,
+            submission_queue_id: self.submission_queue_id,
+            command_id: self.command_id,
+            status_field: self.status_field,
+            lba: self.lba,
+            namespace_id: self.namespace_id,
         }
     }
 }

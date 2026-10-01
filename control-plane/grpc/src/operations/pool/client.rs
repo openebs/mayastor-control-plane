@@ -9,14 +9,14 @@ use crate::{
     pool::{
         self, clear_errors_reply, cordon_pool_reply, create_pool_reply, destroy_pool_reply,
         drain_pool_reply, expand_pool_reply, get_pools_reply, get_pools_request, label_pool_reply,
-        pool_grpc_client::PoolGrpcClient, unlabel_pool_reply, CordonPoolRequest, ExpandPoolRequest,
-        GetPoolsRequest,
+        list_pools_smart_reply, pool_grpc_client::PoolGrpcClient, unlabel_pool_reply,
+        CordonPoolRequest, ExpandPoolRequest, GetPoolsRequest,
     },
 };
 use std::{convert::TryFrom, ops::Deref};
 use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind, TimeoutOptions},
-    types::v0::transport::{Filter, MessageIdVs, Pool, PoolDeleteResult},
+    types::v0::transport::{Filter, ListPoolsSmartResponse, MessageIdVs, Pool, PoolDeleteResult},
 };
 use tonic::transport::Uri;
 
@@ -230,6 +230,22 @@ impl PoolOperations for PoolClient {
             Some(reply) => match reply {
                 drain_pool_reply::Reply::Pool(pool) => Ok(Pool::try_from(pool)?),
                 drain_pool_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
+        }
+    }
+
+    #[tracing::instrument(name = "PoolClient::list_pools_smart", level = "info", skip(self), err)]
+    async fn list_pools_smart(
+        &self,
+        request: &super::traits::ListPoolsSmartRequest,
+    ) -> Result<ListPoolsSmartResponse, ReplyError> {
+        let request = pool::ListPoolsSmartRequest::from(request);
+        let response = self.client().list_pools_smart(request).await?.into_inner();
+        match response.reply {
+            Some(reply) => match reply {
+                list_pools_smart_reply::Reply::Response(resp) => Ok(resp.into()),
+                list_pools_smart_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
         }

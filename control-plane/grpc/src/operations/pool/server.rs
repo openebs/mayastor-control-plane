@@ -3,13 +3,13 @@ use crate::{
     operations::pool::traits::PoolOperations,
     pool::{
         self, clear_errors_reply, cordon_pool_reply, create_pool_reply, drain_pool_reply,
-        expand_pool_reply, get_pools_reply, label_pool_reply,
+        expand_pool_reply, get_pools_reply, label_pool_reply, list_pools_smart_reply,
         pool_grpc_server::{PoolGrpc, PoolGrpcServer},
         unlabel_pool_reply, ClearErrorsReply, ClearErrorsRequest, CordonPoolReply,
         CordonPoolRequest, CreatePoolReply, CreatePoolRequest, DestroyPoolReply,
         DestroyPoolRequest, DrainPoolReply, DrainPoolRequest, ExpandPoolReply, ExpandPoolRequest,
-        GetPoolsReply, GetPoolsRequest, LabelPoolReply, LabelPoolRequest, UnlabelPoolReply,
-        UnlabelPoolRequest,
+        GetPoolsReply, GetPoolsRequest, LabelPoolReply, LabelPoolRequest, ListPoolsSmartReply,
+        ListPoolsSmartRequest, UnlabelPoolReply, UnlabelPoolRequest,
     },
 };
 use std::sync::Arc;
@@ -196,6 +196,21 @@ impl PoolGrpc for PoolServer {
             })),
             Err(err) => Ok(Response::new(DrainPoolReply {
                 reply: Some(drain_pool_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn list_pools_smart(
+        &self,
+        request: Request<ListPoolsSmartRequest>,
+    ) -> Result<tonic::Response<ListPoolsSmartReply>, tonic::Status> {
+        let request: super::traits::ListPoolsSmartRequest = request.into_inner().into();
+        match self.service.list_pools_smart(&request).await {
+            Ok(response) => Ok(Response::new(ListPoolsSmartReply {
+                reply: Some(list_pools_smart_reply::Reply::Response(response.into())),
+            })),
+            Err(err) => Ok(Response::new(ListPoolsSmartReply {
+                reply: Some(list_pools_smart_reply::Reply::Error(err.into())),
             })),
         }
     }
