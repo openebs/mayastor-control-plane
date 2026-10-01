@@ -218,7 +218,7 @@ pub struct PoolDrainRecord {
     /// The initial usage stats of the pool when the pool transitions into Draining state.
     pub initial_stats: Option<PoolUsage>,
     /// In-flight replica moves for this drain.
-    pub replica_moves: Vec<DrainConfig>,
+    pub moving_replicas: Vec<DrainConfig>,
 }
 
 impl Default for PoolDrainRecord {
@@ -233,7 +233,7 @@ impl PoolDrainRecord {
             phase: DrainPhase::Queued,
             reason: Some(PhaseReason::WaitingForSlot),
             initial_stats: None,
-            replica_moves: vec![],
+            moving_replicas: vec![],
         }
     }
 
@@ -253,8 +253,8 @@ impl PoolDrainRecord {
     }
 
     /// Returns the in-flight replica moves for this drain.
-    pub fn replica_moves(&self) -> &Vec<DrainConfig> {
-        &self.replica_moves
+    pub fn moving_replicas(&self) -> &Vec<DrainConfig> {
+        &self.moving_replicas
     }
 }
 
@@ -1266,11 +1266,35 @@ impl From<PoolDrainRecord> for models::PoolDrainRecord {
             reason: record.reason.into_opt(),
             initial: record.initial_stats.into_opt(),
             moving_replicas: record
-                .replica_moves
+                .moving_replicas
                 .into_iter()
                 .filter_map(|config| config.moving_replica)
                 .map(Into::into)
                 .collect(),
+        }
+    }
+}
+
+impl From<DrainConfig> for models::ReplicaMoveConfig {
+    fn from(config: DrainConfig) -> Self {
+        Self {
+            placement_started_at: config.placement_started_at.map(rfc3339),
+            volume: config.volume.to_string(),
+            moving_replica: config.moving_replica.map(|id| id.to_string()),
+            spare_replica: config
+                .spare_replica
+                .and_then(|spare| spare.replica_id)
+                .map(|id| id.to_string()),
+            unwind_spare: config.unwind_spare.map(Into::into),
+        }
+    }
+}
+
+impl From<UnwindSpare> for models::UnwindSpare {
+    fn from(unwind: UnwindSpare) -> Self {
+        match unwind {
+            UnwindSpare::Cancelled => Self::Cancelled,
+            UnwindSpare::Respare => Self::Respare,
         }
     }
 }
@@ -1302,7 +1326,7 @@ impl From<PhaseReason> for models::PoolDrainPhaseReason {
     }
 }
 
-impl From<PoolUsage> for models::PoolDrainUsage {
+impl From<PoolUsage> for models::PoolDrainStats {
     fn from(usage: PoolUsage) -> Self {
         Self {
             replica_count: usage.repl_count,

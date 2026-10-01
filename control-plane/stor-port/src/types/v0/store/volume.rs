@@ -430,7 +430,7 @@ pub struct VolumeRuntimeMetadata {
     /// Tied to the volume's lifetime so it goes away when the volume is deleted.
     offline_rebuild_degraded_since: Option<std::time::Instant>,
     /// Configuration for the replica move operation, if any.
-    replica_move: Option<ReplicaMoveRequester>,
+    moving_replica: Option<ReplicaMoveRequester>,
 }
 impl VolumeRuntimeMetadata {
     /// Check if there's any snapshot.
