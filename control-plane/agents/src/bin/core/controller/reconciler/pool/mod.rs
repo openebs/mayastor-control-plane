@@ -59,6 +59,7 @@ impl TaskPoller for PoolReconciler {
         // TODO: See if we can move this somewhere else,
         // would be easier to figure that out when we have other reconciler.
         drain::drain_state_promoter(context).await;
+        drain::inspect_draining_pools(context).await;
         Self::squash_results(results)
     }
 
