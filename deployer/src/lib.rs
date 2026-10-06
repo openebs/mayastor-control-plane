@@ -104,6 +104,11 @@ pub struct StartOptions {
     #[clap(long)]
     pub no_grpc_tls: bool,
 
+    /// Enforce gRPC TLS on the core server by rejecting plaintext clients.
+    /// Has no effect when gRPC TLS is disabled.
+    #[clap(long, conflicts_with = "no_grpc_tls")]
+    pub grpc_tls_enforced: bool,
+
     /// Don't run the components in FIPS mode.
     #[clap(long)]
     pub no_fips: bool,
@@ -522,6 +527,11 @@ impl StartOptions {
     #[must_use]
     pub fn with_grpc_tls(mut self, enabled: bool) -> Self {
         self.no_grpc_tls = !enabled;
+        self
+    }
+    #[must_use]
+    pub fn with_grpc_tls_enforced(mut self, enforced: bool) -> Self {
+        self.grpc_tls_enforced = enforced;
         self
     }
     #[must_use]
