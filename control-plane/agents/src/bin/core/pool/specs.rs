@@ -320,7 +320,7 @@ impl ResourceSpecs {
         snapshots
     }
     /// Get all replicas on the given pool.
-    fn pool_replicas(&self, id: &PoolId) -> Vec<ResourceMutex<ReplicaSpec>> {
+    pub(crate) fn pool_replicas(&self, id: &PoolId) -> Vec<ResourceMutex<ReplicaSpec>> {
         self.replicas
             .values()
             .filter(|r| r.immutable_ref().pool_name() == id)
@@ -494,6 +494,25 @@ impl ResourceSpecsLocked {
                 pool.is_draining()
             })
             .count()
+    }
+
+    /// Returns the number of pools currently in draining phase.
+    pub(crate) fn pools_rsc_draining(&self) -> Vec<PoolSpec> {
+        let specs = self.read();
+        let pools = specs
+            .pools
+            .to_vec()
+            .iter()
+            .filter_map(|pool| {
+                let pool = pool.lock();
+                if pool.is_draining() {
+                    Some(pool.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        pools
     }
 
     /// Returns list of PoolId whose drain is `Queued`, ordered by the drain request timestamp.

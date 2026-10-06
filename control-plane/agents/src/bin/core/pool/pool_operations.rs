@@ -20,7 +20,7 @@ use stor_port::{
     types::v0::{
         store::{
             pool::{
-                DrainPhase, DrainPhaseOp, DrainProgressOp, PoolCordonOp, PoolDrainOp,
+                DrainPhase, DrainPhaseOp, DrainProgressOp, PhaseReason, PoolCordonOp, PoolDrainOp,
                 PoolOperation, PoolSpec,
             },
             snapshots::replica::ReplicaSnapshot,
@@ -340,10 +340,15 @@ impl ResourceDrain for OperationGuardArc<PoolSpec> {
 }
 
 impl OperationGuardArc<PoolSpec> {
-    /// Sets the pool's drain phase to Draining and records the pool usage at the time of the request.
-    pub(crate) async fn set_draining(&mut self, registry: &Registry) -> Result<(), SvcError> {
-        let usage = registry.pool_usage(self.id()).await?;
-        let phase_op = DrainPhaseOp::new(DrainPhase::Draining, None, Some(usage));
+    /// Sets the pool's drain phase.
+    pub(crate) async fn set_phase_details(
+        &mut self,
+        registry: &Registry,
+        phase: DrainPhase,
+        reason: Option<PhaseReason>,
+    ) -> Result<(), SvcError> {
+        let usage = registry.pool_usage(self.id()).await.ok();
+        let phase_op = DrainPhaseOp::new(phase, reason, usage);
         let request = DrainProgressOp::PhaseUpdate(phase_op);
         self.update_drain_record(registry, request).await?;
         Ok(())

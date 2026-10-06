@@ -332,6 +332,25 @@ pub struct DrainConfig {
     pub unwind_spare: Option<UnwindSpare>,
 }
 
+impl DrainConfig {
+    /// Creates a new instance of DrainConfig.
+    pub fn new(volume: VolumeId, pool: PoolId, replica_id: ReplicaId, need_spare: bool) -> Self {
+        let spare_replica = if need_spare {
+            Some(SpareReplica::default())
+        } else {
+            None
+        };
+        Self {
+            placement_started_at: None,
+            volume,
+            pool,
+            moving_replica: Some(replica_id),
+            spare_replica,
+            unwind_spare: None,
+        }
+    }
+}
+
 /// Spare replica reference for this drain.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct SpareReplica {
@@ -607,6 +626,16 @@ impl PoolSpec {
         }
     }
 
+    /// Returns true if snapshot policy is set to ignore, or if no drain is applied.
+    pub fn ignore_snapshot_policy(&self) -> bool {
+        match self.cordon_drain.as_ref() {
+            Some(CordonDrainState::Drain(drain)) => {
+                drain.policy.snapshot_policy == SnapshotPolicy::Ignore
+            }
+            _ => true,
+        }
+    }
+
     /// Returns the cordon policy in effect: consider self-cordon while a drain is applied, otherwise
     /// the cordon the user applied.
     pub fn effective_cordon(&self) -> Option<CordonedState> {
@@ -638,6 +667,13 @@ impl PoolSpec {
             match op.phase {
                 DrainPhase::Draining => {
                     matches!(drain_record.phase, DrainPhase::Queued)
+                }
+                DrainPhase::PartiallyDrained => {
+                    matches!(drain_record.phase, DrainPhase::Draining)
+                }
+                DrainPhase::Drained => {
+                    matches!(drain_record.phase, DrainPhase::Draining)
+                        || matches!(drain_record.phase, DrainPhase::AwaitingCleanup)
                 }
                 // Will be extended as we add more phase transition callers.
                 _ => false,
