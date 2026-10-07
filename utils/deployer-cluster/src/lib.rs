@@ -523,6 +523,11 @@ impl Cluster {
         format!("{ip}:10124").parse::<SocketAddr>().unwrap()
     }
 
+    /// Whether the io-engine nodes serve gRPC over (auto-)TLS.
+    pub fn grpc_tls(&self) -> bool {
+        !self.builder.opts.no_grpc_tls
+    }
+
     /// pool id for `pool` index on `node` index
     pub fn pool(&self, node: u32, pool: u32) -> transport::PoolId {
         format!("{}-pool-{}", self.node(node), pool + 1).into()

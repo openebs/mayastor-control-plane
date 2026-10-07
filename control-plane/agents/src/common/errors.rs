@@ -91,6 +91,12 @@ pub enum SvcError {
         source: http::Error,
     },
     #[snafu(display(
+        "gRPC TLS is enforced but node '{}' does not support TLS on gRPC endpoint '{}'",
+        node_id,
+        endpoint
+    ))]
+    GrpcTlsRequired { node_id: String, endpoint: String },
+    #[snafu(display(
         "gRPC request '{}' for '{}' failed with '{}'",
         request,
         resource.to_string(),
@@ -569,6 +575,7 @@ impl SvcError {
             Self::GrpcConnectTimeout { .. } => tonic::Code::DeadlineExceeded,
             Self::GrpcConnect { .. } => tonic::Code::Unavailable,
             Self::GrpcUdsConnect { .. } => tonic::Code::Unavailable,
+            Self::GrpcTlsRequired { .. } => tonic::Code::FailedPrecondition,
             Self::Internal { .. } => tonic::Code::Internal,
             Self::Unimplemented { .. } => tonic::Code::Unimplemented,
             Self::RestrictedReplicaCount { .. } => tonic::Code::FailedPrecondition,
@@ -821,6 +828,13 @@ impl From<SvcError> for ReplyError {
 
             SvcError::GrpcConnect { .. } => ReplyError {
                 kind: ReplyErrorKind::Unavailable,
+                resource: ResourceKind::Node,
+                source,
+                extra,
+            },
+
+            SvcError::GrpcTlsRequired { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::Node,
                 source,
                 extra,

@@ -375,6 +375,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         cli_args.offline_rebuild_grace_period.into(),
         cli_args.max_offline_rebuilds,
         cli_args.max_concurrent_pool_drain,
+        grpc_tls_enforced,
     )
     .await?;
 

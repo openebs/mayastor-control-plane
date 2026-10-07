@@ -272,6 +272,7 @@ impl Service {
                     self.comms_timeouts.clone(),
                     ha_disabled,
                     self.sim_socket,
+                    self.registry.grpc_tls_enforced(),
                 );
 
                 // On startup api version is not known, thus probe all apiversions

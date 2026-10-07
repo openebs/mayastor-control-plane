@@ -135,6 +135,7 @@ mod test {
             None,
             ApiVersion::V1,
             false,
+            cluster.grpc_tls(),
             false,
         )
         .unwrap();
