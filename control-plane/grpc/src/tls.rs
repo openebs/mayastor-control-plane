@@ -43,40 +43,42 @@ impl rustls::client::danger::ServerCertVerifier for NoCertificateVerification {
 
     fn verify_tls13_signature(
         &self,
-        _message: &[u8],
-        _certificate: &rustls::pki_types::CertificateDer,
-        _signature: &rustls::DigitallySignedStruct,
+        message: &[u8],
+        certificate: &rustls::pki_types::CertificateDer,
+        signature: &rustls::DigitallySignedStruct,
     ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+        // The server identity is not authenticated (see verify_server_cert),
+        // but still verify the handshake signature against the presented
+        // certificate's key, using the installed provider's algorithms so only
+        // FIPS-approved ones are used in FIPS mode.
+        rustls::crypto::verify_tls13_signature(
+            message,
+            certificate,
+            signature,
+            &utils::signature_verification_algorithms(),
+        )
     }
 
     fn verify_tls12_signature(
         &self,
-        _message: &[u8],
-        _certificate: &rustls::pki_types::CertificateDer,
-        _signature: &rustls::DigitallySignedStruct,
+        message: &[u8],
+        certificate: &rustls::pki_types::CertificateDer,
+        signature: &rustls::DigitallySignedStruct,
     ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+        // The server identity is not authenticated (see verify_server_cert),
+        // but still verify the handshake signature against the presented
+        // certificate's key, using the installed provider's algorithms so only
+        // FIPS-approved ones are used in FIPS mode.
+        rustls::crypto::verify_tls12_signature(
+            message,
+            certificate,
+            signature,
+            &utils::signature_verification_algorithms(),
+        )
     }
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        use rustls::SignatureScheme;
-
-        vec![
-            SignatureScheme::RSA_PKCS1_SHA1,
-            SignatureScheme::ECDSA_SHA1_Legacy,
-            SignatureScheme::RSA_PKCS1_SHA256,
-            SignatureScheme::ECDSA_NISTP256_SHA256,
-            SignatureScheme::RSA_PKCS1_SHA384,
-            SignatureScheme::ECDSA_NISTP384_SHA384,
-            SignatureScheme::RSA_PKCS1_SHA512,
-            SignatureScheme::ECDSA_NISTP521_SHA512,
-            SignatureScheme::RSA_PSS_SHA256,
-            SignatureScheme::RSA_PSS_SHA384,
-            SignatureScheme::RSA_PSS_SHA512,
-            SignatureScheme::ED25519,
-            SignatureScheme::ED448,
-        ]
+        utils::supported_signature_schemes()
     }
 }
 

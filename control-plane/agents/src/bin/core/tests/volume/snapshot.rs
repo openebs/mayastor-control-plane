@@ -461,6 +461,11 @@ async fn unknown_snapshot_garbage_collector() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
         .with_io_engines(1)
+        // Disable gRPC TLS: this test asserts the garbage collector has pruned
+        // the leaked snapshots immediately after a core restart, which races
+        // the fresh TLS handshake the core must perform to reconnect to the
+        // io-engine. Plaintext keeps reconnect latency negligible.
+        .with_grpc_tls(false)
         .with_cache_period("50ms")
         .with_reconcile_period(Duration::from_millis(50), Duration::from_millis(50))
         .build()

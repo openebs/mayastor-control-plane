@@ -134,30 +134,52 @@ impl ComponentAction for IoEngine {
             let socket = SocketAddr::new(IpAddr::from(*container_ip), 10124);
             let tls = !options.no_grpc_tls;
             let enforce_tls = options.grpc_enforce_tls;
-            let mut hdl = RpcHandle::connect(
-                options.latest_io_api_version(),
-                &name,
-                socket,
-                100,
-                tokio::time::sleep,
-                move |endpoint| async move {
-                    if !tls {
-                        return grpc::tls::io_connect(endpoint, false).await;
+            let connector = move |endpoint: tonic::transport::Endpoint| async move {
+                if !tls {
+                    return grpc::tls::io_connect(endpoint, false).await;
+                }
+                // The io-engine may not be TLS-capable (e.g. an older binary that ignores
+                // GRPC_AUTO_TLS and serves plaintext). Unless TLS is enforced, fall back to a
+                // plaintext connection when the TLS handshake fails.
+                match grpc::tls::io_connect(endpoint.clone(), true).await {
+                    Ok(channel) => Ok(channel),
+                    Err(error) if enforce_tls => Err(error),
+                    Err(_) => grpc::tls::io_connect(endpoint, false).await,
+                }
+            };
+            // Readiness probe: connect and ping. The connection handshake (including TLS) can
+            // succeed while the io-engine is still coming up, after which the first request may
+            // see a transient error (e.g. the freshly established h2 connection being reset during
+            // heavy startup). Reconnect and retry the ping until it succeeds or we run out of
+            // attempts, rather than failing the whole cluster start on a single startup hiccup.
+            let mut attempts = 100;
+            loop {
+                let ping = async {
+                    let mut hdl = RpcHandle::connect(
+                        options.latest_io_api_version(),
+                        &name,
+                        socket,
+                        100,
+                        tokio::time::sleep,
+                        connector,
+                    )
+                    .await?;
+                    hdl.ping().await.map_err(|error| error.to_string())
+                }
+                .await;
+                match ping {
+                    Ok(()) => break,
+                    Err(error) => {
+                        attempts -= 1;
+                        if attempts == 0 {
+                            return Err(
+                                format!("Failed to ping io-engine '{name}': {error}").into()
+                            );
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                     }
-                    // The io-engine may not be TLS-capable (e.g. an older binary that ignores
-                    // GRPC_AUTO_TLS and serves plaintext). Unless TLS is enforced, fall back to a
-                    // plaintext connection when the TLS handshake fails.
-                    match grpc::tls::io_connect(endpoint.clone(), true).await {
-                        Ok(channel) => Ok(channel),
-                        Err(error) if enforce_tls => Err(error),
-                        Err(_) => grpc::tls::io_connect(endpoint, false).await,
-                    }
-                },
-            )
-            .await?;
-            hdl.ping()
-                .await
-                .map_err(|error| format!("Failed to ping io-engine '{name}': {error}"))?;
+                }
+            }
         }
         for i in 0..options.io_engines {
             let name = Self::name(i, options);

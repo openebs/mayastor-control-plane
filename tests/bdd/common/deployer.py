@@ -41,6 +41,7 @@ class StartOptions:
     rust_log_silence: str = None
     rest_core_health_freq: str = None
     mount_host_dev_udev: bool = False
+    no_grpc_tls: bool = False
 
     def args(self):
         args = [
@@ -118,6 +119,9 @@ class StartOptions:
         if self.mount_host_dev_udev:
             args.append("--mount-host-dev-udev")
 
+        if self.no_grpc_tls:
+            args.append("--no-grpc-tls")
+
         args.append(agent_arg)
 
         return args
@@ -154,6 +158,7 @@ class Deployer(object):
         rust_log_silence: str = None,
         rest_core_health_freq: str = None,
         mount_host_dev_udev=False,
+        no_grpc_tls=False,
     ):
         options = StartOptions(
             io_engines,
@@ -183,6 +188,7 @@ class Deployer(object):
             rust_log_silence=rust_log_silence,
             rest_core_health_freq=rest_core_health_freq,
             mount_host_dev_udev=mount_host_dev_udev,
+            no_grpc_tls=no_grpc_tls,
         )
         pytest.deployer_options = options
         Deployer.start_with_opts(options)

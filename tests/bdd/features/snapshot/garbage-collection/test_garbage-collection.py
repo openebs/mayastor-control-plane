@@ -61,6 +61,11 @@ def setup(create_pool_disk_images):
         request_timeout=f"{tmo}ms",
         no_min_timeouts=True,
         io_engine_env="MAYASTOR_HB_INTERVAL_SEC=1",
+        # This test asserts snapshot garbage collection right after pausing/unpausing the io-engine
+        # node. With gRPC TLS enabled the control-plane re-establishes a fresh TLS connection to the
+        # io-engine on first contact, and that handshake latency races the tight 300ms request
+        # timeout (504). Run this test with plaintext gRPC to keep first-contact latency negligible.
+        no_grpc_tls=True,
     )
     ApiClient.pools_api().put_node_pool(
         NODE1,

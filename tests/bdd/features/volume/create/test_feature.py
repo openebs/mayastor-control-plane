@@ -185,14 +185,14 @@ def there_should_not_be_any_specs_relating_to_the_volume():
     # Restart the core agent so that all the specs are reloaded from the persistent store.
     docker_client = docker.from_env()
     io_engine = docker_client.containers.get("io-engine-1")
-    io_engine.restart()
     core = docker_client.containers.get("core")
     core.restart()
+    io_engine.restart()
 
     check_zero_specs()
 
 
-@retry(wait_fixed=500, stop_max_attempt_number=10)
+@retry(wait_fixed=250, stop_max_attempt_number=30)
 def check_zero_specs():
     specs = ApiClient.specs_api().get_specs()
 
