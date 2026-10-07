@@ -133,13 +133,26 @@ impl ComponentAction for IoEngine {
             let container_ip = cfg.container_ip_as_ref(&name);
             let socket = SocketAddr::new(IpAddr::from(*container_ip), 10124);
             let tls = !options.no_grpc_tls;
+            let enforce_tls = options.grpc_enforce_tls;
             let mut hdl = RpcHandle::connect(
                 options.latest_io_api_version(),
                 &name,
                 socket,
                 100,
                 tokio::time::sleep,
-                |endpoint| grpc::tls::io_connect(endpoint, tls),
+                move |endpoint| async move {
+                    if !tls {
+                        return grpc::tls::io_connect(endpoint, false).await;
+                    }
+                    // The io-engine may not be TLS-capable (e.g. an older binary that ignores
+                    // GRPC_AUTO_TLS and serves plaintext). Unless TLS is enforced, fall back to a
+                    // plaintext connection when the TLS handshake fails.
+                    match grpc::tls::io_connect(endpoint.clone(), true).await {
+                        Ok(channel) => Ok(channel),
+                        Err(error) if enforce_tls => Err(error),
+                        Err(_) => grpc::tls::io_connect(endpoint, false).await,
+                    }
+                },
             )
             .await?;
             hdl.ping()
