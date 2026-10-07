@@ -4,10 +4,12 @@ use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::io_engine::Null;
 use stor_port::{
     transport_api::ResourceKind,
-    types::v0::transport::{CreatePool, DestroyPool, ExpandPool, ImportPool, PoolState},
+    types::v0::transport::{
+        CreatePool, DestroyPool, ExpandPool, GetPoolsSmartResponse, ImportPool, PoolState,
+    },
 };
 
-use grpc::operations::pool::traits::ClearErrorsRequest;
+use grpc::operations::pool::traits::{ClearErrorsRequest, GetPoolsSmartRequest};
 use snafu::ResultExt;
 
 #[async_trait::async_trait]
@@ -102,6 +104,17 @@ impl crate::controller::io_engine::PoolApi for super::RpcClient {
         Err(SvcError::GrpcRequestError {
             resource: ResourceKind::Pool,
             request: "probe_pool".to_string(),
+            source: tonic::Status::unimplemented("not supported on v0"),
+        })
+    }
+
+    async fn get_pools_smart(
+        &self,
+        _request: &GetPoolsSmartRequest,
+    ) -> Result<GetPoolsSmartResponse, SvcError> {
+        Err(SvcError::GrpcRequestError {
+            resource: ResourceKind::Pool,
+            request: "get_pools_smart".to_string(),
             source: tonic::Status::unimplemented("not supported on v0"),
         })
     }

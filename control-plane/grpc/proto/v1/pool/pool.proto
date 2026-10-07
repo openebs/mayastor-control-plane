@@ -650,4 +650,154 @@ service PoolGrpc {
   // Clear error counters and alerts
   rpc ClearErrors (ClearErrorsRequest) returns (ClearErrorsReply) {}
   rpc DrainPool (DrainPoolRequest) returns (DrainPoolReply) {}
+
+  // Retrieve SMART / health information for the disk(s) backing pool(s)
+  rpc GetPoolsSmart (GetPoolsSmartRequest) returns (GetPoolsSmartReply) {}
+}
+
+// Request to get SMART / health data for pool-backing disks.
+// At least one of node, pool, or node_pool filter must be set.
+message GetPoolsSmartRequest {
+  oneof filter {
+    common.NodeFilter node = 1;
+    common.PoolFilter pool = 2;
+    common.NodePoolFilter node_pool = 3;
+  }
+}
+
+// Reply wrapper for GetPoolsSmart.
+message GetPoolsSmartReply {
+  oneof reply {
+    GetPoolsSmartResponse response = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Response containing SMART info for matched pools.
+message GetPoolsSmartResponse {
+  repeated PoolSmartInfo pools = 1;
+}
+
+// SMART info for a single pool.
+message PoolSmartInfo {
+  // Pool name.
+  string name = 1;
+  // Pool UUID.
+  string uuid = 2;
+  // Health info for each backing disk.
+  repeated DiskHealthInfo disks = 3;
+}
+
+// Health info for a single backing disk.
+message DiskHealthInfo {
+  // Disk device URI (e.g. bdev or devlink path).
+  string disk_uri = 1;
+  // Whether the device supports SMART.
+  bool supported = 2;
+  // Device health details (absent when unsupported).
+  optional DeviceHealthInfo health = 3;
+  // Error string if the health query failed.
+  optional string error = 4;
+}
+
+// SMART / health counters for a device.
+message DeviceHealthInfo {
+  // NVMe critical warning bitmap.
+  uint32 critical_warning = 1;
+  // Overall health assessment.
+  bool healthy = 2;
+  // Composite temperature in degrees Celsius.
+  optional sint32 temperature_celsius = 3;
+  // Available spare capacity percentage.
+  optional uint32 available_spare_percent = 4;
+  // Spare capacity threshold percentage.
+  optional uint32 available_spare_threshold_percent = 5;
+  // Estimated percentage of device life used.
+  optional uint32 percentage_used = 6;
+  // Number of 512-byte data units read.
+  optional uint64 data_units_read = 7;
+  // Number of 512-byte data units written.
+  optional uint64 data_units_written = 8;
+  // Number of host read commands.
+  optional uint64 host_reads = 9;
+  // Number of host write commands.
+  optional uint64 host_writes = 10;
+  // Minutes the controller was busy.
+  optional uint64 controller_busy_minutes = 11;
+  // Number of power cycles.
+  optional uint64 power_cycles = 12;
+  // Cumulative power-on hours.
+  optional uint64 power_on_hours = 13;
+  // Number of unsafe shutdowns.
+  optional uint64 unsafe_shutdowns = 14;
+  // Number of media and data integrity errors.
+  optional uint64 media_errors = 15;
+  // Number of error log entries.
+  optional uint64 num_error_log_entries = 16;
+  // Device identity / model info.
+  optional DeviceIdentityInfo identity = 17;
+  // ATA SMART attributes (empty for NVMe).
+  repeated SmartAttributeInfo smart_attributes = 18;
+  // NVMe error log entries.
+  repeated NvmeErrorLogEntryInfo error_log_entries = 19;
+}
+
+// Device identity and model information.
+message DeviceIdentityInfo {
+  // Model name.
+  optional string model = 1;
+  // Model family.
+  optional string model_family = 2;
+  // Serial number.
+  optional string serial_number = 3;
+  // Firmware revision.
+  optional string firmware_revision = 4;
+  // World-wide name.
+  optional string wwn = 5;
+  // Total capacity in bytes.
+  optional uint64 capacity_bytes = 6;
+  // Logical sector size in bytes.
+  optional uint32 logical_sector_size = 7;
+  // Physical sector size in bytes.
+  optional uint32 physical_sector_size = 8;
+  // Rotation rate in RPM (0 for SSD).
+  optional uint32 rotation_rate = 9;
+  // Form factor description.
+  optional string form_factor = 10;
+  // Transport type (e.g. SATA, NVMe, SAS).
+  optional string transport = 11;
+  // Negotiated link speed.
+  optional string link_speed = 12;
+}
+
+// A single ATA SMART attribute.
+message SmartAttributeInfo {
+  // Attribute ID.
+  uint32 id = 1;
+  // Attribute name.
+  string name = 2;
+  // Current normalized value.
+  uint32 value = 3;
+  // Worst recorded normalized value.
+  uint32 worst = 4;
+  // Failure threshold.
+  uint32 threshold = 5;
+  // Raw attribute value.
+  uint64 raw_value = 6;
+}
+
+// An NVMe error log entry.
+message NvmeErrorLogEntryInfo {
+  // Error count.
+  uint64 error_count = 1;
+  // Submission queue that issued the command.
+  uint32 submission_queue_id = 2;
+  // Command ID (if available).
+  optional uint32 command_id = 3;
+  // Status field from the completion queue entry.
+  uint32 status_field = 4;
+  // LBA associated with the error.
+  optional uint64 lba = 5;
+  // Namespace ID associated with the error.
+  optional uint32 namespace_id = 6;
 }

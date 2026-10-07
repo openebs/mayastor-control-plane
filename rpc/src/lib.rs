@@ -678,10 +678,11 @@ pub mod v1 {
     pub mod pool {
         pub use super::pb::{
             pool_rpc_client, ClearErrorRequest, ClearErrors, CreatePoolRequest, DestroyPoolRequest,
-            DiskInfo, GrowPoolRequest, ImportPoolRequest, ListPoolOptions, ListPoolsResponse, Pool,
-            PoolAlert, PoolAlertStatus, PoolAlerts, PoolErrors, PoolMetadataArgs, PoolProbeMeta,
-            PoolProbes, PoolType, ProbeDiskInfo, ProbeError, ProbeErrorCode, ProbePoolRequest,
-            ProbePoolResponse,
+            DeviceHealth, DeviceIdentity, DiskHealth, DiskInfo, GrowPoolRequest, ImportPoolRequest,
+            ListPoolOptions, ListPoolsResponse, ListPoolsSmartOptions, ListPoolsSmartResponse,
+            NvmeErrorLogEntry, Pool, PoolAlert, PoolAlertStatus, PoolAlerts, PoolErrors,
+            PoolMetadataArgs, PoolProbeMeta, PoolProbes, PoolSmart, PoolType, ProbeDiskInfo,
+            ProbeError, ProbeErrorCode, ProbePoolRequest, ProbePoolResponse, SmartAttribute,
         };
     }
 

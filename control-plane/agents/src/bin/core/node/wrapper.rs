@@ -28,18 +28,19 @@ use stor_port::{
         transport::{
             AddNexusChild, ApiVersion, Child, CreateNexus, CreatePool, CreateReplica,
             CreateReplicaSnapshot, DestroyNexus, DestroyPool, DestroyReplica,
-            DestroyReplicaSnapshot, ExpandPool, FaultNexusChild, GetBlockDevices, ImportPool,
-            IoEngCreateSnapshotClone, ListRebuildRecord, ListReplicaSnapshots, ListSnapshotClones,
-            MessageIdVs, Nexus, NexusChildAction, NexusChildActionContext, NexusChildActionKind,
-            NexusId, NodeId, NodeState, NodeStatus, PoolId, PoolState, RebuildHistory, Register,
-            RemoveNexusChild, Replica, ReplicaId, ReplicaName, ReplicaSnapshot, ResizeNexus,
-            ResizeReplica, SetReplicaEntityId, ShareNexus, ShareReplica, ShutdownNexus, SnapshotId,
-            UnshareNexus, UnshareReplica, VolumeId,
+            DestroyReplicaSnapshot, ExpandPool, FaultNexusChild, GetBlockDevices,
+            GetPoolsSmartResponse, ImportPool, IoEngCreateSnapshotClone, ListRebuildRecord,
+            ListReplicaSnapshots, ListSnapshotClones, MessageIdVs, Nexus, NexusChildAction,
+            NexusChildActionContext, NexusChildActionKind, NexusId, NodeId, NodeState, NodeStatus,
+            PoolId, PoolState, RebuildHistory, Register, RemoveNexusChild, Replica, ReplicaId,
+            ReplicaName, ReplicaSnapshot, ResizeNexus, ResizeReplica, SetReplicaEntityId,
+            ShareNexus, ShareReplica, ShutdownNexus, SnapshotId, UnshareNexus, UnshareReplica,
+            VolumeId,
         },
     },
 };
 
-use grpc::operations::pool::traits::ClearErrorsRequest;
+use grpc::operations::pool::traits::{ClearErrorsRequest, GetPoolsSmartRequest};
 use parking_lot::RwLock;
 use std::{future::Future, ops::DerefMut, sync::Arc};
 use tracing::{debug, trace, warn};
@@ -1386,6 +1387,16 @@ impl PoolApi for Arc<tokio::sync::RwLock<NodeWrapper>> {
             }
             Err(error) => Err(error),
         }
+    }
+
+    async fn get_pools_smart(
+        &self,
+        request: &GetPoolsSmartRequest,
+    ) -> Result<GetPoolsSmartResponse, SvcError> {
+        let dataplane = self
+            .grpc_client_locked(MessageIdVs::GetPoolsSmart.into())
+            .await?;
+        dataplane.get_pools_smart(request).await
     }
 }
 
