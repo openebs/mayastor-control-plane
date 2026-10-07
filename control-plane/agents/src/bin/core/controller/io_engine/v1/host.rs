@@ -46,6 +46,8 @@ impl crate::controller::io_engine::HostApi for super::RpcClient {
             version: registration_info.io_version(),
             features: registration_info.features(),
             bugfixes: registration_info.bugfixes(),
+            transport_caps: registration_info.transport_caps(),
+            nvmf_target: registration_info.nvmf_target(),
             id: registration_info.id.into(),
             grpc_endpoint: std::net::SocketAddr::from_str(&registration_info.grpc_endpoint)
                 .map_err(|error| SvcError::NodeGrpcEndpoint {

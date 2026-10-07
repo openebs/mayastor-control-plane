@@ -103,9 +103,32 @@ impl CreateRow for openapi::models::Node {
             }
         };
         let tallies = self.meta.as_ref().map(|m| &m.tallies);
+        // Prefix the gRPC endpoint with the scheme the io-engine serves, derived from whether it
+        // advertised gRPC TLS support at registration.
+        let grpc_tls = spec
+            .features
+            .as_ref()
+            .and_then(|f| f.grpc_tls)
+            .unwrap_or(false);
+        let grpc_scheme = if grpc_tls { "https" } else { "http" };
+        let grpc_endpoint = format!("{grpc_scheme}://{}", state.grpc_endpoint);
+        // Render the nvmf target as a URI, using the rdma-capable scheme when the target listens
+        // over rdma. An older io-engine that doesn't report its target at all shows as unknown.
+        let nvmf_target = spec.nvmf_target.as_ref().map_or_else(
+            || "<unknown>".to_string(),
+            |target| {
+                let scheme = if target.rdma == Some(true) {
+                    "nvmf+rdma+tcp"
+                } else {
+                    "nvmf"
+                };
+                format!("{scheme}://{}", target.address)
+            },
+        );
         row![
             self.id,
-            state.grpc_endpoint,
+            grpc_endpoint,
+            nvmf_target,
             statuses,
             optional_cell(state.version),
             optional_cell(tallies.map(|t| t.pool_count)),

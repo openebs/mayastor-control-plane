@@ -9,10 +9,13 @@ use stor_port::{
         ReplyError, ResourceKind,
     },
     types::v0::{
-        store::node::{CordonDrainState, CordonedState, DrainState, NodeSpec},
+        store::{
+            app_node::TransportCaps,
+            node::{CordonDrainState, CordonedState, DrainState, NodeSpec},
+        },
         transport::{
             BlockDevice, DestroyNode, Filesystem, Filter, GetBlockDevices, Node, NodeDeleteResult,
-            NodeFeatures, NodeId, NodeRscCounts, NodeState, NodeStatus, Partition,
+            NodeFeatures, NodeId, NodeRscCounts, NodeState, NodeStatus, NvmfTargetInfo, Partition,
             SnapshotLossDetail, SnapshotLossInfo, VolumeLossDetail, VolumeLossInfo,
         },
     },
@@ -60,48 +63,52 @@ impl TryFrom<node::Node> for Node {
     type Error = ReplyError;
     fn try_from(node_grpc_type: node::Node) -> Result<Self, Self::Error> {
         let node_spec = match node_grpc_type.spec {
-            Some(spec) => Some(NodeSpec::new(
-                spec.node_id.into(),
-                std::net::SocketAddr::from_str(&spec.endpoint).map_err(|e| {
-                    Self::Error::invalid_argument(
-                        ResourceKind::Node,
-                        "node.spec.endpoint",
-                        e.to_string(),
-                    )
-                })?,
-                spec.labels.unwrap_or_default().value,
-                match spec.cordon_drain_state {
-                    Some(state) => match state.cordondrainstate {
-                        Some(node::cordon_drain_state::Cordondrainstate::Cordoned(state)) => {
-                            let type_v0_cordoned_state = CordonedState {
-                                cordonlabels: state.cordon_labels,
-                            };
-                            Some(CordonDrainState::Cordoned(type_v0_cordoned_state))
-                        }
-                        Some(node::cordon_drain_state::Cordondrainstate::Draining(state)) => {
-                            let type_v0_draining_state = DrainState {
-                                cordonlabels: state.cordon_labels,
-                                drainlabels: state.drain_labels,
-                            };
-                            Some(CordonDrainState::Draining(type_v0_draining_state))
-                        }
-                        Some(node::cordon_drain_state::Cordondrainstate::Drained(state)) => {
-                            let type_v0_drained_state = DrainState {
-                                cordonlabels: state.cordon_labels,
-                                drainlabels: state.drain_labels,
-                            };
-                            Some(CordonDrainState::Drained(type_v0_drained_state))
-                        }
+            Some(spec) => Some(
+                NodeSpec::new(
+                    spec.node_id.into(),
+                    std::net::SocketAddr::from_str(&spec.endpoint).map_err(|e| {
+                        Self::Error::invalid_argument(
+                            ResourceKind::Node,
+                            "node.spec.endpoint",
+                            e.to_string(),
+                        )
+                    })?,
+                    spec.labels.unwrap_or_default().value,
+                    match spec.cordon_drain_state {
+                        Some(state) => match state.cordondrainstate {
+                            Some(node::cordon_drain_state::Cordondrainstate::Cordoned(state)) => {
+                                let type_v0_cordoned_state = CordonedState {
+                                    cordonlabels: state.cordon_labels,
+                                };
+                                Some(CordonDrainState::Cordoned(type_v0_cordoned_state))
+                            }
+                            Some(node::cordon_drain_state::Cordondrainstate::Draining(state)) => {
+                                let type_v0_draining_state = DrainState {
+                                    cordonlabels: state.cordon_labels,
+                                    drainlabels: state.drain_labels,
+                                };
+                                Some(CordonDrainState::Draining(type_v0_draining_state))
+                            }
+                            Some(node::cordon_drain_state::Cordondrainstate::Drained(state)) => {
+                                let type_v0_drained_state = DrainState {
+                                    cordonlabels: state.cordon_labels,
+                                    drainlabels: state.drain_labels,
+                                };
+                                Some(CordonDrainState::Drained(type_v0_drained_state))
+                            }
+                            None => None,
+                        },
                         None => None,
                     },
-                    None => None,
-                },
-                spec.node_nqn.try_into_opt()?,
-                spec.features.map(Into::into),
-                None,
-                spec.version,
-                spec.shutdown.unwrap_or_default(),
-            )),
+                    spec.node_nqn.try_into_opt()?,
+                    spec.features.map(Into::into),
+                    None,
+                    spec.version,
+                    spec.shutdown.unwrap_or_default(),
+                )
+                .with_transport_caps(spec.transport_caps.map(Into::into))
+                .with_nvmf_target(spec.nvmf_target.map(Into::into)),
+            ),
             None => None,
         };
         let node_state = match node_grpc_type.state {
@@ -177,6 +184,48 @@ impl From<NodeFeatures> for node::NodeFeatures {
     }
 }
 
+impl From<node::TransportCaps> for TransportCaps {
+    fn from(src: node::TransportCaps) -> Self {
+        Self {
+            rdma_hca_present: src.rdma_hca_present,
+            nvme_rdma_module_loaded: src.nvme_rdma_module_loaded,
+            ana_capable: src.ana_capable,
+        }
+    }
+}
+
+impl From<TransportCaps> for node::TransportCaps {
+    fn from(src: TransportCaps) -> Self {
+        Self {
+            rdma_hca_present: src.rdma_hca_present,
+            nvme_rdma_module_loaded: src.nvme_rdma_module_loaded,
+            ana_capable: src.ana_capable,
+        }
+    }
+}
+
+impl From<node::NvmfTargetInfo> for NvmfTargetInfo {
+    fn from(src: node::NvmfTargetInfo) -> Self {
+        Self {
+            interface: src.interface,
+            address: src.address,
+            tcp: src.tcp,
+            rdma: src.rdma,
+        }
+    }
+}
+
+impl From<NvmfTargetInfo> for node::NvmfTargetInfo {
+    fn from(src: NvmfTargetInfo) -> Self {
+        Self {
+            interface: src.interface,
+            address: src.address,
+            tcp: src.tcp,
+            rdma: src.rdma,
+        }
+    }
+}
+
 impl From<Node> for node::Node {
     fn from(types_v0_node: Node) -> Self {
         let grpc_node_spec = types_v0_node.spec().map(|types_v0_spec| node::NodeSpec {
@@ -225,6 +274,8 @@ impl From<Node> for node::Node {
             version: types_v0_spec.version().clone(),
             shutdown: Some(types_v0_spec.is_shutdown()),
             features: types_v0_spec.features().clone().map(Into::into),
+            transport_caps: types_v0_spec.transport_caps().clone().map(Into::into),
+            nvmf_target: types_v0_spec.nvmf_target().clone().map(Into::into),
         });
         let grpc_node_state = match types_v0_node.state() {
             None => None,

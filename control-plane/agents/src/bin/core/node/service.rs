@@ -222,6 +222,8 @@ impl Service {
                         features: node.features().clone(),
                         bugfixes: None,
                         version: None,
+                        transport_caps: node.transport_caps().clone(),
+                        nvmf_target: node.nvmf_target().clone(),
                     },
                     true,
                 )

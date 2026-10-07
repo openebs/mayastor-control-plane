@@ -7,8 +7,12 @@ use rpc::{
 use std::str::FromStr;
 use stor_port::{
     transport_api::{ReplyError, ResourceKind},
-    types::v0::transport::{
-        node, Deregister, HostNqn, NexusVersion, NodeBugFixes, NodeFeatures, NodeId, Register,
+    types::v0::{
+        store::app_node::TransportCaps,
+        transport::{
+            node, Deregister, HostNqn, NexusVersion, NodeBugFixes, NodeFeatures, NodeId,
+            NvmfTargetInfo, Register,
+        },
     },
 };
 
@@ -42,6 +46,10 @@ pub trait RegisterInfo: Send + Sync {
     fn bugfixes(&self) -> Option<NodeBugFixes>;
     /// Version of the io-engine.
     fn io_version(&self) -> Option<String>;
+    /// Transport capabilities of the host the io-engine runs on.
+    fn transport_caps(&self) -> Option<TransportCaps>;
+    /// State of the io-engine's nvmf target.
+    fn nvmf_target(&self) -> Option<NvmfTargetInfo>;
 }
 
 /// Trait to be implemented for Register operation.
@@ -81,6 +89,14 @@ impl RegisterInfo for Register {
 
     fn io_version(&self) -> Option<String> {
         self.version.clone()
+    }
+
+    fn transport_caps(&self) -> Option<TransportCaps> {
+        self.transport_caps.clone()
+    }
+
+    fn nvmf_target(&self) -> Option<NvmfTargetInfo> {
+        self.nvmf_target.clone()
     }
 }
 
@@ -142,6 +158,29 @@ impl RegisterInfo for RegisterRequest {
     fn io_version(&self) -> Option<String> {
         self.version.clone()
     }
+
+    fn transport_caps(&self) -> Option<TransportCaps> {
+        self.transport_caps.as_ref().map(|caps| TransportCaps {
+            rdma_hca_present: caps.rdma_hca_present,
+            nvme_rdma_module_loaded: caps.nvme_rdma_module_loaded,
+            // The io-engine reports its node's ANA capability through the features, not the
+            // transport caps, so derive it from there.
+            ana_capable: self
+                .features
+                .as_ref()
+                .map(|f| f.asymmetric_namespace_access)
+                .unwrap_or_default(),
+        })
+    }
+
+    fn nvmf_target(&self) -> Option<NvmfTargetInfo> {
+        self.nvmf_target.as_ref().map(|target| NvmfTargetInfo {
+            interface: target.interface.clone(),
+            address: target.address.clone(),
+            tcp: target.tcp,
+            rdma: target.rdma,
+        })
+    }
 }
 
 impl RegisterInfo for V1AlphaRegisterRequest {
@@ -175,6 +214,14 @@ impl RegisterInfo for V1AlphaRegisterRequest {
     }
 
     fn io_version(&self) -> Option<String> {
+        None
+    }
+
+    fn transport_caps(&self) -> Option<TransportCaps> {
+        None
+    }
+
+    fn nvmf_target(&self) -> Option<NvmfTargetInfo> {
         None
     }
 }
@@ -217,6 +264,8 @@ impl TryFrom<&dyn RegisterInfo> for Register {
             features: register.features(),
             bugfixes: register.bugfixes(),
             version: register.io_version(),
+            transport_caps: register.transport_caps(),
+            nvmf_target: register.nvmf_target(),
         })
     }
 }

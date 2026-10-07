@@ -3562,10 +3562,41 @@ components:
         shutdown:
           description: Set when the node has deregistered.
           type: boolean
+        transportCaps:
+          description: Transport capabilities of the host the io-engine runs on
+          allOf:
+            - $ref: '#/components/schemas/TransportCaps'
+        nvmfTarget:
+          description: State of the io-engine's nvmf target
+          allOf:
+            - $ref: '#/components/schemas/NvmfTargetInfo'
       additionalProperties: false
       required:
         - grpcEndpoint
         - id
+    NvmfTargetInfo:
+      description: |-
+        State of an io-engine's nvmf target.
+      type: object
+      properties:
+        interface:
+          description: |-
+            The network interface the target listens on (from --nvmf-tgt-interface), if set.
+          type: string
+        address:
+          description: |-
+            The address the target listens on, on the usual nexus and replica ports.
+          type: string
+        tcp:
+          description: |-
+            Whether the target is listening over tcp. Set means it was requested; the value says whether it panned out.
+          type: boolean
+        rdma:
+          description: |-
+            Whether the target is listening over rdma, which is what makes rdma usable. Unset means rdma wasn't asked for; false means it was but couldn't be set up.
+          type: boolean
+      required:
+        - address
     NodeState:
       example:
         grpcEndpoint: '10.1.0.5:10124'
