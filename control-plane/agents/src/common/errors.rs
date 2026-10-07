@@ -91,9 +91,7 @@ pub enum SvcError {
         source: http::Error,
     },
     #[snafu(display(
-        "gRPC TLS is enforced but node '{}' does not support TLS on gRPC endpoint '{}'",
-        node_id,
-        endpoint
+        "gRPC TLS is enforced but node '{node_id}' does not support TLS on gRPC endpoint '{endpoint}'",
     ))]
     GrpcTlsRequired { node_id: String, endpoint: String },
     #[snafu(display(

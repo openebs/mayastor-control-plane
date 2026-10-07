@@ -85,7 +85,7 @@ impl ComponentAction for CoreAgent {
         }
         if !options.no_grpc_tls {
             binary = binary.with_arg("--grpc-auto-tls");
-            if options.grpc_tls_enforced {
+            if options.grpc_enforce_tls {
                 binary = binary.with_arg("--grpc-enforce-tls");
             }
         }

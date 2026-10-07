@@ -331,6 +331,7 @@ impl Cluster {
                     .unwrap(),
                 20,
                 tokio::time::sleep,
+                |endpoint| grpc::tls::io_connect(endpoint, !self.builder.opts.no_grpc_tls),
             )
             .await?),
             None => Err(format!("Container {name} not found!")),

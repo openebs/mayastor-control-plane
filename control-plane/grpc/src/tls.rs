@@ -122,6 +122,17 @@ pub async fn auto_tls_connect(endpoint: &Endpoint) -> Result<Channel, tonic::tra
     endpoint.connect_with_connector(connector).await
 }
 
+/// Connect a channel to an io-engine `endpoint`, using auto-TLS when `tls` is set, otherwise a
+/// plaintext connection. The endpoint must carry an `http` scheme in both cases: for auto-TLS the
+/// handshake is performed by the custom connector, not tonic.
+pub async fn io_connect(endpoint: Endpoint, tls: bool) -> Result<Channel, tonic::transport::Error> {
+    if tls {
+        auto_tls_connect(&endpoint).await
+    } else {
+        endpoint.connect().await
+    }
+}
+
 /// TLS certificate files used by a gRPC endpoint.
 ///
 /// The files are intentionally retained rather than converted into certificate bytes so callers

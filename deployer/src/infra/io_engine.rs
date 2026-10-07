@@ -57,6 +57,10 @@ impl ComponentAction for IoEngine {
             .with_bind(&host_tmp, "/host/tmp")
             .with_bind("/var/run/dpdk", "/var/run/dpdk");
 
+            if !options.no_grpc_tls {
+                spec = spec.with_env("GRPC_AUTO_TLS", "true");
+            }
+
             if options.mount_host_dev_udev {
                 spec = spec
                     .with_bind("/dev", "/dev")
@@ -128,15 +132,19 @@ impl ComponentAction for IoEngine {
             let name = Self::name(i, options);
             let container_ip = cfg.container_ip_as_ref(&name);
             let socket = SocketAddr::new(IpAddr::from(*container_ip), 10124);
+            let tls = !options.no_grpc_tls;
             let mut hdl = RpcHandle::connect(
                 options.latest_io_api_version(),
                 &name,
                 socket,
                 100,
                 tokio::time::sleep,
+                |endpoint| grpc::tls::io_connect(endpoint, tls),
             )
             .await?;
-            hdl.ping().await.unwrap();
+            hdl.ping()
+                .await
+                .map_err(|error| format!("Failed to ping io-engine '{name}': {error}"))?;
         }
         for i in 0..options.io_engines {
             let name = Self::name(i, options);
