@@ -234,6 +234,7 @@ fn test_deserialization_v1_to_v2() {
                     diskpool_encryption: None,
                     nexus_label_version: NexusVersion::V1,
                     grpc_tls: None,
+                    fips: None,
                 }),
                 None,
                 None,

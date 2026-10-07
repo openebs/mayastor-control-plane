@@ -146,6 +146,7 @@ impl RegisterInfo for RegisterRequest {
                 _ => NexusVersion::V2,
             },
             grpc_tls: features.grpc_tls,
+            fips: features.fips,
         })
     }
 

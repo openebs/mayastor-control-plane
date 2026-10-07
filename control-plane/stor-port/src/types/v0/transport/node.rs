@@ -248,6 +248,9 @@ pub struct NodeFeatures {
     /// The io-engine gRPC server has TLS enabled and expects TLS connections.
     #[serde(default)]
     pub grpc_tls: Option<bool>,
+    /// The io-engine runs in FIPS mode: its crypto modules are FIPS validated.
+    #[serde(default)]
+    pub fips: Option<bool>,
 }
 
 /// State of an io-engine's nvmf target.
@@ -534,6 +537,7 @@ impl From<NodeFeatures> for models::NodeFeatures {
             diskpool_encryption: src.diskpool_encryption,
             nexus_label_version: Some(u32::from(src.nexus_label_version)),
             grpc_tls: src.grpc_tls,
+            fips: src.fips,
         }
     }
 }

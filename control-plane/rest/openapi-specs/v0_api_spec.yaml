@@ -3528,6 +3528,9 @@ components:
         grpcTls:
           description: Whether the io-engine gRPC server has TLS enabled and expects TLS connections
           type: boolean
+        fips:
+          description: Whether the io-engine runs in FIPS mode (its crypto modules are FIPS validated)
+          type: boolean
     NodeSpec:
       example:
         grpcEndpoint: '10.1.0.5:10124'

@@ -93,6 +93,8 @@ message NodeFeatures {
   optional uint32 nexus_label_version = 6;
   // Whether the io-engine gRPC server has TLS enabled and expects TLS connections
   optional bool grpc_tls = 7;
+  // Whether the io-engine runs in FIPS mode (its crypto modules are FIPS validated)
+  optional bool fips = 8;
 }
 
 // Transport capabilities of the host an io-engine runs on.

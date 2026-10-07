@@ -166,6 +166,7 @@ impl From<node::NodeFeatures> for NodeFeatures {
             diskpool_encryption: src.diskpool_encryption,
             nexus_label_version: src.nexus_label_version.map(Into::into).unwrap_or_default(),
             grpc_tls: src.grpc_tls,
+            fips: src.fips,
         }
     }
 }
@@ -180,6 +181,7 @@ impl From<NodeFeatures> for node::NodeFeatures {
             diskpool_encryption: src.diskpool_encryption,
             nexus_label_version: Some(u32::from(src.nexus_label_version)),
             grpc_tls: src.grpc_tls,
+            fips: src.fips,
         }
     }
 }
