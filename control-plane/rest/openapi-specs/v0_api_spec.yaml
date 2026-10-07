@@ -3498,6 +3498,36 @@ components:
         - Unknown
         - Online
         - Offline
+    NodeFeatures:
+      description: >-
+        Features and capabilities exposed by the io-engine node. Each optional field is
+        a tristate: absent means the feature is unsupported, false means supported but
+        disabled, and true means supported and enabled.
+      type: object
+      properties:
+        asymmetricNamespaceAccess:
+          description: Whether NVMe ANA (Asymmetric Namespace Access) is enabled
+          type: boolean
+        logicalVolumeManager:
+          description: Whether the LVM backend is enabled
+          type: boolean
+        snapshotRebuild:
+          description: Whether snapshot rebuild is enabled
+          type: boolean
+        rdmaCapableIoEngine:
+          description: Whether the nvmf target supports RDMA
+          type: boolean
+        diskpoolEncryption:
+          description: Whether diskpool encryption is supported
+          type: boolean
+        nexusLabelVersion:
+          description: Max version of the nexus label supported by the node
+          type: integer
+          format: uint32
+          minimum: 0
+        grpcTls:
+          description: Whether the io-engine gRPC server has TLS enabled and expects TLS connections
+          type: boolean
     NodeSpec:
       example:
         grpcEndpoint: '10.1.0.5:10124'
@@ -3508,6 +3538,10 @@ components:
         grpcEndpoint:
           description: gRPC endpoint of the io-engine instance
           type: string
+        features:
+          description: Features and capabilities exposed by the io-engine node
+          allOf:
+            - $ref: '#/components/schemas/NodeFeatures'
         id:
           description: node ID
           $ref: '#/components/schemas/NodeId'

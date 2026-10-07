@@ -587,6 +587,7 @@ impl From<NodeSpec> for models::NodeSpec {
         };
         Self::new_all(
             src.endpoint.to_string(),
+            src.features.map(Into::into),
             src.id.clone(),
             labels,
             src.cordon_drain_state.into_opt(),

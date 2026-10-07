@@ -108,6 +108,9 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
     let listed_node = client.nodes_api().get_node(io_engine1.as_str()).await;
     let listed_node = listed_node.unwrap();
     let version = listed_node.spec.as_ref().unwrap().version.clone();
+    let features = listed_node.spec.as_ref().unwrap().features.clone();
+    // The io-engine is started with TLS enabled, so it must advertise the capability.
+    assert_eq!(features.as_ref().and_then(|f| f.grpc_tls), Some(true));
 
     let pools = client
         .pools_api()
@@ -127,6 +130,7 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
             node_nqn: Some(HostNqn::from_nodename(&io_engine1.to_string()).to_string()),
             version: version.clone(),
             shutdown: Some(false),
+            features: features.clone(),
         }),
         state: Some(models::NodeState {
             id: io_engine1.to_string(),

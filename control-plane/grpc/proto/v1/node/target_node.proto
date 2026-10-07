@@ -54,6 +54,8 @@ message NodeSpec {
   optional string version = 6;
   // If the node has signaled shutdown by sending deregistration message
   optional bool shutdown = 7;
+  // Features and capabilities exposed by the io-engine node
+  optional NodeFeatures features = 8;
 }
 
 message NodeState {
@@ -67,6 +69,26 @@ message NodeState {
   optional string node_nqn = 4;
   // the io-engine version
   optional string version = 5;
+}
+
+// Features and capabilities exposed by the io-engine node.
+// Each optional bool is a tristate: absent means unsupported, false means supported
+// but disabled, and true means supported and enabled.
+message NodeFeatures {
+  // Whether NVMe ANA (Asymmetric Namespace Access) is enabled
+  optional bool asymmetric_namespace_access = 1;
+  // Whether the LVM backend is enabled
+  optional bool logical_volume_manager = 2;
+  // Whether snapshot rebuild is enabled
+  optional bool snapshot_rebuild = 3;
+  // Whether the nvmf target supports RDMA
+  optional bool rdma_capable_io_engine = 4;
+  // Whether diskpool encryption is supported
+  optional bool diskpool_encryption = 5;
+  // Max version of the nexus label supported by the node
+  optional uint32 nexus_label_version = 6;
+  // Whether the io-engine gRPC server has TLS enabled and expects TLS connections
+  optional bool grpc_tls = 7;
 }
 
 // Multiple nodes

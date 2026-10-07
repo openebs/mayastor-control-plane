@@ -12,8 +12,8 @@ use stor_port::{
         store::node::{CordonDrainState, CordonedState, DrainState, NodeSpec},
         transport::{
             BlockDevice, DestroyNode, Filesystem, Filter, GetBlockDevices, Node, NodeDeleteResult,
-            NodeId, NodeRscCounts, NodeState, NodeStatus, Partition, SnapshotLossDetail,
-            SnapshotLossInfo, VolumeLossDetail, VolumeLossInfo,
+            NodeFeatures, NodeId, NodeRscCounts, NodeState, NodeStatus, Partition,
+            SnapshotLossDetail, SnapshotLossInfo, VolumeLossDetail, VolumeLossInfo,
         },
     },
     IntoOption, TryIntoOption,
@@ -97,7 +97,7 @@ impl TryFrom<node::Node> for Node {
                     None => None,
                 },
                 spec.node_nqn.try_into_opt()?,
-                None,
+                spec.features.map(Into::into),
                 None,
                 spec.version,
                 spec.shutdown.unwrap_or_default(),
@@ -149,6 +149,34 @@ impl From<node::ResourceTallies> for NodeRscCounts {
     }
 }
 
+impl From<node::NodeFeatures> for NodeFeatures {
+    fn from(src: node::NodeFeatures) -> Self {
+        Self {
+            asymmetric_namespace_access: src.asymmetric_namespace_access,
+            logical_volume_manager: src.logical_volume_manager,
+            snapshot_rebuild: src.snapshot_rebuild,
+            rdma_capable_io_engine: src.rdma_capable_io_engine,
+            diskpool_encryption: src.diskpool_encryption,
+            nexus_label_version: src.nexus_label_version.map(Into::into).unwrap_or_default(),
+            grpc_tls: src.grpc_tls,
+        }
+    }
+}
+
+impl From<NodeFeatures> for node::NodeFeatures {
+    fn from(src: NodeFeatures) -> Self {
+        Self {
+            asymmetric_namespace_access: src.asymmetric_namespace_access,
+            logical_volume_manager: src.logical_volume_manager,
+            snapshot_rebuild: src.snapshot_rebuild,
+            rdma_capable_io_engine: src.rdma_capable_io_engine,
+            diskpool_encryption: src.diskpool_encryption,
+            nexus_label_version: Some(u32::from(src.nexus_label_version)),
+            grpc_tls: src.grpc_tls,
+        }
+    }
+}
+
 impl From<Node> for node::Node {
     fn from(types_v0_node: Node) -> Self {
         let grpc_node_spec = types_v0_node.spec().map(|types_v0_spec| node::NodeSpec {
@@ -196,6 +224,7 @@ impl From<Node> for node::Node {
             node_nqn: types_v0_spec.node_nqn().as_ref().map(|nqn| nqn.to_string()),
             version: types_v0_spec.version().clone(),
             shutdown: Some(types_v0_spec.is_shutdown()),
+            features: types_v0_spec.features().clone().map(Into::into),
         });
         let grpc_node_state = match types_v0_node.state() {
             None => None,

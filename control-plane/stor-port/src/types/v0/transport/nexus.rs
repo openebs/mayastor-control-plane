@@ -36,6 +36,15 @@ impl From<NexusVersion> for u32 {
         }
     }
 }
+impl From<u32> for NexusVersion {
+    fn from(src: u32) -> Self {
+        match src {
+            0 | 1 => NexusVersion::V1,
+            2 => NexusVersion::V2,
+            v => NexusVersion::Unknown(v),
+        }
+    }
+}
 
 /// Nexus information
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]

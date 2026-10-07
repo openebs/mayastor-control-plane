@@ -502,6 +502,20 @@ impl From<NodeDeleteResult> for models::NodeDeleteResult {
 
 rpc_impl_string_id!(NodeId, "ID of a node");
 
+impl From<NodeFeatures> for models::NodeFeatures {
+    fn from(src: NodeFeatures) -> Self {
+        Self {
+            asymmetric_namespace_access: src.asymmetric_namespace_access,
+            logical_volume_manager: src.logical_volume_manager,
+            snapshot_rebuild: src.snapshot_rebuild,
+            rdma_capable_io_engine: src.rdma_capable_io_engine,
+            diskpool_encryption: src.diskpool_encryption,
+            nexus_label_version: Some(u32::from(src.nexus_label_version)),
+            grpc_tls: src.grpc_tls,
+        }
+    }
+}
+
 impl From<NodeState> for models::NodeState {
     fn from(src: NodeState) -> Self {
         Self::new_all(
