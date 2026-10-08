@@ -145,6 +145,10 @@ impl ReplicaSpec {
     pub fn owned_by_volume(&self) -> bool {
         self.owners.volume().is_some()
     }
+    /// Returns the volume owner if applicable.
+    pub fn volume_owner(&self) -> Option<&VolumeId> {
+        self.owners.volume()
+    }
 }
 
 /// Reference of a pool.

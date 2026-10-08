@@ -400,6 +400,15 @@ impl VolumeMetadata {
     pub fn requested_size(&self) -> Option<u64> {
         self.persisted.requested_size
     }
+    /// Returns true if remove move is set.
+    pub fn has_replica_move(&self) -> bool {
+        self.runtime.replica_move.is_some()
+    }
+
+    /// Update the replica move configuration for the volume.
+    pub fn update_replica_move(&mut self, replica_move: ReplicaMoveRequester) {
+        self.runtime.replica_move = Some(replica_move)
+    }
 }
 
 /// Volume meta information.
