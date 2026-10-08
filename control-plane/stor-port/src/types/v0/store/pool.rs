@@ -209,6 +209,15 @@ pub struct PoolPersistedMetadata {
     pub drain_state: Option<PoolDrainState>,
 }
 
+impl PoolPersistedMetadata {
+    /// Returns the in progress replica moves for the drain, if any.
+    pub fn num_replica_moves(&self) -> Option<usize> {
+        self.drain_state
+            .as_ref()
+            .map(|record| record.moving_replicas.len())
+    }
+}
+
 /// Record of an in-progress pool drain, driving the drain procedure and tracking its progress.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PoolDrainState {
@@ -269,7 +278,8 @@ pub enum PhaseReason {
     WaitingForSlot,
     /// The pool is degraded and cannot safely drain without risking data loss.
     OfflinePool,
-    /// The pool has a single replica that cannot be safely evicted without risking data loss.
+    /// The pool only has replicas belonging to single replica volume,
+    /// cannot be safely evicted without risking data loss.
     SingleReplicaEviction,
     /// The node containing pool is back but pool is cordoned for import, so it cannot be drained.
     ImportCordoned,
@@ -594,6 +604,13 @@ impl PoolSpec {
         }
     }
 
+    /// Pushes replica move config to drain record.
+    pub fn updated_replica_move(&mut self, drain_config: DrainConfig) {
+        if let Some(record) = self.drain_state_mut() {
+            record.moving_replicas.push(drain_config);
+        }
+    }
+
     /// Returns true if the pool is in Queued phase.
     pub fn is_drain_queued(&self) -> bool {
         matches!(
@@ -615,6 +632,16 @@ impl PoolSpec {
         match self.cordon_drain.as_ref()? {
             CordonDrainState::Drain(drain) => Some(drain),
             CordonDrainState::Cordoned(_) => None,
+        }
+    }
+
+    /// Returns true if the drain is unsafe, i.e. if it has been configured to evict replicas.
+    pub fn is_drain_unsafe(&self) -> bool {
+        match self.drain_spec() {
+            Some(spec) => {
+                spec.policy.unsafe_evict || spec.policy.unsafe_rebuild_otherwise_evict.is_some()
+            }
+            None => false,
         }
     }
 
@@ -669,11 +696,11 @@ impl PoolSpec {
                     matches!(drain_state.phase, DrainPhase::Queued)
                 }
                 DrainPhase::PartiallyDrained => {
-                    matches!(drain_record.phase, DrainPhase::Draining)
+                    matches!(drain_state.phase, DrainPhase::Draining)
                 }
                 DrainPhase::Drained => {
-                    matches!(drain_record.phase, DrainPhase::Draining)
-                        || matches!(drain_record.phase, DrainPhase::AwaitingCleanup)
+                    matches!(drain_state.phase, DrainPhase::Draining)
+                        || matches!(drain_state.phase, DrainPhase::AwaitingCleanup)
                 }
                 // Will be extended as we add more phase transition callers.
                 _ => false,
@@ -799,6 +826,9 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
                         if self.phase_updateable(&phase_op) {
                             self.set_drain_phase(phase_op)
                         }
+                    }
+                    DrainProgressOp::AddReplicaMove(drain_config) => {
+                        self.updated_replica_move(drain_config)
                     }
                 },
             }
@@ -929,6 +959,8 @@ pub struct PoolDrainOp {
 pub enum DrainProgressOp {
     /// Update on drain phase and related fields.
     PhaseUpdate(DrainPhaseOp),
+    /// Add a new replica move to the drain record.
+    AddReplicaMove(DrainConfig),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

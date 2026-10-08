@@ -8,7 +8,10 @@ use crate::controller::{
         operations_helper::{OperationSequenceGuard, SpecOperationsHelper},
         OperationGuardArc, TraceSpan,
     },
-    task_poller::{PollContext, PollPeriods, PollResult, PollTimer, PollerState, TaskPoller},
+    task_poller::{
+        PollContext, PollEvent, PollPeriods, PollResult, PollTimer, PollTriggerEvent, PollerState,
+        TaskPoller,
+    },
 };
 use stor_port::types::v0::{
     store::pool::PoolSpec,
@@ -58,8 +61,14 @@ impl TaskPoller for PoolReconciler {
         capacity::remove_larger_replicas(context.registry()).await;
         // TODO: See if we can move this somewhere else,
         // would be easier to figure that out when we have other reconciler.
+        if matches!(
+            context.event(),
+            PollEvent::Triggered(PollTriggerEvent::Start)
+        ) {
+            drain::populate_missing_replica_move(context).await;
+        }
         drain::drain_state_promoter(context).await;
-        drain::inspect_draining_pools(context).await;
+        drain::advance_draining_pools(context).await;
         Self::squash_results(results)
     }
 

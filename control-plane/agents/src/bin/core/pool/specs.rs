@@ -496,8 +496,8 @@ impl ResourceSpecsLocked {
             .count()
     }
 
-    /// Returns the number of pools currently in draining phase.
-    pub(crate) fn pools_rsc_draining(&self) -> Vec<PoolSpec> {
+    /// Returns the ids of the pools currently in draining phase.
+    pub(crate) fn pools_rsc_draining(&self) -> Vec<PoolId> {
         let specs = self.read();
         let pools = specs
             .pools
@@ -506,7 +506,7 @@ impl ResourceSpecsLocked {
             .filter_map(|pool| {
                 let pool = pool.lock();
                 if pool.is_draining() {
-                    Some(pool.clone())
+                    Some(pool.id.clone())
                 } else {
                     None
                 }
