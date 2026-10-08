@@ -1587,6 +1587,29 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+    get:
+      tags:
+        - Pools
+      operationId: get_pool_drain
+      parameters:
+        - in: path
+          name: pool_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoolDrainStateExt'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/pools/{pool_id}/errors':
     delete:
       tags:
@@ -3622,7 +3645,7 @@ components:
             terminal phase as the pool's last-drain artifact, so read `phase` before treating
             a pool as actively draining.
           allOf:
-            - $ref: '#/components/schemas/PoolDrainRecord'
+            - $ref: '#/components/schemas/PoolDrainState'
     PoolDiag:
       description: Pool diagnostic information
       type: object
@@ -5137,7 +5160,7 @@ components:
           format: date-time
         policy:
           $ref: '#/components/schemas/PoolDrainPolicy'
-        userCordon:
+        poolCordon:
           description: |-
             The user's own cordon, set before the drain began and restored if the drain is
             canceled. Absent when the pool was not cordoned before the drain. Gets updated
@@ -5194,10 +5217,9 @@ components:
       example:
         snapshotPolicy: Ignore
         unsafeEvict: false
-    PoolDrainRecord:
+    PoolDrainState:
       description: |-
-        Progress of a pool drain. Persists after the drain reaches a terminal phase, as the
-        pool's last-drain record; it is cleared only when a drain is cancelled.
+        Progress of a pool drain.
       type: object
       properties:
         phase:
@@ -5209,16 +5231,76 @@ components:
             Pool usage captured when the drain entered the Draining phase. Absent while the
             drain is still queued.
           allOf:
-            - $ref: '#/components/schemas/PoolDrainUsage'
+            - $ref: '#/components/schemas/PoolDrainStats'
+        numMovingReplicas:
+          description: |-
+            The number of replicas currently moving off the pool as part of ongoing drain.
+          type: integer
+          format: uint32
+          minimum: 0
+      required:
+        - phase
+        - numMovingReplicas
+    PoolDrainStateExt:
+      description: |-
+        Progress of a pool drain.
+      type: object
+      properties:
+        phase:
+          $ref: '#/components/schemas/PoolDrainPhase'
+        reason:
+          $ref: '#/components/schemas/PoolDrainPhaseReason'
+        initial:
+          description: |-
+            Pool usage captured when the drain entered the Draining phase. Absent while the
+            drain is still queued.
+          allOf:
+            - $ref: '#/components/schemas/PoolDrainStats'
+        current:
+          description: |-
+            Current pool usage. Abseent while the drain is still Queued or Offline.
+          allOf:
+            - $ref: '#/components/schemas/PoolDrainStats'
         movingReplicas:
           description: |-
             The replicas this drain is currently moving off the pool.
           type: array
           items:
-            $ref: '#/components/schemas/ReplicaId'
+            $ref: '#/components/schemas/ReplicaMoveConfig'
       required:
         - phase
         - movingReplicas
+    ReplicaMoveConfig:
+      description: Detailed view of in-flight replica moves on the pool.
+      type: object
+      properties:
+        placement_started_at:
+          description: When this move first attempted to place its spare.
+          type: string
+          format: date-time
+        volume:
+          description: Id of the volume replica belongs to
+          type: string
+        moving_replica:
+          description: Id of the replica being moved. It's None when it's evacuated successfully.
+          type: string
+        spare_replica:
+          description: Id of the spare replica.
+          $ref: '#/components/schemas/SpareReplica'
+        unwind_spare:
+          description: Why a move's over-replicated spare is being removed.
+          $ref: '#/components/schemas/UnwindSpare'
+      required:
+        -  volume
+    SpareReplica:
+      description: Replica created part of over-replication used by drain
+      type: string
+    UnwindSpare:
+      description: Why a move's over-replicated spare is being removed.
+      type: string
+      enum:
+        - Cancelled
+        - Respare
     PoolDrainPhase:
       description: The phase of the pool drain state machine
       type: string
@@ -5240,7 +5322,7 @@ components:
         - SingleReplicaEviction
         - ImportCordoned
         - SnapshotsRetained
-    PoolDrainUsage:
+    PoolDrainStats:
       description: Pool usage snapshot
       type: object
       properties:

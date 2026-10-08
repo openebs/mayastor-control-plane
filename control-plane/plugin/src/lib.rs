@@ -170,6 +170,9 @@ impl ExecuteOperation for GetResources {
                     drain::NodeDrain::get(node_id, &cli_args.output).await
                 }
                 GetDrainArgs::Nodes => drain::NodeDrains::list(&cli_args.output).await,
+                GetDrainArgs::Pool { id: pool_id } => {
+                    drain::PoolDrain::get(pool_id, &cli_args.output).await
+                }
             },
             GetResources::Volumes(vol_args) => {
                 volume::Volumes::list(&cli_args.output, vol_args).await

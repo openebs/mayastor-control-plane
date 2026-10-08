@@ -1,6 +1,7 @@
 use super::*;
 
 use crate::{
+    transport_api::{ReplyError, ReplyErrorKind, ResourceKind},
     types::v0::store::pool::{
         Encryption, EncryptionSecret, PoolLabel, PoolPersistedMetadata, PoolRuntimeMetadata,
         PoolSpec, PoolUSpec, PoolUsage,
@@ -530,6 +531,7 @@ pub struct PoolDef {
     pub replica_count: Option<u64>,
     /// How many snapshots are owned by the pool.
     pub snapshot_count: Option<u64>,
+    /// Pool metadata persisted to pstor.
     pub persisted_metadata: PoolPersistedMetadata,
 }
 
@@ -548,6 +550,11 @@ impl PoolConfig {
             diag.status = state.state.status.clone();
         }
         self
+    }
+
+    /// Return true if drain state exist.
+    pub fn drain_state_exist(&self) -> bool {
+        self.definition.persisted_metadata.drain_state.is_some()
     }
 }
 
@@ -632,6 +639,10 @@ impl Pool {
             committed: state.committed,
         })
     }
+    /// Get pool config, if available.
+    pub fn config(&self) -> Option<&PoolConfig> {
+        self.config.as_ref()
+    }
     /// Get the pool identification.
     pub fn id(&self) -> &PoolId {
         &self.id
@@ -664,8 +675,8 @@ impl From<Pool> for models::Pool {
         let (spec, meta) = match def {
             None => (None, None),
             Some(def) => {
-                let drain: Option<models::PoolDrainRecord> =
-                    def.persisted_metadata.drain_record.into_opt();
+                let drain: Option<models::PoolDrainState> =
+                    def.persisted_metadata.drain_state.into_opt();
                 let meta = models::PoolMeta::new_all(def.replica_count, def.snapshot_count, drain);
                 (Some(def.spec), Some(meta))
             }
@@ -678,6 +689,40 @@ impl From<Pool> for models::Pool {
             diag.into_opt(),
             meta,
         )
+    }
+}
+
+impl TryFrom<Pool> for models::PoolDrainStateExt {
+    type Error = ReplyError;
+
+    fn try_from(pool: Pool) -> Result<Self, Self::Error> {
+        let mut current = pool.current_usage();
+        let Some(config) = pool.config else {
+            return Err(ReplyError {
+                kind: ReplyErrorKind::Internal,
+                resource: ResourceKind::Pool,
+                source: "get_pool_drain".to_string(),
+                extra: "pool config does not exist".to_string(),
+            });
+        };
+        let Some(record) = config.definition.persisted_metadata.drain_state else {
+            return Err(ReplyError {
+                kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::Pool,
+                source: "get_pool_drain".to_string(),
+                extra: "pool does not have drain state".to_string(),
+            });
+        };
+        if record.initial_stats.is_none() {
+            current = None;
+        }
+        Ok(Self {
+            phase: record.phase.into(),
+            reason: record.reason.into_opt(),
+            initial: record.initial_stats.into_opt(),
+            current: current.into_opt(),
+            moving_replicas: record.moving_replicas.into_iter().map(Into::into).collect(),
+        })
     }
 }
 

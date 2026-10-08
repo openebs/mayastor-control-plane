@@ -345,12 +345,12 @@ impl OperationGuardArc<PoolSpec> {
         let usage = registry.pool_usage(self.id()).await?;
         let phase_op = DrainPhaseOp::new(DrainPhase::Draining, None, Some(usage));
         let request = DrainProgressOp::PhaseUpdate(phase_op);
-        self.update_drain_record(registry, request).await?;
+        self.update_drain_state(registry, request).await?;
         Ok(())
     }
 
-    /// Update the drain record for a pool via operation guard functions.
-    pub(crate) async fn update_drain_record(
+    /// Update the drain state for a pool via operation guard functions.
+    pub(crate) async fn update_drain_state(
         &mut self,
         registry: &Registry,
         request: DrainProgressOp,

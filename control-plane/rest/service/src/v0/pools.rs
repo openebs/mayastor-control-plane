@@ -226,6 +226,20 @@ impl apis::actix_server::Pools for RestApi {
         Ok(pool.into())
     }
 
+    async fn get_pool_drain(
+        Path(pool_id): Path<String>,
+    ) -> Result<models::PoolDrainStateExt, RestError<RestJsonError>> {
+        let pool = pool(
+            pool_id.clone(),
+            client()
+                .get(Filter::Pool(pool_id.into()), None)
+                .await?
+                .into_inner()
+                .first(),
+        )?;
+        Ok(models::PoolDrainStateExt::try_from(pool)?)
+    }
+
     async fn put_pool_expand(
         Path(pool_id): Path<String>,
     ) -> Result<models::Pool, RestError<models::RestJsonError>> {

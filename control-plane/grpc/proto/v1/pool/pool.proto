@@ -109,11 +109,11 @@ message Metadata {
   optional uint64 snap_count = 4;
   // Populated when drain request is submitted.
   // Stores states driving the drain procedure.
-  optional PoolDrainRecord drain_record = 5;
+  optional PoolDrainState drain_state = 5;
 }
 
 // Record of an in-progress pool drain, driving the drain procedure and tracking its progress.
-message PoolDrainRecord {
+message PoolDrainState {
   // Current phase of the drain state machine.
   DrainPhase phase = 1;
   // Why pool is in the aforementioned phase.
@@ -122,7 +122,7 @@ message PoolDrainRecord {
   // of its current usage.
   optional PoolDrainStatistics drain_statistics = 3;
   // In-flight replica moves for this drain.
-  repeated DrainConfig replica_moves = 4;
+  repeated DrainConfig moving_replicas = 4;
 }
 
 // Why the pool is in its current drain phase.
@@ -189,7 +189,7 @@ enum DrainPhase {
   // pending cleanup on the pool itself.
   AwaitingCleanup = 3;
   // The user has cancelled the drain and the control plane is undoing the changes it made.
-  // Transient rather than terminal: once cleanup completes the drain record is cleared and the
+  // Transient rather than terminal: once cleanup completes the drain state is cleared and the
   // self-cordon dropped. A new drain is rejected while the pool is in this phase.
   DrainCancelled = 4;
   // Transitioned from Draining when we can't make any progress on drain operation. Awaiting on
@@ -250,7 +250,7 @@ message DrainSpec {
   // The user's drain policy, each of which alters what the drain operation will do.
   DrainPolicy policy = 2;
   // Holds user applied cordon configs if present before starting drain.
-  CordonedState user_cordon = 3;
+  CordonedState pool_cordon = 3;
 }
 
 message DrainPolicy {

@@ -14,7 +14,7 @@ use stor_port::{
     types::v0::{
         store::pool::{
             CordonDrainState, CordonedState, DrainConfig, DrainPhase, DrainPolicy, DrainSpec,
-            Encryption, EncryptionSecret, PhaseReason, PoolDrainRecord, PoolLabel, PoolMetadata,
+            Encryption, EncryptionSecret, PhaseReason, PoolDrainState, PoolLabel, PoolMetadata,
             PoolPersistedMetadata, PoolRuntimeMetadata, PoolSpec, PoolSpecStatus, PoolUSpec,
             PoolUsage, SnapshotPolicy, SpareReplica, UnwindSpare, POOL_BS_CLUSTER_SIZE_DEFAULT,
         },
@@ -221,7 +221,7 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
             },
             metadata: PoolMetadata {
                 persisted: PoolPersistedMetadata {
-                    drain_record: pool_meta.drain_record.try_into_opt()?,
+                    drain_state: pool_meta.drain_state.try_into_opt()?,
                 },
                 runtime: PoolRuntimeMetadata {
                     diag: None,
@@ -277,7 +277,7 @@ impl TryFrom<pool::DrainSpec> for DrainSpec {
                 )
             })?,
             policy: DrainPolicy::try_from(policy)?,
-            user_cordon: spec.user_cordon.into_opt(),
+            pool_cordon: spec.pool_cordon.into_opt(),
         })
     }
 }
@@ -287,7 +287,7 @@ impl From<DrainSpec> for pool::DrainSpec {
         pool::DrainSpec {
             request_timestamp: Some(prost_types::Timestamp::from(spec.request_timestamp)),
             policy: Some(spec.policy.into()),
-            user_cordon: spec.user_cordon.into_opt(),
+            pool_cordon: spec.pool_cordon.into_opt(),
         }
     }
 }
@@ -590,14 +590,14 @@ impl From<PoolDef> for pool::PoolDefinition {
                 spec_status: spec_status as i32,
                 repl_count: pool_def.replica_count,
                 snap_count: pool_def.snapshot_count,
-                drain_record: pool_def.persisted_metadata.drain_record.into_opt(),
+                drain_state: pool_def.persisted_metadata.drain_state.into_opt(),
             }),
         }
     }
 }
 
-impl From<PoolDrainRecord> for pool::PoolDrainRecord {
-    fn from(value: PoolDrainRecord) -> Self {
+impl From<PoolDrainState> for pool::PoolDrainState {
+    fn from(value: PoolDrainState) -> Self {
         Self {
             phase: pool::DrainPhase::from(value.phase) as i32,
             reason: value
@@ -607,7 +607,7 @@ impl From<PoolDrainRecord> for pool::PoolDrainRecord {
                 initial: value.initial_stats.into_opt(),
                 current: None,
             }),
-            replica_moves: value.replica_moves.into_vec(),
+            moving_replicas: value.moving_replicas.into_vec(),
         }
     }
 }
@@ -669,13 +669,13 @@ impl From<DrainPhase> for pool::DrainPhase {
     }
 }
 
-impl TryFrom<pool::PoolDrainRecord> for PoolDrainRecord {
+impl TryFrom<pool::PoolDrainState> for PoolDrainState {
     type Error = ReplyError;
-    fn try_from(value: pool::PoolDrainRecord) -> Result<Self, Self::Error> {
+    fn try_from(value: pool::PoolDrainState) -> Result<Self, Self::Error> {
         let phase = pool::DrainPhase::try_from(value.phase).map_err(|error| {
             ReplyError::invalid_argument(
                 ResourceKind::Pool,
-                "pool.metadata.drain_record.phase",
+                "pool.metadata.drain_state.phase",
                 error.to_string(),
             )
         })?;
@@ -689,7 +689,7 @@ impl TryFrom<pool::PoolDrainRecord> for PoolDrainRecord {
                 .and_then(|reason| pool::PhaseReason::try_from(reason).ok())
                 .map(Into::into),
             initial_stats: initial_stats.into_opt(),
-            replica_moves: value.replica_moves.try_into_vec()?,
+            moving_replicas: value.moving_replicas.try_into_vec()?,
         })
     }
 }
@@ -755,7 +755,7 @@ impl TryFrom<pool::DrainConfig> for DrainConfig {
             .map_err(|error| {
                 ReplyError::invalid_argument(
                     ResourceKind::Pool,
-                    "pool.metadata.drain_record.replica_moves.pool_drain.placement_started_at",
+                    "pool.metadata.drain_state.moving_replicas.pool_drain.placement_started_at",
                     error.to_string(),
                 )
             })?;
@@ -765,7 +765,7 @@ impl TryFrom<pool::DrainConfig> for DrainConfig {
                 pool::UnwindSpare::try_from(unwind).map_err(|error| {
                     ReplyError::invalid_argument(
                         ResourceKind::Pool,
-                        "pool.metadata.drain_record.replica_moves.pool_drain.unwind_spare",
+                        "pool.metadata.drain_state.moving_replicas.pool_drain.unwind_spare",
                         error.to_string(),
                     )
                 })
@@ -940,7 +940,7 @@ impl From<Pool> for pool::Pool {
         if let Some(statistics) = definition
             .as_mut()
             .and_then(|def: &mut pool::PoolDefinition| def.metadata.as_mut())
-            .and_then(|meta| meta.drain_record.as_mut())
+            .and_then(|meta| meta.drain_state.as_mut())
             .and_then(|record| record.drain_statistics.as_mut())
         {
             statistics.current = current_usage.into_opt();
