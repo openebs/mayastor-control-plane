@@ -136,6 +136,8 @@ pub(crate) struct RegistryInner<S: Store> {
     max_offline_rebuilds: Option<NumRebuilds>,
     /// The maximum number of concurrent pool drain allowed.
     max_concurrent_pool_drain: u16,
+    /// Number of replicas can be moved concurrently from a pool during drain process.
+    pool_replica_move_limit: u32,
 }
 
 impl Registry {
@@ -171,6 +173,7 @@ impl Registry {
         offline_rebuild_grace_period: std::time::Duration,
         max_offline_rebuilds: Option<NumRebuilds>,
         max_concurrent_pool_drain: u16,
+        pool_replica_move_limit: u32,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -239,6 +242,7 @@ impl Registry {
                 offline_rebuild_grace_period,
                 max_offline_rebuilds,
                 max_concurrent_pool_drain,
+                pool_replica_move_limit,
             }),
         };
         registry.init().await?;
@@ -333,6 +337,11 @@ impl Registry {
     /// Get the conccurent pool drain limit.
     pub(crate) fn max_concurrent_pool_drain(&self) -> u16 {
         self.max_concurrent_pool_drain
+    }
+
+    /// Number of replicas can be moved concurrently from a pool during drain process.
+    pub(crate) fn pool_replica_move_limit(&self) -> u32 {
+        self.pool_replica_move_limit
     }
 
     /// Get the simulation Args.

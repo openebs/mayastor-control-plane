@@ -209,6 +209,15 @@ pub struct PoolPersistedMetadata {
     pub drain_record: Option<PoolDrainRecord>,
 }
 
+impl PoolPersistedMetadata {
+    /// Returns the in progress replica moves for the drain, if any.
+    pub fn num_replica_moves(&self) -> Option<usize> {
+        self.drain_record
+            .as_ref()
+            .map(|record| record.replica_moves.len())
+    }
+}
+
 /// Record of an in-progress pool drain, driving the drain procedure and tracking its progress.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PoolDrainRecord {
@@ -594,6 +603,13 @@ impl PoolSpec {
         }
     }
 
+    /// Pushes replica move config to drain record.
+    pub fn updated_replica_move(&mut self, drain_config: DrainConfig) {
+        if let Some(record) = self.drain_record_mut() {
+            record.replica_moves.push(drain_config);
+        }
+    }
+
     /// Returns true if the pool is in Queued phase.
     pub fn is_drain_queued(&self) -> bool {
         matches!(
@@ -800,6 +816,9 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
                             self.set_drain_phase(phase_op)
                         }
                     }
+                    DrainProgressOp::AddReplicaMove(drain_config) => {
+                        self.updated_replica_move(drain_config)
+                    }
                 },
             }
         }
@@ -929,6 +948,8 @@ pub struct PoolDrainOp {
 pub enum DrainProgressOp {
     /// Update on drain phase and related fields.
     PhaseUpdate(DrainPhaseOp),
+    /// Add a new replica move to the drain record.
+    AddReplicaMove(DrainConfig),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
