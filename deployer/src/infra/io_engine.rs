@@ -1,4 +1,6 @@
-use crate::infra::{async_trait, Builder, ComponentAction, Error, IoEngine, StartOptions};
+use crate::infra::{
+    async_trait, grpc_mtls::GrpcMtls, Builder, ComponentAction, Error, IoEngine, StartOptions,
+};
 use composer::{Binary, ContainerSpec};
 use rpc::io_engine::{IoEngineApiVersion, RpcHandle};
 use std::net::{IpAddr, SocketAddr};
@@ -10,6 +12,7 @@ impl ComponentAction for IoEngine {
     fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
         let mut cfg = cfg;
         let host_tmp = crate::host_tmp()?;
+        let mtls = GrpcMtls::from_options(options)?;
         for i in 0..options.io_engines + options.idle_io_engines {
             let io_engine_socket =
                 format!("{}:10124", cfg.next_ip_for_name(&Self::name(i, options))?);
@@ -57,8 +60,15 @@ impl ComponentAction for IoEngine {
             .with_bind(&host_tmp, "/host/tmp")
             .with_bind("/var/run/dpdk", "/var/run/dpdk");
 
-            if !options.no_grpc_tls {
-                spec = spec.with_env("GRPC_AUTO_TLS", "true");
+            if let Some(mtls) = &mtls {
+                spec = mtls.bind(spec).with_args(GrpcMtls::args(&name));
+            } else if !options.no_grpc_tls {
+                // In a mixed fleet (a plaintext -> TLS rollout) the regular io-engines can be the
+                // old, plaintext release while the idle io-engines are the new, TLS one that takes
+                // over.
+                let is_regular = i < options.io_engines;
+                let auto_tls = !(is_regular && options.io_engine_no_grpc_tls);
+                spec = spec.with_env("GRPC_AUTO_TLS", if auto_tls { "true" } else { "false" });
             }
 
             if options.mount_host_dev_udev {
@@ -128,23 +138,31 @@ impl ComponentAction for IoEngine {
         options: &StartOptions,
         cfg: &crate::ComposeTestNt,
     ) -> Result<(), Error> {
+        let mtls = GrpcMtls::from_options(options)?;
         for i in 0..options.io_engines {
             let name = Self::name(i, options);
             let container_ip = cfg.container_ip_as_ref(&name);
             let socket = SocketAddr::new(IpAddr::from(*container_ip), 10124);
             let tls = !options.no_grpc_tls;
             let enforce_tls = options.grpc_enforce_tls;
-            let connector = move |endpoint: tonic::transport::Endpoint| async move {
-                if !tls {
-                    return grpc::tls::io_connect(endpoint, false).await;
-                }
-                // The io-engine may not be TLS-capable (e.g. an older binary that ignores
-                // GRPC_AUTO_TLS and serves plaintext). Unless TLS is enforced, fall back to a
-                // plaintext connection when the TLS handshake fails.
-                match grpc::tls::io_connect(endpoint.clone(), true).await {
-                    Ok(channel) => Ok(channel),
-                    Err(error) if enforce_tls => Err(error),
-                    Err(_) => grpc::tls::io_connect(endpoint, false).await,
+            let mtls = mtls.clone();
+            let connector = move |endpoint: tonic::transport::Endpoint| {
+                let mtls = mtls.clone();
+                async move {
+                    if let Some(mtls) = mtls {
+                        return mtls.io_connect(endpoint).await;
+                    }
+                    if !tls {
+                        return grpc::tls::io_connect(endpoint, false).await;
+                    }
+                    // The io-engine may not be TLS-capable (e.g. an older binary that ignores
+                    // GRPC_AUTO_TLS and serves plaintext). Unless TLS is enforced, fall back to
+                    // a plaintext connection when the TLS handshake fails.
+                    match grpc::tls::io_connect(endpoint.clone(), true).await {
+                        Ok(channel) => Ok(channel),
+                        Err(error) if enforce_tls => Err(error),
+                        Err(_) => grpc::tls::io_connect(endpoint, false).await,
+                    }
                 }
             };
             // Readiness probe: connect and ping. The connection handshake (including TLS) can
@@ -161,7 +179,7 @@ impl ComponentAction for IoEngine {
                         socket,
                         100,
                         tokio::time::sleep,
-                        connector,
+                        connector.clone(),
                     )
                     .await?;
                     hdl.ping().await.map_err(|error| error.to_string())
@@ -191,7 +209,7 @@ impl ComponentAction for IoEngine {
                 cfg.exec(&name, vec![rm.as_str(), "-rf", Self::ptpl().1])
                     .await?;
             }
-            super::CoreAgent::wait_node_online(cfg, &name, options.no_grpc_tls).await;
+            super::CoreAgent::wait_node_online(cfg, options, &name).await?;
         }
         Ok(())
     }

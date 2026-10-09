@@ -14,7 +14,7 @@ use stor_port::{transport_api::TimeoutOptions, types::v0::transport};
 
 pub use composer::ImagePullPolicy;
 pub use csi_driver::node::internal::*;
-use deployer_lib::infra::CsiNode;
+use deployer_lib::infra::{grpc_mtls::GrpcMtls, CsiNode};
 pub use etcd_client;
 use etcd_client::DeleteOptions;
 use grpc::{
@@ -110,13 +110,7 @@ impl Cluster {
     }
 
     pub async fn new_grpc_client(&self, grpc_timeout: TimeoutOptions) -> CoreClient {
-        let core_ip = self.composer.container_ip("core");
-        let no_grpc_tls = self.builder.opts.no_grpc_tls;
-        CoreClient::new(
-            Uri::try_from(grpc_addr(core_ip, no_grpc_tls)).unwrap(),
-            grpc_timeout,
-        )
-        .await
+        core_client(&self.composer, &self.builder.opts, grpc_timeout).await
     }
 
     /// volume service liveness checks whether the volume service responds to the
@@ -322,6 +316,7 @@ impl Cluster {
 
     /// return grpc handle to the container
     pub async fn grpc_handle(&self, name: &str) -> Result<RpcHandle, String> {
+        let mtls = GrpcMtls::from_options(&self.builder.opts).map_err(|error| error.to_string())?;
         match self.composer.containers().iter().find(|&c| c.0 == name) {
             Some(container) => Ok(RpcHandle::connect(
                 self.builder.opts.latest_io_api_version(),
@@ -331,7 +326,18 @@ impl Cluster {
                     .unwrap(),
                 20,
                 tokio::time::sleep,
-                |endpoint| grpc::tls::io_connect(endpoint, !self.builder.opts.no_grpc_tls),
+                |endpoint| {
+                    let mtls = mtls.clone();
+                    async move {
+                        match mtls {
+                            Some(mtls) => mtls.io_connect(endpoint).await,
+                            None => {
+                                grpc::tls::io_connect(endpoint, !self.builder.opts.no_grpc_tls)
+                                    .await
+                            }
+                        }
+                    }
+                },
             )
             .await?),
             None => Err(format!("Container {name} not found!")),
@@ -609,17 +615,7 @@ impl Cluster {
         }
 
         let grpc_client = if components.core_enabled() {
-            Some(
-                CoreClient::new(
-                    Uri::try_from(grpc_addr(
-                        composer.container_ip("core"),
-                        components.options().no_grpc_tls,
-                    ))
-                    .unwrap(),
-                    grpc_timeout.clone(),
-                )
-                .await,
-            )
+            Some(core_client(&composer, components.options(), grpc_timeout.clone()).await)
         } else {
             None
         };
@@ -1051,6 +1047,12 @@ impl ClusterBuilder {
         self.opts = self.opts.with_grpc_tls_enforced(enforced);
         self
     }
+    /// Specify whether file-backed mutual TLS is used between the core agent and io-engines.
+    #[must_use]
+    pub fn with_grpc_mtls(mut self, enabled: bool) -> Self {
+        self.opts = self.opts.with_grpc_mtls(enabled);
+        self
+    }
     /// Specify whether rest is enabled or not.
     #[must_use]
     pub fn with_rest(mut self, enabled: bool) -> Self {
@@ -1328,6 +1330,30 @@ impl Pool {
 fn grpc_addr(ip: String, no_grpc_tls: bool) -> String {
     let scheme = if no_grpc_tls { "http" } else { "https" };
     format!("{scheme}://{ip}:50051")
+}
+
+/// A core agent gRPC client, authenticating with the deployer certificate when mTLS is on.
+async fn core_client(
+    composer: &ComposeTest,
+    options: &StartOptions,
+    grpc_timeout: TimeoutOptions,
+) -> CoreClient {
+    let uri = Uri::try_from(grpc_addr(
+        composer.container_ip("core"),
+        options.no_grpc_tls,
+    ))
+    .unwrap();
+    match GrpcMtls::from_options(options).expect("the gRPC mTLS material must be available") {
+        Some(mtls) => CoreClient::new_with_tls(
+            uri,
+            grpc_timeout,
+            mtls.client_tls()
+                .expect("the deployer mTLS client certificate files must be readable"),
+        )
+        .await
+        .expect("the mTLS core client must be built"),
+        None => CoreClient::new(uri, grpc_timeout).await,
+    }
 }
 
 /// Connect an internal node plugin client to `host:port`.
