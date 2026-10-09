@@ -725,6 +725,136 @@ impl TryFrom<Pool> for models::PoolDrainStateExt {
         })
     }
 }
+impl From<PoolSmart> for models::PoolSmart {
+    fn from(src: PoolSmart) -> Self {
+        models::PoolSmart::new_all(
+            src.name,
+            // The io-engine reports the uuid as a string, which is empty when unknown.
+            src.uuid.parse::<uuid::Uuid>().ok(),
+            src.disks
+                .into_iter()
+                .map(models::DiskSmart::from)
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
+impl From<DiskSmart> for models::DiskSmart {
+    fn from(src: DiskSmart) -> Self {
+        models::DiskSmart::new_all(
+            src.disk_uri,
+            src.supported,
+            src.smart.map(models::SmartData::from),
+            src.error,
+        )
+    }
+}
+
+impl From<SmartData> for models::SmartData {
+    fn from(src: SmartData) -> Self {
+        let (nvme, ata) = match src.protocol {
+            Some(SmartProtocol::Nvme(nvme)) => (Some(models::NvmeSmart::from(nvme)), None),
+            Some(SmartProtocol::Ata(ata)) => (None, Some(models::AtaSmart::from(ata))),
+            None => (None, None),
+        };
+        models::SmartData::new_all(
+            src.smart_status_passed,
+            src.temperature_celsius,
+            src.power_on_hours,
+            src.power_cycles,
+            src.available_spare_percent,
+            src.available_spare_threshold_percent,
+            src.percentage_used,
+            src.identity.map(models::DeviceIdentity::from),
+            nvme,
+            ata,
+        )
+    }
+}
+
+impl From<NvmeSmart> for models::NvmeSmart {
+    fn from(src: NvmeSmart) -> Self {
+        models::NvmeSmart::new_all(
+            src.critical_warning,
+            src.temperature_celsius,
+            src.available_spare_percent,
+            src.available_spare_threshold_percent,
+            src.percentage_used,
+            src.data_units_read,
+            src.data_units_written,
+            src.host_reads,
+            src.host_writes,
+            src.controller_busy_minutes,
+            src.power_cycles,
+            src.power_on_hours,
+            src.unsafe_shutdowns,
+            src.media_errors,
+            src.num_error_log_entries,
+            src.warning_temp_time,
+            src.critical_comp_time,
+            src.error_log_entries
+                .into_iter()
+                .map(models::NvmeErrorLogEntry::from)
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
+impl From<AtaSmart> for models::AtaSmart {
+    fn from(src: AtaSmart) -> Self {
+        models::AtaSmart::new_all(
+            src.attributes
+                .into_iter()
+                .map(models::SmartAttribute::from)
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
+impl From<DeviceIdentity> for models::DeviceIdentity {
+    fn from(src: DeviceIdentity) -> Self {
+        models::DeviceIdentity::new_all(
+            src.model,
+            src.model_family,
+            src.serial_number,
+            src.firmware_revision,
+            src.wwn,
+            src.capacity_bytes,
+            src.logical_sector_size,
+            src.physical_sector_size,
+            src.rotation_rate,
+            src.form_factor,
+            src.transport,
+            src.link_speed,
+        )
+    }
+}
+
+impl From<SmartAttribute> for models::SmartAttribute {
+    fn from(src: SmartAttribute) -> Self {
+        models::SmartAttribute::new_all(
+            src.id,
+            src.name,
+            src.value,
+            src.worst,
+            src.threshold,
+            src.raw_value,
+        )
+    }
+}
+
+impl From<NvmeErrorLogEntry> for models::NvmeErrorLogEntry {
+    fn from(src: NvmeErrorLogEntry) -> Self {
+        models::NvmeErrorLogEntry::new_all(
+            src.error_count,
+            src.submission_queue_id,
+            src.command_id,
+            src.status_field,
+            src.lba,
+            src.namespace_id,
+        )
+    }
+}
 
 /// Pool device URI.
 /// Can be specified in the form of a file path or a URI.
@@ -1296,16 +1426,16 @@ pub struct SmartAttribute {
 /// A single NVMe Error Information Log entry.
 #[derive(Default, Debug, Clone)]
 pub struct NvmeErrorLogEntry {
-    /// Error count.
+    /// Cumulative controller error counter, never 0 for a valid entry.
     pub error_count: u64,
-    /// Submission queue identifier.
+    /// Identifier of the submission queue the failing command was posted to.
     pub submission_queue_id: u32,
-    /// Command identifier, if available.
+    /// Identifier of the failing command, when the controller reports it.
     pub command_id: Option<u32>,
-    /// Status field from the completion queue entry.
+    /// Raw status field of the NVMe completion queue entry for the failing command.
     pub status_field: u32,
-    /// LBA associated with the error, if applicable.
+    /// Logical block address associated with the error, when applicable.
     pub lba: Option<u64>,
-    /// Namespace identifier, if applicable.
+    /// Identifier of the namespace associated with the error, when applicable.
     pub namespace_id: Option<u32>,
 }
