@@ -166,17 +166,19 @@ impl NodePluginGrpcServer {
             Server::builder().add_service(NodePluginServer::new(NodePluginSvc { kubelet_path }));
         let result = match (auto_tls, tls) {
             (true, _) => {
-                let config = grpc::tls::auto_server_config(vec!["localhost".to_string()])?;
                 // Only the csi-controller connects here and it is always TLS-aware, so the
-                // listener does not need to sniff for plaintext clients.
-                let incoming =
-                    grpc::tls::incoming_with_server_config(endpoint, config, false).await?;
+                // listener serves TLS exclusively.
+                let incoming = grpc::tls::Listener::auto(endpoint, vec!["localhost".to_string()])
+                    .await?
+                    .tls_incoming();
                 server
                     .serve_with_incoming_shutdown(incoming, Shutdown::wait())
                     .await
             }
             (false, Some(tls)) => {
-                let incoming = grpc::tls::incoming(endpoint, tls, false).await?;
+                let incoming = grpc::tls::Listener::file(endpoint, &tls)
+                    .await?
+                    .tls_incoming();
                 server
                     .serve_with_incoming_shutdown(incoming, Shutdown::wait())
                     .await

@@ -136,7 +136,7 @@ mod test {
             ApiVersion::V1,
             false,
             cluster.grpc_tls(),
-            false,
+            Default::default(),
         )
         .unwrap();
         let io_engine = GrpcClient::new(&ctx).await.unwrap();

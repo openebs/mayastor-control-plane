@@ -11,7 +11,6 @@ mod io_engine;
 mod jaeger;
 mod kibana;
 pub mod nats;
-mod pki;
 mod rest;
 mod rwx_vm;
 

@@ -240,12 +240,11 @@ impl CliArgs {
     fn grpc_tls(&self) -> anyhow::Result<Option<grpc::tls::TlsConfig>> {
         match (&self.grpc_tls_cert_file, &self.grpc_tls_key_file) {
             (None, None) => Ok(None),
-            (Some(certificate), Some(private_key)) => grpc::tls::TlsConfig::new(
+            (Some(certificate), Some(private_key)) => Ok(Some(grpc::tls::TlsConfig::new(
                 self.grpc_tls_ca_file.clone(),
                 Some(certificate.clone()),
                 Some(private_key.clone()),
-            )
-            .map(Some),
+            )?)),
             _ => unreachable!("clap requires the gRPC TLS certificate and private key together"),
         }
     }
@@ -375,7 +374,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         cli_args.offline_rebuild_grace_period.into(),
         cli_args.max_offline_rebuilds,
         cli_args.max_concurrent_pool_drain,
-        grpc_tls_enforced,
+        grpc::tls::IoEngineTls::new(grpc_tls.clone(), grpc_tls_enforced),
     )
     .await?;
 
@@ -429,12 +428,7 @@ async fn run_grpc_server(
         (true, None) => service.run_auto_tls_err(socket, sniff).await,
         (true, Some(_)) => unreachable!("clap prevents combining gRPC TLS files and auto TLS"),
         (false, Some(tls)) => service.run_tls_err(socket, tls, sniff).await,
-        (false, None) if tls_enforced => Err(agents::ServiceError::GrpcTls {
-            source: anyhow::anyhow!(
-                "--grpc-tls-enforced requires gRPC TLS to be configured via --grpc-auto-tls or \
-                the --grpc-tls-cert-file/--grpc-tls-key-file pair"
-            ),
-        }),
+        (false, None) if tls_enforced => Err(agents::ServiceError::GrpcTlsNotConfigured),
         (false, None) => service.run_err(socket).await,
     }
 }

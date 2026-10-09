@@ -82,7 +82,7 @@ pub enum SvcError {
     GrpcConnect {
         node_id: String,
         endpoint: String,
-        source: tonic::transport::Error,
+        source: grpc::tls::Error,
     },
     #[snafu(display("Node '{}' has invalid gRPC URI '{}'", node_id, uri))]
     GrpcConnectUri {

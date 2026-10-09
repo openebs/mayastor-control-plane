@@ -20,8 +20,7 @@ stor-port = { workspace = true }
 rpc = { workspace = true }
 utils = { workspace = true }
 grpc = { workspace = true }
-http = { workspace = true }
-rcgen = { workspace = true }
+grpc-tls = { workspace = true }
 
 clap = { workspace = true, features = ["color", "derive", "env", "string"] }
 tokio = { workspace = true, features = ["full"] }

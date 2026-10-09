@@ -11,10 +11,14 @@
 //! dials the io-engine's registered gRPC endpoint), and the deployer reaches them by IP.
 
 use crate::{
-    infra::{pki::CertificateAuthority, Error, IoEngine, StartOptions},
+    infra::{Error, IoEngine, StartOptions},
     ComposeTestNt,
 };
-use std::path::{Path, PathBuf};
+use grpc_tls::pki::CertificateAuthority;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use tonic::transport::{Channel, Endpoint};
 
 /// Where the certificate files are mounted inside the containers.
@@ -127,21 +131,11 @@ impl GrpcMtls {
     /// Eagerly connect to an io-engine `endpoint` over mTLS, presenting the deployer's client
     /// certificate.
     pub async fn io_connect(&self, endpoint: Endpoint) -> Result<Channel, tonic::transport::Error> {
-        let tls = self
+        let config = self
             .client_tls()
             .and_then(|tls| Ok(tls.client_config()?))
             .expect("the deployer mTLS client certificate files must be readable");
-        // Tonic only performs its own TLS handshake for an `https` endpoint.
-        let mut parts = endpoint.uri().clone().into_parts();
-        parts.scheme = Some(http::uri::Scheme::HTTPS);
-        let uri = http::Uri::from_parts(parts).expect("gRPC endpoint uri with https scheme");
-        // The connect timeout cannot be read back from the endpoint, so match the readiness
-        // probe's (see `RpcHandle::connect`).
-        Endpoint::from(uri)
-            .connect_timeout(std::time::Duration::from_millis(100))
-            .tls_config(tls)?
-            .connect()
-            .await
+        grpc_tls::tls_connect(&endpoint, Arc::new(config)).await
     }
 
     /// The directory holding the certificate files on the host.
