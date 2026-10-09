@@ -24,8 +24,18 @@ impl ComponentAction for JsonGrpcAgent {
             }
         }
 
+        // The jsongrpc agent's CoreClient enables TLS based on the core gRPC URI scheme (https),
+        // so the scheme must match how the core server was started, otherwise the client and
+        // server disagree on TLS (e.g. "received corrupt message of type InvalidContentType").
+        let grpc_scheme = if options.no_grpc_tls { "http" } else { "https" };
+        let core_grpc = format!("{grpc_scheme}://core:50051/");
+        binary = binary.with_args(vec!["--core-grpc", &core_grpc]);
+
         if !options.no_grpc_tls {
             binary = binary.with_arg("--grpc-auto-tls");
+            if options.grpc_enforce_tls {
+                binary = binary.with_arg("--grpc-enforce-tls");
+            }
         }
 
         if let Some(size) = &options.otel_max_batch_size {
