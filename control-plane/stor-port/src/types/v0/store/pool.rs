@@ -209,6 +209,15 @@ pub struct PoolPersistedMetadata {
     pub drain_state: Option<PoolDrainState>,
 }
 
+impl PoolPersistedMetadata {
+    /// Returns the in progress replica moves for the drain, if any.
+    pub fn num_replica_moves(&self) -> Option<usize> {
+        self.drain_record
+            .as_ref()
+            .map(|record| record.replica_moves.len())
+    }
+}
+
 /// Record of an in-progress pool drain, driving the drain procedure and tracking its progress.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PoolDrainState {
@@ -330,6 +339,25 @@ pub struct DrainConfig {
     /// Why a move's over-replicated spare is being removed.
     #[serde(skip)]
     pub unwind_spare: Option<UnwindSpare>,
+}
+
+impl DrainConfig {
+    /// Creates a new instance of DrainConfig.
+    pub fn new(volume: VolumeId, pool: PoolId, replica_id: ReplicaId, need_spare: bool) -> Self {
+        let spare_replica = if need_spare {
+            Some(SpareReplica::default())
+        } else {
+            None
+        };
+        Self {
+            placement_started_at: None,
+            volume,
+            pool,
+            moving_replica: Some(replica_id),
+            spare_replica,
+            unwind_spare: None,
+        }
+    }
 }
 
 /// Spare replica reference for this drain.
@@ -575,6 +603,13 @@ impl PoolSpec {
         }
     }
 
+    /// Pushes replica move config to drain record.
+    pub fn updated_replica_move(&mut self, drain_config: DrainConfig) {
+        if let Some(record) = self.drain_record_mut() {
+            record.replica_moves.push(drain_config);
+        }
+    }
+
     /// Returns true if the pool is in Queued phase.
     pub fn is_drain_queued(&self) -> bool {
         matches!(
@@ -604,6 +639,16 @@ impl PoolSpec {
         match self.cordon_drain.as_ref()? {
             CordonDrainState::Drain(drain) => Some(&drain.policy),
             CordonDrainState::Cordoned(_) => None,
+        }
+    }
+
+    /// Returns true if snapshot policy is set to ignore, or if no drain is applied.
+    pub fn ignore_snapshot_policy(&self) -> bool {
+        match self.cordon_drain.as_ref() {
+            Some(CordonDrainState::Drain(drain)) => {
+                drain.policy.snapshot_policy == SnapshotPolicy::Ignore
+            }
+            _ => true,
         }
     }
 
@@ -638,6 +683,13 @@ impl PoolSpec {
             match op.phase {
                 DrainPhase::Draining => {
                     matches!(drain_state.phase, DrainPhase::Queued)
+                }
+                DrainPhase::PartiallyDrained => {
+                    matches!(drain_record.phase, DrainPhase::Draining)
+                }
+                DrainPhase::Drained => {
+                    matches!(drain_record.phase, DrainPhase::Draining)
+                        || matches!(drain_record.phase, DrainPhase::AwaitingCleanup)
                 }
                 // Will be extended as we add more phase transition callers.
                 _ => false,
@@ -763,6 +815,9 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
                         if self.phase_updateable(&phase_op) {
                             self.set_drain_phase(phase_op)
                         }
+                    }
+                    DrainProgressOp::AddReplicaMove(drain_config) => {
+                        self.updated_replica_move(drain_config)
                     }
                 },
             }
@@ -893,6 +948,8 @@ pub struct PoolDrainOp {
 pub enum DrainProgressOp {
     /// Update on drain phase and related fields.
     PhaseUpdate(DrainPhaseOp),
+    /// Add a new replica move to the drain record.
+    AddReplicaMove(DrainConfig),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

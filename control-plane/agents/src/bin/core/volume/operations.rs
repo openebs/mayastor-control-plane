@@ -33,8 +33,8 @@ use stor_port::{
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
             volume::{
-                PublishOperation, RepublishOperation, UnpublishOperation, VolumeOperation,
-                VolumeSpec,
+                PublishOperation, ReplicaMoveRequester, RepublishOperation, UnpublishOperation,
+                VolumeOperation, VolumeSpec,
             },
         },
         transport::{
@@ -654,6 +654,10 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 }
 
 impl OperationGuardArc<VolumeSpec> {
+    /// Update the replica move configuration for the volume.
+    pub(crate) async fn update_move_config(&mut self, request: ReplicaMoveRequester) {
+        self.lock().metadata.update_replica_move(request);
+    }
     /// Publish a volume, recording the supplied `target_mode` on the resulting
     /// `target_config`. This is the internal entry point used by callers that
     /// need to set up a target for a non-app purpose (the offline-rebuild

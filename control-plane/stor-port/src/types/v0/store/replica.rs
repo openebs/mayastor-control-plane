@@ -141,6 +141,14 @@ impl ReplicaSpec {
     pub fn vol_size(&self) -> u64 {
         self.vol_size.unwrap_or(self.size)
     }
+    /// Returns true if replica is owned by volume.
+    pub fn owned_by_volume(&self) -> bool {
+        self.owners.volume().is_some()
+    }
+    /// Returns the volume owner if applicable.
+    pub fn volume_owner(&self) -> Option<&VolumeId> {
+        self.owners.volume()
+    }
 }
 
 /// Reference of a pool.

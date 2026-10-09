@@ -231,6 +231,10 @@ pub(crate) struct CliArgs {
     /// sorted by drain reqeusted timestamp.
     #[clap(long, default_value_t = 3)]
     max_concurrent_pool_drain: u16,
+
+    /// Number of replicas can be moved concurrently from a pool during drain process.
+    #[clap(long, default_value_t = 2)]
+    pool_replica_move_limit: u32,
 }
 impl CliArgs {
     fn args() -> Self {
@@ -375,6 +379,7 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         cli_args.offline_rebuild_grace_period.into(),
         cli_args.max_offline_rebuilds,
         cli_args.max_concurrent_pool_drain,
+        cli_args.pool_replica_move_limit,
     )
     .await?;
 
