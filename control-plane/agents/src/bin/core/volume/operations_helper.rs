@@ -49,6 +49,19 @@ use stor_port::{
 use http::Uri;
 
 impl OperationGuardArc<VolumeSpec> {
+    /// Whether an operator has asked this volume's rebuild to skip its wait.
+    pub(crate) fn offline_rebuild_requested(&self) -> bool {
+        self.lock().metadata.offline_rebuild_requested()
+    }
+
+    /// Clear both offline-rebuild marks: how long we have seen the volume degraded,
+    /// and any outstanding request to skip the wait.
+    pub(crate) fn clear_offline_rebuild_marks(&mut self) {
+        let mut volume = self.lock();
+        volume.metadata.clear_offline_rebuild_degraded();
+        volume.metadata.clear_offline_rebuild_requested();
+    }
+
     /// Prune volume health from older targets.
     pub(crate) fn prune_health(&self, registry: &Registry) {
         let Some(target) = self.lock().health_info_id().cloned() else {
