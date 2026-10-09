@@ -39,6 +39,8 @@ impl ResourceSpecsLocked {
                         || node_spec.features() != &node.features
                         || node_spec.bugfixes() != &node.bugfixes
                         || node_spec.version() != &node.version
+                        || node_spec.transport_caps() != &node.transport_caps
+                        || node_spec.nvmf_target() != &node.nvmf_target
                         || node_spec.is_shutdown();
 
                     if changed {
@@ -47,6 +49,8 @@ impl ResourceSpecsLocked {
                         node_spec.set_features(node.features.clone());
                         node_spec.set_bugfixes(node.bugfixes.clone());
                         node_spec.set_version(node.version.clone());
+                        node_spec.set_transport_caps(node.transport_caps.clone());
+                        node_spec.set_nvmf_target(node.nvmf_target.clone());
                         node_spec.set_shutdown(false);
                     }
 
@@ -63,7 +67,9 @@ impl ResourceSpecsLocked {
                         node.bugfixes.clone(),
                         node.version.clone(),
                         false,
-                    );
+                    )
+                    .with_transport_caps(node.transport_caps.clone())
+                    .with_nvmf_target(node.nvmf_target.clone());
                     specs.nodes.insert(node.clone());
                     (true, node)
                 }

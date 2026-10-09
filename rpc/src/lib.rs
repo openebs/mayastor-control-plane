@@ -553,21 +553,31 @@ pub mod io_engine {
 
         /// Connect to the container and return a handle to `Self`
         /// Note: The initial connection with a timeout is using blocking calls
-        pub async fn connect<S: Fn(Duration) -> F, F: Future<Output = ()>>(
+        ///
+        /// The `connector` builds the channel from the (plaintext `http`) endpoint, allowing the
+        /// caller to select a plaintext or auto-TLS transport (the io-engine serves TLS only when
+        /// started with auto-TLS). The endpoint always carries an `http` scheme: for auto-TLS the
+        /// handshake is performed by a custom connector rather than tonic.
+        pub async fn connect<S, F, C, CF>(
             version: IoEngineApiVersion,
             name: &str,
             endpoint: SocketAddr,
             mut attempts: i32,
             sleep: S,
-        ) -> Result<Self, String> {
+            connector: C,
+        ) -> Result<Self, String>
+        where
+            S: Fn(Duration) -> F,
+            F: Future<Output = ()>,
+            C: Fn(tonic::transport::Endpoint) -> CF,
+            CF: Future<Output = Result<Channel, tonic::transport::Error>>,
+        {
             let endpoint_str = format!("http://{endpoint}");
+            let tonic_endpoint = tonic::transport::Endpoint::new(endpoint_str)
+                .map_err(|e| e.to_string())?
+                .connect_timeout(Duration::from_millis(100));
             let channel = loop {
-                match tonic::transport::Endpoint::new(endpoint_str.clone())
-                    .map_err(|e| e.to_string())?
-                    .connect_timeout(Duration::from_millis(100))
-                    .connect()
-                    .await
-                {
+                match connector(tonic_endpoint.clone()).await {
                     Ok(channel) => break channel,
                     Err(_) => {
                         sleep(Duration::from_millis(50)).await;

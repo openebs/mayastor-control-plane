@@ -5,11 +5,18 @@ use deployer_cluster::ClusterBuilder;
 use grpc::operations::node::traits::NodeOperations;
 use std::time::Duration;
 use stor_port::types::v0::{
-    store::node::{NodeLabels, NodeSpec},
-    transport::{ApiVersion, Filter, HostNqn, Node, NodeId, NodeState, NodeStatus},
+    store::{
+        app_node::TransportCaps,
+        node::{NodeLabels, NodeSpec},
+    },
+    transport::{
+        ApiVersion, Filter, HostNqn, Node, NodeFeatures, NodeId, NodeState, NodeStatus,
+        NvmfTargetInfo,
+    },
 };
 
 /// Get new `Node` from the given parameters
+#[allow(clippy::too_many_arguments)]
 fn new_node(
     id: NodeId,
     endpoint: String,
@@ -17,21 +24,28 @@ fn new_node(
     api_versions: Option<Vec<ApiVersion>>,
     node_nqn: Option<HostNqn>,
     version: &Option<String>,
+    features: Option<NodeFeatures>,
+    transport_caps: Option<TransportCaps>,
+    nvmf_target: Option<NvmfTargetInfo>,
 ) -> Node {
     let endpoint = std::str::FromStr::from_str(&endpoint).unwrap();
     Node::new(
         id.clone(),
-        Some(NodeSpec::new(
-            id.clone(),
-            endpoint,
-            NodeLabels::new(),
-            None,
-            node_nqn.clone(),
-            None,
-            None,
-            version.clone(),
-            false,
-        )),
+        Some(
+            NodeSpec::new(
+                id.clone(),
+                endpoint,
+                NodeLabels::new(),
+                None,
+                node_nqn.clone(),
+                features,
+                None,
+                version.clone(),
+                false,
+            )
+            .with_transport_caps(transport_caps)
+            .with_nvmf_target(nvmf_target),
+        ),
         Some(NodeState::new(
             id,
             endpoint,
@@ -78,7 +92,10 @@ async fn node() {
             NodeStatus::Online,
             None,
             Some(HostNqn::from_nodename(&maya_name.to_string())),
-            &node.state().and_then(|n| n.version.clone())
+            &node.state().and_then(|n| n.version.clone()),
+            node.spec().and_then(|s| s.features().clone()),
+            node.spec().and_then(|s| s.transport_caps().clone()),
+            node.spec().and_then(|s| s.nvmf_target().clone()),
         )
     );
     // wait for node to miss its deadline

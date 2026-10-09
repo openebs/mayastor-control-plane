@@ -60,7 +60,8 @@ lazy_static! {
     ];
     pub static ref NODE_HEADERS: Row = row![
         "ID",
-        "GRPC ENDPOINT",
+        "GRPC-ENDPOINT",
+        "NVMF-TARGET",
         "STATUS",
         "VERSION",
         "POOLS",

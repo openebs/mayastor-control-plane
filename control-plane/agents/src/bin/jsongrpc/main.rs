@@ -34,6 +34,13 @@ struct CliArgs {
     #[clap(long = "grpc-auto-tls", conflicts_with_all = ["grpc_tls_cert_file", "grpc_tls_key_file", "grpc_tls_ca_file"])]
     grpc_auto_tls: bool,
 
+    /// Enforce TLS when connecting to io-engine gRPC endpoints by rejecting io-engines that do
+    /// not advertise TLS support, rather than falling back to a plaintext connection. {n}
+    /// Enable this once every io-engine speaks TLS to fully enforce encrypted transport, as
+    /// required by some compliance and security frameworks.
+    #[clap(long, env)]
+    grpc_enforce_tls: bool,
+
     /// Crypto options.
     #[clap(flatten)]
     crypto: utils::CryptoArgs,
@@ -77,7 +84,9 @@ async fn main() -> anyhow::Result<()> {
 async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
     let grpc_addr = cli_args.json_grpc_server_addr;
     let tls = cli_args.grpc_tls()?;
-    let json_grpc_service = JsonGrpcServer::new(Arc::new(JsonGrpcSvc::new())).into_grpc_server();
+    let json_grpc_service =
+        JsonGrpcServer::new(Arc::new(JsonGrpcSvc::new(cli_args.grpc_enforce_tls)))
+            .into_grpc_server();
 
     let service = Service::builder().with_service(json_grpc_service);
 

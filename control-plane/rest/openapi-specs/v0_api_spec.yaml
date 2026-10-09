@@ -3498,6 +3498,39 @@ components:
         - Unknown
         - Online
         - Offline
+    NodeFeatures:
+      description: >-
+        Features and capabilities exposed by the io-engine node. Each optional field is
+        a tristate: absent means the feature is unsupported, false means supported but
+        disabled, and true means supported and enabled.
+      type: object
+      properties:
+        asymmetricNamespaceAccess:
+          description: Whether NVMe ANA (Asymmetric Namespace Access) is enabled
+          type: boolean
+        logicalVolumeManager:
+          description: Whether the LVM backend is enabled
+          type: boolean
+        snapshotRebuild:
+          description: Whether snapshot rebuild is enabled
+          type: boolean
+        rdmaCapableIoEngine:
+          description: Whether the nvmf target supports RDMA
+          type: boolean
+        diskpoolEncryption:
+          description: Whether diskpool encryption is supported
+          type: boolean
+        nexusLabelVersion:
+          description: Max version of the nexus label supported by the node
+          type: integer
+          format: uint32
+          minimum: 0
+        grpcTls:
+          description: Whether the io-engine gRPC server has TLS enabled and expects TLS connections
+          type: boolean
+        fips:
+          description: Whether the io-engine runs in FIPS mode (its crypto modules are FIPS validated)
+          type: boolean
     NodeSpec:
       example:
         grpcEndpoint: '10.1.0.5:10124'
@@ -3508,6 +3541,10 @@ components:
         grpcEndpoint:
           description: gRPC endpoint of the io-engine instance
           type: string
+        features:
+          description: Features and capabilities exposed by the io-engine node
+          allOf:
+            - $ref: '#/components/schemas/NodeFeatures'
         id:
           description: node ID
           $ref: '#/components/schemas/NodeId'
@@ -3528,10 +3565,41 @@ components:
         shutdown:
           description: Set when the node has deregistered.
           type: boolean
+        transportCaps:
+          description: Transport capabilities of the host the io-engine runs on
+          allOf:
+            - $ref: '#/components/schemas/TransportCaps'
+        nvmfTarget:
+          description: State of the io-engine's nvmf target
+          allOf:
+            - $ref: '#/components/schemas/NvmfTargetInfo'
       additionalProperties: false
       required:
         - grpcEndpoint
         - id
+    NvmfTargetInfo:
+      description: |-
+        State of an io-engine's nvmf target.
+      type: object
+      properties:
+        interface:
+          description: |-
+            The network interface the target listens on (from --nvmf-tgt-interface), if set.
+          type: string
+        address:
+          description: |-
+            The address the target listens on, on the usual nexus and replica ports.
+          type: string
+        tcp:
+          description: |-
+            Whether the target is listening over tcp. Set means it was requested; the value says whether it panned out.
+          type: boolean
+        rdma:
+          description: |-
+            Whether the target is listening over rdma, which is what makes rdma usable. Unset means rdma wasn't asked for; false means it was but couldn't be set up.
+          type: boolean
+      required:
+        - address
     NodeState:
       example:
         grpcEndpoint: '10.1.0.5:10124'

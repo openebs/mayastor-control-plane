@@ -331,6 +331,7 @@ impl Cluster {
                     .unwrap(),
                 20,
                 tokio::time::sleep,
+                |endpoint| grpc::tls::io_connect(endpoint, !self.builder.opts.no_grpc_tls),
             )
             .await?),
             None => Err(format!("Container {name} not found!")),
@@ -521,6 +522,11 @@ impl Cluster {
         let name = self.node(index);
         let ip = self.composer.container_ip(name.as_str());
         format!("{ip}:10124").parse::<SocketAddr>().unwrap()
+    }
+
+    /// Whether the io-engine nodes serve gRPC over (auto-)TLS.
+    pub fn grpc_tls(&self) -> bool {
+        !self.builder.opts.no_grpc_tls
     }
 
     /// pool id for `pool` index on `node` index

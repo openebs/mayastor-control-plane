@@ -15,7 +15,7 @@ actix = ["actix-web", "rustls"]
 tower-client-rls = ["tower-client", "rustls_aws_lc_rs"]
 tower-client = ["tower-hyper"]
 tower-hyper = ["hyper", "tower", "tower-http", "http-body", "futures", "pin-project", "tokio"]
-rustls_feat = ["rustls", "hyper-rustls"]
+rustls_feat = ["rustls", "hyper-rustls", "fips"]
 rustls_aws_lc_rs = ["rustls_feat", "rustls/aws-lc-rs", "hyper-rustls/aws-lc-rs"]
 tower-trace = ["opentelemetry-otlp", "opentelemetry_sdk", "tracing-opentelemetry", "opentelemetry", "opentelemetry-http", "tracing", "tracing-subscriber"]
 
@@ -43,6 +43,8 @@ http-body = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 pin-project = { workspace = true, optional = true }
 hyper-body = { workspace = true }
+# fips crate for the FIPS-approved signature verification schemes (tls client); rustls only
+fips = { workspace = true, optional = true }
 # certificate file watching for TLS auto-reload (tower client); Linux/inotify only
 cert-watcher = { workspace = true }
 

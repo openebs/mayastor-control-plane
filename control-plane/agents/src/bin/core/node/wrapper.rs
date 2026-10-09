@@ -107,6 +107,8 @@ pub(crate) struct NodeWrapper {
     disable_ha: bool,
     /// Simulated address for the node.
     sim_socket: Option<std::net::SocketAddr>,
+    /// Whether gRPC TLS is enforced, rejecting connections to io-engines that don't support TLS.
+    grpc_tls_enforced: bool,
 }
 
 impl NodeWrapper {
@@ -117,6 +119,7 @@ impl NodeWrapper {
         comms_timeouts: NodeCommsTimeout,
         disable_ha: bool,
         sim_socket: Option<std::net::SocketAddr>,
+        grpc_tls_enforced: bool,
     ) -> Self {
         tracing::debug!("Creating new node {:?}", node);
         Self {
@@ -129,6 +132,7 @@ impl NodeWrapper {
             num_rebuilds: Arc::new(RwLock::new(0)),
             disable_ha,
             sim_socket,
+            grpc_tls_enforced,
         }
     }
 
@@ -149,6 +153,7 @@ impl NodeWrapper {
             num_rebuilds: Arc::new(RwLock::new(0)),
             disable_ha: false,
             sim_socket: None,
+            grpc_tls_enforced: false,
         }
     }
 
@@ -297,6 +302,7 @@ impl NodeWrapper {
                 api_version,
                 self.sim_socket.is_some(),
                 self.node_grpc_tls(),
+                self.grpc_tls_enforced,
             )?)
         } else {
             Err(SvcError::InvalidApiVersion { api_version: None })
@@ -318,6 +324,7 @@ impl NodeWrapper {
                 api_version,
                 self.sim_socket.is_some(),
                 self.node_grpc_tls(),
+                self.grpc_tls_enforced,
             )?)
         } else {
             Err(SvcError::InvalidApiVersion { api_version: None })
@@ -336,6 +343,7 @@ impl NodeWrapper {
                 api_version,
                 self.sim_socket.is_some(),
                 self.node_grpc_tls(),
+                self.grpc_tls_enforced,
             )?)
         } else {
             Err(SvcError::InvalidApiVersion { api_version: None })

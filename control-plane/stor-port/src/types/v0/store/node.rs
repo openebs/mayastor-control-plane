@@ -3,11 +3,13 @@ use crate::{
     types::v0::{
         openapi::models,
         store::{
+            app_node::TransportCaps,
             definitions::{ObjectKey, StorableObject, StorableObjectType},
             AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
         },
         transport::{
-            self, HostNqn, NexusVersion, NodeBugFix, NodeBugFixes, NodeFeatures, NodeId, VolumeId,
+            self, HostNqn, NexusVersion, NodeBugFix, NodeBugFixes, NodeFeatures, NodeId,
+            NvmfTargetInfo, VolumeId,
         },
     },
     IntoOption,
@@ -205,6 +207,12 @@ pub struct NodeSpec {
     /// Version of the io-engine.
     #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<String>,
+    /// Transport capabilities of the host the io-engine runs on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    transport_caps: Option<TransportCaps>,
+    /// State of the io-engine's nvmf target.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    nvmf_target: Option<NvmfTargetInfo>,
     /// If the node has signaled shutdown by sending deregistration message.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     shutdown: bool,
@@ -274,6 +282,8 @@ impl NodeSpec {
             features,
             bugfixes,
             version,
+            transport_caps: None,
+            nvmf_target: None,
             shutdown,
             metadata: NodeMetadata::default(),
         }
@@ -311,6 +321,14 @@ impl NodeSpec {
     pub fn version(&self) -> &Option<String> {
         &self.version
     }
+    /// Transport capabilities of the host the io-engine runs on.
+    pub fn transport_caps(&self) -> &Option<TransportCaps> {
+        &self.transport_caps
+    }
+    /// State of the io-engine's nvmf target.
+    pub fn nvmf_target(&self) -> &Option<NvmfTargetInfo> {
+        &self.nvmf_target
+    }
     /// Node version.
     pub fn label_version(&self) -> NexusVersion {
         self.features
@@ -337,6 +355,24 @@ impl NodeSpec {
     /// Set Node version.
     pub fn set_version(&mut self, version: Option<String>) {
         self.version = version;
+    }
+    /// Set the transport capabilities of the host the io-engine runs on.
+    pub fn set_transport_caps(&mut self, transport_caps: Option<TransportCaps>) {
+        self.transport_caps = transport_caps;
+    }
+    /// Set the state of the io-engine's nvmf target.
+    pub fn set_nvmf_target(&mut self, nvmf_target: Option<NvmfTargetInfo>) {
+        self.nvmf_target = nvmf_target;
+    }
+    /// Set the transport capabilities, returning `Self`.
+    pub fn with_transport_caps(mut self, transport_caps: Option<TransportCaps>) -> Self {
+        self.transport_caps = transport_caps;
+        self
+    }
+    /// Set the nvmf target state, returning `Self`.
+    pub fn with_nvmf_target(mut self, nvmf_target: Option<NvmfTargetInfo>) -> Self {
+        self.nvmf_target = nvmf_target;
+        self
     }
     /// Set as true when the node has deregistered itself.
     pub fn set_shutdown(&mut self, shutdown: bool) {
@@ -587,12 +623,15 @@ impl From<NodeSpec> for models::NodeSpec {
         };
         Self::new_all(
             src.endpoint.to_string(),
+            src.features.map(Into::into),
             src.id.clone(),
             labels,
             src.cordon_drain_state.into_opt(),
             src.node_nqn.into_opt(),
             src.version,
             src.shutdown,
+            src.transport_caps.map(Into::into),
+            src.nvmf_target.map(Into::into),
         )
     }
 }

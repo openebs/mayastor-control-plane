@@ -3,7 +3,10 @@ use super::*;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, str::FromStr};
 
-use crate::{types::v0::store::node::NodeSpec, IntoOption};
+use crate::{
+    types::v0::store::{app_node::TransportCaps, node::NodeSpec},
+    IntoOption,
+};
 use strum_macros::{Display, EnumString};
 
 /// Registration
@@ -28,6 +31,10 @@ pub struct Register {
     pub bugfixes: Option<NodeBugFixes>,
     /// Version of the io-engine.
     pub version: Option<String>,
+    /// Transport capabilities of the host the io-engine runs on.
+    pub transport_caps: Option<TransportCaps>,
+    /// State of the io-engine's nvmf target.
+    pub nvmf_target: Option<NvmfTargetInfo>,
 }
 
 /// Deregister message payload
@@ -241,13 +248,31 @@ pub struct NodeFeatures {
     /// The io-engine gRPC server has TLS enabled and expects TLS connections.
     #[serde(default)]
     pub grpc_tls: Option<bool>,
+    /// The io-engine runs in FIPS mode: its crypto modules are FIPS validated.
+    #[serde(default)]
+    pub fips: Option<bool>,
+}
+
+/// State of an io-engine's nvmf target.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NvmfTargetInfo {
+    /// The network interface the target listens on (from `--nvmf-tgt-interface`), if set.
+    pub interface: Option<String>,
+    /// The address the target listens on, on the usual nexus and replica ports.
+    pub address: String,
+    /// Whether the target is listening over tcp. Set means it was requested; the value says
+    /// whether it panned out.
+    pub tcp: Option<bool>,
+    /// Whether the target is listening over rdma, which is what makes rdma usable. Unset means
+    /// rdma wasn't asked for; false means it was but couldn't be set up.
+    pub rdma: Option<bool>,
 }
 
 /// Bug fixe in enum format
 pub enum NodeBugFix {
     NexusRebuildReplicaAncestry,
 }
-
 /// Node bug-fixes as exposed by the node io-engine.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -501,6 +526,32 @@ impl From<NodeDeleteResult> for models::NodeDeleteResult {
 }
 
 rpc_impl_string_id!(NodeId, "ID of a node");
+
+impl From<NodeFeatures> for models::NodeFeatures {
+    fn from(src: NodeFeatures) -> Self {
+        Self {
+            asymmetric_namespace_access: src.asymmetric_namespace_access,
+            logical_volume_manager: src.logical_volume_manager,
+            snapshot_rebuild: src.snapshot_rebuild,
+            rdma_capable_io_engine: src.rdma_capable_io_engine,
+            diskpool_encryption: src.diskpool_encryption,
+            nexus_label_version: Some(u32::from(src.nexus_label_version)),
+            grpc_tls: src.grpc_tls,
+            fips: src.fips,
+        }
+    }
+}
+
+impl From<NvmfTargetInfo> for models::NvmfTargetInfo {
+    fn from(src: NvmfTargetInfo) -> Self {
+        Self {
+            interface: src.interface,
+            address: src.address,
+            tcp: src.tcp,
+            rdma: src.rdma,
+        }
+    }
+}
 
 impl From<NodeState> for models::NodeState {
     fn from(src: NodeState) -> Self {

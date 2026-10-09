@@ -6,9 +6,8 @@ mod snap_rebuild;
 mod translation;
 
 use crate::controller::io_engine::{ApiVersion, GrpcContext};
-use agents::errors::{GrpcConnect, SvcError};
+use agents::errors::SvcError;
 
-use snafu::ResultExt;
 use tonic::transport::Channel;
 
 /// V1 HostClient.
@@ -41,10 +40,7 @@ pub(crate) struct RpcClient {
 impl RpcClient {
     /// Create a new grpc client with a context.
     pub(crate) async fn new(context: &GrpcContext) -> Result<Self, SvcError> {
-        let channel = context.connect_channel().await.context(GrpcConnect {
-            node_id: context.node().to_owned(),
-            endpoint: context.endpoint().to_string(),
-        })?;
+        let channel = context.connect_channel().await?;
 
         Ok(Self {
             host: HostClient::new(channel.clone()),

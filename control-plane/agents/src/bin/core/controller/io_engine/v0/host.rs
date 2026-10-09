@@ -30,6 +30,8 @@ impl crate::controller::io_engine::HostApi for super::RpcClient {
             features: None,
             bugfixes: None,
             version: None,
+            transport_caps: None,
+            nvmf_target: None,
         })
     }
 

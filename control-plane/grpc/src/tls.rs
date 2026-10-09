@@ -43,40 +43,42 @@ impl rustls::client::danger::ServerCertVerifier for NoCertificateVerification {
 
     fn verify_tls13_signature(
         &self,
-        _message: &[u8],
-        _certificate: &rustls::pki_types::CertificateDer,
-        _signature: &rustls::DigitallySignedStruct,
+        message: &[u8],
+        certificate: &rustls::pki_types::CertificateDer,
+        signature: &rustls::DigitallySignedStruct,
     ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+        // The server identity is not authenticated (see verify_server_cert),
+        // but still verify the handshake signature against the presented
+        // certificate's key, using the installed provider's algorithms so only
+        // FIPS-approved ones are used in FIPS mode.
+        rustls::crypto::verify_tls13_signature(
+            message,
+            certificate,
+            signature,
+            &utils::signature_verification_algorithms(),
+        )
     }
 
     fn verify_tls12_signature(
         &self,
-        _message: &[u8],
-        _certificate: &rustls::pki_types::CertificateDer,
-        _signature: &rustls::DigitallySignedStruct,
+        message: &[u8],
+        certificate: &rustls::pki_types::CertificateDer,
+        signature: &rustls::DigitallySignedStruct,
     ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+        // The server identity is not authenticated (see verify_server_cert),
+        // but still verify the handshake signature against the presented
+        // certificate's key, using the installed provider's algorithms so only
+        // FIPS-approved ones are used in FIPS mode.
+        rustls::crypto::verify_tls12_signature(
+            message,
+            certificate,
+            signature,
+            &utils::signature_verification_algorithms(),
+        )
     }
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        use rustls::SignatureScheme;
-
-        vec![
-            SignatureScheme::RSA_PKCS1_SHA1,
-            SignatureScheme::ECDSA_SHA1_Legacy,
-            SignatureScheme::RSA_PKCS1_SHA256,
-            SignatureScheme::ECDSA_NISTP256_SHA256,
-            SignatureScheme::RSA_PKCS1_SHA384,
-            SignatureScheme::ECDSA_NISTP384_SHA384,
-            SignatureScheme::RSA_PKCS1_SHA512,
-            SignatureScheme::ECDSA_NISTP521_SHA512,
-            SignatureScheme::RSA_PSS_SHA256,
-            SignatureScheme::RSA_PSS_SHA384,
-            SignatureScheme::RSA_PSS_SHA512,
-            SignatureScheme::ED25519,
-            SignatureScheme::ED448,
-        ]
+        utils::supported_signature_schemes()
     }
 }
 
@@ -120,6 +122,17 @@ pub async fn auto_tls_connect(endpoint: &Endpoint) -> Result<Channel, tonic::tra
     let tls = TlsConnector::from(Arc::new(auto_client_config()));
     let connector = tower::service_fn(move |uri: http::Uri| auto_tls_connect_io(tls.clone(), uri));
     endpoint.connect_with_connector(connector).await
+}
+
+/// Connect a channel to an io-engine `endpoint`, using auto-TLS when `tls` is set, otherwise a
+/// plaintext connection. The endpoint must carry an `http` scheme in both cases: for auto-TLS the
+/// handshake is performed by the custom connector, not tonic.
+pub async fn io_connect(endpoint: Endpoint, tls: bool) -> Result<Channel, tonic::transport::Error> {
+    if tls {
+        auto_tls_connect(&endpoint).await
+    } else {
+        endpoint.connect().await
+    }
 }
 
 /// TLS certificate files used by a gRPC endpoint.

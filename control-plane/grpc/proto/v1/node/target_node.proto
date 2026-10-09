@@ -54,6 +54,12 @@ message NodeSpec {
   optional string version = 6;
   // If the node has signaled shutdown by sending deregistration message
   optional bool shutdown = 7;
+  // Features and capabilities exposed by the io-engine node
+  optional NodeFeatures features = 8;
+  // Transport capabilities of the host the io-engine runs on
+  optional TransportCaps transport_caps = 9;
+  // State of the io-engine's nvmf target
+  optional NvmfTargetInfo nvmf_target = 10;
 }
 
 message NodeState {
@@ -67,6 +73,51 @@ message NodeState {
   optional string node_nqn = 4;
   // the io-engine version
   optional string version = 5;
+}
+
+// Features and capabilities exposed by the io-engine node.
+// Each optional bool is a tristate: absent means unsupported, false means supported
+// but disabled, and true means supported and enabled.
+message NodeFeatures {
+  // Whether NVMe ANA (Asymmetric Namespace Access) is enabled
+  optional bool asymmetric_namespace_access = 1;
+  // Whether the LVM backend is enabled
+  optional bool logical_volume_manager = 2;
+  // Whether snapshot rebuild is enabled
+  optional bool snapshot_rebuild = 3;
+  // Whether the nvmf target supports RDMA
+  optional bool rdma_capable_io_engine = 4;
+  // Whether diskpool encryption is supported
+  optional bool diskpool_encryption = 5;
+  // Max version of the nexus label supported by the node
+  optional uint32 nexus_label_version = 6;
+  // Whether the io-engine gRPC server has TLS enabled and expects TLS connections
+  optional bool grpc_tls = 7;
+  // Whether the io-engine runs in FIPS mode (its crypto modules are FIPS validated)
+  optional bool fips = 8;
+}
+
+// Transport capabilities of the host an io-engine runs on.
+message TransportCaps {
+  // RDMA HCA hardware is present on this node (reported by ibv_devinfo)
+  bool rdma_hca_present = 1;
+  // The nvme_rdma kernel module is loaded on this node. Both this and
+  // rdma_hca_present are required for NVMe-oF RDMA to actually be usable.
+  bool nvme_rdma_module_loaded = 2;
+  // NVMe ANA multipath is enabled on this node
+  bool ana_capable = 3;
+}
+
+// State of an io-engine's nvmf target.
+message NvmfTargetInfo {
+  // The network interface the target listens on (from --nvmf-tgt-interface), if set
+  optional string interface = 1;
+  // The address the target listens on, on the usual nexus and replica ports
+  string address = 2;
+  // Whether the target is listening over tcp (set means requested; value says whether it worked)
+  optional bool tcp = 3;
+  // Whether the target is listening over rdma (unset means not asked for; false means it failed)
+  optional bool rdma = 4;
 }
 
 // Multiple nodes

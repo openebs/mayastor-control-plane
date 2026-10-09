@@ -222,6 +222,8 @@ impl Service {
                         features: node.features().clone(),
                         bugfixes: None,
                         version: None,
+                        transport_caps: node.transport_caps().clone(),
+                        nvmf_target: node.nvmf_target().clone(),
                     },
                     true,
                 )
@@ -272,6 +274,7 @@ impl Service {
                     self.comms_timeouts.clone(),
                     ha_disabled,
                     self.sim_socket,
+                    self.registry.grpc_tls_enforced(),
                 );
 
                 // On startup api version is not known, thus probe all apiversions

@@ -459,7 +459,7 @@ fn node_output(node_state: NodeState) -> String {
     format!(
         " {:width_id$}{:width_grpc$}STATUS \n",
         "ID",
-        "GRPC ENDPOINT",
+        "GRPC-ENDPOINT",
         width_id = node_state.id.len() + 2,
         width_grpc = node_state.grpc_endpoint.len() + 2
     ) + &*format!(

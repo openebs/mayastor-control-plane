@@ -8,11 +8,10 @@ mod translation;
 use crate::controller::io_engine::{
     types::RebuildHistoryResp, ApiVersion, GrpcContext, NexusChildRebuildApi,
 };
-use agents::errors::{GrpcConnect, SvcError};
+use agents::errors::SvcError;
 use rpc::io_engine::IoEngineClientV0;
 use stor_port::types::v0::transport::{GetRebuildRecord, ListRebuildRecord, RebuildHistory};
 
-use snafu::ResultExt;
 use stor_port::transport_api::ResourceKind;
 use tonic::{transport::Channel, Status};
 
@@ -32,10 +31,7 @@ impl RpcClient {
         })
     }
     async fn make_client(context: &GrpcContext) -> Result<IoEngineClientV0<Channel>, SvcError> {
-        let channel = context.connect_channel().await.context(GrpcConnect {
-            node_id: context.node().to_owned(),
-            endpoint: context.endpoint().to_string(),
-        })?;
+        let channel = context.connect_channel().await?;
         Ok(IoEngineClientV0::new(channel))
     }
     async fn fetcher_client(&self) -> Result<Self, SvcError> {
