@@ -1,6 +1,7 @@
 use super::*;
 use grpc::operations::pool::traits::{
-    ClearErrors, ClearErrorsRequest, PoolCordonRequest, PoolDrainRequest, PoolOperations,
+    ClearErrors, ClearErrorsRequest, GetPoolsSmartFilter, GetPoolsSmartRequest, PoolCordonRequest,
+    PoolDrainRequest, PoolOperations,
 };
 use openapi::apis::pools_api::actix::server::{delNodePoolResponse, delPoolResponse};
 use rest_client::versions::v0::{apis::Uuid, models::PoolClearErr};
@@ -10,7 +11,7 @@ use stor_port::{
     types::v0::{
         openapi,
         store::pool::DrainPolicy,
-        transport::{DestroyPool, ExpandPool, Filter, UnlabelPool},
+        transport::{DestroyPool, ExpandPool, Filter, PoolSmart, UnlabelPool},
     },
 };
 
@@ -121,6 +122,42 @@ impl apis::actix_server::Pools for RestApi {
             None => client().get(Filter::None, None).await?,
         };
         Ok(pools.into_inner().into_iter().map(From::from).collect())
+    }
+
+    async fn get_node_pools_smart(
+        Path(id): Path<String>,
+    ) -> Result<Vec<models::PoolSmart>, RestError<RestJsonError>> {
+        let request = GetPoolsSmartRequest {
+            filter: GetPoolsSmartFilter::Node(id.into()),
+        };
+        let pools = client().get_pools_smart(&request).await?;
+        Ok(pools.pools.into_iter().map(From::from).collect())
+    }
+
+    async fn get_node_pool_smart(
+        Path((node_id, pool_id)): Path<(String, String)>,
+    ) -> Result<models::PoolSmart, RestError<RestJsonError>> {
+        let request = GetPoolsSmartRequest {
+            filter: GetPoolsSmartFilter::NodePool(node_id.into(), pool_id.clone().into()),
+        };
+        let pool = pool_smart(
+            pool_id,
+            client().get_pools_smart(&request).await?.pools.first(),
+        )?;
+        Ok(pool.into())
+    }
+
+    async fn get_pool_smart(
+        Path(pool_id): Path<String>,
+    ) -> Result<models::PoolSmart, RestError<RestJsonError>> {
+        let request = GetPoolsSmartRequest {
+            filter: GetPoolsSmartFilter::Pool(pool_id.clone().into()),
+        };
+        let pool = pool_smart(
+            pool_id,
+            client().get_pools_smart(&request).await?.pools.first(),
+        )?;
+        Ok(pool.into())
     }
 
     async fn put_node_pool(
@@ -253,7 +290,19 @@ impl apis::actix_server::Pools for RestApi {
     }
 }
 
-/// returns pool from pool option and returns an error on non existence
+/// Returns the SMART info of the pool or a not found error.
+pub fn pool_smart(pool_id: String, pool: Option<&PoolSmart>) -> Result<PoolSmart, ReplyError> {
+    match pool {
+        Some(pool) => Ok(pool.clone()),
+        None => Err(ReplyError {
+            kind: ReplyErrorKind::NotFound,
+            resource: ResourceKind::Pool,
+            source: "Requested pool was not found".to_string(),
+            extra: format!("Pool id : {pool_id}"),
+        }),
+    }
+}
+
 pub fn pool(pool_id: String, pool: Option<&Pool>) -> Result<Pool, ReplyError> {
     match pool {
         Some(pool) => Ok(pool.clone()),

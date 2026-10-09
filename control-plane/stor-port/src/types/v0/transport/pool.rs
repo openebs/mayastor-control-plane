@@ -681,6 +681,107 @@ impl From<Pool> for models::Pool {
     }
 }
 
+impl From<PoolSmart> for models::PoolSmart {
+    fn from(src: PoolSmart) -> Self {
+        models::PoolSmart::new_all(
+            src.name,
+            src.uuid,
+            src.disks
+                .into_iter()
+                .map(models::DiskHealth::from)
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
+impl From<DiskHealth> for models::DiskHealth {
+    fn from(src: DiskHealth) -> Self {
+        models::DiskHealth::new_all(
+            src.disk_uri,
+            src.supported,
+            src.health.map(models::DeviceHealth::from),
+            src.error,
+        )
+    }
+}
+
+impl From<DeviceHealth> for models::DeviceHealth {
+    fn from(src: DeviceHealth) -> Self {
+        models::DeviceHealth::new_all(
+            src.critical_warning,
+            src.healthy,
+            src.temperature_celsius,
+            src.available_spare_percent,
+            src.available_spare_threshold_percent,
+            src.percentage_used,
+            src.data_units_read,
+            src.data_units_written,
+            src.host_reads,
+            src.host_writes,
+            src.controller_busy_minutes,
+            src.power_cycles,
+            src.power_on_hours,
+            src.unsafe_shutdowns,
+            src.media_errors,
+            src.num_error_log_entries,
+            src.identity.map(models::DeviceIdentity::from),
+            src.smart_attributes
+                .into_iter()
+                .map(models::SmartAttribute::from)
+                .collect::<Vec<_>>(),
+            src.error_log_entries
+                .into_iter()
+                .map(models::NvmeErrorLogEntry::from)
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
+impl From<DeviceIdentity> for models::DeviceIdentity {
+    fn from(src: DeviceIdentity) -> Self {
+        models::DeviceIdentity::new_all(
+            src.model,
+            src.model_family,
+            src.serial_number,
+            src.firmware_revision,
+            src.wwn,
+            src.capacity_bytes,
+            src.logical_sector_size,
+            src.physical_sector_size,
+            src.rotation_rate,
+            src.form_factor,
+            src.transport,
+            src.link_speed,
+        )
+    }
+}
+
+impl From<SmartAttribute> for models::SmartAttribute {
+    fn from(src: SmartAttribute) -> Self {
+        models::SmartAttribute::new_all(
+            src.id,
+            src.name,
+            src.value,
+            src.worst,
+            src.threshold,
+            src.raw_value,
+        )
+    }
+}
+
+impl From<NvmeErrorLogEntry> for models::NvmeErrorLogEntry {
+    fn from(src: NvmeErrorLogEntry) -> Self {
+        models::NvmeErrorLogEntry::new_all(
+            src.error_count,
+            src.submission_queue_id,
+            src.command_id,
+            src.status_field,
+            src.lba,
+            src.namespace_id,
+        )
+    }
+}
+
 /// Pool device URI.
 /// Can be specified in the form of a file path or a URI.
 /// eg: /dev/sda, aio:///dev/sda, malloc:///disk?size_mb=100.
