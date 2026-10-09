@@ -487,6 +487,32 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  '/nodes/{id}/pools-smart':
+    get:
+      tags:
+        - Pools
+      operationId: get_node_pools_smart
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            $ref: '#/components/schemas/NodeId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PoolSmart'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/nodes/{id}/replicas':
     get:
       tags:
@@ -898,6 +924,35 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  '/nodes/{node_id}/pools/{pool_id}/smart':
+    get:
+      tags:
+        - Pools
+      operationId: get_node_pool_smart
+      parameters:
+        - in: path
+          name: node_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/NodeId'
+        - in: path
+          name: pool_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/PoolId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoolSmart'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/nodes/{node_id}/pools/{pool_id}/replicas':
     get:
       tags:
@@ -1250,6 +1305,30 @@ paths:
                 $ref: '#/components/schemas/PoolDeleteResult'
         '204':
           description: Pool deleted successfully (normal mode)
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
+  '/pools/{pool_id}/smart':
+    get:
+      tags:
+        - Pools
+      operationId: get_pool_smart
+      parameters:
+        - in: path
+          name: pool_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/PoolId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoolSmart'
         '4XX':
           $ref: '#/components/responses/ClientError'
         '5XX':
@@ -3695,6 +3774,302 @@ components:
       required:
         - id
       minProperties: 2
+    PoolSmart:
+      description: SMART data for all disks backing a pool
+      type: object
+      properties:
+        name:
+          $ref: '#/components/schemas/PoolId'
+        poolUuid:
+          description: Pool uuid, not set when the io-engine does not report it
+          allOf:
+            - $ref: '#/components/schemas/PoolUuid'
+        disks:
+          description: SMART data for each disk backing the pool
+          type: array
+          items:
+            $ref: '#/components/schemas/DiskSmart'
+      required:
+        - name
+        - disks
+    DiskSmart:
+      description: SMART data for a single disk backing a pool
+      type: object
+      properties:
+        disk_uri:
+          description: URI of the disk device
+          type: string
+        supported:
+          description: Whether SMART is supported on this disk
+          type: boolean
+        smart:
+          $ref: '#/components/schemas/SmartData'
+        error:
+          description: Error message if SMART data could not be retrieved
+          type: string
+      required:
+        - disk_uri
+        - supported
+    SmartData:
+      description: |-
+        SMART data read from a disk. The fields at this level are the values
+        that every device type reports with the same meaning. The raw report
+        for the device type is in `nvme` or `ata`, which is present only for
+        that type of device. For SAS devices the model and firmware revision
+        in `identity` come from smartctl's `scsi_model_name` and `scsi_revision`.
+      type: object
+      properties:
+        smart_status_passed:
+          description: |-
+            The device's own overall health self-assessment. For devices read
+            with smartctl this is smartctl's `smart_status.passed`. For NVMe
+            devices read directly from the SMART log it is true when
+            `critical_warning` is zero. Not set when the device reports no
+            verdict. It does not reflect individual attribute values, media
+            errors or logged errors.
+          type: boolean
+        temperature_celsius:
+          description: Composite temperature in degrees Celsius. Not set when the device does not report one
+          type: integer
+          format: int32
+        power_on_hours:
+          description: Cumulative power-on hours
+          type: integer
+          format: uint64
+        power_cycles:
+          description: Number of power cycles. Not reported by SAS devices
+          type: integer
+          format: uint64
+        available_spare_percent:
+          description: |-
+            Remaining spare capacity as a percentage, for SSDs that report it.
+            NVMe: the SMART/health log's Available Spare. SATA: smartctl's
+            `spare_available.current_percent`, which some models do not report
+          type: integer
+          format: uint32
+        available_spare_threshold_percent:
+          description: |-
+            Spare capacity percentage below which the device flags a problem.
+            NVMe: the SMART/health log's Available Spare Threshold. SATA:
+            smartctl's `spare_available.threshold_percent`, which some models
+            do not report
+          type: integer
+          format: uint32
+        percentage_used:
+          description: |-
+            Estimated percentage of the rated write endurance used, may exceed
+            100. NVMe: the SMART/health log's Percentage Used. SATA: smartctl
+            reports this as `endurance_used.current_percent` (ATA device
+            statistics, percentage used endurance indicator)
+          type: integer
+          format: uint32
+        identity:
+          $ref: '#/components/schemas/DeviceIdentity'
+        nvme:
+          $ref: '#/components/schemas/NvmeSmart'
+        ata:
+          $ref: '#/components/schemas/AtaSmart'
+    NvmeSmart:
+      description: NVMe SMART / health log values and error log. Present only for NVMe devices
+      type: object
+      properties:
+        critical_warning:
+          description: NVMe critical warning bitmap
+          type: integer
+          format: uint32
+        temperature_celsius:
+          description: Composite temperature in degrees Celsius
+          type: integer
+          format: int32
+        available_spare_percent:
+          description: Available spare capacity as a percentage
+          type: integer
+          format: uint32
+        available_spare_threshold_percent:
+          description: Threshold below which spare capacity is critical
+          type: integer
+          format: uint32
+        percentage_used:
+          description: Estimated percentage of device life used, may exceed 100
+          type: integer
+          format: uint32
+        data_units_read:
+          description: Number of 512-byte data units read
+          type: integer
+          format: uint64
+        data_units_written:
+          description: Number of 512-byte data units written
+          type: integer
+          format: uint64
+        host_reads:
+          description: Number of host read commands
+          type: integer
+          format: uint64
+        host_writes:
+          description: Number of host write commands
+          type: integer
+          format: uint64
+        controller_busy_minutes:
+          description: Controller busy time in minutes
+          type: integer
+          format: uint64
+        power_cycles:
+          description: Number of power cycles
+          type: integer
+          format: uint64
+        power_on_hours:
+          description: Cumulative power-on hours
+          type: integer
+          format: uint64
+        unsafe_shutdowns:
+          description: Number of unsafe shutdowns
+          type: integer
+          format: uint64
+        media_errors:
+          description: Count of media and data integrity errors
+          type: integer
+          format: uint64
+        num_error_log_entries:
+          description: Number of error information log entries reported by the controller
+          type: integer
+          format: uint64
+        warning_temp_time:
+          description: Minutes the composite temperature has been at or above the warning threshold
+          type: integer
+          format: uint32
+        critical_comp_time:
+          description: Minutes the composite temperature has been at or above the critical threshold
+          type: integer
+          format: uint32
+        error_log_entries:
+          description: Most recent NVMe error information log entries
+          type: array
+          items:
+            $ref: '#/components/schemas/NvmeErrorLogEntry'
+      required:
+        - critical_warning
+        - error_log_entries
+    AtaSmart:
+      description: ATA SMART data. Present only for SATA/ATA devices
+      type: object
+      properties:
+        attributes:
+          description: SMART attribute table entries
+          type: array
+          items:
+            $ref: '#/components/schemas/SmartAttribute'
+      required:
+        - attributes
+    DeviceIdentity:
+      description: Device identity and inventory information
+      type: object
+      properties:
+        model:
+          description: Model name
+          type: string
+        model_family:
+          description: Model family
+          type: string
+        serial_number:
+          description: Serial number
+          type: string
+        firmware_revision:
+          description: Firmware revision
+          type: string
+        wwn:
+          description: World Wide Name
+          type: string
+        capacity_bytes:
+          description: Total capacity in bytes
+          type: integer
+          format: uint64
+        logical_sector_size:
+          description: Logical sector size in bytes
+          type: integer
+          format: uint32
+        physical_sector_size:
+          description: Physical sector size in bytes
+          type: integer
+          format: uint32
+        rotation_rate:
+          description: Rotation rate in RPM, 0 for SSD
+          type: integer
+          format: uint32
+        form_factor:
+          description: Form factor, e.g. 2.5 inches
+          type: string
+        transport:
+          description: Transport type, e.g. NVMe or SATA
+          type: string
+        link_speed:
+          description: Link speed
+          type: string
+    SmartAttribute:
+      description: A single ATA SMART attribute table entry
+      type: object
+      properties:
+        id:
+          description: Attribute identifier, as defined by the drive vendor
+          type: integer
+          format: uint32
+        name:
+          description: Attribute name as reported by the drive
+          type: string
+        value:
+          description: Current normalized value
+          type: integer
+          format: uint32
+        worst:
+          description: Worst normalized value recorded
+          type: integer
+          format: uint32
+        threshold:
+          description: Failure threshold
+          type: integer
+          format: uint32
+        raw_value:
+          description: Raw attribute value
+          type: integer
+          format: uint64
+      required:
+        - id
+        - name
+        - value
+        - worst
+        - threshold
+        - raw_value
+    NvmeErrorLogEntry:
+      description: A single NVMe error information log entry
+      type: object
+      properties:
+        error_count:
+          description: Cumulative controller error counter. Never 0 for a valid entry
+          type: integer
+          format: uint64
+        submission_queue_id:
+          description: Identifier of the submission queue the failing command was posted to
+          type: integer
+          format: uint32
+        command_id:
+          description: Identifier of the failing command, when the controller reports it
+          type: integer
+          format: uint32
+        status_field:
+          description: Raw status field of the NVMe completion queue entry for the failing command
+          type: integer
+          format: uint32
+        lba:
+          description: Logical block address associated with the error, when applicable
+          type: integer
+          format: uint64
+        namespace_id:
+          description: Identifier of the namespace associated with the error, when applicable
+          type: integer
+          format: uint32
+      required:
+        - error_count
+        - submission_queue_id
+        - status_field
     PoolMeta:
       description: Pool metadata information
       type: object
