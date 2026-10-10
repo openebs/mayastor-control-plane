@@ -61,6 +61,7 @@ impl NodeCommsTimeout {
         connect: std::time::Duration,
         request: std::time::Duration,
         no_min: bool,
+        pool_import_timeout: Option<std::time::Duration>,
     ) -> Self {
         let opts = TimeoutOptions::new()
             .with_req_timeout(request)
@@ -68,7 +69,11 @@ impl NodeCommsTimeout {
             .with_min_req_timeout(if no_min {
                 None
             } else {
-                TimeoutOptions::default().request_min_timeout().cloned()
+                let mut min = stor_port::transport_api::RequestMinTimeout::default();
+                if let Some(timeout) = pool_import_timeout {
+                    min = min.with_pool_import_timeout(timeout);
+                }
+                Some(min)
             });
 
         Self { opts }
@@ -198,12 +203,13 @@ impl Service {
         request: std::time::Duration,
         connect: std::time::Duration,
         no_min: bool,
+        pool_import_timeout: Option<std::time::Duration>,
     ) -> Self {
         let sim_socket = Self::sim_socket(&registry);
         let service = Self {
             registry,
             deadline,
-            comms_timeouts: NodeCommsTimeout::new(connect, request, no_min),
+            comms_timeouts: NodeCommsTimeout::new(connect, request, no_min, pool_import_timeout),
             sim_socket,
         };
         // attempt to reload the node state based on the specification
