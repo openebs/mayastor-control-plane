@@ -37,10 +37,15 @@ let
   }));
   tag = if img_tag != "" then img_tag else control-plane.version;
   image_suffix = { "release" = ""; "debug" = "-dev"; "coverage" = "-cov"; };
+  license_src = sourcer.whitelistSource ../../.. [ "LICENSE" ];
   build-control-plane-image = { buildType, name, package, config ? { } }:
     dockerTools.buildImage {
       inherit tag;
       created = "now";
+      extraCommands = ''
+        mkdir -p licenses
+        cp --no-preserve=mode ${license_src}/LICENSE licenses/LICENSE
+      '';
       name = "${repo-org}/${img_prefix}-${name}${image_suffix.${buildType}}";
       copyToRoot = [ tini busybox package pkgs.cacert ];
       config = {
