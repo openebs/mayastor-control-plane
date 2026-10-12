@@ -270,7 +270,11 @@ impl Cluster {
     }
     /// Wait till the pool is online.
     pub async fn wait_pool_online(&self, pool_id: PoolId) -> Result<(), ()> {
-        let timeout = Duration::from_secs(2);
+        self.wait_pool_online_tmo(pool_id, Duration::from_secs(2))
+            .await
+    }
+    /// Wait till the pool is online, up to the given timeout.
+    pub async fn wait_pool_online_tmo(&self, pool_id: PoolId, timeout: Duration) -> Result<(), ()> {
         let start = std::time::Instant::now();
         loop {
             let filter = Filter::Pool(pool_id.clone());
@@ -281,6 +285,11 @@ impl Cluster {
                     .and_then(|p| p.state().map(|s| s.status == PoolStatus::Online))
                     == Some(true)
                 {
+                    tracing::info!(
+                        pool.id = %pool_id,
+                        elapsed = ?start.elapsed(),
+                        "Pool is online"
+                    );
                     return Ok(());
                 }
             }
@@ -289,6 +298,11 @@ impl Cluster {
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
+        tracing::warn!(
+            pool.id = %pool_id,
+            elapsed = ?start.elapsed(),
+            "Pool did not come online within the timeout"
+        );
         Err(())
     }
     /// Wait till the pool is online.
