@@ -1589,10 +1589,27 @@ async fn slow_create() {
             .expect_err("device suspended");
         assert_eq!(error.kind, ReplyErrorKind::Cancelled);
 
-        lvol.resume().unwrap();
+        let pools = client.pool().get(Filter::None, None).await.unwrap();
+        tracing::info!("{pools:#?}");
 
-        let pool = client.pool().create(&create, None).await.unwrap();
+        tracing::info!("Resuming device");
+        lvol.resume().unwrap();
+        tracing::info!("Resumed device");
+
+        let pool = match client.pool().create(&create, None).await {
+            Err(error) => {
+                assert_eq!(error.kind, ReplyErrorKind::AlreadyExists);
+                let pools = client
+                    .pool()
+                    .get(Filter::Pool(create.id.clone()), None)
+                    .await
+                    .expect("Failed to get pool");
+                pools.into_inner().first().cloned().unwrap()
+            }
+            Ok(pool) => pool,
+        };
         assert!(pool.spec().unwrap().status.created());
+        client.pool().destroy(&destroy, None).await.unwrap();
     }
 }
 

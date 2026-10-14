@@ -629,7 +629,7 @@ impl Cluster {
         }
 
         let grpc_client = if components.core_enabled() {
-            Some(core_client(&composer, components.options(), grpc_timeout.clone()).await)
+            Some(core_client(&composer, components.options(), grpc_timeout).await)
         } else {
             None
         };
