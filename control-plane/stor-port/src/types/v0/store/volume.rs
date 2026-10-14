@@ -400,6 +400,11 @@ impl VolumeMetadata {
     pub fn requested_size(&self) -> Option<u64> {
         self.persisted.requested_size
     }
+
+    /// Update the replica move configuration for the volume.
+    pub fn update_replica_move(&mut self, replica_move: ReplicaMoveRequester) {
+        self.runtime.moving_replica = Some(replica_move)
+    }
 }
 
 /// Volume meta information.
@@ -823,6 +828,16 @@ impl VolumeSpec {
             // We should never reach here
             transport::NexusVersion::Unknown(_) => panic!("Unknown label version"),
         }
+    }
+
+    /// Returns true if remove move is set.
+    pub fn has_replica_move(&self) -> bool {
+        self.metadata.runtime.moving_replica.is_some()
+    }
+
+    /// Returns true if it's a single replica volume.
+    pub fn is_single_replica(&self) -> bool {
+        self.num_replicas == 1
     }
 }
 

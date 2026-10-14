@@ -139,6 +139,8 @@ pub(crate) struct RegistryInner<S: Store> {
     max_concurrent_pool_drain: u16,
     /// The gRPC TLS client policy towards the io-engines.
     grpc_tls: IoEngineTls,
+    /// Number of replicas can be moved concurrently from a pool during drain process.
+    pool_replica_move_limit: u32,
 }
 
 impl Registry {
@@ -175,6 +177,7 @@ impl Registry {
         max_offline_rebuilds: Option<NumRebuilds>,
         max_concurrent_pool_drain: u16,
         grpc_tls: IoEngineTls,
+        pool_replica_move_limit: u32,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -244,6 +247,7 @@ impl Registry {
                 max_offline_rebuilds,
                 max_concurrent_pool_drain,
                 grpc_tls,
+                pool_replica_move_limit,
             }),
         };
         registry.init().await?;
@@ -343,6 +347,11 @@ impl Registry {
     /// Get the conccurent pool drain limit.
     pub(crate) fn max_concurrent_pool_drain(&self) -> u16 {
         self.max_concurrent_pool_drain
+    }
+
+    /// Number of replicas can be moved concurrently from a pool during drain process.
+    pub(crate) fn pool_replica_move_limit(&self) -> u32 {
+        self.pool_replica_move_limit
     }
 
     /// Get the simulation Args.

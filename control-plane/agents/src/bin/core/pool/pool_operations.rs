@@ -20,7 +20,7 @@ use stor_port::{
     types::v0::{
         store::{
             pool::{
-                DrainPhase, DrainPhaseOp, DrainProgressOp, PoolCordonOp, PoolDrainOp,
+                DrainPhase, DrainPhaseOp, DrainProgressOp, PhaseReason, PoolCordonOp, PoolDrainOp,
                 PoolOperation, PoolSpec,
             },
             snapshots::replica::ReplicaSnapshot,
@@ -340,13 +340,35 @@ impl ResourceDrain for OperationGuardArc<PoolSpec> {
 }
 
 impl OperationGuardArc<PoolSpec> {
-    /// Sets the pool's drain phase to Draining and records the pool usage at the time of the request.
-    pub(crate) async fn set_draining(&mut self, registry: &Registry) -> Result<(), SvcError> {
-        let usage = registry.pool_usage(self.id()).await?;
-        let phase_op = DrainPhaseOp::new(DrainPhase::Draining, None, Some(usage));
+    /// Sets drain phase for the pool.
+    /// Returns early if the phase and reason are already set for the pool.
+    /// Failures are logged.
+    pub(crate) async fn update_drain_phase(
+        &mut self,
+        registry: &Registry,
+        phase: DrainPhase,
+        reason: Option<PhaseReason>,
+    ) {
+        if self
+            .lock()
+            .drain_state()
+            .map(|r| r.phase() == &phase && r.reason() == &reason)
+            .unwrap_or(false)
+        {
+            return;
+        }
+        let usage = registry.pool_usage(self.id()).await.ok();
+        let phase_op = DrainPhaseOp::new(phase.clone(), reason, usage);
         let request = DrainProgressOp::PhaseUpdate(phase_op);
-        self.update_drain_state(registry, request).await?;
-        Ok(())
+        if let Err(err) = self.update_drain_state(registry, request).await {
+            tracing::error!(
+                pool.id = %self.id(),
+                error = %err,
+                "Failed to set drain phase as {phase}"
+            );
+        } else {
+            tracing::info!(pool.id = %self.id(), "Pool phase set to {phase}");
+        }
     }
 
     /// Update the drain state for a pool via operation guard functions.
