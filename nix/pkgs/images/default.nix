@@ -2,7 +2,7 @@
 # avoid dependency on docker tool chain. Though the maturity of OCI
 # builder in nixpkgs is questionable which is why we postpone this step.
 
-{ pkgs, xfsprogs_5_16, rdma-core, busybox, dockerTools, lib, e2fsprogs_1_46_5, btrfs-progs, utillinux, fetchurl, fetchpatch, control-plane, tini, sourcer, img_tag ? "", img_org ? "", img_release ? "", img_prefix }:
+{ pkgs, xfsprogs_5_16, rdma-core, busybox, dockerTools, lib, e2fsprogs_1_46_5, btrfs-progs, utillinux, fetchurl, fetchpatch, control-plane, tini, sourcer, img_tag ? "", img_org ? "", img_prefix }:
 let
   repo-org = if img_org != "" then img_org else "${builtins.readFile (pkgs.runCommand "repo_org" {
     buildInputs = with pkgs; [ git ];
@@ -39,8 +39,11 @@ let
   image_suffix = { "release" = ""; "debug" = "-dev"; "coverage" = "-cov"; };
   license_src = sourcer.whitelistSource ../../.. [ "LICENSE" ];
   vendor = "OpenEBS";
-  maintainer = "OpenEBS Authors <https://github.com/openebs/community>";
-  release = if img_release != "" then img_release else "1";
+  maintainer = "OpenEBS Authors (https://github.com/openebs/community)";
+  # `release` identifies a build of a given `version`. Nothing here
+  # distinguishes one rebuild of a version from another, so it is fixed rather
+  # than threaded through from a build argument nothing would ever set.
+  release = "1";
   build-control-plane-image = { buildType, name, package, description, summary ? description, config ? { } }:
     dockerTools.buildImage {
       inherit tag;
