@@ -42,6 +42,9 @@ impl<T: AsOperationSequencer + std::fmt::Debug + Clone> OperationSequencer for R
     }
     fn complete(&self, revert: OperationSequenceState) {
         self.lock().as_mut().complete(revert);
+        // The operation sequence just freed up: wake the next waiter (if any) so it can
+        // attempt to acquire, instead of waiting out its poll interval.
+        self.wake_op_waiter();
     }
 }
 
@@ -72,6 +75,16 @@ impl<T: Clone + ResourceUid> ResourceUid for Resource<T> {
 pub(crate) struct ResourceMutexInner<T> {
     resource: Mutex<T>,
     immutable_peek: Arc<T>,
+    /// Waiters for the sequenced operation guard (`operation_guard_mode_wait`).
+    ///
+    /// When a waiter fails to acquire, it parks on a channel registered here.
+    /// When the guard is dropped the channel is fired so the waiter re-attempts promptly
+    /// (rather than only after its poll interval elapses).
+    ///
+    /// FIFO order is best-effort since it's only checked after acquisition attempts.
+    /// This avoids paying where there's no contention, though we always have to check
+    /// when unlocking/completing the sequence.
+    op_waiters: Mutex<std::collections::VecDeque<tokio::sync::oneshot::Sender<()>>>,
 }
 impl<T: Clone> From<T> for ResourceMutex<T> {
     fn from(resource: T) -> Self {
@@ -81,6 +94,7 @@ impl<T: Clone> From<T> for ResourceMutex<T> {
             inner: Arc::new(ResourceMutexInner {
                 resource,
                 immutable_peek,
+                op_waiters: Mutex::new(std::collections::VecDeque::new()),
             }),
         }
     }
@@ -104,6 +118,26 @@ impl<T: Clone> ResourceMutex<T> {
     /// Useful over `as_ref` as it returns the `Arc` directly.
     pub(crate) fn immutable_arc(&self) -> Arc<T> {
         self.inner.immutable_peek.clone()
+    }
+}
+impl<T> ResourceMutex<T> {
+    /// Register the caller as a waiter for the sequenced operation guard, returning a
+    /// receiver which resolves when a guard is next dropped.
+    ///
+    /// Waiters are woken in FIFO registration order.
+    pub(crate) fn register_op_waiter(&self) -> tokio::sync::oneshot::Receiver<()> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.inner.op_waiters.lock().push_back(tx);
+        rx
+    }
+    /// Wake the next live waiter (if any), dropping any whose receivers have gone away.
+    fn wake_op_waiter(&self) {
+        let mut waiters = self.inner.op_waiters.lock();
+        while let Some(tx) = waiters.pop_front() {
+            if tx.send(()).is_ok() {
+                break;
+            }
+        }
     }
 }
 
