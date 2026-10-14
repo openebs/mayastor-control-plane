@@ -15,7 +15,8 @@ use stor_port::{
         transport::{
             CreatePool, CreateReplica, CreateVolume, DestroyPool, DestroyReplica, DestroyVolume,
             Filter, LabelledTopology, NodeStatus, PoolTopology, PublishVolume, ReplicaId,
-            SetVolumeReplica, SnapshotId, Topology, Volume, VolumeShareProtocol, VolumeStatus,
+            SetVolumeReplica, SnapshotId, Topology, UnpublishVolume, Volume, VolumeShareProtocol,
+            VolumeStatus,
         },
     },
 };
@@ -732,6 +733,15 @@ async fn snapshot_upgrade() {
         .await
         .expect_err("No rebuild on older version!");
     assert_eq!(error.kind, ReplyErrorKind::FailedPrecondition);
+
+    // Unpublish volume_1 before the node swaps: otherwise the missing-nexus reconciler recreates
+    // the target against the replica's pre-swap address, and the io-engine blocks for the full
+    // NVMe-oF TCP connect timeout (~3s) connecting to the now-dead old node before the spec is
+    // refreshed to the replacement's address.
+    let volume_1 = vol_cli
+        .unpublish(&UnpublishVolume::new(volume_1.uuid(), false, vec![]), None)
+        .await
+        .unwrap();
 
     // Replace node 0 with its idle replacement (registers under same CP node ID).
     // replace_node waits for Offline, ensuring the old process releases hugepages.

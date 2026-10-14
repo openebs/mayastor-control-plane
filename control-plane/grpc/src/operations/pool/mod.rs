@@ -26,19 +26,23 @@ mod test {
     type CompleteSender = Arc<Mutex<Option<Sender<(bool, Instant)>>>>;
     static COMPLETE_CHAN: OnceCell<CompleteSender> = OnceCell::new();
 
-    /// Generate an ephemeral self-signed TLS config, shared by both the client and the server, so
-    /// the client presents (and the server verifies) the same certificate (mutual TLS).
+    /// Generate an ephemeral TLS config from a throwaway CA, shared by both the client and the
+    /// server, so the client presents (and the server verifies) a certificate issued by the same
+    /// CA as the server's (mutual TLS).
     fn self_signed_tls(san: String) -> (crate::tls::TlsConfig, std::path::PathBuf) {
-        let cert = rcgen::generate_simple_self_signed(vec![san]).unwrap();
+        let ca = grpc_tls::pki::CertificateAuthority::generate("grpc-timeout-test").unwrap();
         let dir = std::env::temp_dir().join(format!("grpc-timeout-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
+        let ca_path = dir.join("ca.pem");
         let cert_path = dir.join("cert.pem");
         let key_path = dir.join("key.pem");
-        std::fs::write(&cert_path, cert.cert.pem()).unwrap();
-        std::fs::write(&key_path, cert.key_pair.serialize_pem()).unwrap();
+        ca.write_certificate(&ca_path).unwrap();
+        ca.issue("grpc-timeout-test", &[san])
+            .unwrap()
+            .write(&cert_path, &key_path)
+            .unwrap();
         let tls =
-            crate::tls::TlsConfig::new(Some(cert_path.clone()), Some(cert_path), Some(key_path))
-                .unwrap();
+            crate::tls::TlsConfig::new(Some(ca_path), Some(cert_path), Some(key_path)).unwrap();
         (tls, dir)
     }
 
@@ -57,9 +61,10 @@ mod test {
         let server_tls = tls.clone();
         tokio::spawn(async move {
             let service = PoolServer::new(Arc::new(server::Server {}));
-            let incoming = crate::tls::incoming(socket_addr, server_tls, false)
+            let incoming = crate::tls::Listener::file(socket_addr, &server_tls)
                 .await
-                .unwrap();
+                .unwrap()
+                .tls_incoming();
             tonic::transport::Server::builder()
                 .add_service(service.into_grpc_server())
                 .serve_with_incoming(incoming)

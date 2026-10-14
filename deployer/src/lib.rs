@@ -109,6 +109,20 @@ pub struct StartOptions {
     #[clap(long, conflicts_with = "no_grpc_tls")]
     pub grpc_enforce_tls: bool,
 
+    /// Use file-backed mutual TLS (mTLS) for gRPC between the core agent and the io-engines,
+    /// rather than auto-TLS: a throwaway CA and per-component certificates are generated into
+    /// the workspace tmp folder and mounted into the containers.
+    /// Note: only the core agent and the io-engines are provisioned with certificates, so other
+    /// components which talk to the core agent (rest, csi, ha, ...) are not supported with it.
+    #[clap(long, conflicts_with = "no_grpc_tls")]
+    pub grpc_mtls: bool,
+
+    /// Configure the regular (non-idle) io-engines to not use gRPC TLS (serve plaintext), even
+    /// when gRPC TLS is enabled. The idle io-engines keep TLS, simulating a plaintext -> TLS
+    /// rollout where a new TLS io-engine takes over from an old plaintext one.
+    #[clap(long, conflicts_with = "no_grpc_tls")]
+    pub io_engine_no_grpc_tls: bool,
+
     /// Don't run the components in FIPS mode.
     #[clap(long)]
     pub no_fips: bool,
@@ -532,6 +546,16 @@ impl StartOptions {
     #[must_use]
     pub fn with_grpc_tls_enforced(mut self, enforced: bool) -> Self {
         self.grpc_enforce_tls = enforced;
+        self
+    }
+    #[must_use]
+    pub fn with_grpc_mtls(mut self, enabled: bool) -> Self {
+        self.grpc_mtls = enabled;
+        self
+    }
+    #[must_use]
+    pub fn with_io_engine_no_grpc_tls(mut self, enabled: bool) -> Self {
+        self.io_engine_no_grpc_tls = enabled;
         self
     }
     #[must_use]

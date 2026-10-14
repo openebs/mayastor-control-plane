@@ -253,7 +253,6 @@ async fn deleting_pool_spec_reconciler(
     .await
 }
 
-#[tracing::instrument(skip(pool, context), level = "trace", fields(pool.id = %pool.id(), request.reconcile = true))]
 async fn retry_create_pool_reconciler(
     pool: &mut OperationGuardArc<PoolSpec>,
     context: &PollContext,

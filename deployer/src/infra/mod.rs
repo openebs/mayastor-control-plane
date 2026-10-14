@@ -6,6 +6,7 @@ mod elastic;
 mod empty;
 mod etcd;
 mod fio_spdk;
+pub mod grpc_mtls;
 mod io_engine;
 mod jaeger;
 mod kibana;
@@ -174,6 +175,7 @@ impl Components {
     }
     /// Start all components, in order, but don't wait for them.
     pub async fn start(&self, cfg: &ComposeTestNt) -> Result<(), Error> {
+        self.pre_start(cfg)?;
         let mut last_done = None;
         for component in &self.0 {
             if let Some(last_done) = last_done {
@@ -198,6 +200,7 @@ impl Components {
     /// Start all components, in order. Then wait for all components with a wait between each
     /// component to make sure they start orderly.
     async fn start_wait_inner(&self, cfg: &ComposeTestNt) -> Result<(), Error> {
+        self.pre_start(cfg)?;
         let mut last_done = None;
 
         for component in &self.0 {
@@ -230,6 +233,14 @@ impl Components {
                 .or_insert(vec![n]);
             acc
         })
+    }
+    /// Prepare what the components need before any of them is started: once the containers
+    /// exist (so their IPs are known) the gRPC mTLS certificates can be issued.
+    fn pre_start(&self, cfg: &ComposeTestNt) -> Result<(), Error> {
+        if let Some(mtls) = grpc_mtls::GrpcMtls::from_options(&self.1)? {
+            mtls.provision(&self.1, cfg)?;
+        }
+        Ok(())
     }
     pub fn shutdown_order(&self) -> Vec<Vec<String>> {
         todo!("Must get actual container names!")
@@ -339,6 +350,9 @@ impl BuilderConfigure for Components {
             build_error("all the workspace binaries", status.code())?;
         }
         let mut cfg = cfg;
+        if let Some(mtls) = grpc_mtls::GrpcMtls::from_options(&self.1)? {
+            mtls.prepare()?;
+        }
         for component in &self.0 {
             cfg = component.configure(&self.1, cfg)?;
         }

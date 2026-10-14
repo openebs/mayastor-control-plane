@@ -55,13 +55,22 @@ impl OperationGuardArc<PoolSpec> {
             return Ok(());
         }
 
+        self.retry_creating_(registry, node, request).await
+    }
+
+    #[tracing::instrument(skip_all, level = "info", fields(pool.id = %self.id(), request.reconcile = true))]
+    async fn retry_creating_(
+        &mut self,
+        registry: &Registry,
+        node: Arc<RwLock<NodeWrapper>>,
+        request: CreatePool,
+    ) -> Result<(), SvcError> {
         let _ = self.start_create(registry, &request).await?;
         let result = node.create_pool(&request).await;
 
         let _state = self
             .complete_create(result, registry, OnCreateFail::LeaveAsIs)
             .await?;
-
         Ok(())
     }
 

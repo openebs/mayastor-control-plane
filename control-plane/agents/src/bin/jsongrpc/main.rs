@@ -50,12 +50,11 @@ impl CliArgs {
     fn grpc_tls(&self) -> anyhow::Result<Option<grpc::tls::TlsConfig>> {
         match (&self.grpc_tls_cert_file, &self.grpc_tls_key_file) {
             (None, None) => Ok(None),
-            (Some(certificate), Some(private_key)) => grpc::tls::TlsConfig::new(
+            (Some(certificate), Some(private_key)) => Ok(Some(grpc::tls::TlsConfig::new(
                 self.grpc_tls_ca_file.clone(),
                 Some(certificate.clone()),
                 Some(private_key.clone()),
-            )
-            .map(Some),
+            )?)),
             _ => unreachable!("clap requires the gRPC TLS certificate and private key together"),
         }
     }
@@ -84,9 +83,9 @@ async fn main() -> anyhow::Result<()> {
 async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
     let grpc_addr = cli_args.json_grpc_server_addr;
     let tls = cli_args.grpc_tls()?;
+    let io_engine_tls = grpc::tls::IoEngineTls::new(tls.clone(), cli_args.grpc_enforce_tls);
     let json_grpc_service =
-        JsonGrpcServer::new(Arc::new(JsonGrpcSvc::new(cli_args.grpc_enforce_tls)))
-            .into_grpc_server();
+        JsonGrpcServer::new(Arc::new(JsonGrpcSvc::new(io_engine_tls))).into_grpc_server();
 
     let service = Service::builder().with_service(json_grpc_service);
 

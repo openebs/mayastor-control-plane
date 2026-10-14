@@ -10,6 +10,7 @@ use grpc::{
         jsongrpc::traits::{JsonGrpcOperations, JsonGrpcRequestInfo},
         node::traits::NodeOperations,
     },
+    tls::IoEngineTls,
 };
 use rpc::io_engine::json_rpc_client::JsonRpcClient;
 use serde_json::Value;
@@ -21,16 +22,15 @@ use stor_port::{
 
 #[derive(Clone, Default)]
 pub(super) struct JsonGrpcSvc {
-    /// Reject io-engines that do not advertise gRPC TLS support instead of
-    /// connecting over plaintext.
-    grpc_tls_enforced: bool,
+    /// The gRPC TLS client policy towards the io-engines.
+    grpc_tls: IoEngineTls,
 }
 
 /// JSON gRPC service implementation
 impl JsonGrpcSvc {
     /// create a new jsongrpc service
-    pub(super) fn new(grpc_tls_enforced: bool) -> Self {
-        Self { grpc_tls_enforced }
+    pub(super) fn new(grpc_tls: IoEngineTls) -> Self {
+        Self { grpc_tls }
     }
 
     /// Generic JSON gRPC call issued to the IoEngine using the JsonRpcClient.
@@ -68,7 +68,7 @@ impl JsonGrpcSvc {
 
         // When TLS is enforced, refuse to fall back to a plaintext connection for an io-engine
         // that doesn't advertise gRPC TLS support, rather than talking to it in the clear.
-        if self.grpc_tls_enforced && !grpc_tls {
+        if self.grpc_tls.enforced() && !grpc_tls {
             return Err(SvcError::GrpcTlsRequired {
                 node_id: node.id.to_string(),
                 endpoint: node.grpc_endpoint.to_string(),
@@ -79,7 +79,7 @@ impl JsonGrpcSvc {
         api_versions.sort();
 
         // The io-engine endpoint always carries an `http` scheme; with TLS the handshake is
-        // performed by the auto-TLS connector rather than by tonic (see `grpc::tls::io_connect`).
+        // performed by our own connector rather than by tonic (see `IoEngineTls::connect`).
         let uri = http::uri::Uri::builder()
             .scheme("http")
             .authority(node.grpc_endpoint.to_string())
@@ -89,7 +89,9 @@ impl JsonGrpcSvc {
                 node_id: node.id.to_string(),
                 uri: node.grpc_endpoint.to_string(),
             })?;
-        let channel = grpc::tls::io_connect(tonic::transport::Endpoint::from(uri), grpc_tls)
+        let channel = self
+            .grpc_tls
+            .connect(&tonic::transport::Endpoint::from(uri), grpc_tls)
             .await
             .context(GrpcConnect {
                 node_id: node.id.to_string(),

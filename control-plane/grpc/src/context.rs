@@ -130,8 +130,11 @@ impl Context {
 
     /// Create a new endpoint that connects to the provided Uri.
     /// This endpoint has default connect and request timeouts.
-    fn endpoint(&self, uri: Uri, auto_tls: bool) -> tonic::transport::Endpoint {
-        let uri = if auto_tls {
+    ///
+    /// When `grpc_tls` is set the TLS handshake is performed by our own connector (auto-TLS or
+    /// file-backed), so the scheme is forced to `http` to stop tonic from applying its own TLS.
+    fn endpoint(&self, uri: Uri, grpc_tls: bool) -> tonic::transport::Endpoint {
+        let uri = if grpc_tls {
             let mut parts = uri.into_parts();
             parts.scheme = Some(http::uri::Scheme::HTTP);
             Uri::from_parts(parts).expect("gRPC URI is valid")
@@ -163,7 +166,7 @@ impl Context {
 }
 
 /// Tonic Channel with added gRPC tracing and TLS certificate auto-reload.
-pub(crate) type TracedChannel = crate::tracing::OpenTelClientService<crate::tls::ReloadableChannel>;
+pub(crate) type TracedChannel = crate::tracing::OpenTelClientService<tonic::transport::Channel>;
 
 /// Generic RPC Client.
 #[derive(Clone)]
@@ -197,8 +200,10 @@ impl<C: Clone> Client<C> {
     {
         let context = Context::new(options);
         let auto_tls = tls.is_none() && uri.scheme_str() == Some("https");
-        let endpoint = context.endpoint(uri, auto_tls);
-        let channel = crate::tls::ReloadableChannel::new(endpoint, tls, auto_tls)?;
+        // Both auto-TLS and file-backed TLS dial through a grpc-tls custom connector, which needs
+        // an `http` scheme; only a plaintext channel keeps the original scheme.
+        let endpoint = context.endpoint(uri, tls.is_some() || auto_tls);
+        let channel = crate::tls::client_channel(endpoint, tls, auto_tls)?;
 
         let channel = tower::ServiceBuilder::new()
             .layer(OpenTelClient::new())

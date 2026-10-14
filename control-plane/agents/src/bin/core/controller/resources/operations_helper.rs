@@ -899,18 +899,23 @@ impl<T: AsOperationSequencer + Clone + Sync + Send + Debug + ResourceUid> Operat
         &self,
         mode: OperationMode,
     ) -> Result<OperationGuardArc<T>, SvcError> {
-        let mut tries = 5;
-        loop {
-            tries -= 1;
-            match self.operation_guard_mode(mode) {
-                Ok(guard) => return Ok(guard),
-                Err(error) if tries == 0 => {
-                    return Err(error);
-                }
-                Err(_) => {}
-            };
+        if let Ok(guard) = self.operation_guard_mode(mode) {
+            return Ok(guard);
+        }
 
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(1);
+        loop {
+            let waiter = self.register_op_waiter();
+            if let Ok(guard) = self.operation_guard_mode(mode) {
+                return Ok(guard);
+            }
+
+            tokio::select! {
+                _ = waiter => {}
+                _ = tokio::time::sleep_until(deadline) => {
+                    return Err(SvcError::Conflict {});
+                }
+            }
         }
     }
 }

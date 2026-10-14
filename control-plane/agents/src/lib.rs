@@ -25,7 +25,12 @@ pub enum ServiceError {
     #[snafu(display("GrpcServer error"))]
     GrpcServer { source: tonic::transport::Error },
     #[snafu(display("Grpc TLS error"))]
-    GrpcTls { source: anyhow::Error },
+    GrpcTls { source: grpc::tls::Error },
+    #[snafu(display(
+        "--grpc-tls-enforced requires gRPC TLS to be configured via --grpc-auto-tls or the \
+        --grpc-tls-cert-file/--grpc-tls-key-file pair"
+    ))]
+    GrpcTlsNotConfigured,
 }
 
 type LayerStack = tower::layer::util::Stack<OpenTelServer, tower::layer::util::Identity>;
@@ -118,20 +123,28 @@ impl Service {
     ///
     /// When `sniff` is set the listener also accepts plaintext clients on the same port, which is
     /// only required by a server at a mixed-version boundary (e.g. core accepting registrations
-    /// from both plaintext and TLS io-engines during a rolling upgrade).
+    /// from both plaintext and TLS io-engines during a rolling upgrade); otherwise it serves TLS
+    /// exclusively.
     pub async fn run_tls_err(
         self,
         socket: SocketAddr,
         tls: grpc::tls::TlsConfig,
         sniff: bool,
     ) -> Result<(), ServiceError> {
-        let incoming = grpc::tls::incoming(socket, tls, sniff)
+        let listener = grpc::tls::Listener::file(socket, &tls)
             .await
             .map_err(|source| ServiceError::GrpcTls { source })?;
-        self.tonic_server
-            .serve_with_incoming_shutdown(incoming, Self::shutdown_signal())
-            .await
-            .map_err(|source| ServiceError::GrpcServer { source })
+        let server = self.tonic_server;
+        let result = if sniff {
+            server
+                .serve_with_incoming_shutdown(listener.sniffing_incoming(), Self::shutdown_signal())
+                .await
+        } else {
+            server
+                .serve_with_incoming_shutdown(listener.tls_incoming(), Self::shutdown_signal())
+                .await
+        };
+        result.map_err(|source| ServiceError::GrpcServer { source })
     }
 
     /// Runs the server with an ephemeral self-signed TLS certificate.
@@ -141,22 +154,28 @@ impl Service {
     ///
     /// When `sniff` is set the listener also accepts plaintext clients on the same port, which is
     /// only required by a server at a mixed-version boundary (e.g. core accepting registrations
-    /// from both plaintext and TLS io-engines during a rolling upgrade).
+    /// from both plaintext and TLS io-engines during a rolling upgrade); otherwise it serves TLS
+    /// exclusively.
     pub async fn run_auto_tls_err(
         self,
         socket: SocketAddr,
         sniff: bool,
     ) -> Result<(), ServiceError> {
         tracing::info!("Running gRPC server with ephemeral self-signed TLS certificate");
-        let config = grpc::tls::auto_server_config(vec!["localhost".to_string()])
-            .map_err(|source| ServiceError::GrpcTls { source })?;
-        let incoming = grpc::tls::incoming_with_server_config(socket, config, sniff)
+        let listener = grpc::tls::Listener::auto(socket, vec!["localhost".to_string()])
             .await
             .map_err(|source| ServiceError::GrpcTls { source })?;
-        self.tonic_server
-            .serve_with_incoming_shutdown(incoming, Self::shutdown_signal())
-            .await
-            .map_err(|source| ServiceError::GrpcServer { source })
+        let server = self.tonic_server;
+        let result = if sniff {
+            server
+                .serve_with_incoming_shutdown(listener.sniffing_incoming(), Self::shutdown_signal())
+                .await
+        } else {
+            server
+                .serve_with_incoming_shutdown(listener.tls_incoming(), Self::shutdown_signal())
+                .await
+        };
+        result.map_err(|source| ServiceError::GrpcServer { source })
     }
 
     /// Waits until the process receives a shutdown: either TERM or INT.

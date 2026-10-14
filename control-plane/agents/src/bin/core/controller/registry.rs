@@ -25,6 +25,7 @@ use crate::{
     SimArgs, ThinArgs,
 };
 use agents::errors::SvcError;
+use grpc::tls::IoEngineTls;
 use std::{
     collections::HashMap,
     future::Future,
@@ -136,8 +137,8 @@ pub(crate) struct RegistryInner<S: Store> {
     max_offline_rebuilds: Option<NumRebuilds>,
     /// The maximum number of concurrent pool drain allowed.
     max_concurrent_pool_drain: u16,
-    /// Enforce gRPC TLS to io-engines, rejecting connections to io-engines that don't support TLS.
-    grpc_tls_enforced: bool,
+    /// The gRPC TLS client policy towards the io-engines.
+    grpc_tls: IoEngineTls,
 }
 
 impl Registry {
@@ -173,7 +174,7 @@ impl Registry {
         offline_rebuild_grace_period: std::time::Duration,
         max_offline_rebuilds: Option<NumRebuilds>,
         max_concurrent_pool_drain: u16,
-        grpc_tls_enforced: bool,
+        grpc_tls: IoEngineTls,
     ) -> Result<Self, SvcError> {
         let store_endpoint = Self::format_store_endpoint(&store_url);
         tracing::info!("Connecting to persistent store at {}", store_endpoint);
@@ -242,7 +243,7 @@ impl Registry {
                 offline_rebuild_grace_period,
                 max_offline_rebuilds,
                 max_concurrent_pool_drain,
-                grpc_tls_enforced,
+                grpc_tls,
             }),
         };
         registry.init().await?;
@@ -314,9 +315,9 @@ impl Registry {
         self.ha_disabled
     }
 
-    /// Check if gRPC TLS to io-engines is enforced.
-    pub(crate) fn grpc_tls_enforced(&self) -> bool {
-        self.grpc_tls_enforced
+    /// The gRPC TLS client policy towards the io-engines.
+    pub(crate) fn grpc_tls(&self) -> &IoEngineTls {
+        &self.grpc_tls
     }
 
     /// Check if pool creation using non-persistent devlink is allowed.

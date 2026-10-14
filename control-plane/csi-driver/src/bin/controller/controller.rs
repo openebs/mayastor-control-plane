@@ -159,13 +159,10 @@ async fn node_plugin_channel(endpoint: &str) -> Result<tonic::transport::Channel
             .await
             .map_err(|error| Status::unavailable(error.to_string()))
     } else if let Some(tls) = config.grpc_tls() {
-        let tls_config = tls
-            .client_config()
-            .map_err(|error| Status::internal(error.to_string()))?;
-        tonic_endpoint(format!("https://{endpoint}"))?
-            .tls_config(tls_config)
-            .map_err(|error| Status::internal(error.to_string()))?
-            .connect()
+        // The file-backed TLS connector performs the handshake itself, so the endpoint uses an
+        // http scheme to stop tonic from applying (and rejecting) its own TLS logic.
+        let endpoint = tonic_endpoint(format!("http://{endpoint}"))?;
+        grpc::tls::file_tls_connect(&endpoint, tls)
             .await
             .map_err(|error| Status::unavailable(error.to_string()))
     } else {

@@ -1,6 +1,9 @@
 use crate::{
     build_error,
-    infra::{async_trait, Builder, ComponentAction, ComposeTest, CoreAgent, Error, StartOptions},
+    infra::{
+        async_trait, grpc_mtls::GrpcMtls, Builder, ComponentAction, ComposeTest, CoreAgent, Error,
+        StartOptions,
+    },
 };
 use composer::{Binary, ContainerSpec};
 use grpc::operations::node::traits::NodeOperations;
@@ -83,17 +86,25 @@ impl ComponentAction for CoreAgent {
         if !options.no_deprecated_access_mode {
             binary = binary.with_arg("--deprecated-access-mode");
         }
-        if !options.no_grpc_tls {
+        let mtls = GrpcMtls::from_options(options)?;
+        if let Some(_mtls) = &mtls {
+            binary = binary.with_args(GrpcMtls::args(name));
+            if options.grpc_enforce_tls {
+                binary = binary.with_arg("--grpc-enforce-tls");
+            }
+        } else if !options.no_grpc_tls {
             binary = binary.with_arg("--grpc-auto-tls");
             if options.grpc_enforce_tls {
                 binary = binary.with_arg("--grpc-enforce-tls");
             }
         }
 
-        Ok(cfg.add_container_spec(
-            ContainerSpec::from_binary(name, options.fips_env(binary))
-                .with_portmap("50051", "50051"),
-        ))
+        let mut spec = ContainerSpec::from_binary(name, options.fips_env(binary))
+            .with_portmap("50051", "50051");
+        if let Some(mtls) = &mtls {
+            spec = mtls.bind(spec);
+        }
+        Ok(cfg.add_container_spec(spec))
     }
     async fn start(
         &self,
@@ -108,13 +119,9 @@ impl ComponentAction for CoreAgent {
         options: &StartOptions,
         cfg: &crate::ComposeTestNt,
     ) -> Result<(), Error> {
-        let ip = cfg.container_ip("core");
-        let scheme = if options.no_grpc_tls { "http" } else { "https" };
-        let uri = tonic::transport::Uri::from_str(&format!("{scheme}://{ip}:50051")).unwrap();
         let timeout = grpc::context::TimeoutOptions::new()
             .with_req_timeout(std::time::Duration::from_millis(100));
-        let core =
-            grpc::client::CoreClient::new(uri, Some(timeout.with_max_retries(Some(10)))).await;
+        let core = Self::client(cfg, options, timeout.with_max_retries(Some(10))).await?;
         core.wait_ready(None).await.map_err(|_| {
             let error = "Failed to wait for core to get ready";
             std::io::Error::new(std::io::ErrorKind::TimedOut, error)
@@ -125,23 +132,46 @@ impl ComponentAction for CoreAgent {
 }
 
 impl CoreAgent {
-    /// Wait for a node to become online.
-    pub(crate) async fn wait_node_online(cfg: &ComposeTest, node: &str, no_grpc_tls: bool) {
+    /// The core agent gRPC URI, as reachable from the host.
+    pub fn uri(cfg: &ComposeTest, options: &StartOptions) -> tonic::transport::Uri {
         let ip = cfg.container_ip("core");
-        let scheme = if no_grpc_tls { "http" } else { "https" };
-        let uri = tonic::transport::Uri::from_str(&format!("{scheme}://{ip}:50051")).unwrap();
+        let scheme = if options.no_grpc_tls { "http" } else { "https" };
+        tonic::transport::Uri::from_str(&format!("{scheme}://{ip}:50051")).unwrap()
+    }
 
+    /// A core agent gRPC client, authenticating with the deployer certificate when mTLS is on.
+    pub async fn client(
+        cfg: &ComposeTest,
+        options: &StartOptions,
+        timeout: grpc::context::TimeoutOptions,
+    ) -> Result<grpc::client::CoreClient, Error> {
+        let uri = Self::uri(cfg, options);
+        let mtls = GrpcMtls::from_options(options)?;
+        match mtls {
+            Some(mtls) => {
+                let tls = mtls.client_tls()?;
+                Ok(grpc::client::CoreClient::new_with_tls(uri, timeout, tls).await?)
+            }
+            None => Ok(grpc::client::CoreClient::new(uri, timeout).await),
+        }
+    }
+
+    /// Wait for a node to become online.
+    pub(crate) async fn wait_node_online(
+        cfg: &ComposeTest,
+        options: &StartOptions,
+        node: &str,
+    ) -> Result<(), Error> {
         let timeout = grpc::context::TimeoutOptions::new()
             .with_req_timeout(std::time::Duration::from_millis(100));
-        let core =
-            grpc::client::CoreClient::new(uri, Some(timeout.with_max_retries(Some(10)))).await;
+        let core = Self::client(cfg, options, timeout.with_max_retries(Some(10))).await?;
 
         loop {
             let filter = Filter::Node(node.into());
             if let Ok(nodes) = core.node().get(filter, false, None).await {
                 if let Some(node) = nodes.0.into_iter().find(|n| n.id().as_str() == node) {
                     if node.state().map(|s| &s.status) == Some(&NodeStatus::Online) {
-                        return;
+                        return Ok(());
                     }
                 }
             }

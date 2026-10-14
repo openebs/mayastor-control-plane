@@ -1,6 +1,6 @@
 use crate::{controller::io_engine::NodeApi, node::service::NodeCommsTimeout};
 use agents::errors::{GrpcConnect, GrpcConnectUri, SvcError};
-use grpc::context::timeout_grpc;
+use grpc::{context::timeout_grpc, tls::IoEngineTls};
 use stor_port::{
     transport_api::MessageId,
     types::v0::transport::{ApiVersion, NodeId},
@@ -32,8 +32,8 @@ pub(crate) struct GrpcContext {
     sim: bool,
     /// Whether the io-engine gRPC server expects TLS connections.
     tls: bool,
-    /// Whether gRPC TLS is enforced, rejecting connections to io-engines that don't support TLS.
-    tls_enforced: bool,
+    /// The gRPC TLS client policy towards the io-engines.
+    tls_policy: IoEngineTls,
 }
 
 impl GrpcContext {
@@ -48,7 +48,7 @@ impl GrpcContext {
         api_version: ApiVersion,
         sim: bool,
         tls: bool,
-        tls_enforced: bool,
+        tls_policy: IoEngineTls,
     ) -> Result<Self, SvcError> {
         let uri = http::uri::Uri::builder()
             .scheme("http")
@@ -78,7 +78,7 @@ impl GrpcContext {
             api_version,
             sim,
             tls,
-            tls_enforced,
+            tls_policy,
         })
     }
     /// Override the timeout config in the context for the given request.
@@ -118,28 +118,27 @@ impl GrpcContext {
         endpoint
     }
     /// Connect a tonic `Channel` to this node.
-    /// Uses auto-TLS (certificate verification bypassed) when the io-engine advertises gRPC TLS
-    /// support in its registration, otherwise a plaintext connection.
+    /// Uses TLS when the io-engine advertises gRPC TLS support in its registration (mutual TLS
+    /// with our file-backed certificates when configured, otherwise auto-TLS with certificate
+    /// verification bypassed), otherwise a plaintext connection.
     ///
     /// When gRPC TLS is enforced, an io-engine that doesn't advertise TLS support is rejected
     /// outright rather than connected over plaintext.
     pub(crate) async fn connect_channel(&self) -> Result<tonic::transport::Channel, SvcError> {
-        if self.tls_enforced && !self.tls {
+        if self.tls_policy.enforced() && !self.tls {
             return Err(SvcError::GrpcTlsRequired {
                 node_id: self.node.to_string(),
                 endpoint: self.socket_endpoint.to_string(),
             });
         }
         let endpoint = self.tonic_endpoint();
-        let channel = if self.tls {
-            grpc::tls::auto_tls_connect(&endpoint).await
-        } else {
-            endpoint.connect().await
-        };
-        channel.context(GrpcConnect {
-            node_id: self.node.to_string(),
-            endpoint: self.socket_endpoint.to_string(),
-        })
+        self.tls_policy
+            .connect(&endpoint, self.tls)
+            .await
+            .context(GrpcConnect {
+                node_id: self.node.to_string(),
+                endpoint: self.socket_endpoint.to_string(),
+            })
     }
     /// Get the node identifier.
     pub(crate) fn node(&self) -> &NodeId {
