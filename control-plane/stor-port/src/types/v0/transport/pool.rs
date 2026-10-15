@@ -1139,44 +1139,78 @@ pub struct GetPoolsSmartResponse {
     pub pools: Vec<PoolSmart>,
 }
 
-/// SMART / health for all disks backing a single pool.
+/// SMART data for all disks backing a single pool.
 #[derive(Default, Debug, Clone)]
 pub struct PoolSmart {
     /// Pool name.
     pub name: String,
     /// Pool UUID.
     pub uuid: String,
-    /// Health information for each disk backing the pool.
-    pub disks: Vec<DiskHealth>,
+    /// SMART data for each disk backing the pool.
+    pub disks: Vec<DiskSmart>,
 }
 
-/// Health for a single disk backing the pool.
+/// SMART data for a single disk backing the pool.
 #[derive(Default, Debug, Clone)]
-pub struct DiskHealth {
+pub struct DiskSmart {
     /// URI of the disk device (e.g. bdev or device path).
     pub disk_uri: String,
     /// Whether SMART is supported on this disk.
     pub supported: bool,
-    /// SMART health data, present when supported and readable.
-    pub health: Option<DeviceHealth>,
+    /// SMART data, present when supported and readable.
+    pub smart: Option<SmartData>,
     /// Error message if SMART data could not be retrieved.
     pub error: Option<String>,
 }
 
-/// SMART / health information for a backing device.
+/// SMART data for a backing device. The fields at this level are the values
+/// every device type reports with the same meaning, the protocol specific
+/// report is in `protocol`.
 #[derive(Default, Debug, Clone)]
-pub struct DeviceHealth {
-    /// NVMe critical warning bitmap.
+pub struct SmartData {
+    /// Device self-assessment, unset when the device reports no verdict.
+    pub smart_status_passed: Option<bool>,
+    /// Composite temperature in degrees Celsius.
+    pub temperature_celsius: Option<i32>,
+    /// Cumulative power-on hours.
+    pub power_on_hours: Option<u64>,
+    /// Number of power cycles.
+    pub power_cycles: Option<u64>,
+    /// Device identity / inventory information.
+    pub identity: Option<DeviceIdentity>,
+    /// Available spare capacity as a percentage.
+    pub available_spare_percent: Option<u32>,
+    /// Threshold below which spare capacity is critical.
+    pub available_spare_threshold_percent: Option<u32>,
+    /// Estimated percentage of device life used, may exceed 100.
+    pub percentage_used: Option<u32>,
+    /// Protocol specific SMART report.
+    pub protocol: Option<SmartProtocol>,
+}
+
+/// Protocol specific SMART report, NVMe and ATA are mutually exclusive.
+#[derive(Debug, Clone)]
+// NvmeSmart is much larger than AtaSmart, but boxing it would leak into every consumer.
+#[allow(clippy::large_enum_variant)]
+pub enum SmartProtocol {
+    /// NVMe devices only.
+    Nvme(NvmeSmart),
+    /// SATA/ATA devices only.
+    Ata(AtaSmart),
+}
+
+/// NVMe SMART / Health Information log and Error Information log.
+#[derive(Default, Debug, Clone)]
+pub struct NvmeSmart {
+    /// Raw NVMe critical warning flags (0 == none).
     pub critical_warning: u32,
-    /// Overall health assessment.
-    pub healthy: bool,
     /// Composite temperature in degrees Celsius.
     pub temperature_celsius: Option<i32>,
     /// Available spare capacity as a percentage.
     pub available_spare_percent: Option<u32>,
     /// Threshold below which spare capacity is critical.
     pub available_spare_threshold_percent: Option<u32>,
-    /// Estimated percentage of device life used.
+    /// Estimated percentage of device life used, may exceed 100.
     pub percentage_used: Option<u32>,
     /// Number of 512-byte data units read.
     pub data_units_read: Option<u64>,
@@ -1198,12 +1232,19 @@ pub struct DeviceHealth {
     pub media_errors: Option<u64>,
     /// Number of error information log entries.
     pub num_error_log_entries: Option<u64>,
-    /// Device identity / inventory information.
-    pub identity: Option<DeviceIdentity>,
-    /// ATA SMART attribute table entries.
-    pub smart_attributes: Vec<SmartAttribute>,
+    /// Minutes at or above the warning composite temperature.
+    pub warning_temp_time: Option<u32>,
+    /// Minutes at or above the critical composite temperature.
+    pub critical_comp_time: Option<u32>,
     /// NVMe error information log entries.
     pub error_log_entries: Vec<NvmeErrorLogEntry>,
+}
+
+/// ATA SMART attribute table.
+#[derive(Default, Debug, Clone)]
+pub struct AtaSmart {
+    /// ATA SMART attribute table entries.
+    pub attributes: Vec<SmartAttribute>,
 }
 
 /// Device identity / inventory data.

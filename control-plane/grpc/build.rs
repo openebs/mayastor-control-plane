@@ -1,5 +1,10 @@
 fn main() {
     tonic_build::configure()
+        // NvmeSmartInfo is much larger than AtaSmartInfo, but boxing it would leak into every consumer.
+        .type_attribute(
+            ".v1.pool.SmartDataInfo.protocol",
+            "#[allow(clippy::large_enum_variant)]",
+        )
         .compile_protos(
             &[
                 "proto/v1/pool/pool.proto",
