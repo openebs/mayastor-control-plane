@@ -512,6 +512,8 @@ pub enum SvcError {
     PoolAlreadyDraining { name: PoolId },
     #[snafu(display("Either one of unsafe evict option can be used"))]
     UnsafeEvictPolicyConflict {},
+    #[snafu(display("Volume is waiting for one of its replicas to move"))]
+    VolumeReplicaMoveInProgress {},
 }
 
 impl SvcError {
@@ -543,6 +545,7 @@ impl SvcError {
             Self::AlreadyTerminal { .. } => tonic::Code::FailedPrecondition,
             Self::PoolAlreadyDraining { .. } => tonic::Code::FailedPrecondition,
             Self::UnsafeEvictPolicyConflict { .. } => tonic::Code::InvalidArgument,
+            Self::VolumeReplicaMoveInProgress { .. } => tonic::Code::FailedPrecondition,
             _ => tonic::Code::Internal,
         }
     }
@@ -1394,6 +1397,12 @@ impl From<SvcError> for ReplyError {
             SvcError::UnsafeEvictPolicyConflict { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::Pool,
+                source,
+                extra,
+            },
+            SvcError::VolumeReplicaMoveInProgress { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Volume,
                 source,
                 extra,
             },
