@@ -193,7 +193,18 @@ pub(crate) async fn detach(uuid: &Uuid, errheader: String) -> Result<(), Status>
             ));
         }
 
-        crate::mount::wait_fs_shutdown(&device_path, None).await?;
+        // The one wait before the disconnect, and bounded: unstage_fs_volume flushed the file
+        // system before it unmounted the staging path. A file system still alive after the bound
+        // is pinned outside the host mount namespace, e.g. by a private bind of /var/lib/kubelet
+        // that the kernel only detaches when the kubelet removes the staging directory, after we
+        // return: waiting for it would never end (openebs/mayastor#1910). Everything written
+        // before the flush is on the device.
+        if let Err(error) = crate::mount::wait_fs_shutdown(&device_path).await {
+            tracing::warn!(
+                device = %device_path,
+                "{error}; it was flushed before the unmount, detaching"
+            );
+        }
 
         if let Err(error) = device.detach().await {
             return Err(failure!(
