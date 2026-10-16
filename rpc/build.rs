@@ -47,6 +47,11 @@ fn main() {
 
     tonic_build::configure()
         .build_server(true)
+        // NvmeSmart is much larger than AtaSmart, but boxing it would leak into every consumer.
+        .type_attribute(
+            ".mayastor.v1.SmartData.protocol",
+            "#[allow(clippy::large_enum_variant)]",
+        )
         .compile_protos(
             &[
                 "protobuf/v1/host.proto",

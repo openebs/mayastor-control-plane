@@ -684,62 +684,94 @@ message PoolSmartInfo {
   string name = 1;
   // Pool UUID.
   string uuid = 2;
-  // Health info for each backing disk.
-  repeated DiskHealthInfo disks = 3;
+  // SMART data for each backing disk.
+  repeated DiskSmartInfo disks = 3;
 }
 
-// Health info for a single backing disk.
-message DiskHealthInfo {
+// SMART data for a single backing disk.
+message DiskSmartInfo {
   // Disk device URI (e.g. bdev or devlink path).
   string disk_uri = 1;
   // Whether the device supports SMART.
   bool supported = 2;
-  // Device health details (absent when unsupported).
-  optional DeviceHealthInfo health = 3;
-  // Error string if the health query failed.
+  // SMART data (absent when unsupported).
+  optional SmartDataInfo smart = 3;
+  // Error string if the SMART query failed.
   optional string error = 4;
 }
 
-// SMART / health counters for a device.
-message DeviceHealthInfo {
-  // NVMe critical warning bitmap.
-  uint32 critical_warning = 1;
-  // Overall health assessment.
-  bool healthy = 2;
+// SMART data for a device. The fields at this level are the values every
+// device type reports with the same meaning;
+// the protocol specific report is in the `protocol` oneof.
+message SmartDataInfo {
+  // Device self-assessment; unset when the device reports no verdict.
+  optional bool smart_status_passed = 1;
   // Composite temperature in degrees Celsius.
-  optional sint32 temperature_celsius = 3;
-  // Available spare capacity percentage.
-  optional uint32 available_spare_percent = 4;
-  // Spare capacity threshold percentage.
-  optional uint32 available_spare_threshold_percent = 5;
-  // Estimated percentage of device life used.
-  optional uint32 percentage_used = 6;
-  // Number of 512-byte data units read.
-  optional uint64 data_units_read = 7;
-  // Number of 512-byte data units written.
-  optional uint64 data_units_written = 8;
-  // Number of host read commands.
-  optional uint64 host_reads = 9;
-  // Number of host write commands.
-  optional uint64 host_writes = 10;
-  // Minutes the controller was busy.
-  optional uint64 controller_busy_minutes = 11;
-  // Number of power cycles.
-  optional uint64 power_cycles = 12;
+  optional sint32 temperature_celsius = 2;
   // Cumulative power-on hours.
-  optional uint64 power_on_hours = 13;
-  // Number of unsafe shutdowns.
-  optional uint64 unsafe_shutdowns = 14;
-  // Number of media and data integrity errors.
-  optional uint64 media_errors = 15;
-  // Number of error log entries.
-  optional uint64 num_error_log_entries = 16;
+  optional uint64 power_on_hours = 3;
+  // Number of power cycles.
+  optional uint64 power_cycles = 4;
   // Device identity / model info.
-  optional DeviceIdentityInfo identity = 17;
-  // ATA SMART attributes (empty for NVMe).
-  repeated SmartAttributeInfo smart_attributes = 18;
+  optional DeviceIdentityInfo identity = 5;
+  // Available spare capacity percentage.
+  optional uint32 available_spare_percent = 6;
+  // Spare capacity threshold percentage.
+  optional uint32 available_spare_threshold_percent = 7;
+  // Estimated percentage of device life used (may exceed 100).
+  optional uint32 percentage_used = 8;
+  oneof protocol {
+    // NVMe devices only.
+    NvmeSmartInfo nvme = 9;
+    // SATA/ATA devices only.
+    AtaSmartInfo ata = 10;
+  }
+}
+
+// NVMe SMART / Health Information log and Error Information log.
+message NvmeSmartInfo {
+  // Raw NVMe critical warning flags (0 == none).
+  uint32 critical_warning = 1;
+  // Composite temperature in degrees Celsius.
+  optional sint32 temperature_celsius = 2;
+  // Available spare capacity percentage.
+  optional uint32 available_spare_percent = 3;
+  // Spare capacity threshold percentage.
+  optional uint32 available_spare_threshold_percent = 4;
+  // Estimated percentage of device life used (may exceed 100).
+  optional uint32 percentage_used = 5;
+  // Number of 512-byte data units read.
+  optional uint64 data_units_read = 6;
+  // Number of 512-byte data units written.
+  optional uint64 data_units_written = 7;
+  // Number of host read commands.
+  optional uint64 host_reads = 8;
+  // Number of host write commands.
+  optional uint64 host_writes = 9;
+  // Minutes the controller was busy.
+  optional uint64 controller_busy_minutes = 10;
+  // Number of power cycles.
+  optional uint64 power_cycles = 11;
+  // Cumulative power-on hours.
+  optional uint64 power_on_hours = 12;
+  // Number of unsafe shutdowns.
+  optional uint64 unsafe_shutdowns = 13;
+  // Number of media and data integrity errors.
+  optional uint64 media_errors = 14;
+  // Number of error log entries.
+  optional uint64 num_error_log_entries = 15;
+  // Minutes at or above the warning composite temperature.
+  optional uint32 warning_temp_time = 16;
+  // Minutes at or above the critical composite temperature.
+  optional uint32 critical_comp_time = 17;
   // NVMe error log entries.
-  repeated NvmeErrorLogEntryInfo error_log_entries = 19;
+  repeated NvmeErrorLogEntryInfo error_log_entries = 18;
+}
+
+// ATA SMART attribute table.
+message AtaSmartInfo {
+  // ATA SMART attributes.
+  repeated SmartAttributeInfo attributes = 1;
 }
 
 // Device identity and model information.

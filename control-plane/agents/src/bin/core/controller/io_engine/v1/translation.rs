@@ -1141,24 +1141,47 @@ impl IoEngineToAgent for v1::pool::PoolSmart {
     }
 }
 
-impl IoEngineToAgent for v1::pool::DiskHealth {
-    type AgentMessage = transport::DiskHealth;
+impl IoEngineToAgent for v1::pool::DiskSmart {
+    type AgentMessage = transport::DiskSmart;
     fn to_agent(&self) -> Self::AgentMessage {
-        transport::DiskHealth {
+        transport::DiskSmart {
             disk_uri: self.disk_uri.clone(),
             supported: self.supported,
-            health: self.health.as_ref().map(|h| h.to_agent()),
+            smart: self.smart.as_ref().map(|s| s.to_agent()),
             error: self.error.clone(),
         }
     }
 }
 
-impl IoEngineToAgent for v1::pool::DeviceHealth {
-    type AgentMessage = transport::DeviceHealth;
+impl IoEngineToAgent for v1::pool::SmartData {
+    type AgentMessage = transport::SmartData;
     fn to_agent(&self) -> Self::AgentMessage {
-        transport::DeviceHealth {
+        transport::SmartData {
+            smart_status_passed: self.smart_status_passed,
+            temperature_celsius: self.temperature_celsius,
+            power_on_hours: self.power_on_hours,
+            power_cycles: self.power_cycles,
+            available_spare_percent: self.available_spare_percent,
+            available_spare_threshold_percent: self.available_spare_threshold_percent,
+            percentage_used: self.percentage_used,
+            identity: self.identity.as_ref().map(|i| i.to_agent()),
+            protocol: self.protocol.as_ref().map(|p| match p {
+                v1::pool::smart_data::Protocol::Nvme(n) => {
+                    transport::SmartProtocol::Nvme(n.to_agent())
+                }
+                v1::pool::smart_data::Protocol::Ata(a) => {
+                    transport::SmartProtocol::Ata(a.to_agent())
+                }
+            }),
+        }
+    }
+}
+
+impl IoEngineToAgent for v1::pool::NvmeSmart {
+    type AgentMessage = transport::NvmeSmart;
+    fn to_agent(&self) -> Self::AgentMessage {
+        transport::NvmeSmart {
             critical_warning: self.critical_warning,
-            healthy: self.healthy,
             temperature_celsius: self.temperature_celsius,
             available_spare_percent: self.available_spare_percent,
             available_spare_threshold_percent: self.available_spare_threshold_percent,
@@ -1173,13 +1196,22 @@ impl IoEngineToAgent for v1::pool::DeviceHealth {
             unsafe_shutdowns: self.unsafe_shutdowns,
             media_errors: self.media_errors,
             num_error_log_entries: self.num_error_log_entries,
-            identity: self.identity.as_ref().map(|i| i.to_agent()),
-            smart_attributes: self.smart_attributes.iter().map(|a| a.to_agent()).collect(),
+            warning_temp_time: self.warning_temp_time,
+            critical_comp_time: self.critical_comp_time,
             error_log_entries: self
                 .error_log_entries
                 .iter()
                 .map(|e| e.to_agent())
                 .collect(),
+        }
+    }
+}
+
+impl IoEngineToAgent for v1::pool::AtaSmart {
+    type AgentMessage = transport::AtaSmart;
+    fn to_agent(&self) -> Self::AgentMessage {
+        transport::AtaSmart {
+            attributes: self.attributes.iter().map(|a| a.to_agent()).collect(),
         }
     }
 }
