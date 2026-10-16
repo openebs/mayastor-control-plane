@@ -260,6 +260,114 @@ async fn offline_rebuild_respects_max_offline_rebuilds() {
     volume_api.del_volume(&uid).await.unwrap();
 }
 
+/// An operator who knows a node is not coming back can ask for the rebuild to start
+/// without serving out the grace period.
+///
+/// Configured with a long grace period and degraded by stopping a node, so nothing
+/// else would bypass the wait: the scale-up bypass does not apply here. The volume is
+/// first observed sitting idle, then the request is issued and the temp nexus has to
+/// appear well inside the grace window. That gap is what shows the request did it.
+#[tokio::test]
+async fn offline_rebuild_can_be_requested_by_operator() {
+    const LONG_GRACE_SECS: u64 = 60;
+    const START_WINDOW_SECS: u64 = 15;
+
+    let reconcile = Duration::from_millis(RECONCILE_PERIOD_MS);
+    let cluster = ClusterBuilder::builder()
+        .with_rest(true)
+        .with_io_engines(3)
+        .with_tmpfs_pool(52428800)
+        .with_cache_period("250ms")
+        .with_reconcile_period(reconcile, reconcile)
+        .with_options(|o| {
+            o.with_isolated_io_engine(true)
+                .with_agents_env("OFFLINE_REBUILD_ENABLED", "true")
+                .with_agents_env(
+                    "OFFLINE_REBUILD_GRACE_PERIOD",
+                    &format!("{LONG_GRACE_SECS}s"),
+                )
+        })
+        .build()
+        .await
+        .unwrap();
+
+    let api_client = cluster.rest_v00();
+    let volume_api = api_client.volumes_api();
+
+    let volid = VolumeId::new();
+    let body = models::CreateVolumeBody::new(VolumePolicy::new(true), 2, 10485760u64, false, false);
+    let volume = volume_api.put_volume(&volid, body).await.unwrap();
+    let uid = volume.spec.uuid;
+
+    volume_api
+        .put_volume_target(
+            &uid,
+            models::PublishVolumeBody::new_all(
+                HashMap::new(),
+                None,
+                cluster.node(0).to_string(),
+                models::VolumeShareProtocol::Nvmf,
+                None,
+                cluster.csi_node(0),
+                None,
+            ),
+        )
+        .await
+        .expect("Should publish volume");
+    volume_api
+        .del_volume_target(&uid, None, None)
+        .await
+        .expect("Should unpublish volume");
+
+    let victim_node = pick_victim_node(&api_client, &cluster.node(0).to_string(), uid).await;
+    cluster
+        .composer()
+        .stop(&victim_node)
+        .await
+        .expect("Should stop io-engine node");
+
+    wait_till_volume_status(
+        &cluster,
+        &uid,
+        VolumeStatus::Degraded,
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("Volume should become Degraded");
+
+    // The grace period is long enough that nothing starts on its own within the
+    // window this test runs in, so no settle-and-check is needed first.
+    let vol = volume_api.get_volume(&uid).await.unwrap();
+    assert!(
+        vol.state.target.is_none(),
+        "No rebuild should start before the request; got target={:?}",
+        vol.state.target
+    );
+
+    let t0 = std::time::Instant::now();
+    volume_api
+        .put_volume_rebuild(&uid)
+        .await
+        .expect("Should accept the offline rebuild request");
+
+    wait_for_unshared_target(&cluster, &uid, Duration::from_secs(START_WINDOW_SECS))
+        .await
+        .expect("Offline rebuild should start once requested, without the grace period");
+
+    assert!(
+        t0.elapsed() < Duration::from_secs(LONG_GRACE_SECS),
+        "Requested rebuild took {:?}, which is not inside the grace period of {LONG_GRACE_SECS}s",
+        t0.elapsed()
+    );
+
+    restart_node(&cluster, &victim_node).await;
+    wait_till_volume_online_no_target(&cluster, &uid, Duration::from_secs(REBUILD_TIMEOUT_SECS))
+        .await
+        .expect("Volume should be Online with no target after the rebuild completes");
+
+    volume_api.del_volume(&uid).await.unwrap();
+}
+
 /// Happy path scenario, see [`offline_rebuild_e2e`] doc.
 async fn happy_path(cluster: &deployer_cluster::Cluster) {
     let api_client = cluster.rest_v00();
