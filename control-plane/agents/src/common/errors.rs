@@ -72,7 +72,7 @@ pub enum SvcError {
         timeout: std::time::Duration,
     },
     #[snafu(display(
-        "Failed to connect to node '{node_id}' via gRPC endpoint '{endpoint}': {source:?}"
+        "Failed to connect to node '{node_id}' via gRPC endpoint '{endpoint}': {source}"
     ))]
     GrpcConnect {
         node_id: String,
@@ -100,7 +100,10 @@ pub enum SvcError {
         request: String,
         source: tonic::Status,
     },
-    #[snafu(display("Failed to connect to grpc sever via uds socket path '{path}'"))]
+    #[snafu(display(
+        "Failed to connect to grpc sever via uds socket path '{path}': {}",
+        Self::tonic_chain(source)
+    ))]
     GrpcUdsConnect {
         path: String,
         source: tonic::transport::Error,
@@ -561,6 +564,26 @@ impl SvcError {
             }
             _ => (self.tonic_code(), nix::Error::EPERM),
         }
+    }
+    /// Get the full error chain as a string for the [`tonic::transport::Error`].
+    /// If the `tracing` level is set to `TRACE`, the debug representation
+    /// of the error is returned instead.
+    pub fn tonic_chain(error: &tonic::transport::Error) -> String {
+        if tracing::enabled!(tracing::Level::TRACE) {
+            return format!("{error:?}");
+        }
+
+        let mut chain = error.to_string();
+        let mut source = error.source();
+        while let Some(error) = source {
+            let error_string = error.to_string();
+            if !chain.contains(&error_string) {
+                chain.push_str(": ");
+                chain.push_str(&error_string);
+            }
+            source = error.source();
+        }
+        chain
     }
 }
 

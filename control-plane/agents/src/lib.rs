@@ -22,9 +22,9 @@ pub use common::errors;
 #[derive(Debug, Snafu)]
 #[allow(missing_docs)]
 pub enum ServiceError {
-    #[snafu(display("GrpcServer error"))]
+    #[snafu(display("GrpcServer error: {}", errors::SvcError::tonic_chain(source)))]
     GrpcServer { source: tonic::transport::Error },
-    #[snafu(display("Grpc TLS error"))]
+    #[snafu(display("Grpc TLS error: {source}"))]
     GrpcTls { source: grpc::tls::Error },
     #[snafu(display(
         "--grpc-tls-enforced requires gRPC TLS to be configured via --grpc-auto-tls or the \
