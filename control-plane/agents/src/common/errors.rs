@@ -16,13 +16,13 @@ use stor_port::{
 #[snafu(visibility(pub), context(suffix(false)))]
 #[allow(missing_docs)]
 pub enum SvcError {
-    #[snafu(display("Failed to get node '{}' from the node agent", node))]
+    #[snafu(display("Failed to get node '{node}' from the node agent"))]
     GetNode { node: String, source: ReplyError },
     #[snafu(display("Failed to get nodes from the node agent"))]
     GetNodes { source: ReplyError },
-    #[snafu(display("Node '{}' is not online", node))]
+    #[snafu(display("Node '{node}' is not online"))]
     NodeNotOnline { node: NodeId },
-    #[snafu(display("Node {} has invalid socket address {}", node, socket))]
+    #[snafu(display("Node '{node}' has invalid socket address '{socket}'"))]
     NodeGrpcEndpoint {
         node: NodeId,
         socket: String,
@@ -30,7 +30,7 @@ pub enum SvcError {
     },
     #[snafu(display("No available online nodes"))]
     NoNodes {},
-    #[snafu(display("Node {} is cordoned", node_id))]
+    #[snafu(display("Node '{node_id}' is cordoned"))]
     CordonedNode { node_id: String },
     #[snafu(display("{resource} {id} is already labelled with labels '{labels}'"))]
     LabelsExists {
@@ -64,10 +64,7 @@ pub enum SvcError {
         resources: String,
     },
     #[snafu(display(
-        "Timed out after '{:?}' attempting to connect to node '{}' via gRPC endpoint '{}'",
-        timeout,
-        node_id,
-        endpoint
+        "Timed out after '{timeout:?}' attempting to connect to node '{node_id}' via gRPC endpoint '{endpoint}'"
     ))]
     GrpcConnectTimeout {
         node_id: String,
@@ -75,16 +72,14 @@ pub enum SvcError {
         timeout: std::time::Duration,
     },
     #[snafu(display(
-        "Failed to connect to node '{}' via gRPC endpoint '{}'",
-        node_id,
-        endpoint
+        "Failed to connect to node '{node_id}' via gRPC endpoint '{endpoint}': {source}"
     ))]
     GrpcConnect {
         node_id: String,
         endpoint: String,
         source: grpc::tls::Error,
     },
-    #[snafu(display("Node '{}' has invalid gRPC URI '{}'", node_id, uri))]
+    #[snafu(display("Node '{node_id}' has invalid gRPC URI '{uri}'"))]
     GrpcConnectUri {
         node_id: String,
         uri: String,
@@ -105,70 +100,67 @@ pub enum SvcError {
         request: String,
         source: tonic::Status,
     },
-    #[snafu(display("Failed to connect to grpc sever via uds socket path '{}'", path))]
+    #[snafu(display("Failed to connect to grpc sever via uds socket path '{path}'"))]
     GrpcUdsConnect {
         path: String,
         source: tonic::transport::Error,
     },
-    #[snafu(display("Node '{}' not found", node_id))]
+    #[snafu(display("Node '{node_id}' not found"))]
     NodeNotFound { node_id: NodeId },
-    #[snafu(display("Pool '{}' not loaded", pool_id))]
+    #[snafu(display("Pool '{pool_id}' not loaded"))]
     PoolNotLoaded { pool_id: PoolId },
-    #[snafu(display("Pool '{}' not found", pool_id))]
+    #[snafu(display("Pool '{pool_id}' not found"))]
     PoolNotFound { pool_id: PoolId },
-    #[snafu(display("Disk list should have only 1 device. Received :{:?}", disks))]
+    #[snafu(display("Disk list should have only 1 device. Received :{disks:?}"))]
     InvalidPoolDeviceNum { disks: Vec<PoolDeviceUri> },
-    #[snafu(display("Nexus '{}' not found", nexus_id))]
+    #[snafu(display("Nexus '{nexus_id}' not found"))]
     NexusNotFound { nexus_id: String },
     #[snafu(display(
-        "Nexus '{nexus_id}' resize status not determined. Requested size {requested_size}",
+        "Nexus '{nexus_id}' resize status not determined. Requested size {requested_size}"
     ))]
     NexusResizeStatusUnknown {
         nexus_id: String,
         requested_size: u64,
     },
-    #[snafu(display("VolumeSnapshot '{}' for volume `{:?}` not found", snap_id, source_id))]
+    #[snafu(display("VolumeSnapshot '{snap_id}' for volume `{source_id:?}` not found"))]
     VolSnapshotNotFound {
         snap_id: String,
         source_id: Option<String>,
     },
     #[snafu(display(
-        "Invalid source Volume: {} for VolumeSnapshot: {}, expected source Volume: {}",
-        invalid_source_id,
-        snap_id,
-        correct_source_id
+        "Invalid source Volume: {invalid_source_id} for VolumeSnapshot: {snap_id}, expected source Volume: {correct_source_id}"
     ))]
     InvalidSnapshotSource {
         snap_id: String,
         invalid_source_id: String,
         correct_source_id: String,
     },
-    #[snafu(display("Failed to take snapshot on pools {pools}: {reason}"))]
+    #[snafu(display("Failed to take snapshot on pools '{pools}': {reason}"))]
     VolSnapshotPools {
         pools: String,
         reason: String,
         kind: ResourceKind,
         code: tonic::Code,
     },
-    #[snafu(display("{} '{}' not found", kind.to_string(), id))]
+    #[snafu(display("{kind} '{id}' not found"))]
     NotFound { kind: ResourceKind, id: String },
-    #[snafu(display("{} '{}' is still being created..", kind.to_string(), id))]
+    #[snafu(display("{kind} '{id}' is still being created.."))]
     PendingCreation { kind: ResourceKind, id: String },
-    #[snafu(display("{} '{}' is being deleted..", kind.to_string(), id))]
+    #[snafu(display("{kind} '{id}' is being deleted.."))]
     PendingDeletion { kind: ResourceKind, id: String },
-    #[snafu(display("Child '{}' not found in Nexus '{}'", child, nexus))]
+    #[snafu(display("Child '{child}' not found in Nexus '{nexus}'"))]
     ChildNotFound { nexus: String, child: String },
-    #[snafu(display("Child '{}' already exists in Nexus '{}'", child, nexus))]
+    #[snafu(display("Child '{child}' already exists in Nexus '{nexus}'"))]
     ChildAlreadyExists { nexus: String, child: String },
-    #[snafu(display("Volume '{}' not found", vol_id))]
+    #[snafu(display("Volume '{vol_id}' not found"))]
     VolumeNotFound { vol_id: String },
-    #[snafu(display("Affinity Group '{}' not found", vol_grp_id))]
+    #[snafu(display("Affinity Group '{vol_grp_id}' not found"))]
     AffinityGroupNotFound { vol_grp_id: String },
-    #[snafu(display("Volume '{}' not published", vol_id))]
+    #[snafu(display("Volume '{vol_id}' not published"))]
     VolumeNotPublished { vol_id: String },
-    #[snafu(display("Node '{}' not allowed to access target for volume '{}'", node, vol_id))]
+    #[snafu(display("Node '{node}' not allowed to access target for volume '{vol_id}'"))]
     FrontendNodeNotAllowed { node: String, vol_id: String },
-    #[snafu(display("{} {} cannot be shared over invalid protocol '{}'", kind.to_string(), id, share))]
+    #[snafu(display("{kind} '{id}' cannot be shared over invalid protocol '{share}'"))]
     InvalidShareProtocol {
         kind: ResourceKind,
         id: String,
@@ -200,85 +192,73 @@ pub enum SvcError {
     #[snafu(display("Volume '{vol_id}' is already published for nodes '{nodes:?}'"))]
     VolumePublishSingle { vol_id: String, nodes: Vec<String> },
     #[snafu(display(
-        "Volume '{}' - required size is invalid. Current size: '{}', requested size: '{}'",
-        vol_id,
-        current_size,
-        requested_size
+        "Volume '{vol_id}' - required size is invalid. Current size: '{current_size}', requested size: '{requested_size}'"
     ))]
     VolumeResizeSize {
         vol_id: String,
         requested_size: u64,
         current_size: u64,
     },
-    #[snafu(display("Replica '{}' not found", replica_id))]
+    #[snafu(display("Replica '{replica_id}' not found"))]
     ReplicaNotFound { replica_id: ReplicaId },
-    #[snafu(display("{} '{}' is already shared over {}", kind.to_string(), id, share))]
+    #[snafu(display("{kind} '{id}' is already shared over '{share}'"))]
     AlreadyShared {
         kind: ResourceKind,
         id: String,
         share: String,
     },
-    #[snafu(display("{} '{}' is not shared", kind.to_string(), id))]
+    #[snafu(display("{kind} '{id}' is not shared"))]
     NotShared { kind: ResourceKind, id: String },
-    #[snafu(display("Invalid filter value: {:?}", filter))]
+    #[snafu(display("Invalid filter value: {filter:?}"))]
     InvalidFilter { filter: Filter },
     #[snafu(display("Operation failed due to insufficient resources"))]
     NotEnoughResources { source: NotEnough },
     #[snafu(display("Failed to deserialise JsonRpc response"))]
     JsonRpcDeserialise { source: serde_json::Error },
     #[snafu(display(
-        "Json RPC call failed for method '{}' with parameters '{}'. Error {}",
-        method,
-        params,
-        error,
+        "Json RPC call failed for method '{method}' with parameters '{params}'. Error {error}",
     ))]
     JsonRpc {
         method: String,
         params: String,
         error: String,
     },
-    #[snafu(display("Internal error: {}", details))]
+    #[snafu(display("Internal error: {details}"))]
     Internal { details: String },
     #[snafu(display("Invalid Arguments"))]
     InvalidArguments {},
     #[snafu(display("IoEngine upgrade is required to rebuild volume with snapshots"))]
     UpgradeRequiredToRebuild {},
-    #[snafu(display("Invalid {}, labels: {} ", resource_kind, labels))]
+    #[snafu(display("Invalid {resource_kind}, labels: {labels}"))]
     InvalidLabel {
         labels: String,
         resource_kind: ResourceKind,
     },
-    #[snafu(display(
-        "Forbidden {}, cannot delete internal labels: {} ",
-        resource_kind,
-        labels
-    ))]
+    #[snafu(display("Forbidden {resource_kind}, cannot delete internal labels: {labels}"))]
     ForbiddenUnlabelKey {
         labels: String,
         resource_kind: ResourceKind,
     },
     #[snafu(display("Multiple nexuses not supported"))]
     MultipleNexuses {},
-    #[snafu(display("Storage Error: {}", source))]
+    #[snafu(display("Storage Error: {source}"))]
     Store { source: StoreError },
-    #[snafu(display("Storage Error: {} Config for Resource id {} not committed to the store", kind.to_string(), id))]
+    #[snafu(display(
+        "Storage Error: {kind} Config for Resource id {id} not committed to the store"
+    ))]
     StoreDirty { kind: ResourceKind, id: String },
     #[snafu(display("Watch Config Not Found"))]
     WatchNotFound {},
-    #[snafu(display("{} Resource to be watched does not exist", kind.to_string()))]
+    #[snafu(display("{kind} Resource to be watched does not exist"))]
     WatchResourceNotFound { kind: ResourceKind },
     #[snafu(display("Watch Already Exists"))]
     WatchAlreadyExists {},
     #[snafu(display("Conflicts with existing operation - please retry"))]
     Conflict {},
-    #[snafu(display("{} Resource pending deletion - please retry", kind.to_string()))]
+    #[snafu(display("{kind} Resource pending deletion - please retry"))]
     Deleting { kind: ResourceKind },
     #[snafu(display(
-        "Retried creation of resource id {} kind {} with different parameters. Existing resource: {}, Request: {}",
-        id,
-        kind.to_string(),
-        resource,
-        request
+        "Retried creation of resource id {id} kind {kind} with different parameters. Existing resource: {resource}, Request: {request}",
     ))]
     ReCreateMismatch {
         id: String,
@@ -286,67 +266,57 @@ pub enum SvcError {
         resource: String,
         request: String,
     },
-    #[snafu(display("{} Resource id {} needs to be reconciled. Please retry", kind.to_string(), id))]
+    #[snafu(display("{kind} Resource id {id} needs to be reconciled. Please retry"))]
     NotReady { kind: ResourceKind, id: String },
-    #[snafu(display("{} Resource id {} still in use", kind.to_string(), id))]
+    #[snafu(display("{kind} Resource id {id} still in use"))]
     InUse { kind: ResourceKind, id: String },
-    #[snafu(display("{} Resource id {} already exists", kind.to_string(), id))]
+    #[snafu(display("{kind} Resource id {id} already exists"))]
     AlreadyExists { kind: ResourceKind, id: String },
-    #[snafu(display("Cannot remove the last replica '{}' of volume '{}'", replica, volume))]
+    #[snafu(display("Cannot remove the last replica '{replica}' of volume '{volume}'"))]
     LastReplica { replica: String, volume: String },
-    #[snafu(display(
-        "Cannot remove the last healthy replica '{}' of volume '{}'",
-        replica,
-        volume
-    ))]
+    #[snafu(display("Cannot remove the last healthy replica '{replica}' of volume '{volume}'"))]
     LastHealthyReplica { replica: String, volume: String },
-    #[snafu(display("Replica count of Volume '{}' is already '{}'", id, count))]
+    #[snafu(display("Replica count of Volume '{id}' is already '{count}'"))]
     ReplicaCountAchieved { id: String, count: u8 },
     #[snafu(display("Replica count only allowed to change by a maximum of one at a time"))]
     ReplicaChangeCount {},
     #[snafu(display(
-        "Unable to increase replica count due to volume '{}' in state '{}'",
-        volume_id,
-        volume_state
+        "Unable to increase replica count due to volume '{volume_id}' in state '{volume_state}'"
     ))]
     ReplicaIncrease {
         volume_id: String,
         volume_state: String,
     },
-    #[snafu(display("Could not get rebuild history for nexus'{}'", nexus_id))]
+    #[snafu(display("Could not get rebuild history for nexus '{nexus_id}'"))]
     RebuildHistoryNotFound { nexus_id: String },
-    #[snafu(display("No suitable replica removal candidates found for Volume '{}'", id))]
+    #[snafu(display("No suitable replica removal candidates found for Volume '{id}'"))]
     ReplicaRemovalNoCandidates { id: String },
-    #[snafu(display("Failed to create the desired number of replicas for Volume '{}'", id))]
+    #[snafu(display("Failed to create the desired number of replicas for Volume '{id}'"))]
     ReplicaCreateNumber { id: String },
-    #[snafu(display("No online replicas are available for Volume '{}'", id))]
+    #[snafu(display("No online replicas are available for Volume '{id}'"))]
     NoOnlineReplicas { id: String },
-    #[snafu(display("No healthy replicas are available for Volume '{}'", id))]
+    #[snafu(display("No healthy replicas are available for Volume '{id}'"))]
     NoHealthyReplicas { id: String },
-    #[snafu(display("Pool not ready to take clone of snapshot '{}'", id))]
+    #[snafu(display("Pool not ready to take clone of snapshot '{id}'"))]
     NoSnapshotPools { id: String },
     #[snafu(display("Cannot scale down volume due to affinity group restrictions"))]
     RestrictedReplicaCount {},
-    #[snafu(display("Entry with key '{}' not found in the persistent store.", key))]
+    #[snafu(display("Entry with key '{key}' not found in the persistent store."))]
     StoreMissingEntry { key: String },
-    #[snafu(display("The uuid '{}' for kind '{}' is not valid.", uuid, kind.to_string()))]
+    #[snafu(display("The uuid '{uuid}' for kind '{kind}' is not valid."))]
     InvalidUuid { uuid: String, kind: ResourceKind },
     #[snafu(display(
-        "Unable to start rebuild. Maximum number of rebuilds permitted is {}",
-        max_rebuilds
+        "Unable to start rebuild. Maximum number of rebuilds permitted is {max_rebuilds}"
     ))]
     MaxRebuilds { max_rebuilds: u32 },
-    #[snafu(display("The api version: {:?} is not valid", api_version))]
+    #[snafu(display("The api version: {api_version:?} is not valid"))]
     InvalidApiVersion { api_version: Option<ApiVersion> },
-    #[snafu(display("The subsystem with nqn: {} is not found, {}", nqn, details))]
+    #[snafu(display("The subsystem with nqn: {nqn} is not found, {details}"))]
     SubsystemNotFound { nqn: String, details: String },
     #[snafu(display("Can't add new path to subsystem with nqn: {nqn} as it is not present"))]
     ReplaceNqnNotFound { nqn: String },
     #[snafu(display(
-        "The subsystem {} has unexpected Nqn ({}), expected ({})",
-        path,
-        nqn,
-        expected_nqn
+        "The subsystem {path} has unexpected Nqn ({nqn}), expected ({expected_nqn})"
     ))]
     UnexpectedSubsystemNqn {
         nqn: String,
@@ -355,14 +325,10 @@ pub enum SvcError {
     },
     #[snafu(display("The nqn couldnt be parsed"))]
     NvmeParseError {},
-    #[snafu(display("Nvme connect failed: {}", details))]
+    #[snafu(display("Nvme connect failed: {details}"))]
     NvmeConnectError { details: String },
     #[snafu(display(
-        "Remaining pool {} free space {} not enough to online child '{}' as we required {}",
-        pool_id,
-        free_space,
-        child,
-        required
+        "Remaining pool {pool_id} free space {free_space} not enough to online child '{child}' as we required {required}"
     ))]
     NoCapacityToOnline {
         pool_id: String,
@@ -371,30 +337,25 @@ pub enum SvcError {
         required: u64,
     },
     #[snafu(display(
-        "Replicas {:?}, can't be resized due to required capacity ({}) or state(Online) not met.",
-        replica_ids,
-        required
+        "Replicas {replica_ids:?}, can't be resized due to required capacity ({required}) or state(Online) not met."
     ))]
     ResizeReplError {
         replica_ids: Vec<String>,
         required: u64,
     },
     #[snafu(display(
-        "Service for request '{}' for '{}' is unimplemented with '{}'",
-        request,
-        resource.to_string(),
-        source
+        "Service for request '{request}' for '{resource}' is unimplemented with '{source}'"
     ))]
     Unimplemented {
         resource: ResourceKind,
         request: String,
         source: tonic::Status,
     },
-    #[snafu(display("Replica's {} snapshot was unexpectedly skipped", replica))]
+    #[snafu(display("Replica's {replica} snapshot was unexpectedly skipped"))]
     ReplicaSnapSkipped { replica: String },
-    #[snafu(display("Replica's {} snapshot was unexpectedly not taken", replica))]
+    #[snafu(display("Replica's {replica} snapshot was unexpectedly not taken"))]
     ReplicaSnapMiss { replica: String },
-    #[snafu(display("Failed to snapshot replicas {:?}", failed_replicas))]
+    #[snafu(display("Failed to snapshot replicas {failed_replicas:?}"))]
     ReplicaSnapError {
         failed_replicas: Vec<(String, nix::errno::Errno)>,
     },
@@ -405,8 +366,7 @@ pub enum SvcError {
     #[snafu(display("The snapshot is not created, and its parent volume is gone"))]
     SnapshotNotCreatedNoVolume {},
     #[snafu(display(
-        "Reached maximum transactions for snapshot: {}, needs to be reconciled",
-        snap_id
+        "Reached maximum transactions for snapshot: {snap_id}, needs to be reconciled"
     ))]
     SnapshotMaxTransactions { snap_id: String },
     #[snafu(display("Cloned snapshot volumes must be thin provisioned"))]
@@ -422,9 +382,7 @@ pub enum SvcError {
     #[snafu(display("Target switchover is not allowed without HA"))]
     SwitchoverNotAllowedWhenHAisDisabled {},
     #[snafu(display(
-        "The volume would exceed the cluster capacity limit of {}B by {}B",
-        cluster_capacity_limit,
-        excess
+        "The volume would exceed the cluster capacity limit of {cluster_capacity_limit}B by {excess}B"
     ))]
     CapacityLimitExceeded {
         cluster_capacity_limit: u64,
