@@ -72,7 +72,7 @@ pub enum SvcError {
         timeout: std::time::Duration,
     },
     #[snafu(display(
-        "Failed to connect to node '{node_id}' via gRPC endpoint '{endpoint}': {source}"
+        "Failed to connect to node '{node_id}' via gRPC endpoint '{endpoint}': {source:?}"
     ))]
     GrpcConnect {
         node_id: String,
