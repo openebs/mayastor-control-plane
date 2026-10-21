@@ -1,8 +1,5 @@
-use super::translation::{rpc_pool_to_agent, AgentToIoEngine};
-use crate::controller::io_engine::{
-    translation::IoEngineToAgent,
-    types::{ProbePoolRequest, ProbePoolResponse},
-};
+use super::translation::{rpc_pool_smart_to_agent, rpc_pool_to_agent, AgentToIoEngine};
+use crate::controller::io_engine::types::{ProbePoolRequest, ProbePoolResponse};
 use agents::errors::{GrpcRequest as GrpcRequestError, SvcError};
 use rpc::v1::pool::ListPoolOptions;
 use stor_port::{
@@ -164,6 +161,12 @@ impl crate::controller::io_engine::PoolApi for super::RpcClient {
                 resource: ResourceKind::Pool,
                 request: "get_pools_smart",
             })?;
-        Ok(response.into_inner().to_agent())
+        let pools = response
+            .into_inner()
+            .pools
+            .iter()
+            .map(|p| rpc_pool_smart_to_agent(p, self.context.node()))
+            .collect();
+        Ok(GetPoolsSmartResponse { pools })
     }
 }

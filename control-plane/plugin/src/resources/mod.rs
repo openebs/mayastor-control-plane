@@ -2,7 +2,7 @@ use crate::resources::{
     app_node::{GetAppNodeArgs, GetAppNodesArgs},
     blockdevice::BlockDeviceArgs,
     node::{DrainNodeArgs, GetNodeArgs, GetNodesArgs},
-    pool::{DrainPoolArgs, GetPoolArgs, GetPoolsArgs},
+    pool::{DrainPoolArgs, GetPoolArgs, GetPoolSmartArgs, GetPoolsArgs, GetPoolsSmartArgs},
     snapshot::VolumeSnapshotArgs,
     volume::{VolumeTopologiesArgs, VolumeTopologyArgs, VolumesArgs},
 };
@@ -36,6 +36,9 @@ pub enum GetResources {
     /// get drain
     #[clap(subcommand)]
     Drain(GetDrainArgs),
+    /// get smart
+    #[clap(subcommand)]
+    Smart(GetSmartArgs),
     /// Get all volumes.
     Volumes(VolumesArgs),
     /// Get volume with the given ID.
@@ -165,6 +168,15 @@ pub enum UnCordonResources {
         #[clap(flatten)]
         resources: Option<pool::UncordonReq>,
     },
+}
+
+/// The types of resources that support the 'get smart' operation.
+#[derive(clap::Subcommand, Debug)]
+pub enum GetSmartArgs {
+    /// Get the SMART data of the disks of all pools on a node.
+    Pools(GetPoolsSmartArgs),
+    /// Get the SMART data of the disks of the pool with the given ID.
+    Pool(GetPoolSmartArgs),
 }
 
 /// The types of resources that support the 'get cordon' operation.

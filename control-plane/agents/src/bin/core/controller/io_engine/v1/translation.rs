@@ -13,11 +13,11 @@ use stor_port::{
         openapi::apis::IntoVec,
         store::pool::{Encryption, EncryptionSecret},
         transport::{
-            self, ChildState, ChildStateReason, GetPoolsSmartResponse, Nexus, NexusId,
-            NexusNvmePreemption, NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation,
-            PoolAlertStatus, PoolAlerts, PoolDiskError, PoolError, PoolErrorCode, PoolState,
-            PoolUuid, Protocol, Replica, ReplicaId, ReplicaKind, ReplicaName, ReplicaStatus,
-            SetReplicaEntityId, SnapshotId, VolumeId,
+            self, ChildState, ChildStateReason, Nexus, NexusId, NexusNvmePreemption,
+            NexusNvmfConfig, NexusStatus, NodeId, NvmeReservation, PoolAlertStatus, PoolAlerts,
+            PoolDiskError, PoolError, PoolErrorCode, PoolState, PoolUuid, Protocol, Replica,
+            ReplicaId, ReplicaKind, ReplicaName, ReplicaStatus, SetReplicaEntityId, SnapshotId,
+            VolumeId,
         },
     },
     IntoOption,
@@ -1121,15 +1121,6 @@ impl AgentToIoEngine for GetPoolsSmartRequest {
     }
 }
 
-impl IoEngineToAgent for v1::pool::ListPoolsSmartResponse {
-    type AgentMessage = GetPoolsSmartResponse;
-    fn to_agent(&self) -> Self::AgentMessage {
-        GetPoolsSmartResponse {
-            pools: self.pools.iter().map(|p| p.to_agent()).collect(),
-        }
-    }
-}
-
 impl IoEngineToAgent for v1::pool::PoolSmart {
     type AgentMessage = transport::PoolSmart;
     fn to_agent(&self) -> Self::AgentMessage {
@@ -1137,8 +1128,19 @@ impl IoEngineToAgent for v1::pool::PoolSmart {
             name: self.name.clone(),
             uuid: self.uuid.clone(),
             disks: self.disks.iter().map(|d| d.to_agent()).collect(),
+            node: Default::default(),
         }
     }
+}
+
+/// Converts rpc pool SMART data to an agent pool SMART data.
+pub(super) fn rpc_pool_smart_to_agent(
+    rpc_pool: &v1::pool::PoolSmart,
+    id: &NodeId,
+) -> transport::PoolSmart {
+    let mut pool = rpc_pool.to_agent();
+    pool.node = id.clone();
+    pool
 }
 
 impl IoEngineToAgent for v1::pool::DiskSmart {

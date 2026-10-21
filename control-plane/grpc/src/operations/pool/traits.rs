@@ -1811,6 +1811,7 @@ impl From<PoolSmart> for pool::PoolSmartInfo {
             name: p.name,
             uuid: p.uuid,
             disks: p.disks.into_iter().map(Into::into).collect(),
+            node: p.node.into(),
         }
     }
 }
@@ -1821,6 +1822,7 @@ impl From<pool::PoolSmartInfo> for PoolSmart {
             name: p.name,
             uuid: p.uuid,
             disks: p.disks.into_iter().map(Into::into).collect(),
+            node: p.node.into(),
         }
     }
 }

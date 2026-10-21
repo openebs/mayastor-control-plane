@@ -729,6 +729,7 @@ impl From<PoolSmart> for models::PoolSmart {
     fn from(src: PoolSmart) -> Self {
         models::PoolSmart::new_all(
             src.name,
+            src.node,
             // The io-engine reports the uuid as a string, which is empty when unknown.
             src.uuid.parse::<uuid::Uuid>().ok(),
             src.disks
@@ -1278,6 +1279,8 @@ pub struct PoolSmart {
     pub uuid: String,
     /// SMART data for each disk backing the pool.
     pub disks: Vec<DiskSmart>,
+    /// Id of the node the pool is on.
+    pub node: NodeId,
 }
 
 /// SMART data for a single disk backing the pool.
