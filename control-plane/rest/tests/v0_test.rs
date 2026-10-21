@@ -201,6 +201,8 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
 
     info!("Pools: {:#?}", pool);
 
+    pool_smart_test(&client, &io_engine1, &io_engine2).await;
+
     let _ = client.replicas_api().get_replicas().await.unwrap();
     let replica = client
         .replicas_api()
@@ -513,6 +515,89 @@ async fn client_test(cluster: &Cluster, auth: &bool) {
         "unexpected liveness probe status line: {}",
         live_status
     );
+}
+
+/// Exercises the pool SMART routes: node, node+pool and pool filters, plus missing resources.
+/// The test pools are malloc backed so SMART cannot be read; this checks routing, filtering
+/// and the unsupported/error response shape.
+async fn pool_smart_test(client: &ApiClient, node1: &NodeId, node2: &NodeId) {
+    let is_not_found = |error: Error<models::RestJsonError>| {
+        matches!(
+            error,
+            Error::Response(ResponseError::Expected(r)) if r.status() == apis::StatusCode::NOT_FOUND
+        )
+    };
+    let assert_unsupported = |smart: &models::PoolSmart, pool: &models::Pool| {
+        assert_eq!(smart.name, pool.id);
+        assert!(smart.pool_uuid.is_some());
+        let disks = &pool.spec.as_ref().unwrap().disks;
+        assert_eq!(smart.disks.len(), disks.len());
+        for (disk, uri) in smart.disks.iter().zip(disks) {
+            assert_eq!(&disk.disk_uri, uri);
+            assert!(!disk.supported);
+            assert!(disk.smart.is_none());
+            assert!(disk.error.is_some());
+        }
+    };
+
+    let pools = client.pools_api().get_pools(None).await.unwrap();
+    let pool1 = pools.iter().find(|p| p.id == "pooloop").unwrap();
+    let pool2 = pools.iter().find(|p| p.id == "pooloop2").unwrap();
+
+    // Node filter: only the pools of the requested node are returned.
+    let node_pools = client
+        .pools_api()
+        .get_node_pools_smart(node1.as_str())
+        .await
+        .unwrap();
+    assert_eq!(node_pools.len(), 1);
+    assert_unsupported(&node_pools[0], pool1);
+    let node_pools = client
+        .pools_api()
+        .get_node_pools_smart(node2.as_str())
+        .await
+        .unwrap();
+    assert_eq!(node_pools.len(), 1);
+    assert_unsupported(&node_pools[0], pool2);
+
+    // NodePool filter.
+    let smart = client
+        .pools_api()
+        .get_node_pool_smart(node1.as_str(), &pool1.id)
+        .await
+        .unwrap();
+    assert_unsupported(&smart, pool1);
+
+    // Pool filter.
+    let smart = client.pools_api().get_pool_smart(&pool2.id).await.unwrap();
+    assert_unsupported(&smart, pool2);
+
+    // Missing resources.
+    let error = client
+        .pools_api()
+        .get_pool_smart("missing-pool")
+        .await
+        .expect_err("pool does not exist");
+    assert!(is_not_found(error));
+    let error = client
+        .pools_api()
+        .get_node_pool_smart(node1.as_str(), "missing-pool")
+        .await
+        .expect_err("pool does not exist");
+    assert!(is_not_found(error));
+    // The pool exists, but on another node.
+    let error = client
+        .pools_api()
+        .get_node_pool_smart(node2.as_str(), &pool1.id)
+        .await
+        .expect_err("pool is not on this node");
+    assert!(is_not_found(error));
+    let error = client
+        .pools_api()
+        .get_node_pools_smart("missing-node")
+        .await
+        .expect_err("node does not exist");
+    assert!(is_not_found(error));
 }
 
 /// Issue a raw HTTP/1.1 GET request and return the response status line.
