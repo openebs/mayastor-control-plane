@@ -112,6 +112,12 @@ impl Registry {
         })
     }
 
+    /// Returns true of pool is empty.
+    pub(crate) async fn is_pool_empty(&self, pool_id: &PoolId) -> Result<bool, SvcError> {
+        let pool_usage = self.pool_usage(pool_id).await?;
+        Ok(pool_usage.repl_count + pool_usage.snap_count == 0)
+    }
+
     /// Get all controller pools states (state + metadata).
     pub(crate) async fn ctrl_pool_states(&self) -> Vec<CtrlPoolState> {
         let nodes = self.node_wrappers().await;
