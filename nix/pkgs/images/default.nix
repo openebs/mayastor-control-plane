@@ -38,7 +38,13 @@ let
   tag = if img_tag != "" then img_tag else control-plane.version;
   image_suffix = { "release" = ""; "debug" = "-dev"; "coverage" = "-cov"; };
   license_src = sourcer.whitelistSource ../../.. [ "LICENSE" ];
-  build-control-plane-image = { buildType, name, package, config ? { } }:
+  vendor = "OpenEBS";
+  maintainer = "OpenEBS Authors (https://github.com/openebs/community)";
+  # `release` identifies a build of a given `version`. Nothing here
+  # distinguishes one rebuild of a version from another, so it is fixed rather
+  # than threaded through from a build argument nothing would ever set.
+  release = "1";
+  build-control-plane-image = { buildType, name, package, description, summary ? description, config ? { } }:
     dockerTools.buildImage {
       inherit tag;
       created = "now";
@@ -50,25 +56,45 @@ let
       copyToRoot = [ tini busybox package pkgs.cacert ];
       config = {
         Entrypoint = [ "tini" "--" package.binary ];
+        Labels = {
+          inherit vendor maintainer summary description release;
+          name = "${img_prefix}-${name}${image_suffix.${buildType}}";
+          version = tag;
+        };
       } // config;
     };
+  descriptions = {
+    core = "Mayastor core agent - the control plane's central agent, reconciling nodes, pools, volumes and nexuses.";
+    jsongrpc = "Mayastor JSON-gRPC agent - relays JSON-RPC calls to the data plane on behalf of the control plane.";
+    ha = {
+      node = "Mayastor HA node agent - watches local NVMe-oF paths and reports broken ones to the cluster agent.";
+      cluster = "Mayastor HA cluster agent - drives switchover of volume targets when a node reports a failed path.";
+    };
+    diskpool = "Mayastor DiskPool operator - reconciles DiskPool custom resources against control plane pools.";
+    controller = "Mayastor CSI controller - provisions, attaches and snapshots Mayastor volumes.";
+    node = "Mayastor CSI node plugin - stages, mounts and unmounts Mayastor volumes on the node.";
+    api-rest = "Mayastor REST API server - serves the control plane's OpenAPI over HTTP and HTTPS.";
+  };
   build-agent-image = { buildType, name }:
     build-control-plane-image {
       inherit buildType;
       name = "agent-${name}";
       package = control-plane.${buildType}.agents.${name};
+      description = descriptions.${name};
     };
   build-agent-cat-image = { buildType, name, category }:
     build-control-plane-image {
       inherit buildType;
       name = "agent-${category}-${name}";
       package = control-plane.${buildType}.agents.${category}.${name};
+      description = descriptions.${category}.${name};
     };
   build-rest-image = { buildType }:
     build-control-plane-image {
       inherit buildType;
       name = "api-rest";
       package = control-plane.${buildType}.api-rest;
+      description = descriptions.api-rest;
       config = {
         ExposedPorts = {
           "8080/tcp" = { };
@@ -81,12 +107,14 @@ let
       inherit buildType;
       name = "operator-${name}";
       package = control-plane.${buildType}.operators.${name};
+      description = descriptions.${name};
     };
   build-csi-image = { buildType, name, config ? { } }:
     build-control-plane-image {
       inherit buildType config;
       name = "csi-${name}";
       package = control-plane.${buildType}.csi.${name};
+      description = descriptions.${name};
     };
 in
 let
