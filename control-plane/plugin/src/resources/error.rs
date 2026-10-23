@@ -101,6 +101,18 @@ pub enum Error {
     ListPoolsError {
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
+    /// Error when list pools SMART request fails.
+    #[snafu(display("Failed to list the pools SMART data of node {id}. Error {source}"))]
+    ListPoolsSmartError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
+    /// Error when get pool SMART request fails.
+    #[snafu(display("Failed to get the SMART data of pool {id}. Error {source}"))]
+    GetPoolSmartError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
     /// Error when get volume request fails.
     #[snafu(display("Failed to get volume {id}. Error {source}"))]
     GetVolumeError {

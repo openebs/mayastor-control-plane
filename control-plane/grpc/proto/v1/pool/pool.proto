@@ -686,6 +686,8 @@ message PoolSmartInfo {
   string uuid = 2;
   // SMART data for each backing disk.
   repeated DiskSmartInfo disks = 3;
+  // Id of the node the pool is on.
+  string node = 4;
 }
 
 // SMART data for a single backing disk.

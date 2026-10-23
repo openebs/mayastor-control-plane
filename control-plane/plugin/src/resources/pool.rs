@@ -20,7 +20,7 @@ use openapi::{apis::StatusCode, models, models::PoolCordonDrain};
 use prettytable::{Cell, Row};
 use serde::Serialize;
 use snafu::ResultExt;
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 use strum_macros::{AsRefStr, Display, EnumString};
 
 /// Pools resource.
@@ -1105,5 +1105,204 @@ fn pool_cordon_resources(pool: &models::Pool) -> String {
             None => String::new(),
         },
         None => String::new(),
+    }
+}
+
+/// Pools SMART resource.
+#[derive(clap::Args, Debug)]
+pub struct PoolsSmart {}
+
+/// Pool SMART resource.
+#[derive(clap::Args, Debug)]
+pub struct PoolSmart {}
+
+/// Arguments used when getting the SMART data of the pools of a node.
+#[derive(Debug, Clone, clap::Args)]
+pub struct GetPoolsSmartArgs {
+    /// Id of the node.
+    node_id: NodeId,
+}
+
+impl GetPoolsSmartArgs {
+    /// Return the node ID.
+    pub fn node_id(&self) -> NodeId {
+        self.node_id.clone()
+    }
+}
+
+/// Arguments used when getting the SMART data of a pool.
+#[derive(Debug, Clone, clap::Args)]
+pub struct GetPoolSmartArgs {
+    /// Id of the pool.
+    pool_id: PoolId,
+    /// Gets the SMART data from the pool on this node.
+    #[clap(long)]
+    node: Option<NodeId>,
+}
+
+impl GetPoolSmartArgs {
+    /// Return the pool ID.
+    pub fn pool_id(&self) -> PoolId {
+        self.pool_id.clone()
+    }
+    /// Return the node ID.
+    pub fn node(&self) -> Option<&NodeId> {
+        self.node.as_ref()
+    }
+}
+
+#[async_trait(?Send)]
+impl ListWithArgs for PoolsSmart {
+    type Args = GetPoolsSmartArgs;
+    async fn list(args: &Self::Args, output: &utils::OutputFormat) -> PluginResult {
+        let pools = RestClient::client()
+            .pools_api()
+            .get_node_pools_smart(&args.node_id())
+            .await
+            .map(|pools| pools.into_body())
+            .map_err(|e| Error::ListPoolsSmartError {
+                id: args.node_id(),
+                source: e,
+            })?;
+
+        print_table(output, pools);
+        Ok(())
+    }
+}
+
+#[async_trait(?Send)]
+impl GetWithArgs for PoolSmart {
+    type ID = PoolId;
+    type Args = GetPoolSmartArgs;
+    async fn get(id: &Self::ID, args: &Self::Args, output: &utils::OutputFormat) -> PluginResult {
+        let pool = match args.node() {
+            Some(node_id) => {
+                RestClient::client()
+                    .pools_api()
+                    .get_node_pool_smart(node_id, id)
+                    .await
+            }
+            None => RestClient::client().pools_api().get_pool_smart(id).await,
+        }
+        .map(|pool| pool.into_body())
+        .map_err(|source| Error::GetPoolSmartError {
+            id: id.to_string(),
+            source,
+        })?;
+
+        print_table(output, pool);
+        Ok(())
+    }
+}
+
+/// Headers of the pool SMART table, which has a row per disk.
+const POOL_SMART_HEADERS: [&str; 12] = [
+    "POOL",
+    "NODE",
+    "DISK",
+    "TYPE",
+    "MODEL",
+    "FIRMWARE",
+    "SMART-STATUS",
+    "TEMP",
+    "POWER-ON",
+    "SPARE",
+    "USED",
+    "ERROR",
+];
+
+impl GetHeaderRow for models::PoolSmart {
+    fn get_header_row(&self) -> Row {
+        Row::new(POOL_SMART_HEADERS.iter().map(|h| Cell::new(h)).collect())
+    }
+}
+
+impl CreateRows for models::PoolSmart {
+    fn create_rows(&self) -> Vec<Row> {
+        self.disks
+            .iter()
+            .enumerate()
+            .map(|(i, disk)| {
+                // The pool and its node are on the first row, the other disks hang below it.
+                if i == 0 {
+                    disk_smart_row(&self.name, &self.node, disk)
+                } else if i < self.disks.len() - 1 {
+                    disk_smart_row("├─", "", disk)
+                } else {
+                    disk_smart_row("└─", "", disk)
+                }
+            })
+            .collect()
+    }
+    // Keep the disks in the order of the pool.
+    fn sort_rows(&self) -> bool {
+        false
+    }
+}
+
+impl CreateRows for Vec<models::PoolSmart> {
+    fn create_rows(&self) -> Vec<Row> {
+        self.iter().flat_map(CreateRows::create_rows).collect()
+    }
+    fn sort_rows(&self) -> bool {
+        false
+    }
+}
+
+/// Create the table row of a disk, which only has the values reported by every device type.
+fn disk_smart_row(pool: &str, node: &str, disk: &models::DiskSmart) -> Row {
+    let smart = disk.smart.as_ref();
+    let identity = smart.and_then(|smart| smart.identity.as_ref());
+    let status = if disk.supported {
+        optional_cell(
+            smart
+                .and_then(|smart| smart.smart_status_passed)
+                .map(|passed| if passed { "PASSED" } else { "FAILED" }),
+        )
+    } else {
+        "N/A".to_string()
+    };
+    row![
+        pool,
+        node,
+        disk.disk_uri,
+        optional_cell(smart.and_then(smart_device_type)),
+        optional_cell(identity.and_then(|identity| identity.model.as_ref())),
+        optional_cell(identity.and_then(|identity| identity.firmware_revision.as_ref())),
+        status,
+        optional_cell(
+            smart
+                .and_then(|smart| smart.temperature_celsius)
+                .map(|t| format!("{t}°C")),
+        ),
+        optional_cell(
+            smart
+                .and_then(|smart| smart.power_on_hours)
+                .map(|hours| humantime::format_duration(Duration::from_secs(hours * 3600))),
+        ),
+        optional_cell(
+            smart
+                .and_then(|smart| smart.available_spare_percent)
+                .map(|p| format!("{p}%")),
+        ),
+        optional_cell(
+            smart
+                .and_then(|smart| smart.percentage_used)
+                .map(|p| format!("{p}%")),
+        ),
+        optional_cell(disk.error.as_ref()),
+    ]
+}
+
+/// The type of the device: NVMe and ATA devices are told apart by the report they carry. For other
+/// devices, such as SAS, it is the transport reported by the device.
+fn smart_device_type(smart: &models::SmartData) -> Option<String> {
+    match (&smart.nvme, &smart.ata) {
+        (Some(_), _) => Some("NVMe".to_string()),
+        (None, Some(_)) => Some("SATA".to_string()),
+        (None, None) => smart
+            .identity
+            .as_ref()
+            .and_then(|identity| identity.transport.clone()),
     }
 }

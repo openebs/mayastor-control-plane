@@ -17,8 +17,8 @@ use crate::{
     resources::{
         app_node, blockdevice, cordon, drain, node, pool, snapshot, volume,
         volume::VolumeTopologiesArgs, ClearErrors, CordonResources, DeleteArgs, DeleteResources,
-        DrainResources, ExpandResources, GetCordonArgs, GetDrainArgs, GetResources, ScaleResources,
-        SetPropertyResources, SetVolumeProperties, UnCordonResources,
+        DrainResources, ExpandResources, GetCordonArgs, GetDrainArgs, GetResources, GetSmartArgs,
+        ScaleResources, SetPropertyResources, SetVolumeProperties, UnCordonResources,
     },
 };
 
@@ -172,6 +172,12 @@ impl ExecuteOperation for GetResources {
                 GetDrainArgs::Nodes => drain::NodeDrains::list(&cli_args.output).await,
                 GetDrainArgs::Pool { id: pool_id } => {
                     drain::PoolDrain::get(pool_id, &cli_args.output).await
+                }
+            },
+            GetResources::Smart(get_smart_resource) => match get_smart_resource {
+                GetSmartArgs::Pools(args) => pool::PoolsSmart::list(args, &cli_args.output).await,
+                GetSmartArgs::Pool(args) => {
+                    pool::PoolSmart::get(&args.pool_id(), args, &cli_args.output).await
                 }
             },
             GetResources::Volumes(vol_args) => {

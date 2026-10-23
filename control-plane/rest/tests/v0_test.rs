@@ -529,6 +529,7 @@ async fn pool_smart_test(client: &ApiClient, node1: &NodeId, node2: &NodeId) {
     };
     let assert_unsupported = |smart: &models::PoolSmart, pool: &models::Pool| {
         assert_eq!(smart.name, pool.id);
+        assert_eq!(smart.node, pool.spec.as_ref().unwrap().node);
         assert!(smart.pool_uuid.is_some());
         let disks = &pool.spec.as_ref().unwrap().disks;
         assert_eq!(smart.disks.len(), disks.len());
