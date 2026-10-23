@@ -116,7 +116,9 @@ async fn offline_rebuild_reconcile(
         Err(_) => return PollResult::Ok(PollerState::Busy),
     };
 
-    if !volume.as_ref().policy.self_heal || !volume.as_ref().status.created() {
+    if (!volume.as_ref().policy.self_heal && volume.as_ref().metadata.drain_config().is_none())
+        || !volume.as_ref().status.created()
+    {
         return PollResult::Ok(PollerState::Idle);
     }
 
@@ -161,14 +163,22 @@ async fn offline_rebuild_reconcile(
         return PollResult::Ok(PollerState::Idle);
     }
 
+    let spare_need_rebuilding = volume.as_ref().metadata.need_spare()
+        && !context
+            .registry()
+            .volume(volume.uuid())
+            .await
+            .is_ok_and(|v| v.spare_online());
+
     // Scale-up added a replica that was never part of the last-published
     // nexus, so it is definitively out-of-sync — not a transient blip the
     // grace period is meant to absorb. If that replica is also currently
     // online it can serve as an in-place rebuild target, so no fresh pool is
-    // needed either.
+    // needed either. Also, a spare which needs rebuilding is an in-place target.
     let has_in_place_target = volume
         .has_scale_up_rebuild_target(&volume_state.replica_topology, context.registry())
-        .await?;
+        .await?
+        || spare_need_rebuilding;
 
     // Skips the wait only: the checks below still apply.
     let requested = volume.offline_rebuild_requested();

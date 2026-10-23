@@ -33,7 +33,7 @@ use stor_port::{
             nexus_persistence::NexusInfoKey,
             replica::ReplicaSpec,
             volume::{
-                PublishOperation, ReplicaMoveRequester, RepublishOperation, UnpublishOperation,
+                OverReplicationRequester, PublishOperation, RepublishOperation, UnpublishOperation,
                 VolumeOperation, VolumeSpec,
             },
         },
@@ -654,9 +654,13 @@ impl ResourcePublishing for OperationGuardArc<VolumeSpec> {
 }
 
 impl OperationGuardArc<VolumeSpec> {
-    /// Update the replica move configuration for the volume.
-    pub(crate) async fn update_move_config(&mut self, request: ReplicaMoveRequester) {
-        self.lock().metadata.update_replica_move(request);
+    /// Record the over-replication request for the volume.
+    pub(crate) async fn update_over_replication(&mut self, request: OverReplicationRequester) {
+        self.lock().metadata.update_over_replication(request);
+    }
+    /// Clears the over-replication request of the volume.
+    pub(crate) async fn remove_over_replication(&mut self) {
+        self.lock().metadata.remove_over_replication();
     }
     /// Publish a volume, recording the supplied `target_mode` on the resulting
     /// `target_config`. This is the internal entry point used by callers that

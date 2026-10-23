@@ -61,6 +61,15 @@ impl Registry {
         }
     }
 
+    /// Returns true if node is Online.
+    pub(crate) async fn is_node_online(&self, id: &NodeId) -> bool {
+        if let Ok(node) = self.node_wrapper(id).await {
+            node.read().await.is_online()
+        } else {
+            false
+        }
+    }
+
     /// Register new NodeSpec for the given `Register` Request
     pub(super) async fn register_node_spec(&self, request: &Register) {
         let automatic = self.config().node_registration().automatic();

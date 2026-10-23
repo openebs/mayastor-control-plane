@@ -507,6 +507,7 @@ impl Service {
             .guarded_pool_on_node(&request.pool_id, request.node_id.as_ref())
             .await?;
         let spec = guarded_pool.drain(&self.registry, request).await?;
+        guarded_pool.unwind_spares(&self.registry).await;
         let state = self.registry.ctrl_pool_state(guarded_pool.uid()).await.ok();
         Ok(Pool::new(spec, state))
     }

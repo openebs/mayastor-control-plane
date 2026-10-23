@@ -74,6 +74,15 @@ impl ComponentAction for CoreAgent {
         if let Some(max_rebuilds) = &options.max_rebuilds {
             binary = binary.with_args(vec!["--max-rebuilds", &max_rebuilds.to_string()]);
         }
+        if options.offline_rebuild_enabled {
+            binary = binary.with_arg("--offline-rebuild-enabled");
+        }
+        if let Some(period) = &options.offline_rebuild_grace_period {
+            binary = binary.with_args(vec!["--offline-rebuild-grace-period", &period.to_string()]);
+        }
+        if let Some(max) = &options.max_offline_rebuilds {
+            binary = binary.with_args(vec!["--max-offline-rebuilds", &max.to_string()]);
+        }
         if options.allow_non_persistent_devlink {
             binary = binary.with_args(vec!["--allow-non-persistent-devlink"]);
         }
