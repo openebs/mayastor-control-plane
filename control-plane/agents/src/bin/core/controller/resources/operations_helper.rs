@@ -905,14 +905,27 @@ impl<T: AsOperationSequencer + Clone + Sync + Send + Debug + ResourceUid> Operat
 
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(1);
         loop {
-            let waiter = self.register_op_waiter();
-            if let Ok(guard) = self.operation_guard_mode(mode) {
-                return Ok(guard);
+            let (waiter, is_sole_waiter) = self.register_op_waiter();
+            if is_sole_waiter {
+                // if we're the only ones waiting, try again to wa a race since the registration is not
+                // synced with the operation mode
+                // todo: move operation mode guard to the `ResourceMutex` so we can fix the race.
+                if let Ok(guard) = self.operation_guard_mode(mode) {
+                    return Ok(guard);
+                }
             }
 
             tokio::select! {
-                _ = waiter => {}
+                _ = waiter => {
+                    if let Ok(guard) = self.operation_guard_mode(mode) {
+                        return Ok(guard);
+                    }
+                }
                 _ = tokio::time::sleep_until(deadline) => {
+                    // Try one more time, just in case the waiter was not notified for some reason.
+                    if let Ok(guard) = self.operation_guard_mode(mode) {
+                        return Ok(guard);
+                    }
                     return Err(SvcError::Conflict {});
                 }
             }
