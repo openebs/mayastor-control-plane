@@ -197,7 +197,6 @@ impl TryFrom<pool::PoolDefinition> for PoolSpec {
                     Some(labels) => Some(labels.value),
                     None => None,
                 },
-                sequencer: Default::default(),
                 operation: None,
                 creat_tsc: None,
                 encryption: pool_spec

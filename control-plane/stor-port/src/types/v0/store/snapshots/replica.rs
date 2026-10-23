@@ -1,6 +1,6 @@
 use super::{SnapshotId, SnapshotSpec};
 use crate::types::v0::{
-    store::{AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction},
+    store::{SpecStatus, SpecTransaction},
     transport::{PoolId, PoolUuid, ReplicaId, SnapshotParameters, SnapshotTxId, VolumeId},
 };
 use chrono::{DateTime, Utc};
@@ -105,8 +105,6 @@ impl ReplicaSnapshot {
 /// to manage a replica snapshot.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct ReplicaSnapshotMeta {
-    #[serde(skip)]
-    sequencer: OperationSequence,
     /// Record of the operation in progress.
     operation: Option<ReplicaSnapshotOperationState>,
 
@@ -136,7 +134,6 @@ impl ReplicaSnapshotMeta {
         allocated_size: u64,
     ) -> Self {
         Self {
-            sequencer: OperationSequence::new(),
             operation: Some(ReplicaSnapshotOperationState {
                 operation: ReplicaSnapshotOperation::Create,
                 result: None,
@@ -226,15 +223,6 @@ pub enum ReplicaSnapshotOperation {
     Destroy,
 }
 
-impl AsOperationSequencer for ReplicaSnapshot {
-    fn as_ref(&self) -> &OperationSequence {
-        &self.metadata.sequencer
-    }
-
-    fn as_mut(&mut self) -> &mut OperationSequence {
-        &mut self.metadata.sequencer
-    }
-}
 impl SpecTransaction<ReplicaSnapshotOperation> for ReplicaSnapshot {
     fn has_pending_op(&self) -> bool {
         self.metadata.operation.is_some()

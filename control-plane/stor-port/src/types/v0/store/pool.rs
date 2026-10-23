@@ -6,7 +6,7 @@ use crate::{
         openapi::models::{self, PoolSpecEncryption},
         store::{
             definitions::{ObjectKey, StorableObject, StorableObjectType},
-            AsOperationSequencer, Display, OperationSequence, SpecStatus, SpecTransaction,
+            Display, SpecStatus, SpecTransaction,
         },
         transport::{
             self, CreatePool, ImportPool, NodeId, PoolDeviceUri, PoolDiag, PoolId, ReplicaId,
@@ -70,7 +70,6 @@ impl From<&CreatePool> for PoolSpec {
                 disks: request.disks.clone(),
                 status: PoolSpecStatus::Creating,
                 labels: request.labels.clone(),
-                sequencer: OperationSequence::new(),
                 operation: None,
                 creat_tsc: None,
                 encryption: request.encryption.clone(),
@@ -108,7 +107,6 @@ impl PartialEq<CreatePool> for PoolSpec {
     fn eq(&self, other: &CreatePool) -> bool {
         let mut other = PoolSpec::from(other);
         other.status = self.status.clone();
-        other.sequencer = self.sequencer.clone();
         other.creat_tsc = self.creat_tsc;
         other.metadata = self.metadata.clone();
         &other == self
@@ -165,9 +163,6 @@ pub struct PoolUSpec {
     /// labels to be set on the pool
     #[serde(skip_serializing_if = "Option::is_none")]
     pub labels: Option<PoolLabel>,
-    /// Update in progress
-    #[serde(skip)]
-    pub sequencer: OperationSequence,
     /// Record of the operation in progress
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operation: Option<PoolOperationState>,
@@ -733,16 +728,6 @@ impl From<&PoolSpec> for ImportPool {
             uuid: None,
             encryption: value.encryption.clone(),
         }
-    }
-}
-
-impl AsOperationSequencer for PoolSpec {
-    fn as_ref(&self) -> &OperationSequence {
-        &self.sequencer
-    }
-
-    fn as_mut(&mut self) -> &mut OperationSequence {
-        &mut self.sequencer
     }
 }
 

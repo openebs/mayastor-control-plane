@@ -154,12 +154,6 @@ pub enum OperationSequenceState {
     Reconcile { active: bool },
 }
 
-/// Operations are locked
-pub trait AsOperationSequencer {
-    fn as_ref(&self) -> &OperationSequence;
-    fn as_mut(&mut self) -> &mut OperationSequence;
-}
-
 pub trait OperationSequencer: Debug + Clone {
     /// Check if the transition is valid.
     fn valid(&self, next: OperationSequenceState) -> bool;

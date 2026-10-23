@@ -1257,7 +1257,6 @@ impl TryFrom<replica::ReplicaSpec> for ReplicaSpec {
                     ))
                 }
             },
-            sequencer: Default::default(),
             operation: value.operation.map(|op| ReplicaOperationState {
                 operation: ReplicaOperation::Create,
                 result: op.result,

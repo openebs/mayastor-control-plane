@@ -382,7 +382,6 @@ impl TryFrom<volume::VolumeDefinition> for VolumeSpec {
                 },
                 None => None,
             },
-            sequencer: Default::default(),
             last_nexus_id: match volume_spec.last_nexus_id {
                 Some(id) => match NexusId::try_from(id) {
                     Ok(volume_id) => Some(volume_id),

@@ -5,7 +5,7 @@ use crate::{
         openapi::models,
         store::{
             definitions::{ObjectKey, StorableObject, StorableObjectType},
-            AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
+            SpecStatus, SpecTransaction,
         },
         transport::{
             self, CreateReplica, HostNqn, NexusId, PoolId, PoolUuid, Protocol, ReplicaId,
@@ -97,9 +97,6 @@ pub struct ReplicaSpec {
     pub managed: bool,
     /// Owner Resource
     pub owners: ReplicaOwners,
-    /// Update in progress
-    #[serde(skip)]
-    pub sequencer: OperationSequence,
     /// Record of the operation in progress
     pub operation: Option<ReplicaOperationState>,
     /// List of host nqn's allowed to connect to the shared replica target.
@@ -214,7 +211,6 @@ mod tests_deserializer {
                         Some(VolumeId::try_from("ec4e66fd-3b33-4439-b504-d49aba53da26").unwrap()),
                         vec![],
                     ),
-                    sequencer: Default::default(),
                     operation: None,
                     allowed_hosts: vec![],
                     kind: None,
@@ -241,7 +237,6 @@ mod tests_deserializer {
                         Some(VolumeId::try_from("ec4e66fd-3b33-4439-b504-d49aba53da26").unwrap()),
                         vec![],
                     ),
-                    sequencer: Default::default(),
                     operation: None,
                     allowed_hosts: vec![],
                     kind: None,
@@ -254,16 +249,6 @@ mod tests_deserializer {
             let replica_spec: ReplicaSpec = serde_json::from_str(test.input).unwrap();
             assert_eq!(test.expected, replica_spec);
         }
-    }
-}
-
-impl AsOperationSequencer for ReplicaSpec {
-    fn as_ref(&self) -> &OperationSequence {
-        &self.sequencer
-    }
-
-    fn as_mut(&mut self) -> &mut OperationSequence {
-        &mut self.sequencer
     }
 }
 
@@ -445,7 +430,6 @@ impl From<&CreateReplica> for ReplicaSpec {
             status: ReplicaSpecStatus::Creating,
             managed: request.managed,
             owners: request.owners.clone(),
-            sequencer: OperationSequence::new(),
             operation: None,
             allowed_hosts: request.allowed_hosts.clone(),
             kind: request.kind.clone(),
@@ -457,7 +441,6 @@ impl PartialEq<CreateReplica> for ReplicaSpec {
     fn eq(&self, other: &CreateReplica) -> bool {
         let mut other = ReplicaSpec::from(other);
         other.status = self.status.clone();
-        other.sequencer = self.sequencer.clone();
         &other == self
     }
 }
@@ -510,7 +493,6 @@ impl From<&SnapshotCloneSpecParams> for ReplicaSpec {
             status: ReplicaSpecStatus::Creating,
             managed: true,
             owners: ReplicaOwners::from_volume(value.uuid()),
-            sequencer: OperationSequence::new(),
             operation: None,
             allowed_hosts: vec![],
             kind: Some(ReplicaKind::SnapshotClone),
