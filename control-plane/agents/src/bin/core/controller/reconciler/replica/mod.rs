@@ -177,7 +177,7 @@ async fn destroy_deleting_replica(
 }
 
 /// Complete a replica purge: try io-engine destroy first, fall back to spec-only deletion.
-#[tracing::instrument(level = "debug", skip(replica, context), fields(replica.uuid = %replica.uuid(), request.reconcile = true))]
+#[tracing::instrument(level = "debug", skip(replica, context), fields(replica.uuid = %replica.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn purge_replica(
     replica: &mut OperationGuardArc<ReplicaSpec>,
     context: &PollContext,
@@ -200,7 +200,7 @@ async fn purge_replica(
     PollResult::Ok(PollerState::Idle)
 }
 
-#[tracing::instrument(level = "debug", skip(replica, context), fields(replica.uuid = %replica.uuid(), request.reconcile = true))]
+#[tracing::instrument(level = "debug", skip(replica, context), fields(replica.uuid = %replica.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn destroy_replica(
     replica: &mut OperationGuardArc<ReplicaSpec>,
     context: &PollContext,

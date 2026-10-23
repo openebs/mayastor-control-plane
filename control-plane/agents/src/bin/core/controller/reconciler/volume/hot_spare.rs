@@ -39,7 +39,7 @@ impl TaskPoller for HotSpareReconciler {
     }
 }
 
-#[tracing::instrument(level = "debug", skip(context, volume_spec), fields(volume.uuid = %volume_spec.uuid(), request.reconcile = true))]
+#[tracing::instrument(level = "debug", skip(context, volume_spec), fields(volume.uuid = %volume_spec.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn hot_spare_reconcile(
     volume_spec: &mut ResourceMutex<VolumeSpec>,
     context: &PollContext,
@@ -97,7 +97,7 @@ async fn hot_spare_nexus_reconcile(
     squash_results(results)
 }
 
-#[tracing::instrument(skip(context, volume, nexus), fields(volume = ?volume.as_ref(), nexus.uuid = %nexus.uuid(), nexus.node = %nexus.as_ref().node, volume.uuid = tracing::field::Empty, request.reconcile = true))]
+#[tracing::instrument(skip(context, volume, nexus), fields(volume = ?volume.as_ref(), nexus.uuid = %nexus.uuid(), nexus.node = %nexus.as_ref().node, volume.uuid = tracing::field::Empty, request.reconcile = true, event = ?context.event()))]
 async fn generic_nexus_reconciler(
     volume: &mut OperationGuardArc<VolumeSpec>,
     nexus: &mut OperationGuardArc<NexusSpec>,
@@ -188,7 +188,7 @@ async fn nexus_replica_count_reconciler(
         Ordering::Equal => PollResult::Ok(PollerState::Idle),
     }
 }
-#[tracing::instrument(skip(context, volume, nexus, nexus_state), fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
+#[tracing::instrument(skip(context, volume, nexus, nexus_state), fields(nexus.uuid = %nexus.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn nexus_replica_count_reconciler_traced(
     volume: &mut OperationGuardArc<VolumeSpec>,
     nexus: &mut OperationGuardArc<NexusSpec>,
@@ -255,7 +255,7 @@ async fn volume_replica_count_reconciler(
     }
 }
 
-#[tracing::instrument(skip(context, volume), fields(volume.uuid = %volume.uuid(), request.reconcile = true))]
+#[tracing::instrument(skip(context, volume), fields(volume.uuid = %volume.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn volume_replica_count_reconciler_traced(
     volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,

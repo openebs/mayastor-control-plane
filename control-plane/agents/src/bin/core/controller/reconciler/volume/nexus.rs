@@ -36,7 +36,7 @@ impl TaskPoller for VolumeNexusReconciler {
     }
 }
 
-#[tracing::instrument(level = "trace", skip(context, volume_spec), fields(volume.uuid = %volume_spec.uuid(), request.reconcile = true))]
+#[tracing::instrument(level = "trace", skip(context, volume_spec), fields(volume.uuid = %volume_spec.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn volume_nexus_reconcile(
     volume_spec: &mut ResourceMutex<VolumeSpec>,
     context: &PollContext,

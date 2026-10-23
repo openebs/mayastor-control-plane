@@ -125,10 +125,12 @@ impl<T> ResourceMutex<T> {
     /// receiver which resolves when a guard is next dropped.
     ///
     /// Waiters are woken in FIFO registration order.
-    pub(crate) fn register_op_waiter(&self) -> tokio::sync::oneshot::Receiver<()> {
+    /// The boolean indicates if it's the sole waiter.
+    pub(crate) fn register_op_waiter(&self) -> (tokio::sync::oneshot::Receiver<()>, bool) {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        self.inner.op_waiters.lock().push_back(tx);
-        rx
+        let mut waiters = self.inner.op_waiters.lock();
+        waiters.push_back(tx);
+        (rx, waiters.len() == 1)
     }
     /// Wake the next live waiter (if any), dropping any whose receivers have gone away.
     fn wake_op_waiter(&self) {

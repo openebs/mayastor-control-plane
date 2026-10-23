@@ -50,7 +50,7 @@ impl TaskPoller for NodePurgeReconciler {
 /// The node is already in Purging state. `purge_node` detects the resume case,
 /// skips pre-flight validation, and re-runs the destroy lifecycle with all
 /// accepts set to true.
-#[tracing::instrument(skip_all, level = "trace", fields(node.id = %node_guard.uid(), request.reconcile = true))]
+#[tracing::instrument(skip_all, level = "trace", fields(node.id = %node_guard.uid(), request.reconcile = true, event = ?context.event()))]
 async fn resume_node_purge(
     context: &PollContext,
     node_guard: &mut OperationGuardArc<NodeSpec>,

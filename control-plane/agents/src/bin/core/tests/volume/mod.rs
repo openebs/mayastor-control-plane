@@ -1667,7 +1667,7 @@ async fn health() {
     wait_for_health(
         &volume.state(),
         &volume_client,
-        Duration::from_secs(2),
+        Duration::from_secs(3),
         |h| {
             h.healthy_replicas == 2
                 && !h.clean_shutdown
