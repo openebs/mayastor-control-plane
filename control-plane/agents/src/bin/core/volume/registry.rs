@@ -200,9 +200,10 @@ impl Registry {
                             }
                         }
                         Some(h) => {
-                            if h.online_clean_replicas >= volume_spec.num_replicas {
+                            if h.online_clean_replicas >= volume_spec.effective_replica_count() {
                                 VolumeStatus::Online
                             } else if h.online_clean_replicas > 0 {
+                                tracing::info!("marking Degraded");
                                 VolumeStatus::Degraded
                             } else {
                                 VolumeStatus::Faulted

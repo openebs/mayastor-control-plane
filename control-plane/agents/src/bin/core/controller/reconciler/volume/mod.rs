@@ -1,5 +1,5 @@
 mod garbage_collector;
-mod hot_spare;
+pub(super) mod hot_spare;
 mod nexus;
 mod offline_rebuild;
 

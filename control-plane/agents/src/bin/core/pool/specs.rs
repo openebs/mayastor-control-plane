@@ -515,6 +515,74 @@ impl ResourceSpecsLocked {
         pools
     }
 
+    /// Returns the ids of the pools currently in Cancelled phase.
+    pub(crate) fn pools_rsc_cancelled(&self) -> Vec<PoolId> {
+        let specs = self.read();
+        let pools = specs
+            .pools
+            .to_vec()
+            .iter()
+            .filter_map(|pool| {
+                let pool = pool.lock();
+                pool.is_drain_cancelled().then(|| pool.id.clone())
+            })
+            .collect::<Vec<_>>();
+        pools
+    }
+
+    /// Returns the ids of the pools whose drain was cancelled and has no moves left to unwind.
+    pub(crate) fn pools_rsc_cancel_finished(&self) -> Vec<PoolId> {
+        let specs = self.read();
+        let pools = specs
+            .pools
+            .to_vec()
+            .iter()
+            .filter_map(|pool| {
+                let pool = pool.lock();
+                pool.drain_cancel_finished().then(|| pool.id.clone())
+            })
+            .collect::<Vec<_>>();
+        pools
+    }
+
+    /// Returns the ids of the pools currently in AwaitingCleanup phase.
+    pub(crate) fn pools_rsc_awaiting_cleanup(&self) -> Vec<PoolId> {
+        let specs = self.read();
+        let pools = specs
+            .pools
+            .to_vec()
+            .iter()
+            .filter_map(|pool| {
+                let pool = pool.lock();
+                if pool.is_draining() {
+                    Some(pool.id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        pools
+    }
+
+    /// Returns the ids of the pools currently in PartiallyDrained phase.
+    pub(crate) fn pools_rsc_partially_drained(&self) -> Vec<PoolId> {
+        let specs = self.read();
+        let pools = specs
+            .pools
+            .to_vec()
+            .iter()
+            .filter_map(|pool| {
+                let pool = pool.lock();
+                if pool.is_partially_drained() {
+                    Some(pool.id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        pools
+    }
+
     /// Returns list of PoolId whose drain is `Queued`, ordered by the drain request timestamp.
     pub(crate) fn pools_rsc_drain_queued(&self) -> Vec<PoolId> {
         let specs = self.read();
