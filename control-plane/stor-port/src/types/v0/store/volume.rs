@@ -405,6 +405,30 @@ impl VolumeMetadata {
     pub fn update_replica_move(&mut self, replica_move: ReplicaMoveRequester) {
         self.runtime.moving_replica = Some(replica_move)
     }
+
+    /// Remove replica move config.
+    pub fn remove_replica_move(&mut self) {
+        self.runtime.moving_replica = None
+    }
+
+    /// Return drain config if present.
+    pub fn drain_config(&self) -> Option<DrainConfig> {
+        if let Some(requester) = &self.runtime.moving_replica {
+            match requester {
+                ReplicaMoveRequester::PoolDrain(config) => Some(config.clone()),
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Returns true if spare replica is needed.
+    pub fn need_spare(&self) -> bool {
+        if let Some(drain_cfg) = self.drain_config() {
+            return !drain_cfg.spare_replica.is_none() && drain_cfg.moving_replica.is_some();
+        }
+        false
+    }
 }
 
 /// Volume meta information.

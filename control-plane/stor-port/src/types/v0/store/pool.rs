@@ -359,6 +359,33 @@ impl DrainConfig {
             unwind_spare: None,
         }
     }
+
+    /// Return true if over-replication is not required.
+    pub fn unsafe_evict(&self) -> bool {
+        self.spare_replica.is_none()
+    }
+
+    /// Return true if over-replication is required but spare is not placed yet.
+    pub fn spare_not_placed(&self) -> bool {
+        self.spare_replica
+            .as_ref()
+            .and_then(|s| s.replica_id.clone())
+            .is_none()
+    }
+
+    /// Updates spare_replica id.
+    pub fn update_spare(&mut self, replica: Option<ReplicaId>) {
+        if let Some(spare) = self.spare_replica.as_mut() {
+            spare.replica_id = replica;
+        }
+    }
+
+    /// Updates placement_started_at if not set already.
+    pub fn update_placement_started_at(&mut self) {
+        if self.placement_started_at.is_none() {
+            self.placement_started_at = Some(SystemTime::now());
+        }
+    }
 }
 
 /// Spare replica reference for this drain.
@@ -605,9 +632,35 @@ impl PoolSpec {
     }
 
     /// Pushes replica move config to drain record.
-    pub fn updated_replica_move(&mut self, drain_config: DrainConfig) {
+    pub fn add_replica_move(&mut self, drain_config: DrainConfig) {
         if let Some(record) = self.drain_state_mut() {
             record.moving_replicas.push(drain_config);
+        }
+    }
+
+    /// Update the drain config with passed value.
+    pub fn update_replica_move(&mut self, drain_config: DrainConfig) {
+        if let Some(record) = self.drain_state_mut() {
+            if let Some(existing) = record
+                .moving_replicas
+                .iter_mut()
+                .find(|c| c.volume == drain_config.volume)
+            {
+                *existing = drain_config;
+            }
+        }
+    }
+
+    /// Removed the drain config.
+    pub fn remove_replica_move(&mut self, drain_config: DrainConfig) {
+        if let Some(record) = self.drain_state_mut() {
+            if let Some(i) = record
+                .moving_replicas
+                .iter()
+                .position(|r| r.volume == drain_config.volume)
+            {
+                record.moving_replicas.remove(i);
+            }
         }
     }
 
@@ -640,6 +693,29 @@ impl PoolSpec {
         match self.drain_spec() {
             Some(spec) => {
                 spec.policy.unsafe_evict || spec.policy.unsafe_rebuild_otherwise_evict.is_some()
+            }
+            None => false,
+        }
+    }
+
+    /// Returns true if unsafe_rebuild_otherwise_evict is 0 or the duration to place a
+    /// spare is elapsed.
+    pub fn evict_now(&self, placement_started_at: Option<SystemTime>) -> bool {
+        match self.drain_spec() {
+            Some(spec) => {
+                if let Some(duration) = spec.policy.unsafe_rebuild_otherwise_evict {
+                    if duration.is_zero() {
+                        return true;
+                    }
+                    if let Some(placement_started_at) = placement_started_at {
+                        if let Ok(elapsed) = placement_started_at.elapsed() {
+                            if elapsed > duration {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                false
             }
             None => false,
         }
@@ -828,7 +904,13 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
                         }
                     }
                     DrainProgressOp::AddReplicaMove(drain_config) => {
-                        self.updated_replica_move(drain_config)
+                        self.add_replica_move(drain_config)
+                    }
+                    DrainProgressOp::UpdateReplicaMove(drain_config) => {
+                        self.update_replica_move(drain_config)
+                    }
+                    DrainProgressOp::RemoveReplicaMove(drain_config) => {
+                        self.remove_replica_move(drain_config)
                     }
                 },
             }
@@ -961,6 +1043,10 @@ pub enum DrainProgressOp {
     PhaseUpdate(DrainPhaseOp),
     /// Add a new replica move to the drain record.
     AddReplicaMove(DrainConfig),
+    /// Update an existing replica move.
+    UpdateReplicaMove(DrainConfig),
+    /// Update an existing replica move.
+    RemoveReplicaMove(DrainConfig),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
