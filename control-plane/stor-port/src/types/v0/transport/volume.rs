@@ -50,6 +50,22 @@ impl Volume {
     pub fn status(&self) -> Option<VolumeStatus> {
         Some(self.state.status.clone())
     }
+
+    /// Returns true if spare replica is Online.
+    pub fn spare_online(&self) -> bool {
+        if let Some(cfg) = self.spec.metadata.drain_config() {
+            if let Some(spare) = cfg.spare_replica {
+                if let Some(replica_id) = spare.replica_id {
+                    if let Some(replica_state) = self.state.replica_topology.get(&replica_id) {
+                        if let Some(status) = &replica_state.child_status {
+                            return *status == ChildState::Online;
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
 }
 
 impl From<Volume> for models::Volume {

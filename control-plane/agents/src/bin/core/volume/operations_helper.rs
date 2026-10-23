@@ -24,7 +24,7 @@ use agents::errors::{NotEnough, SvcError, SvcError::ReplicaRemovalNoCandidates};
 use grpc::operations::volume::traits::PublishVolumeInfo;
 use stor_port::{
     pstor::ObjectKey,
-    transport_api::ErrorChain,
+    transport_api::{ErrorChain, ResourceKind},
     types::v0::{
         store::{
             nexus::{NexusSpec, ReplicaUri},
@@ -371,6 +371,44 @@ impl OperationGuardArc<VolumeSpec> {
         Ok(())
     }
 
+    /// Remove a replica from the volume even if it is a child of the volume nexus.
+    /// The child is first removed from the nexus, after which the now unused replica is removed from the volume.
+    pub(crate) async fn remove_volume_replica_in_use(
+        &mut self,
+        registry: &Registry,
+        nexus: &mut OperationGuardArc<NexusSpec>,
+        nexus_state: &Nexus,
+        replica_id: &ReplicaId,
+    ) -> Result<(), SvcError> {
+        let child_uri = nexus
+            .as_ref()
+            .children
+            .iter()
+            .find(|c| c.as_replica().is_some_and(|r| r.uuid() == replica_id))
+            .map(|c| c.uri());
+
+        match child_uri {
+            Some(uri) => {
+                nexus
+                    .remove_vol_child_by_uri(&mut Some(&mut *self), registry, nexus_state, &uri)
+                    .await?;
+            }
+            None => {
+                self.remove_unused_volume_replica(registry, replica_id)
+                    .await?
+            }
+        }
+
+        // remove_vol_child_by_uri ignores the volume replica removal result, so verify it.
+        match registry.specs().replica_rsc(replica_id) {
+            Some(replica) if replica.lock().owners.owned_by(self.uuid()) => Err(SvcError::InUse {
+                kind: ResourceKind::Replica,
+                id: replica_id.to_string(),
+            }),
+            _ => Ok(()),
+        }
+    }
+
     /// Attach existing replicas to the given volume nexus until it reaches the required number of
     /// data replicas.
     /// Returns the first encountered error, but tries to add as many as it can until it does so.
@@ -385,20 +423,20 @@ impl OperationGuardArc<VolumeSpec> {
             let nodes = specs.replica_nodes(replicas.clone());
             (replicas.count(), nodes)
         };
-        let volume_children = replicas.min(self.as_ref().num_replicas as usize);
+        let need_spare = self.as_ref().metadata.need_spare();
+        let volume_children =
+            replicas.min(self.as_ref().num_replicas as usize + need_spare as usize);
         let mut nexus_children = nexus.as_ref().children.len();
 
         if self.has_snapshots() {
             registry.verify_nodes_fix(nodes.iter(), &NodeBugFix::NexusRebuildReplicaAncestry)?;
         }
         let replicas = nexus_attach_candidates(self.as_ref(), nexus.as_ref(), registry).await?;
-
         let mut result = Ok(());
         for replica in replicas {
             if nexus_children >= volume_children {
                 break;
             }
-
             if replica.rebuildable() == &Some(false) {
                 if self
                     .remove_unused_volume_replica(registry, &replica.state().uuid)
@@ -417,7 +455,6 @@ impl OperationGuardArc<VolumeSpec> {
                 }
                 continue;
             }
-
             match nexus
                 .attach_replica(registry, replica.state(), self.has_snapshots())
                 .await
@@ -463,7 +500,8 @@ impl OperationGuardArc<VolumeSpec> {
     ) -> Result<(), SvcError> {
         let vol_spec_clone = self.lock().clone();
         let nexus_spec_clone = nexus.lock().clone();
-        let volume_children = vol_spec_clone.num_replicas as usize;
+        let volume_children =
+            vol_spec_clone.num_replicas as usize + self.as_ref().metadata.need_spare() as usize;
         let mut nexus_replica_children =
             nexus_spec_clone
                 .children
