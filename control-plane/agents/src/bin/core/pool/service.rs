@@ -479,7 +479,11 @@ impl Service {
     #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %request.pool_id))]
     async fn uncordon(&self, request: PoolCordonRequest) -> Result<Pool, SvcError> {
         let mut guarded_pool = self.specs().guarded_pool(&request.pool_id).await?;
+        let cancel_drain = request.drain.unwrap_or(false);
         let spec = guarded_pool.uncordon(&self.registry, request).await?;
+        if cancel_drain {
+            guarded_pool.cancel_moves(&self.registry).await;
+        }
         let state = self.registry.ctrl_pool_state(guarded_pool.uid()).await.ok();
         Ok(Pool::new(spec, state))
     }
@@ -507,6 +511,7 @@ impl Service {
             .guarded_pool_on_node(&request.pool_id, request.node_id.as_ref())
             .await?;
         let spec = guarded_pool.drain(&self.registry, request).await?;
+        guarded_pool.unwind_spares(&self.registry).await;
         let state = self.registry.ctrl_pool_state(guarded_pool.uid()).await.ok();
         Ok(Pool::new(spec, state))
     }

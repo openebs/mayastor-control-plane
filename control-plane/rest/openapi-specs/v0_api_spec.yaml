@@ -5760,7 +5760,7 @@ components:
           description: Id of the volume replica belongs to
           type: string
         moving_replica:
-          description: Id of the replica being moved. It's None when it's evacuated successfully.
+          description: Id of the replica being moved.
           type: string
         spare_replica:
           description: Id of the spare replica.
@@ -5770,6 +5770,7 @@ components:
           $ref: '#/components/schemas/UnwindSpare'
       required:
         -  volume
+        -  moving_replica
     SpareReplica:
       description: Replica created part of over-replication used by drain
       type: string
