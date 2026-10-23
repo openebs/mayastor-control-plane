@@ -82,7 +82,7 @@ impl GarbageCollect for OperationGuardArc<VolumeSnapshot> {
     }
 }
 
-#[tracing::instrument(skip(snapshot, context), level = "trace", fields(snapshot.id = %snapshot.uuid(), request.reconcile = true))]
+#[tracing::instrument(skip(snapshot, context), level = "trace", fields(snapshot.id = %snapshot.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn deleting_volume_snapshot_reconciler(
     snapshot: &mut OperationGuardArc<VolumeSnapshot>,
     context: &PollContext,
@@ -118,7 +118,7 @@ async fn deleting_volume_snapshot_reconciler(
     }
 }
 
-#[tracing::instrument(skip(snapshot, context), level = "trace", fields(snapshot.id = %snapshot.uuid(), request.reconcile = true))]
+#[tracing::instrument(skip(snapshot, context), level = "trace", fields(snapshot.id = %snapshot.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn creating_orphaned_volume_snapshot_reconciler(
     snapshot: &mut OperationGuardArc<VolumeSnapshot>,
     context: &PollContext,
@@ -159,7 +159,7 @@ async fn creating_orphaned_volume_snapshot_reconciler(
     }
 }
 
-#[tracing::instrument(skip(snapshot, context), level = "trace", fields(snapshot.id = %snapshot.uuid(), request.reconcile = true))]
+#[tracing::instrument(skip(snapshot, context), level = "trace", fields(snapshot.id = %snapshot.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn prune_volume_snapshot_reconciler(
     snapshot: &mut OperationGuardArc<VolumeSnapshot>,
     context: &PollContext,
@@ -179,7 +179,7 @@ async fn prune_volume_snapshot_reconciler(
     Ok(PollerState::Idle)
 }
 
-#[tracing::instrument(skip(snapshot, context), level = "trace", fields(snapshot.id = %snapshot.uuid(), request.reconcile = true))]
+#[tracing::instrument(skip(snapshot, context), level = "trace", fields(snapshot.id = %snapshot.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn delete_no_transaction_volume_snapshot_reconciler(
     snapshot: &mut OperationGuardArc<VolumeSnapshot>,
     context: &PollContext,

@@ -46,7 +46,7 @@ impl TaskPoller for NodeSnapshotGarbageCollector {
 }
 
 /// Identify unknown snapshots and attempt to clean them up.
-#[tracing::instrument(skip(node_spec, context), level = "trace", fields(request.reconcile = true))]
+#[tracing::instrument(skip(node_spec, context), level = "trace", fields(request.reconcile = true, event = ?context.event()))]
 async fn delete_unknown_volume_snapshot_reconciler(
     context: &PollContext,
     node_spec: &mut OperationGuardArc<NodeSpec>,

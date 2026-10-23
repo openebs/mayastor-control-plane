@@ -117,7 +117,7 @@ impl ReCreate for OperationGuardArc<PoolSpec> {
 /// crashed/restarted.
 /// In such a case, we issue a new create pool request against the io-engine instance where the pool
 /// should exist.
-#[tracing::instrument(skip(pool, context), level = "trace", fields(pool.id = %pool.id(), request.reconcile = true))]
+#[tracing::instrument(skip(pool, context), level = "trace", fields(pool.id = %pool.id(), request.reconcile = true, event = ?context.event()))]
 async fn missing_pool_state_reconciler(
     pool: &mut OperationGuardArc<PoolSpec>,
     context: &PollContext,
@@ -185,7 +185,7 @@ async fn missing_pool_state_reconciler(
                 }
             }
         }
-        .instrument(tracing::info_span!("missing_pool_state_reconciler", pool.id = %pool_spec.id, request.reconcile = true))
+        .instrument(tracing::info_span!("missing_pool_state_reconciler", pool.id = %pool_spec.id, request.reconcile = true, event = ?context.event()))
         .await
     } else {
         PollResult::Ok(PollerState::Idle)
@@ -198,7 +198,7 @@ async fn missing_pool_state_reconciler(
 /// cleans up any such pool when node comes up.
 /// If the pool is in Purging state (from a pool purge operation that failed mid-way),
 /// resume the purge via the resource interface.
-#[tracing::instrument(skip(pool, context), level = "trace", fields(pool.id = %pool.id(), request.reconcile = true))]
+#[tracing::instrument(skip(pool, context), level = "trace", fields(pool.id = %pool.id(), request.reconcile = true, event = ?context.event()))]
 async fn deleting_pool_spec_reconciler(
     pool: &mut OperationGuardArc<PoolSpec>,
     context: &PollContext,

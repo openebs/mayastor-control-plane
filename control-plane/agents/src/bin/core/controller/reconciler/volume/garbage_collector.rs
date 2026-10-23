@@ -102,7 +102,7 @@ impl GarbageCollect for OperationGuardArc<VolumeSpec> {
     }
 }
 
-#[tracing::instrument(level = "trace", skip(volume, context), fields(volume.uuid = %volume.uuid(), request.reconcile = true))]
+#[tracing::instrument(level = "trace", skip(volume, context), fields(volume.uuid = %volume.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn destroy_deleting_volume(
     volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
@@ -144,7 +144,7 @@ async fn destroy_volume(
 /// When any of its nexuses are no longer used
 /// Then they should be disowned
 /// And they should eventually be destroyed
-#[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.uuid(), request.reconcile = true))]
+#[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn disown_unused_nexuses(
     volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
@@ -180,7 +180,7 @@ async fn disown_unused_nexuses(
 /// Given a published volume
 /// When some of its replicas are not healthy, not online and not used by a nexus
 /// Then they should be disowned
-#[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.uuid(), request.reconcile = true))]
+#[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn disown_unused_replicas(
     volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
@@ -255,7 +255,7 @@ async fn disown_unused_replicas(
 /// Volume replicas could have been possibly expanded as part of volume resize,
 /// but the volume expansion failed overall leaving behind expanded replicas. So we
 /// bring back the replica size to what is expected by the volume spec.
-#[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.uuid(), request.reconcile = true))]
+#[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn revert_expanded_replicas(
     volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
@@ -306,7 +306,7 @@ async fn revert_expanded_replicas(
 
 /// After republishing if the nexus was not shutdown gracefully, we should disown its local
 /// child as that is non reservable.
-#[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.uuid(), request.reconcile = true))]
+#[tracing::instrument(level = "debug", skip(context, volume), fields(volume.uuid = %volume.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn disown_non_reservable_replicas(
     volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,

@@ -119,7 +119,7 @@ async fn offline_rebuild_budget(
 #[tracing::instrument(
     level = "debug",
     skip_all,
-    fields(volume.uuid = %volume_spec.uuid(), request.reconcile = true)
+    fields(volume.uuid = %volume_spec.uuid(), request.reconcile = true, event = ?context.event())
 )]
 async fn offline_rebuild_reconcile(
     volume_spec: &mut ResourceMutex<VolumeSpec>,

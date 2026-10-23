@@ -146,7 +146,7 @@ async fn nexus_reconciler(
 
 /// Checks if nexus is Degraded and any child is Faulted. If yes, Depending on rebuild policy for
 /// child it performs rebuild operation.
-#[tracing::instrument(skip(nexus, volume, context), level = "trace", fields(volume = ?volume.as_ref().map(|v| v.as_ref()), nexus.uuid = %nexus.uuid(), nexus.node = %nexus.as_ref().node, request.reconcile = true))]
+#[tracing::instrument(skip(nexus, volume, context), level = "trace", fields(volume = ?volume.as_ref().map(|v| v.as_ref()), nexus.uuid = %nexus.uuid(), nexus.node = %nexus.as_ref().node, request.reconcile = true, event = ?context.event()))]
 pub(super) async fn handle_faulted_children(
     nexus: &mut OperationGuardArc<NexusSpec>,
     volume: &mut Option<&mut OperationGuardArc<VolumeSpec>>,
@@ -307,7 +307,7 @@ pub(super) async fn online_nexus_child(
 
 /// Find and removes unknown children from the given nexus
 /// If the child is a replica it also disowns and destroys it
-#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
+#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true, event = ?context.event()))]
 pub(super) async fn unknown_children_remover(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
@@ -322,7 +322,7 @@ pub(super) async fn unknown_children_remover(
         .collect::<Vec<_>>();
 
     if !unknown_children.is_empty() {
-        let span = tracing::info_span!("unknown_children_remover", nexus.uuid = %nexus.uuid(), request.reconcile = true);
+        let span = tracing::info_span!("unknown_children_remover", nexus.uuid = %nexus.uuid(), request.reconcile = true, event = ?context.event());
         async move {
             for child in unknown_children {
                 nexus.warn_span(|| {
@@ -355,7 +355,7 @@ pub(super) async fn unknown_children_remover(
 /// Find missing children from the given nexus
 /// They are removed from the spec as we don't know why they got removed, so it's safer
 /// to just disown and destroy them.
-#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
+#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true, event = ?context.event()))]
 pub(super) async fn missing_children_remover(
     nexus: &mut OperationGuardArc<NexusSpec>,
     volume: &mut Option<&mut OperationGuardArc<VolumeSpec>>,
@@ -411,7 +411,7 @@ pub(super) async fn missing_nexus_recreate(
         return PollResult::Ok(PollerState::Idle);
     }
 
-    #[tracing::instrument(skip(nexus_guard, context), fields(nexus.uuid = %nexus_guard.uuid(), request.reconcile = true))]
+    #[tracing::instrument(skip(nexus_guard, context), fields(nexus.uuid = %nexus_guard.uuid(), request.reconcile = true, event = ?context.event()))]
     async fn missing_nexus_recreate(
         nexus_guard: &mut OperationGuardArc<NexusSpec>,
         context: &PollContext,
@@ -507,7 +507,7 @@ pub(super) async fn missing_nexus_recreate(
 /// Fixup the nexus share protocol if it does not match what the specs says
 /// If the nexus is shared but the protocol is not the same as the spec, then we must first
 /// unshare the nexus, and then share it via the correct protocol
-#[tracing::instrument(skip(nexus, context), level = "debug", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
+#[tracing::instrument(skip(nexus, context), level = "debug", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true, event = ?context.event()))]
 pub(super) async fn fixup_nexus_protocol(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
@@ -609,10 +609,11 @@ pub(super) async fn faulted_nexus_remover(
     let healthy_children = healthy_nexus_children(nexus_spec, context.registry()).await?;
     let node = context.registry().node_wrapper(&nexus_spec.node).await?;
 
-    #[tracing::instrument(skip(nexus, node), fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
+    #[tracing::instrument(skip(nexus, node, context), fields(nexus.uuid = %nexus.uuid(), request.reconcile = true, event = ?context.event()))]
     async fn faulted_nexus_remover(
         nexus: &mut OperationGuardArc<NexusSpec>,
         node: Arc<RwLock<NodeWrapper>>,
+        context: &PollContext,
     ) -> PollResult {
         nexus.warn("Removing Faulted Nexus so it can be recreated with its healthy children");
 
@@ -657,13 +658,13 @@ pub(super) async fn faulted_nexus_remover(
             )
         });
     }
-    faulted_nexus_remover(nexus, node).await
+    faulted_nexus_remover(nexus, node, context).await
 }
 
 /// Fixup the size of nexus if it doesn't match what the volume spec is specifying. This mismatch
 /// could have happened if as part of the volume resize operation, the status of nexus resize was
 /// not definitively known.
-#[tracing::instrument(skip(nexus, context), level = "debug", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
+#[tracing::instrument(skip(nexus, context), level = "debug", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true, event = ?context.event()))]
 pub(super) async fn fixup_nexus_size(
     nexus: &mut OperationGuardArc<NexusSpec>,
     volume: &OperationGuardArc<VolumeSpec>,

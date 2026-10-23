@@ -17,7 +17,7 @@ use stor_port::types::v0::{
 
 /// Find thin-provisioned Nexus children which are degraded due to ENOSPC and try to online them
 /// if sufficient pool space has been freed.
-#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true))]
+#[tracing::instrument(skip(nexus, context), level = "trace", fields(nexus.uuid = %nexus.uuid(), request.reconcile = true, event = ?context.event()))]
 pub(crate) async fn enospc_children_onliner(
     nexus: &mut OperationGuardArc<NexusSpec>,
     context: &PollContext,
