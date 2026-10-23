@@ -1,3 +1,4 @@
+mod drain_utils;
 mod garbage_collector;
 mod hot_spare;
 mod nexus;

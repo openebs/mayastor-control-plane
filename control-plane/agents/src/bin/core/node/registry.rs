@@ -1,6 +1,6 @@
 use crate::controller::{registry::Registry, wrapper::NodeWrapper};
 use agents::errors::SvcError;
-use stor_port::types::v0::transport::{NodeBugFix, NodeId, NodeState, Register};
+use stor_port::types::v0::transport::{NodeBugFix, NodeId, NodeState, NodeStatus, Register};
 
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -58,6 +58,15 @@ impl Registry {
                 }
             }
             Some(node) => Ok(node.read().await.node_state().clone()),
+        }
+    }
+
+    /// Returns true if node is Online.
+    pub(crate) async fn is_node_online(&self, id: &NodeId) -> bool {
+        if let Ok(state) = self.node_state(id).await {
+            state.status == NodeStatus::Online
+        } else {
+            false
         }
     }
 
