@@ -5,7 +5,7 @@ use crate::controller::{
             GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecs, ResourceSpecsLocked,
             SpecOperationsHelper,
         },
-        OperationGuardArc, ResourceMutex,
+        OperationGuardArc, ResourceGuard, ResourceMutex,
     },
 };
 use agents::errors::{SvcError, SvcError::PoolNotFound};
@@ -463,7 +463,7 @@ impl ResourceSpecsLocked {
     pub(crate) fn pool_with<R>(
         &self,
         id: &PoolId,
-        run: impl Fn(parking_lot::MutexGuard<PoolSpec>) -> R,
+        run: impl Fn(ResourceGuard<PoolSpec>) -> R,
     ) -> Result<R, SvcError> {
         let specs = self.read();
         let pool = specs.pools.get(id).ok_or(PoolNotFound {

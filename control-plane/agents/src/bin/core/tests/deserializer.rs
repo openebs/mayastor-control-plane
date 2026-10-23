@@ -119,7 +119,6 @@ fn test_deserialization_v1_to_v2() {
                         creation_affinity_keys: None,
                     })),
                 }),
-                sequencer: Default::default(),
                 last_nexus_id: Some(
                     NexusId::try_from("d6ccbb97-d13e-4ffb-91a0-c7607bb01f8f").unwrap(),
                 ),
@@ -156,7 +155,6 @@ fn test_deserialization_v1_to_v2() {
                         );
                         Some(labels)
                     },
-                    sequencer: Default::default(),
                     operation: None,
                     creat_tsc: None,
                     encryption: None,

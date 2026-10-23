@@ -22,7 +22,7 @@ use stor_port::{
             replica::ReplicaSpec,
             snapshots::volume::VolumeSnapshot,
             volume::{AffinityGroupSpec, VolumeContentSource, VolumeSpec},
-            AsOperationSequencer, OperationMode, SpecStatus, SpecTransaction,
+            OperationMode, SpecStatus, SpecTransaction,
         },
         transport::{
             AppNodeId, NexusId, NodeId, PoolId, ReplicaId, ReplicaTopology, SnapshotId,
@@ -713,7 +713,7 @@ pub(crate) trait GuardedOperationsHelper:
 
 #[async_trait::async_trait]
 pub(crate) trait SpecOperationsHelper:
-    Clone + Debug + StorableObject + AsOperationSequencer + PartialEq<Self::Create>
+    Clone + Debug + StorableObject + PartialEq<Self::Create>
 {
     type Create: Debug + PartialEq + Sync + Send;
     type Status: PartialEq + Sync + Send;
@@ -856,10 +856,7 @@ pub(crate) trait SpecOperationsHelper:
 
 /// Operations are locked
 #[async_trait::async_trait]
-pub(crate) trait OperationSequenceGuard<
-    T: AsOperationSequencer + Clone + Sync + Send + Debug + ResourceUid,
->
-{
+pub(crate) trait OperationSequenceGuard<T: Clone + Sync + Send + Debug + ResourceUid> {
     /// Attempt to obtain a guard for the specified operation mode
     fn operation_guard_mode(&self, mode: OperationMode) -> Result<OperationGuardArc<T>, SvcError>;
     /// Attempt to obtain a guard for the specified operation mode
@@ -879,17 +876,17 @@ pub(crate) trait OperationSequenceGuard<
 }
 
 #[async_trait::async_trait]
-impl<T: AsOperationSequencer + Clone + Sync + Send + Debug + ResourceUid> OperationSequenceGuard<T>
-    for ResourceMutex<T>
-{
+impl<T: Clone + Sync + Send + Debug + ResourceUid> OperationSequenceGuard<T> for ResourceMutex<T> {
     fn operation_guard_mode(&self, mode: OperationMode) -> Result<OperationGuardArc<T>, SvcError> {
-        let get_value = |s: &Self| s.lock().clone();
-
-        match OperationGuardArc::try_sequence(self, get_value, mode) {
+        match self.try_guard(mode) {
             Ok(guard) => Ok(guard),
-            Err((error, log)) => {
+            Err(log) => {
                 if log {
-                    tracing::trace!("Resource '{}' is busy: {}", self.lock().uid_str(), error);
+                    tracing::trace!(
+                        "Resource '{}' is busy: Cannot transition from '{self:?}' to '{:?}'",
+                        self.lock().uid_str(),
+                        mode.apply()
+                    );
                 }
                 Err(SvcError::Conflict {})
             }
@@ -899,34 +896,23 @@ impl<T: AsOperationSequencer + Clone + Sync + Send + Debug + ResourceUid> Operat
         &self,
         mode: OperationMode,
     ) -> Result<OperationGuardArc<T>, SvcError> {
-        if let Ok(guard) = self.operation_guard_mode(mode) {
-            return Ok(guard);
-        }
-
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(1);
         loop {
-            let (waiter, is_sole_waiter) = self.register_op_waiter();
-            if is_sole_waiter {
-                // if we're the only ones waiting, try again to wa a race since the registration is not
-                // synced with the operation mode
-                // todo: move operation mode guard to the `ResourceMutex` so we can fix the race.
-                if let Ok(guard) = self.operation_guard_mode(mode) {
-                    return Ok(guard);
-                }
-            }
+            // Atomically acquire, or enqueue as a FIFO waiter. Because the try-acquire and the
+            // enqueue happen under the same lock that a dropped guard takes to wake waiters,
+            // there's no lost-wake-up window here.
+            let waiter = match self.try_guard_or_register(mode) {
+                Ok(guard) => return Ok(guard),
+                Err(waiter) => waiter,
+            };
 
             tokio::select! {
                 _ = waiter => {
-                    if let Ok(guard) = self.operation_guard_mode(mode) {
-                        return Ok(guard);
-                    }
+                    // A guard was dropped; loop round to re-attempt acquisition.
                 }
                 _ = tokio::time::sleep_until(deadline) => {
-                    // Try one more time, just in case the waiter was not notified for some reason.
-                    if let Ok(guard) = self.operation_guard_mode(mode) {
-                        return Ok(guard);
-                    }
-                    return Err(SvcError::Conflict {});
+                    // Timed out. Make one final *plain* attempt without enqueuing.
+                    return self.operation_guard_mode(mode);
                 }
             }
         }

@@ -1,6 +1,6 @@
 use super::{replica::ReplicaSnapshot, SnapshotId, SnapshotSpec};
 use crate::types::v0::{
-    store::{AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction},
+    store::{SpecStatus, SpecTransaction},
     transport::{
         GenericSnapshotParameters, NexusVersion, SnapshotParameters, SnapshotTxId, VolumeId,
     },
@@ -117,8 +117,6 @@ impl From<&VolumeSnapshotUserSpec> for VolumeSnapshot {
 /// Control-plane snapshot metadata, used for book-keeping.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct VolumeSnapshotMeta {
-    #[serde(skip)]
-    sequencer: OperationSequence,
     /// Record of the operation in progress.
     operation: Option<VolumeSnapshotOperationState>,
 
@@ -395,15 +393,6 @@ impl VolumeSnapshotCreateResult {
     }
 }
 
-impl AsOperationSequencer for VolumeSnapshot {
-    fn as_ref(&self) -> &OperationSequence {
-        &self.metadata.sequencer
-    }
-
-    fn as_mut(&mut self) -> &mut OperationSequence {
-        &mut self.metadata.sequencer
-    }
-}
 impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
     fn has_pending_op(&self) -> bool {
         self.metadata.operation.is_some()

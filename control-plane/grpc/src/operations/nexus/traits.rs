@@ -564,7 +564,6 @@ impl TryFrom<nexus::NexusSpec> for NexusSpec {
                 },
                 None => None,
             },
-            sequencer: Default::default(),
             operation: value.operation.map(|op| NexusOperationState {
                 operation: NexusOperation::Create,
                 result: op.result,
