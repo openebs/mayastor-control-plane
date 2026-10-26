@@ -1,7 +1,7 @@
 mod garbage_collector;
 mod hot_spare;
 mod nexus;
-mod offline_rebuild;
+pub(crate) mod offline_rebuild;
 
 use crate::controller::task_poller::{PollContext, PollPeriods, PollResult, PollTimer, TaskPoller};
 

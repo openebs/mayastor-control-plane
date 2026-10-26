@@ -5,7 +5,7 @@ pub(crate) mod poller;
 mod pool;
 mod replica;
 mod snapshot;
-mod volume;
+pub(crate) mod volume;
 
 pub(crate) use crate::controller::task_poller::PollTriggerEvent;
 use crate::controller::task_poller::{

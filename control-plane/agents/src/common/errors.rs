@@ -385,6 +385,27 @@ pub enum SvcError {
     #[snafu(display("Target switchover is not allowed without HA"))]
     SwitchoverNotAllowedWhenHAisDisabled {},
     #[snafu(display(
+        "An offline rebuild cannot be requested while the offline rebuild reconciler is disabled"
+    ))]
+    OfflineRebuildDisabled {},
+    #[snafu(display(
+        "Volume '{vol_id}' is published; rebuilds for a published volume are already driven \
+        automatically and have no grace period to skip"
+    ))]
+    RebuildTriggerVolumePublished { vol_id: String },
+    #[snafu(display("Volume '{vol_id}' is not degraded, so there is nothing to rebuild"))]
+    RebuildTriggerVolumeNotDegraded { vol_id: String },
+    #[snafu(display(
+        "Volume '{vol_id}' cannot be rebuilt right now: it needs a healthy replica to copy \
+        from and somewhere to put the replacement"
+    ))]
+    RebuildTriggerNotViable { vol_id: String },
+    #[snafu(display(
+        "Volume '{vol_id}' cannot be rebuilt right now because the configured rebuild limits \
+        are reached; retry without 'now' to queue it, or with 'force' to start it anyway"
+    ))]
+    RebuildTriggerLimited { vol_id: String },
+    #[snafu(display(
         "The volume would exceed the cluster capacity limit of {cluster_capacity_limit}B by {excess}B"
     ))]
     CapacityLimitExceeded {
@@ -1276,6 +1297,36 @@ impl From<SvcError> for ReplyError {
             SvcError::SwitchoverNotAllowedWhenHAisDisabled {} => ReplyError {
                 kind: ReplyErrorKind::FailedPrecondition,
                 resource: ResourceKind::Nexus,
+                source,
+                extra,
+            },
+            SvcError::OfflineRebuildDisabled {} => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Volume,
+                source,
+                extra,
+            },
+            SvcError::RebuildTriggerVolumePublished { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Volume,
+                source,
+                extra,
+            },
+            SvcError::RebuildTriggerVolumeNotDegraded { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Volume,
+                source,
+                extra,
+            },
+            SvcError::RebuildTriggerNotViable { .. } => ReplyError {
+                kind: ReplyErrorKind::FailedPrecondition,
+                resource: ResourceKind::Volume,
+                source,
+                extra,
+            },
+            SvcError::RebuildTriggerLimited { .. } => ReplyError {
+                kind: ReplyErrorKind::ResourceExhausted,
+                resource: ResourceKind::Volume,
                 source,
                 extra,
             },

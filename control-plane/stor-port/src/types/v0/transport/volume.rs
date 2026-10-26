@@ -885,6 +885,40 @@ impl SetVolumeReplica {
     }
 }
 
+/// Ask for a volume's rebuild to start without waiting out the grace period.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TriggerRebuild {
+    /// The uuid of the volume.
+    pub uuid: VolumeId,
+    /// Start the rebuild as part of this request rather than queueing it for the
+    /// reconciler, and fail if it cannot be started.
+    pub now: bool,
+    /// Start the rebuild even when the configured rebuild limits are reached.
+    /// Only meaningful alongside `now`.
+    pub force: bool,
+}
+impl TriggerRebuild {
+    /// Create new `Self` for the given volume, queued for the reconciler.
+    pub fn new(uuid: VolumeId) -> Self {
+        Self {
+            uuid,
+            now: false,
+            force: false,
+        }
+    }
+    /// Start the rebuild in line with the request instead of queueing it.
+    pub fn with_now(mut self, now: bool) -> Self {
+        self.now = now;
+        self
+    }
+    /// Start the rebuild even when the rebuild limits are reached.
+    pub fn with_force(mut self, force: bool) -> Self {
+        self.force = force;
+        self
+    }
+}
+
 /// Set the volume property.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
