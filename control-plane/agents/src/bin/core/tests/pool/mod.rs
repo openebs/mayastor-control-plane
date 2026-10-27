@@ -1488,7 +1488,7 @@ async fn destroy_after_restart() {
 }
 
 #[tokio::test]
-async fn slow_create() {
+async fn slow_create_import() {
     const POOL_SIZE_BYTES: u64 = 128 * 1024 * 1024;
 
     let vg = deployer_cluster::lvm::VolGroup::new("slow-pooly", POOL_SIZE_BYTES).unwrap();
@@ -1538,6 +1538,7 @@ async fn slow_create() {
             }
         }
 
+        tracing::info!("Resuming {lvol}");
         lvol.resume().unwrap();
 
         let start = std::time::Instant::now();
@@ -1590,11 +1591,10 @@ async fn slow_create() {
         assert_eq!(error.kind, ReplyErrorKind::Cancelled);
 
         let pools = client.pool().get(Filter::None, None).await.unwrap();
-        tracing::info!("{pools:#?}");
+        tracing::debug!("{pools:?}");
 
-        tracing::info!("Resuming device");
+        tracing::info!("Resuming {lvol}");
         lvol.resume().unwrap();
-        tracing::info!("Resumed device");
 
         let pool = match client.pool().create(&create, None).await {
             Err(error) => {
@@ -1609,6 +1609,30 @@ async fn slow_create() {
             Ok(pool) => pool,
         };
         assert!(pool.spec().unwrap().status.created());
+
+        // Slow Import
+        let node = cluster.node(0);
+
+        tracing::info!("Stopping {node}");
+        // Now we try to recreate using an API call, rather than using the reconciler
+        cluster.composer().stop(&node).await.unwrap();
+        // todo: wait node offline
+
+        tracing::info!("Suspending {lvol} on {node}");
+        lvol.suspend_await().await.unwrap();
+
+        tracing::info!("Starting {node}");
+        cluster.composer().start(&node).await.unwrap();
+
+        let sleep = std::time::Duration::from_secs(2);
+        tracing::info!("Sleeping {sleep:?}");
+        tokio::time::sleep(sleep).await;
+
+        tracing::info!("Resuming device {lvol} on {node}");
+        lvol.resume().unwrap();
+
+        cluster.wait_pool_online(pool.id().clone()).await.unwrap();
+
         client.pool().destroy(&destroy, None).await.unwrap();
     }
 }
