@@ -851,6 +851,12 @@ pub struct DrainPoolArgs {
     pool_id: PoolId,
     #[clap(flatten)]
     policy: DrainReq,
+    /// Only evaluate what the drain would do, without changing anything.{n}
+    /// Lists the volumes whose replica could not be moved to another pool, and why.{n}
+    /// The result is a point-in-time evaluation: changes in the cluster after the call
+    /// are not reflected.
+    #[clap(long)]
+    dry_run: bool,
 }
 
 impl DrainPoolArgs {
@@ -861,6 +867,10 @@ impl DrainPoolArgs {
     /// Return the drain policy.
     pub fn policy(&self) -> &DrainReq {
         &self.policy
+    }
+    /// Whether to only evaluate the drain.
+    pub fn dry_run(&self) -> bool {
+        self.dry_run
     }
 }
 
@@ -899,6 +909,64 @@ impl Drain for Pool {
                     return Err(Error::PoolDrainStateMissing { id: id.to_string() });
                 };
                 println!("Pool {id} drain requested. Current phase: {}", record.phase);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Pool {
+    /// Evaluate what draining the pool would do, without changing anything.
+    pub async fn drain_dry_run(
+        id: &PoolId,
+        args: &DrainReq,
+        output: &OutputFormat,
+    ) -> PluginResult {
+        let reply = RestClient::client()
+            .pools_api()
+            .put_pool_drain_dry_run(id, models::PoolDrainReq::from(args))
+            .await
+            .map_err(|source| Error::PoolDrainError {
+                id: id.to_string(),
+                source,
+            })?
+            .into_body();
+        match output {
+            OutputFormat::Yaml => {
+                println!("{}", serde_yaml::to_string(&reply).unwrap());
+            }
+            OutputFormat::Json => {
+                println!("{}", serde_json::to_string(&reply).unwrap());
+            }
+            OutputFormat::None => {
+                println!(
+                    "Dry run for pool {id}: {} replicas and {} snapshots, {} degraded volumes.",
+                    reply.num_replicas, reply.num_snapshots, reply.num_degraded
+                );
+                if reply.num_volume_replica_immovable == 0 {
+                    println!("All replicas can be moved to other pools.");
+                } else {
+                    println!(
+                        "{} volume replicas cannot be moved to another pool:",
+                        reply.num_volume_replica_immovable
+                    );
+                    let reasons = reply.immovable_resources;
+                    for (reason, volumes) in [
+                        ("nodes", reasons.nodes),
+                        ("size", reasons.size),
+                        ("topology", reasons.topology),
+                        ("cluster size", reasons.cluster_size),
+                        ("single replica eviction", reasons.single_replica_eviction),
+                        ("encryption", reasons.encryption),
+                        ("affinity group", reasons.affinity_group),
+                        ("no candidate pool", reasons.no_candidate_pool),
+                        ("other", reasons.other),
+                    ] {
+                        if !volumes.is_empty() {
+                            println!("  {reason}: {}", volumes.join(", "));
+                        }
+                    }
+                }
             }
         }
         Ok(())

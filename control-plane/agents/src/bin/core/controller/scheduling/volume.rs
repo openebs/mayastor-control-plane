@@ -169,7 +169,13 @@ impl AddVolumeReplica {
         }
         used_bytes.into_iter().max()
     }
-    async fn builder(request: GetSuitablePools, registry: &Registry) -> Self {
+    /// Build the context and the (unfiltered) pool list used for replica placement.
+    /// Read-only, so it is also used to evaluate placement without provisioning, see
+    /// `volume_policy::immovable`.
+    pub(crate) async fn context_and_pools(
+        request: GetSuitablePools,
+        registry: &Registry,
+    ) -> (GetSuitablePoolsContext, Vec<PoolItem>) {
         let volume_spec = request.spec;
 
         let replicas = registry.specs().volume_replicas(&volume_spec.uuid);
@@ -195,19 +201,23 @@ impl AddVolumeReplica {
             }
         }
 
+        (
+            GetSuitablePoolsContext {
+                registry: registry.clone(),
+                spec: volume_spec,
+                allocated_bytes,
+                move_repl: request.move_repl,
+                snap_repl: false,
+                ag_restricted_nodes,
+                used_spread_labels: exclude_labels,
+            },
+            PoolItemLister::list(registry, &pool_ag_replica_count_map).await,
+        )
+    }
+    async fn builder(request: GetSuitablePools, registry: &Registry) -> Self {
+        let (context, pools) = Self::context_and_pools(request, registry).await;
         Self {
-            data: ResourceData::new(
-                GetSuitablePoolsContext {
-                    registry: registry.clone(),
-                    spec: volume_spec,
-                    allocated_bytes,
-                    move_repl: request.move_repl,
-                    snap_repl: false,
-                    ag_restricted_nodes,
-                    used_spread_labels: exclude_labels,
-                },
-                PoolItemLister::list(registry, &pool_ag_replica_count_map).await,
-            ),
+            data: ResourceData::new(context, pools),
         }
     }
     fn with_default_policy(self) -> Self {

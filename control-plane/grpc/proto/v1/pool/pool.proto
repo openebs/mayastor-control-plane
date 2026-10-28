@@ -624,13 +624,57 @@ message DrainPoolRequest {
   string pool_id = 2;
   /// The drain policy to apply to the pool.
   DrainPolicy policy = 3;
+  /// Only evaluate what the drain would do, without making any change.
+  /// The reply is then a `DrainDryRunReply`.
+  bool dry_run = 4;
 }
 
 message DrainPoolReply {
   oneof reply {
     Pool pool = 1;
     common.ReplyError error = 2;
+    // Set when the request was a dry run.
+    DrainDryRunReply dry_run = 3;
   }
+}
+
+// The outcome of a drain dry run, evaluated at the time of the request.
+message DrainDryRunReply {
+  // Number of replicas on the pool.
+  uint64 num_replicas = 1;
+  // Number of snapshots on the pool.
+  uint64 num_snapshots = 2;
+  // Number of volumes with a replica on the pool which are not online.
+  uint64 num_degraded = 3;
+  // Number of volumes with a replica on the pool for which no other pool was found.
+  uint64 num_volume_replica_immovable = 4;
+  // The volumes which could not be moved, grouped by the constraint(s) which blocked them.
+  ImmovableReasons immovable_resources = 5;
+}
+
+// Volume ids grouped by the constraint which blocks the move of their replica.
+// A volume is listed under every constraint which excluded at least one pool.
+message ImmovableReasons {
+  // Node constraints: cordoned, offline, not allowed by topology, or already used by the volume.
+  repeated string nodes = 1;
+  // Capacity constraints: pool too small, not enough free space or overcommitted.
+  repeated string size = 2;
+  // Node or pool topology constraints.
+  repeated string topology = 3;
+  // No pool with a blobstore cluster size matching the volume's.
+  repeated string cluster_size = 4;
+  // Any other constraint, such as pool state or cordon.
+  repeated string other = 5;
+  // Single replica volumes, whose only replica is never evicted when unsafe eviction was
+  // requested.
+  repeated string single_replica_eviction = 6;
+  // No pool which satisfies the volume's encryption requirement.
+  repeated string encryption = 7;
+  // Affinity group anti-affinity: the only candidate nodes already hold a replica of another
+  // volume of the same affinity group.
+  repeated string affinity_group = 8;
+  // No other pool exists which could receive the replica.
+  repeated string no_candidate_pool = 9;
 }
 
 // Service for managing storage pools

@@ -263,6 +263,32 @@ impl apis::actix_server::Pools for RestApi {
         Ok(pool.into())
     }
 
+    async fn put_node_pool_drain_dry_run(
+        Path((node_id, pool_id)): Path<(String, String)>,
+        Body(body): Body<models::PoolDrainReq>,
+    ) -> Result<models::PoolDrainDryRun, RestError<RestJsonError>> {
+        let request = PoolDrainRequest {
+            node_id: Some(node_id.into()),
+            pool_id: pool_id.into(),
+            policy: DrainPolicy::try_from(body)?,
+        };
+        let reply = client().drain_dry_run(&request).await?;
+        Ok(reply.into())
+    }
+
+    async fn put_pool_drain_dry_run(
+        Path(pool_id): Path<String>,
+        Body(body): Body<models::PoolDrainReq>,
+    ) -> Result<models::PoolDrainDryRun, RestError<RestJsonError>> {
+        let request = PoolDrainRequest {
+            node_id: None,
+            pool_id: pool_id.into(),
+            policy: DrainPolicy::try_from(body)?,
+        };
+        let reply = client().drain_dry_run(&request).await?;
+        Ok(reply.into())
+    }
+
     async fn get_pool_drain(
         Path(pool_id): Path<String>,
     ) -> Result<models::PoolDrainStateExt, RestError<RestJsonError>> {

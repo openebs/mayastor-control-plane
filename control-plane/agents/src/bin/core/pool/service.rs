@@ -1,13 +1,18 @@
-use crate::controller::{
-    registry::Registry,
-    resources::{
-        operations::{
-            ResourceDrain, ResourceLabel, ResourceLifecycle, ResourceResize, ResourceSharing,
+use crate::{
+    controller::{
+        registry::Registry,
+        resources::{
+            operations::{
+                ResourceDrain, ResourceLabel, ResourceLifecycle, ResourceResize, ResourceSharing,
+            },
+            operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
+            OperationGuardArc, ResourceMutex,
         },
-        operations_helper::{OperationSequenceGuard, ResourceSpecsLocked},
-        OperationGuardArc, ResourceMutex,
+        scheduling::{replica_move_blockers, volume::GetSuitablePools, ImmovableReason},
+        wrapper::GetterOps,
     },
-    wrapper::GetterOps,
+    pool::specs::drain_refused_error,
+    volume::volume_pool_candidates,
 };
 use agents::errors::{PoolNotFound, ReplicaNotFound, SvcError};
 use grpc::{
@@ -29,11 +34,15 @@ use stor_port::{
         ReplyError, ResourceKind,
     },
     types::v0::{
-        store::{pool::PoolSpec, replica::ReplicaSpec},
+        store::{
+            pool::{PoolDrainOp, PoolSpec},
+            replica::ReplicaSpec,
+        },
         transport::{
-            CreatePool, CreateReplica, DestroyPool, DestroyReplica, ExpandPool, Filter, GetPools,
-            GetPoolsSmartResponse, GetReplicas, LabelPool, NodeId, Pool, PoolDeleteResult, PoolId,
-            Replica, ResizeReplica, ShareReplica, UnlabelPool, UnshareReplica, VolumeId,
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, DrainDryRunReply, ExpandPool,
+            Filter, GetPools, GetPoolsSmartResponse, GetReplicas, LabelPool, NodeId, Pool,
+            PoolDeleteResult, PoolId, Replica, ResizeReplica, ShareReplica, UnlabelPool,
+            UnshareReplica, VolumeId,
         },
     },
 };
@@ -47,6 +56,8 @@ use grpc::operations::pool::traits::{
     PoolCreateError,
 };
 use snafu::OptionExt;
+use std::collections::{BTreeSet, HashSet};
+use stor_port::types::v0::transport::NexusStatus;
 
 #[derive(Debug, Clone)]
 pub(super) struct Service {
@@ -148,6 +159,15 @@ impl PoolOperations for Service {
         let service = self.clone();
         let pool = Context::spawn(async move { service.drain(request).await }).await??;
         Ok(pool)
+    }
+    async fn drain_dry_run(
+        &self,
+        request: &PoolDrainRequest,
+    ) -> Result<DrainDryRunReply, ReplyError> {
+        let request = request.clone();
+        let service = self.clone();
+        let reply = Context::spawn(async move { service.drain_dry_run(request).await }).await??;
+        Ok(reply)
     }
     async fn get_pools_smart(
         &self,
@@ -509,6 +529,117 @@ impl Service {
         let spec = guarded_pool.drain(&self.registry, request).await?;
         let state = self.registry.ctrl_pool_state(guarded_pool.uid()).await.ok();
         Ok(Pool::new(spec, state))
+    }
+
+    /// Evaluate what draining the pool would do, without making any change.
+    /// This only reads the current state of the pool and of its volumes: no operation guard is
+    /// taken, nothing is persisted, and the pool is not cordoned.
+    #[tracing::instrument(level = "info", skip(self), err, fields(pool.id = %request.pool_id))]
+    async fn drain_dry_run(&self, request: PoolDrainRequest) -> Result<DrainDryRunReply, SvcError> {
+        let pool_spec = self.specs().pool(&request.pool_id)?;
+        if let Some(node) = &request.node_id {
+            if &pool_spec.node != node {
+                return Err(SvcError::PoolNotFound {
+                    pool_id: request.pool_id.clone(),
+                });
+            }
+        }
+        // Refuse the same requests a real drain would refuse.
+        let drain_op = PoolDrainOp {
+            policy: request.policy.clone(),
+        };
+        pool_spec
+            .validate_drain(&drain_op)
+            .map_err(|refused| drain_refused_error(&request.pool_id, refused))?;
+
+        let usage = self.registry.pool_usage(&request.pool_id).await?;
+        let mut reply = DrainDryRunReply {
+            num_replicas: usage.repl_count,
+            num_snapshots: usage.snap_count,
+            ..Default::default()
+        };
+
+        let mut volumes = HashSet::new();
+        for replica in self.specs().pool_replicas(&request.pool_id) {
+            if let Some(volume) = replica.lock().volume_owner() {
+                volumes.insert(volume.clone());
+            }
+        }
+
+        for volume_id in volumes {
+            let Ok(volume_spec) = self.specs().volume_clone(&volume_id) else {
+                continue;
+            };
+            // The drain only moves replicas of online volumes, see the drain reconciler.
+            if let Ok(volume) = self.registry.volume(&volume_id).await {
+                if volume.state().status != NexusStatus::Online {
+                    reply.num_degraded += 1;
+                }
+            }
+
+            let mut blockers = BTreeSet::new();
+            if request.policy.unsafe_evict && volume_spec.num_replicas == 1 {
+                // The drain never evicts the only replica of a volume.
+                blockers.insert(ImmovableReason::SingleReplicaEviction);
+            } else {
+                let candidates = volume_pool_candidates(
+                    GetSuitablePools::new(&volume_spec, None),
+                    &self.registry,
+                )
+                .await;
+                if !candidates.is_empty() {
+                    continue;
+                }
+                blockers =
+                    replica_move_blockers(&self.registry, &volume_spec, &request.pool_id).await;
+                if blockers.is_empty() {
+                    // The scheduler found no pool, but no constraint explains why.
+                    tracing::warn!(
+                        volume.uuid = %volume_id,
+                        "Replica can't be moved but no blocking constraint was found"
+                    );
+                    blockers.insert(ImmovableReason::Other);
+                }
+            }
+
+            reply.num_volume_replica_immovable += 1;
+            let reasons = &mut reply.immovable_resources;
+            for blocker in blockers {
+                match blocker {
+                    ImmovableReason::Nodes => reasons.nodes.push(volume_id.clone()),
+                    ImmovableReason::Size => reasons.size.push(volume_id.clone()),
+                    ImmovableReason::Topology => reasons.topology.push(volume_id.clone()),
+                    ImmovableReason::ClusterSize => reasons.cluster_size.push(volume_id.clone()),
+                    ImmovableReason::SingleReplicaEviction => {
+                        reasons.single_replica_eviction.push(volume_id.clone())
+                    }
+                    ImmovableReason::Encryption => reasons.encryption.push(volume_id.clone()),
+                    ImmovableReason::AffinityGroup => {
+                        reasons.affinity_group.push(volume_id.clone())
+                    }
+                    ImmovableReason::NoCandidatePool => {
+                        reasons.no_candidate_pool.push(volume_id.clone())
+                    }
+                    ImmovableReason::Other => reasons.other.push(volume_id.clone()),
+                }
+            }
+        }
+        // Keep the reply stable across calls.
+        let reasons = &mut reply.immovable_resources;
+        for ids in [
+            &mut reasons.nodes,
+            &mut reasons.size,
+            &mut reasons.topology,
+            &mut reasons.cluster_size,
+            &mut reasons.single_replica_eviction,
+            &mut reasons.encryption,
+            &mut reasons.affinity_group,
+            &mut reasons.no_candidate_pool,
+            &mut reasons.other,
+        ] {
+            ids.sort_by_key(|id| id.to_string());
+        }
+        Ok(reply)
     }
 
     /// Get SMART / health information for pools, dispatched by filter.
