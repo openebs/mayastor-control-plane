@@ -20,12 +20,12 @@ use stor_port::{
         },
         transport::{
             AtaSmart, CreatePool, CtrlPoolState, DestroyPool, DeviceIdentity, DiskInfo, DiskSmart,
-            ExpandPool, Filter, GetPoolsSmartResponse, LabelPool, NodeId, NvmeErrorLogEntry,
-            NvmeSmart, Pool, PoolAlert, PoolAlertStatus, PoolAlerts, PoolDef, PoolDeleteResult,
-            PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolErrorInfo,
-            PoolId, PoolSmart, PoolState, PoolStatus, ReplicaId, SmartAttribute, SmartData,
-            SmartProtocol, SnapshotLossDetail, SnapshotLossInfo, UnlabelPool, VolumeId,
-            VolumeLossDetail, VolumeLossInfo,
+            DrainDryRunReply, ExpandPool, Filter, GetPoolsSmartResponse, ImmovableReasons,
+            LabelPool, NodeId, NvmeErrorLogEntry, NvmeSmart, Pool, PoolAlert, PoolAlertStatus,
+            PoolAlerts, PoolDef, PoolDeleteResult, PoolDeviceUri, PoolDiag, PoolDiskError,
+            PoolError, PoolErrorCode, PoolErrorInfo, PoolId, PoolSmart, PoolState, PoolStatus,
+            ReplicaId, SmartAttribute, SmartData, SmartProtocol, SnapshotLossDetail,
+            SnapshotLossInfo, UnlabelPool, VolumeId, VolumeLossDetail, VolumeLossInfo,
         },
     },
     IntoOption, IntoVec, TryIntoOption, TryIntoVec,
@@ -148,6 +148,11 @@ pub trait PoolOperations: Send + Sync {
     async fn clear_errors(&self, request: &ClearErrorsRequest) -> Result<Pool, ReplyError>;
     /// Initiates drain of a pool using user specified config.
     async fn drain(&self, request: &PoolDrainRequest) -> Result<Pool, ReplyError>;
+    /// Evaluates what draining the pool would do, without making any change.
+    async fn drain_dry_run(
+        &self,
+        request: &PoolDrainRequest,
+    ) -> Result<DrainDryRunReply, ReplyError>;
     /// Get pools SMART / health information.
     async fn get_pools_smart(
         &self,
@@ -1528,7 +1533,83 @@ impl From<PoolDrainRequest> for pool::DrainPoolRequest {
             node_id: value.node_id.map(Into::into),
             pool_id: value.pool_id.into(),
             policy: Some(value.policy.into()),
+            dry_run: false,
         }
+    }
+}
+
+impl From<DrainDryRunReply> for pool::DrainDryRunReply {
+    fn from(value: DrainDryRunReply) -> Self {
+        Self {
+            num_replicas: value.num_replicas,
+            num_snapshots: value.num_snapshots,
+            num_degraded: value.num_degraded,
+            num_volume_replica_immovable: value.num_volume_replica_immovable,
+            immovable_resources: Some(value.immovable_resources.into()),
+        }
+    }
+}
+
+impl TryFrom<pool::DrainDryRunReply> for DrainDryRunReply {
+    type Error = ReplyError;
+
+    fn try_from(value: pool::DrainDryRunReply) -> Result<Self, Self::Error> {
+        let immovable_resources = value
+            .immovable_resources
+            .ok_or_else(|| {
+                ReplyError::missing_argument(
+                    ResourceKind::Pool,
+                    "drain_dry_run_reply.immovable_resources",
+                )
+            })?
+            .try_into()?;
+        Ok(Self {
+            num_replicas: value.num_replicas,
+            num_snapshots: value.num_snapshots,
+            num_degraded: value.num_degraded,
+            num_volume_replica_immovable: value.num_volume_replica_immovable,
+            immovable_resources,
+        })
+    }
+}
+
+impl From<ImmovableReasons> for pool::ImmovableReasons {
+    fn from(value: ImmovableReasons) -> Self {
+        let ids = |ids: Vec<VolumeId>| ids.into_iter().map(|id| id.to_string()).collect();
+        Self {
+            nodes: ids(value.nodes),
+            size: ids(value.size),
+            topology: ids(value.topology),
+            cluster_size: ids(value.cluster_size),
+            single_replica_eviction: ids(value.single_replica_eviction),
+            encryption: ids(value.encryption),
+            affinity_group: ids(value.affinity_group),
+            no_candidate_pool: ids(value.no_candidate_pool),
+            other: ids(value.other),
+        }
+    }
+}
+
+impl TryFrom<pool::ImmovableReasons> for ImmovableReasons {
+    type Error = ReplyError;
+
+    fn try_from(value: pool::ImmovableReasons) -> Result<Self, Self::Error> {
+        let ids = |ids: Vec<String>| -> Result<Vec<VolumeId>, ReplyError> {
+            ids.into_iter()
+                .map(|id| VolumeId::try_from(StringValue(Some(id))))
+                .collect()
+        };
+        Ok(Self {
+            nodes: ids(value.nodes)?,
+            size: ids(value.size)?,
+            topology: ids(value.topology)?,
+            cluster_size: ids(value.cluster_size)?,
+            single_replica_eviction: ids(value.single_replica_eviction)?,
+            encryption: ids(value.encryption)?,
+            affinity_group: ids(value.affinity_group)?,
+            no_candidate_pool: ids(value.no_candidate_pool)?,
+            other: ids(value.other)?,
+        })
     }
 }
 

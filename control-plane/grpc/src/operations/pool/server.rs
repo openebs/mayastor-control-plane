@@ -190,14 +190,20 @@ impl PoolGrpc for PoolServer {
         request: Request<DrainPoolRequest>,
     ) -> Result<tonic::Response<DrainPoolReply>, tonic::Status> {
         let request = request.into_inner();
-        match self.service.drain(&request.try_into()?).await {
-            Ok(pool) => Ok(Response::new(DrainPoolReply {
-                reply: Some(drain_pool_reply::Reply::Pool(pool.into())),
-            })),
-            Err(err) => Ok(Response::new(DrainPoolReply {
-                reply: Some(drain_pool_reply::Reply::Error(err.into())),
-            })),
-        }
+        let dry_run = request.dry_run;
+        let request: super::traits::PoolDrainRequest = request.try_into()?;
+        let reply = if dry_run {
+            match self.service.drain_dry_run(&request).await {
+                Ok(reply) => drain_pool_reply::Reply::DryRun(reply.into()),
+                Err(err) => drain_pool_reply::Reply::Error(err.into()),
+            }
+        } else {
+            match self.service.drain(&request).await {
+                Ok(pool) => drain_pool_reply::Reply::Pool(pool.into()),
+                Err(err) => drain_pool_reply::Reply::Error(err.into()),
+            }
+        };
+        Ok(Response::new(DrainPoolReply { reply: Some(reply) }))
     }
 
     async fn get_pools_smart(

@@ -137,6 +137,14 @@ impl ExecuteOperation for DrainResources {
                 )
                 .await
             }
+            DrainResources::Pool(drain_pool_args) if drain_pool_args.dry_run() => {
+                pool::Pool::drain_dry_run(
+                    drain_pool_args.pool_id(),
+                    drain_pool_args.policy(),
+                    &cli_args.output,
+                )
+                .await
+            }
             DrainResources::Pool(drain_pool_args) => {
                 pool::Pool::drain(
                     drain_pool_args.pool_id(),
