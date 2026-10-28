@@ -1442,3 +1442,73 @@ pub struct NvmeErrorLogEntry {
     /// Identifier of the namespace associated with the error, when applicable.
     pub namespace_id: Option<u32>,
 }
+
+/// The outcome of a pool drain dry run, evaluated at the time of the request.
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
+pub struct DrainDryRunReply {
+    /// Number of replicas on the pool.
+    pub num_replicas: u64,
+    /// Number of snapshots on the pool.
+    pub num_snapshots: u64,
+    /// Number of volumes with a replica on the pool which are not online.
+    pub num_degraded: u64,
+    /// Number of volumes with a replica on the pool for which no other pool was found.
+    pub num_volume_replica_immovable: u64,
+    /// The volumes which could not be moved, grouped by the constraint which blocked them.
+    pub immovable_resources: ImmovableReasons,
+}
+
+/// Volume ids grouped by the constraint which blocks the move of their replica.
+/// A volume is listed under every constraint which excluded at least one pool.
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
+pub struct ImmovableReasons {
+    /// Node constraints: cordoned, offline, not allowed by topology or already used by the volume.
+    pub nodes: Vec<VolumeId>,
+    /// Capacity constraints: pool too small, not enough free space or overcommitted.
+    pub size: Vec<VolumeId>,
+    /// Node or pool topology constraints.
+    pub topology: Vec<VolumeId>,
+    /// No pool with a blobstore cluster size matching the volume's.
+    pub cluster_size: Vec<VolumeId>,
+    /// Single replica volumes, whose only replica is never evicted when unsafe eviction was
+    /// requested.
+    pub single_replica_eviction: Vec<VolumeId>,
+    /// No pool which satisfies the volume's encryption requirement.
+    pub encryption: Vec<VolumeId>,
+    /// Affinity group anti-affinity: the only candidate nodes already hold a replica of another
+    /// volume of the same affinity group.
+    pub affinity_group: Vec<VolumeId>,
+    /// No other pool exists which could receive the replica.
+    pub no_candidate_pool: Vec<VolumeId>,
+    /// Any other constraint, such as pool state or cordon.
+    pub other: Vec<VolumeId>,
+}
+
+impl From<DrainDryRunReply> for models::PoolDrainDryRun {
+    fn from(value: DrainDryRunReply) -> Self {
+        Self::new_all(
+            value.num_replicas,
+            value.num_snapshots,
+            value.num_degraded,
+            value.num_volume_replica_immovable,
+            models::PoolDrainImmovableReasons::from(value.immovable_resources),
+        )
+    }
+}
+
+impl From<ImmovableReasons> for models::PoolDrainImmovableReasons {
+    fn from(value: ImmovableReasons) -> Self {
+        let ids = |ids: Vec<VolumeId>| ids.iter().map(ToString::to_string).collect::<Vec<_>>();
+        Self::new_all(
+            ids(value.nodes),
+            ids(value.size),
+            ids(value.topology),
+            ids(value.cluster_size),
+            ids(value.single_replica_eviction),
+            ids(value.encryption),
+            ids(value.affinity_group),
+            ids(value.no_candidate_pool),
+            ids(value.other),
+        )
+    }
+}

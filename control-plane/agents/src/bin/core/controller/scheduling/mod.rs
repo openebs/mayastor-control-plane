@@ -4,6 +4,7 @@ pub(crate) mod pool;
 pub(crate) mod resources;
 pub(crate) mod volume;
 mod volume_policy;
+pub(crate) use volume_policy::immovable::{replica_move_blockers, ImmovableReason};
 
 use crate::controller::scheduling::{
     nexus::GetPersistedNexusChildrenCtx,
