@@ -5,7 +5,7 @@ use crate::{
         store::{
             app_node::TransportCaps,
             definitions::{ObjectKey, StorableObject, StorableObjectType},
-            AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
+            SpecStatus, SpecTransaction,
         },
         transport::{
             self, HostNqn, NexusVersion, NodeBugFix, NodeBugFixes, NodeFeatures, NodeId,
@@ -189,9 +189,6 @@ pub struct NodeSpec {
     draining_volumes: HashSet<VolumeId>,
     #[serde(skip)] // Do not store.
     draining_timestamp: Option<SystemTime>,
-    /// The operation sequence resource is in.
-    #[serde(skip)]
-    sequencer: OperationSequence,
     /// Record of the operation in progress.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operation: Option<NodeOperationState>,
@@ -276,7 +273,6 @@ impl NodeSpec {
             node_nqn,
             draining_volumes: HashSet::new(),
             draining_timestamp: None,
-            sequencer: OperationSequence::new(),
             operation: None,
             status: SpecStatus::Created(()),
             features,
@@ -633,16 +629,6 @@ impl From<NodeSpec> for models::NodeSpec {
             src.transport_caps.map(Into::into),
             src.nvmf_target.map(Into::into),
         )
-    }
-}
-
-impl AsOperationSequencer for NodeSpec {
-    fn as_ref(&self) -> &OperationSequence {
-        &self.sequencer
-    }
-
-    fn as_mut(&mut self) -> &mut OperationSequence {
-        &mut self.sequencer
     }
 }
 

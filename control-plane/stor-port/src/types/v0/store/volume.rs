@@ -7,7 +7,7 @@ use crate::{
             definitions::{ObjectKey, StorableObject, StorableObjectType},
             nexus_persistence::VolumeHealthKey,
             pool::{default_pool_cluster_size, DrainConfig, POOL_BS_CLUSTER_SIZE_DEFAULT},
-            AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
+            SpecStatus, SpecTransaction,
         },
         transport::{
             self, AffinityGroup, CreateVolume, HostNqn, NexusId, NexusNvmfConfig, NodeId,
@@ -257,9 +257,6 @@ pub struct VolumeSpec {
     pub policy: VolumePolicy,
     /// Replica placement topology for the volume creation only.
     pub topology: Option<Topology>,
-    /// Update of the state in progress.
-    #[serde(skip)]
-    pub sequencer: OperationSequence,
     /// Id of the last Nexus used by the volume.
     pub last_nexus_id: Option<NexusId>,
     /// Record of the operation in progress.
@@ -580,26 +577,6 @@ impl TargetConfig {
     }
 }
 
-impl AsOperationSequencer for VolumeSpec {
-    fn as_ref(&self) -> &OperationSequence {
-        &self.sequencer
-    }
-
-    fn as_mut(&mut self) -> &mut OperationSequence {
-        &mut self.sequencer
-    }
-}
-
-impl AsOperationSequencer for AffinityGroupSpec {
-    fn as_ref(&self) -> &OperationSequence {
-        &self.sequencer
-    }
-
-    fn as_mut(&mut self) -> &mut OperationSequence {
-        &mut self.sequencer
-    }
-}
-
 impl VolumeSpec {
     pub fn new(request: &CreateVolume, label: LabelVersion) -> Self {
         Self {
@@ -610,7 +587,6 @@ impl VolumeSpec {
             status: VolumeSpecStatus::Creating,
             policy: request.policy.clone(),
             topology: request.topology.clone(),
-            sequencer: OperationSequence::new(),
             last_nexus_id: None,
             operation: None,
             thin: request.thin,
@@ -1315,7 +1291,6 @@ impl PartialEq<CreateVolume> for VolumeSpec {
     fn eq(&self, other: &CreateVolume) -> bool {
         let mut other = VolumeSpec::new(other, self.label_version());
         other.status = self.status.clone();
-        other.sequencer = self.sequencer.clone();
         other.content_source = self.content_source.clone();
         &other == self
     }
@@ -1406,19 +1381,12 @@ pub struct AffinityGroupSpec {
     id: AffinityGroupId,
     /// List of ids of volumes that belong to the Affinity Group.
     volumes: Vec<VolumeId>,
-    /// The operation sequence resource is in.
-    #[serde(skip)]
-    sequencer: OperationSequence,
 }
 
 impl AffinityGroupSpec {
     /// Create a new AffinityGroupSpec.
     pub fn new(id: AffinityGroupId, volumes: Vec<VolumeId>) -> Self {
-        Self {
-            id,
-            volumes,
-            sequencer: OperationSequence::new(),
-        }
+        Self { id, volumes }
     }
     /// Name of the Affinity Group.
     pub fn id(&self) -> &AffinityGroupId {

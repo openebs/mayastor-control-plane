@@ -5,7 +5,7 @@ use crate::types::v0::{
     store::{
         definitions::{ObjectKey, StorableObject, StorableObjectType},
         nexus_child::NexusChild,
-        AsOperationSequencer, OperationSequence, SpecStatus, SpecTransaction,
+        SpecStatus, SpecTransaction,
     },
     transport::{
         self, ChildState, ChildStateReason, ChildUri, CreateNexus, DestroyNexus, HostNqn, NexusId,
@@ -95,9 +95,6 @@ pub struct NexusSpec {
     pub managed: bool,
     /// Volume which owns this nexus, if any.
     pub owner: Option<VolumeId>,
-    /// Update of the state in progress.
-    #[serde(skip)]
-    pub sequencer: OperationSequence,
     /// Record of the operation in progress.
     pub operation: Option<NexusOperationState>,
     /// Nexus Nvmf Configuration.
@@ -206,16 +203,6 @@ impl From<&NexusSpec> for ShareNexus {
             allowed_hosts: from.allowed_hosts.clone(),
             read_only: from.read_only,
         }
-    }
-}
-
-impl AsOperationSequencer for NexusSpec {
-    fn as_ref(&self) -> &OperationSequence {
-        &self.sequencer
-    }
-
-    fn as_mut(&mut self) -> &mut OperationSequence {
-        &mut self.sequencer
     }
 }
 
@@ -406,7 +393,6 @@ impl From<&CreateNexus> for NexusSpec {
             share: Protocol::None,
             managed: request.managed,
             owner: request.owner.clone(),
-            sequencer: OperationSequence::new(),
             operation: None,
             nvmf_config: request.config.clone(),
             status_info: NexusStatusInfo::new(false),
@@ -421,7 +407,6 @@ impl PartialEq<CreateNexus> for NexusSpec {
     fn eq(&self, other: &CreateNexus) -> bool {
         let mut other = NexusSpec::from(other);
         other.spec_status = self.spec_status.clone();
-        other.sequencer = self.sequencer.clone();
         &other == self
     }
 }
