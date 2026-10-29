@@ -97,6 +97,10 @@ pub enum PoolErrorCode {
     TimeOut,
     /// gRPC aborted because it took too long.
     Aborted,
+    /// The data-plane is still creating the pool.
+    BusyCreating,
+    /// The data-plane is still importing the pool.
+    BusyImporting,
     // If the Disk is already claimed by something.
     // This may happen if the disk is used by another pool for example.
     DiskClaimed,
@@ -686,6 +690,8 @@ impl From<openapi::models::PoolProbeErrorCode> for PoolErrorCode {
                 PoolErrorCode::DiskNotImportable
             }
             openapi::models::PoolProbeErrorCode::UriNotHandled => PoolErrorCode::UriNotHandled,
+            openapi::models::PoolProbeErrorCode::BusyCreating => PoolErrorCode::BusyCreating,
+            openapi::models::PoolProbeErrorCode::BusyImporting => PoolErrorCode::BusyImporting,
         }
     }
 }
