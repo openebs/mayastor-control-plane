@@ -4185,6 +4185,8 @@ components:
         - InvalidDiskUri
         - DiskNotImportable
         - UriNotHandled
+        - Creating
+        - Importing
     PoolErrorInfo:
       type: object
       description: Pool alerts and error information

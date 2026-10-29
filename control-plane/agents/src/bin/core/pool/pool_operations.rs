@@ -27,8 +27,8 @@ use stor_port::{
         },
         transport::{
             CreatePool, CtrlPoolState, DestroyPool, ExpandPool, NodeId, Pool, PoolDeleteResult,
-            PoolDiag, PoolDiskError, PoolId, PoolStatus, ReplicaOwners, SnapshotLossInfo,
-            VolumeLossInfo,
+            PoolDiag, PoolDiskError, PoolErrorCode, PoolId, PoolStatus, ReplicaOwners,
+            SnapshotLossInfo, VolumeLossInfo,
         },
     },
 };
@@ -96,8 +96,15 @@ impl ResourceLifecycle for OperationGuardArc<PoolSpec> {
         let on_fail = OnCreateFail::on_pool_create_err(&result);
 
         if let Err(ref error) = result {
-            let diag = Self::pool_create_error(error).map(|(error, kind)| {
+            let diag = Self::pool_create_error(error).map(|(mut error, kind)| {
                 let disks = pool.as_ref().disks.first().map(|d| d.to_string());
+                // Either the data-plane told us a create is already in flight, or our own deadline
+                // expired while it was still working on it. Either way the pool is still being
+                // created in the background, which is also why these are exactly the codes which
+                // map to `OnCreateFail::LeaveAsIs`.
+                if matches!(error.code, PoolErrorCode::Aborted | PoolErrorCode::TimeOut) {
+                    error.code = PoolErrorCode::Creating;
+                }
                 let diag = PoolDiag {
                     import_errors: vec![PoolDiskError {
                         error: error.clone(),

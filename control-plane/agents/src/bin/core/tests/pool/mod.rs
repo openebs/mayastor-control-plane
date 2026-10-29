@@ -1593,6 +1593,17 @@ async fn slow_create_import() {
         let pools = client.pool().get(Filter::None, None).await.unwrap();
         tracing::debug!("{pools:?}");
 
+        // The create timed out but the data-plane is still working on it, which is why we keep
+        // retrying. Report that rather than the raw gRPC failure.
+        let creating = pools.into_inner().first().cloned().expect("pool spec");
+        assert!(creating.spec().expect("managed").status.creating());
+        let diag = creating.diag().expect("create failed");
+        assert_eq!(
+            diag.error.as_ref().map(|e| e.code),
+            Some(PoolErrorCode::Creating),
+            "{diag:?}"
+        );
+
         tracing::info!("Resuming {lvol}");
         lvol.resume().unwrap();
 
@@ -1627,6 +1638,23 @@ async fn slow_create_import() {
         let sleep = std::time::Duration::from_secs(2);
         tracing::info!("Sleeping {sleep:?}");
         tokio::time::sleep(sleep).await;
+
+        // The device is still suspended, so the import keeps timing out. The pool is not broken,
+        // it's still being imported, and that's what we should be reporting.
+        let pools = client
+            .pool()
+            .get(Filter::Pool(create.id.clone()), None)
+            .await
+            .expect("Failed to get pool");
+        let importing = pools.into_inner().first().cloned().expect("pool spec");
+        assert!(importing.spec().expect("managed").status.created());
+        assert!(importing.state().is_none(), "{importing:?}");
+        let diag = importing.diag().expect("import failed at least once");
+        assert_eq!(
+            diag.error.as_ref().map(|e| e.code),
+            Some(PoolErrorCode::Importing),
+            "{diag:?}"
+        );
 
         tracing::info!("Resuming device {lvol} on {node}");
         lvol.resume().unwrap();

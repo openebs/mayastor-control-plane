@@ -55,21 +55,39 @@ impl CreateRow for openapi::models::Pool {
             Some(diag) => diag.status,
             None => state.status,
         };
-        let status = if managed && spec.status != models::SpecStatus::Created {
-            format!("{}/{status}", spec.status)
+        let pool_diag_error = diag.error.as_ref().map(|e| e.code);
+        // A pool is rendered on two axes: the transition it's going through, if any, and the
+        // health of the pool itself. An in-flight spec operation takes precedence over a
+        // transition reported by the control-plane.
+        let creating = managed && spec.status == models::SpecStatus::Creating;
+        let transition = if managed && spec.status != models::SpecStatus::Created {
+            Some(spec.status.to_string())
+        } else if pool_diag_error == Some(models::PoolProbeErrorCode::Importing) {
+            Some(models::PoolProbeErrorCode::Importing.to_string())
         } else {
-            status.to_string()
+            None
+        };
+        let status = match &transition {
+            // A pool which is still being created doesn't exist in the data-plane yet, so it has
+            // no health of its own to report and the transition is the whole story.
+            Some(transition) if creating => transition.clone(),
+            Some(transition) => format!("{transition}/{status}"),
+            None => status.to_string(),
         };
 
-        let pool_diag_error = diag.error.as_ref().map(|e| e.code);
-        let statuses = match (spec.cordon_drain, pool_diag_error) {
-            (None, None) => status.to_string(),
-            (None, Some(error)) => format!("{status} ({error})"),
+        // A create or import still in flight is already named by the transition, so don't repeat
+        // it as the reason.
+        let reason = pool_diag_error
+            .map(|error| error.to_string())
+            .filter(|error| Some(error) != transition.as_ref());
+        let statuses = match (spec.cordon_drain, reason) {
+            (None, None) => status,
+            (None, Some(reason)) => format!("{status} ({reason})"),
             (Some(_), None) => {
                 format!("{status}, {}", PoolCordonDrainState::Cordoned)
             }
-            (Some(_), Some(error)) => {
-                format!("{status} ({error}), {}", PoolCordonDrainState::Cordoned)
+            (Some(_), Some(reason)) => {
+                format!("{status} ({reason}), {}", PoolCordonDrainState::Cordoned)
             }
         };
         let alert_status = state.error_info.as_ref().map(|e| e.alerts.status);
