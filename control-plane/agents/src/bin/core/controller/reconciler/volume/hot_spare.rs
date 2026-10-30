@@ -302,69 +302,18 @@ async fn volume_replica_count_reconciler_traced(
 
             let missing_replica_count =
                 required_replica_count.saturating_sub(current_replica_count);
-            let mut drain_cfg = volume.as_ref().metadata.drain_config();
+            let drain_cfg = volume.as_ref().metadata.drain_config();
             // As volume replica count cannot be modified while replica move is applied on volume and
             // replica move cannot be applied on a non-online volume. We can get non-zero base_diff
             // while replica move is also there only if user tries to force trigger rebuild and replica
             // is removed. In that case doing a Full rebuild takes precedence.
             let creating_spare = missing_replica_count == 0
                 && drain_cfg.as_ref().is_some_and(|cfg| cfg.spare_not_placed());
-            let diff = if creating_spare {
-                1
-            } else {
-                missing_replica_count
-            };
             if creating_spare {
-                if let Some(drain_cfg) = drain_cfg.as_mut() {
-                    if drain_cfg.placement_started_at.is_none() {
-                        drain_cfg.update_placement_started_at();
-                        update_drain_status(context, drain_cfg.clone(), volume).await;
-                    }
-                }
-            }
-            match volume
-                .create_volume_replicas(context.registry(), diff)
-                .await
-            {
-                Ok(result) if !result.is_empty() => {
-                    current_replica_count += result.len();
-                    let replicas = result.iter().fold(String::new(), |acc, replica| {
-                        if acc.is_empty() {
-                            format!("{replica}")
-                        } else {
-                            format!("{acc},{replica}")
-                        }
-                    });
-
-                    volume.info_span(|| {
-                        tracing::info!(
-                            replicas = %replicas,
-                            "Successfully created '{}' new replica(s)",
-                            result.len()
-                        )
-                    });
-                    if creating_spare {
-                        if let Some(drain_cfg) = drain_cfg.as_mut() {
-                            if let Some(spare) = result.first() {
-                                drain_cfg.update_spare(Some(spare.clone()));
-                                update_drain_status(context, drain_cfg.clone(), volume).await;
-                            }
-                        }
-                    }
-                }
-                // Nothing was created: either no candidate/creation error, or an empty result.
-                outcome => {
-                    let reason = match &outcome {
-                        Err(error) => error.full_string(),
-                        Ok(_) => "no replica was created".to_string(),
-                    };
-                    volume.error(&format!("Failed to create replicas: {reason}"));
-                    if creating_spare {
-                        if let Some(drain_cfg) = drain_cfg {
-                            return evict_if_applicable(context, drain_cfg, nexus, volume).await;
-                        }
-                    }
-                }
+                return create_spare_replica(volume, context, drain_cfg, nexus).await;
+            } else {
+                current_replica_count +=
+                    create_missing_replica(volume, context, missing_replica_count).await
             }
         }
         Ordering::Greater => {
@@ -372,11 +321,11 @@ async fn volume_replica_count_reconciler_traced(
                 tracing::warn!(
                     "The volume has '{}' replica(s) but it should only have '{}'. Removing...",
                     current_replica_count,
-                    required_replica_count
+                    effective_replica_count
                 )
             });
 
-            let diff = current_replica_count - required_replica_count;
+            let diff = current_replica_count - effective_replica_count;
             match volume
                 .remove_unused_volume_replicas(context.registry(), diff)
                 .await
@@ -416,11 +365,104 @@ async fn volume_replica_count_reconciler_traced(
         }
     }
 
-    PollResult::Ok(if current_replica_count == required_replica_count {
+    PollResult::Ok(if current_replica_count == effective_replica_count {
         PollerState::Idle
     } else {
         PollerState::Busy
     })
+}
+
+/// Creates spare replica for the volume. If fails to do so, then check if it needs to be
+/// evicted as per unsafe evict policy.
+async fn create_spare_replica(
+    volume: &mut OperationGuardArc<VolumeSpec>,
+    context: &PollContext,
+    mut drain_cfg: Option<DrainConfig>,
+    nexus: Option<&mut OperationGuardArc<NexusSpec>>,
+) -> PollResult {
+    if let Some(drain_cfg) = drain_cfg.as_mut() {
+        if drain_cfg.placement_started_at.is_none() {
+            drain_cfg.update_placement_started_at();
+            update_drain_status(context, drain_cfg.clone(), volume).await;
+        }
+    }
+    match volume.create_volume_replicas(context.registry(), 1).await {
+        Ok(result) => {
+            if let Some(replica) = result.first() {
+                volume.info_span(|| {
+                    tracing::info!(
+                        replicas = %replica,
+                        "Successfully created '{}' new replica(s)",
+                        result.len()
+                    )
+                });
+
+                if let Some(drain_cfg) = drain_cfg.as_mut() {
+                    drain_cfg.update_spare(Some(replica.clone()));
+                    update_drain_status(context, drain_cfg.clone(), volume).await;
+                }
+                Ok(PollerState::Idle)
+            } else {
+                error!(volume.uuid = %volume.uuid(), "No spare replica was created for volume");
+                if let Some(drain_cfg) = drain_cfg {
+                    return evict_if_applicable(context, drain_cfg, nexus, volume).await;
+                }
+                Ok(PollerState::Busy)
+            }
+        }
+        Err(error) => {
+            let reason = error.full_string();
+            error!(volume.uuid = %volume.uuid(), "No spare replica was created for volume: {reason}");
+            //volume.error(&format!("Failed to create replicas: {reason}"));
+            if let Some(drain_cfg) = drain_cfg {
+                return evict_if_applicable(context, drain_cfg, nexus, volume).await;
+            }
+            Ok(PollerState::Busy)
+        }
+    }
+}
+
+/// Create replicas for the volume to match user requested replica count.
+async fn create_missing_replica(
+    volume: &mut OperationGuardArc<VolumeSpec>,
+    context: &PollContext,
+    count: usize,
+) -> usize {
+    match volume
+        .create_volume_replicas(context.registry(), count)
+        .await
+    {
+        Ok(result) => {
+            if !result.is_empty() {
+                let replicas = result.iter().fold(String::new(), |acc, replica| {
+                    if acc.is_empty() {
+                        format!("{replica}")
+                    } else {
+                        format!("{acc},{replica}")
+                    }
+                });
+
+                volume.info_span(|| {
+                    tracing::info!(
+                    replicas = %replicas,
+                    "Successfully created '{}' new replica(s)",
+                    result.len()
+                    )
+                });
+                return result.len();
+            } else {
+                volume.error(&format!(
+                    "Failed to create replicas for volume '{}': no replicas were created",
+                    volume.uuid()
+                ));
+            }
+        }
+        Err(error) => {
+            let reason = error.full_string();
+            volume.error(&format!("Failed to create replicas: {reason}"));
+        }
+    }
+    0
 }
 
 async fn evict_if_applicable(
