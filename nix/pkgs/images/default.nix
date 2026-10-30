@@ -44,7 +44,7 @@ let
   # distinguishes one rebuild of a version from another, so it is fixed rather
   # than threaded through from a build argument nothing would ever set.
   release = "1";
-  build-control-plane-image = { buildType, name, package, description, summary ? description, config ? { } }:
+  build-control-plane-image = { buildType, name, package, description, summary ? description, config ? { }, user ? null }:
     dockerTools.buildImage {
       inherit tag;
       created = "now";
@@ -61,6 +61,8 @@ let
           name = "${img_prefix}-${name}${image_suffix.${buildType}}";
           version = tag;
         };
+      } // lib.optionalAttrs (user != null) {
+        User = user;
       } // config;
     };
   descriptions = {
@@ -75,23 +77,23 @@ let
     node = "Mayastor CSI node plugin - stages, mounts and unmounts Mayastor volumes on the node.";
     api-rest = "Mayastor REST API server - serves the control plane's OpenAPI over HTTP and HTTPS.";
   };
-  build-agent-image = { buildType, name }:
+  build-agent-image = { buildType, name, user ? null }:
     build-control-plane-image {
-      inherit buildType;
+      inherit buildType user;
       name = "agent-${name}";
       package = control-plane.${buildType}.agents.${name};
       description = descriptions.${name};
     };
-  build-agent-cat-image = { buildType, name, category }:
+  build-agent-cat-image = { buildType, name, category, user ? null }:
     build-control-plane-image {
-      inherit buildType;
+      inherit buildType user;
       name = "agent-${category}-${name}";
       package = control-plane.${buildType}.agents.${category}.${name};
       description = descriptions.${category}.${name};
     };
-  build-rest-image = { buildType }:
+  build-rest-image = { buildType, user ? null }:
     build-control-plane-image {
-      inherit buildType;
+      inherit buildType user;
       name = "api-rest";
       package = control-plane.${buildType}.api-rest;
       description = descriptions.api-rest;
@@ -102,16 +104,16 @@ let
         };
       };
     };
-  build-operator-image = { buildType, name }:
+  build-operator-image = { buildType, name, user ? null }:
     build-control-plane-image {
-      inherit buildType;
+      inherit buildType user;
       name = "operator-${name}";
       package = control-plane.${buildType}.operators.${name};
       description = descriptions.${name};
     };
-  build-csi-image = { buildType, name, config ? { } }:
+  build-csi-image = { buildType, name, config ? { }, user ? null }:
     build-control-plane-image {
-      inherit buildType config;
+      inherit buildType config user;
       name = "csi-${name}";
       package = control-plane.${buildType}.csi.${name};
       description = descriptions.${name};
@@ -122,15 +124,16 @@ let
     core = build-agent-image {
       inherit buildType;
       name = "core";
+      user = "65534:65534";
     };
     jsongrpc = build-agent-image {
       inherit buildType;
       name = "jsongrpc";
     };
     ha = rec {
-      build-ha-agent-image = { buildType, name }:
+      build-ha-agent-image = { buildType, name, user ? null }:
         build-agent-cat-image {
-          inherit buildType name;
+          inherit buildType name user;
           category = "ha";
         };
       node = build-ha-agent-image {
@@ -140,14 +143,15 @@ let
       cluster = build-ha-agent-image {
         inherit buildType;
         name = "cluster";
+        user = "65534:65534";
       };
     };
   };
   build-operator-images = { buildType }: {
-    diskpool = build-operator-image { inherit buildType; name = "diskpool"; };
+    diskpool = build-operator-image { inherit buildType; name = "diskpool"; user = "65534:65534"; };
   };
   build-csi-images = { buildType }: {
-    controller = build-csi-image { inherit buildType; name = "controller"; };
+    controller = build-csi-image { inherit buildType; name = "controller"; user = "65534:65534"; };
     node = build-csi-image {
       inherit buildType;
       name = "node";
@@ -169,7 +173,7 @@ let
     csi = build-csi-images { inherit buildType; } // {
       recurseForDerivations = true;
     };
-    rest = build-rest-image { inherit buildType; };
+    rest = build-rest-image { inherit buildType; user = "65534:65534"; };
   };
 in
 {
