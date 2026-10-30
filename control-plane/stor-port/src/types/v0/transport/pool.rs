@@ -120,6 +120,12 @@ pub enum PoolErrorCode {
     TimeOut,
     /// gRPC aborted because it took too long.
     Aborted,
+    /// The data-plane is still creating the pool.
+    /// Only ever set as the direct result of a create request.
+    Creating,
+    /// The data-plane is still importing the pool.
+    /// Only ever set as the direct result of an import request.
+    Importing,
     // If the Disk is already claimed by something.
     // This may happen if the disk is used by another pool for example.
     DiskClaimed,
@@ -459,6 +465,8 @@ impl From<PoolErrorCode> for models::PoolProbeErrorCode {
             PoolErrorCode::ImportDisabled => Self::ImportDisabled,
             PoolErrorCode::TimeOut => Self::TimeOut,
             PoolErrorCode::Aborted => Self::Aborted,
+            PoolErrorCode::Creating => Self::Creating,
+            PoolErrorCode::Importing => Self::Importing,
             PoolErrorCode::DiskClaimed => Self::DiskClaimed,
             PoolErrorCode::PCIDriverUnsupported => Self::PciDriverUnsupported,
             PoolErrorCode::PCIKernelBound => Self::PciKernelBound,
@@ -589,9 +597,17 @@ pub struct Pool {
 impl Pool {
     /// Construct a new pool with spec and state.
     pub fn new(spec: PoolSpec, state: Option<CtrlPoolState>) -> Self {
+        let id = spec.id.clone();
+        let config = PoolConfig::from(spec);
+        // Reconcile the diag against the live state, same as `Self::from_state`, otherwise a
+        // pool fetched by id keeps reporting whatever the last failed import left behind.
+        let config = match &state {
+            Some(state) => config.with_state_diag(state),
+            None => config,
+        };
         Self {
-            id: spec.id.clone(),
-            config: Some(PoolConfig::from(spec)),
+            id,
+            config: Some(config),
             state,
         }
     }

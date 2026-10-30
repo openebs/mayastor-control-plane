@@ -850,6 +850,8 @@ impl From<PoolErrorCode> for pool::ProbeErrorCode {
             PoolErrorCode::InvalidDiskUri => Self::InvalidDiskUri,
             PoolErrorCode::DiskNotImportable => Self::DiskNotImportable,
             PoolErrorCode::UriNotHandled => Self::UriNotHandled,
+            PoolErrorCode::Creating => Self::PoolCreating,
+            PoolErrorCode::Importing => Self::PoolImporting,
         }
     }
 }
@@ -892,6 +894,8 @@ impl From<pool::ProbeErrorCode> for PoolErrorCode {
             pool::ProbeErrorCode::InvalidDiskUri => Self::InvalidDiskUri,
             pool::ProbeErrorCode::DiskNotImportable => Self::DiskNotImportable,
             pool::ProbeErrorCode::UriNotHandled => Self::UriNotHandled,
+            pool::ProbeErrorCode::PoolCreating => Self::Creating,
+            pool::ProbeErrorCode::PoolImporting => Self::Importing,
         }
     }
 }

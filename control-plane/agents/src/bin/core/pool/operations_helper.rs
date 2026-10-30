@@ -163,6 +163,10 @@ impl OperationGuardArc<PoolSpec> {
             PoolErrorCode::InvalidDiskUri => PoolStatus::Offline,
             PoolErrorCode::DiskNotImportable => PoolStatus::Offline,
             PoolErrorCode::UriNotHandled => PoolStatus::Offline,
+            // We know nothing about a pool which doesn't exist yet, whereas one being imported
+            // does exist, it's just not usable until the data-plane is done with it.
+            PoolErrorCode::Creating => PoolStatus::Unknown,
+            PoolErrorCode::Importing => PoolStatus::Offline,
         }
     }
 
@@ -262,8 +266,13 @@ impl OperationGuardArc<PoolSpec> {
         );
         let result = node.import_pool(&request).await;
         if let Err(error) = &result {
-            if let Some(error) = Self::pool_import_error(error) {
+            if let Some(mut error) = Self::pool_import_error(error) {
                 let disks = pool_spec.disks.first().map(|d| d.to_string());
+                // Either the data-plane told us an import is already in flight, or our own deadline
+                // expired while it was still working on it.
+                if matches!(error.code, PoolErrorCode::Aborted | PoolErrorCode::TimeOut) {
+                    error.code = PoolErrorCode::Importing;
+                }
                 *reporter.lock().expect("not poisoned") = Some(PoolDiag {
                     import_errors: vec![PoolDiskError {
                         error: error.clone(),
@@ -375,6 +384,10 @@ impl OperationGuardArc<PoolSpec> {
             PoolErrorCode::UriNotHandled => {
                 (Code::InvalidArgument, ReplyErrorKind::InvalidArgument)
             }
+            // These are only ever set on the stored diagnostics, never used to build a reply,
+            // which keeps the gRPC code the data-plane actually gave us.
+            PoolErrorCode::Creating => (Code::Cancelled, ReplyErrorKind::Cancelled),
+            PoolErrorCode::Importing => (Code::Aborted, ReplyErrorKind::Aborted),
         }
     }
 

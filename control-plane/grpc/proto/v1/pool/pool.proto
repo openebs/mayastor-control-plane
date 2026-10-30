@@ -61,6 +61,10 @@ enum ProbeErrorCode {
   UriNotHandled = 18;
   // Request cancelled because it took too long.
   Aborted = 19;
+  // The data-plane is still creating the pool.
+  PoolCreating = 20;
+  // The data-plane is still importing the pool.
+  PoolImporting = 21;
 }
 message ProbeError {
   ProbeErrorCode code = 1;
