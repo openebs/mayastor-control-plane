@@ -1,7 +1,8 @@
 use crate::controller::{resources::OperationGuardArc, task_poller::PollContext};
+
 use stor_port::types::v0::{
     store::{
-        pool::{DrainConfig, DrainPhase, DrainProgressOp, PhaseReason, PoolSpec},
+        pool::{DrainConfig, DrainPhase, DrainProgressOp, PhaseReason, PoolSpec, UnwindSpare},
         replica::ReplicaSpec,
         volume::{ReplicaMoveRequester, VolumeSpec},
     },
@@ -145,6 +146,89 @@ pub(crate) async fn advance_draining_pools(context: &PollContext) {
     }
 }
 
+/// Set drain phase to Drained if usage is 0 on AwaitingCleanup pool.
+pub(crate) async fn handle_awaiting_cleanup(context: &PollContext) {
+    for pool in context.specs().pools_rsc_awaiting_cleanup() {
+        let Ok(mut pool_guard) = context.specs().guarded_pool(&pool).await else {
+            continue;
+        };
+        let Ok(empty) = context.registry().is_pool_empty(&pool).await else {
+            continue;
+        };
+        if empty {
+            pool_guard
+                .update_drain_phase(context.registry(), DrainPhase::Drained, None)
+                .await;
+        }
+    }
+}
+
+/// Goes through all PartiallyDrained pools and checks if they can be moved back to Queued state.
+pub(crate) async fn handle_partially_drained(context: &PollContext) {
+    for pool in context.specs().pools_rsc_partially_drained() {
+        let Ok(mut pool_guard) = context.specs().guarded_pool(&pool).await else {
+            continue;
+        };
+        let Some(drain_state) = pool_guard.as_ref().drain_state() else {
+            continue;
+        };
+        let Some(reason) = drain_state.reason.as_ref() else {
+            continue;
+        };
+        match reason {
+            PhaseReason::OfflinePool => {
+                if context.registry().has_pool_state(&pool).await {
+                    pool_guard
+                        .update_drain_phase(
+                            context.registry(),
+                            DrainPhase::Queued,
+                            Some(PhaseReason::WaitingForSlot),
+                        )
+                        .await
+                }
+                if context
+                    .registry()
+                    .is_node_online(&pool_guard.as_ref().node)
+                    .await
+                    && pool_guard
+                        .as_ref()
+                        .effective_cordon()
+                        .is_some_and(|c| c.import)
+                {
+                    pool_guard
+                        .update_drain_phase(
+                            context.registry(),
+                            DrainPhase::PartiallyDrained,
+                            Some(PhaseReason::ImportCordoned),
+                        )
+                        .await
+                }
+            }
+            PhaseReason::SingleReplicaEviction => {
+                if !pool_guard.as_ref().is_drain_unsafe() {
+                    pool_guard
+                        .update_drain_phase(
+                            context.registry(),
+                            DrainPhase::Queued,
+                            Some(PhaseReason::WaitingForSlot),
+                        )
+                        .await
+                }
+            }
+            PhaseReason::SnapshotsRetained if pool_guard.as_ref().accept_snapshot_loss() => {
+                pool_guard
+                    .update_drain_phase(
+                        context.registry(),
+                        DrainPhase::Queued,
+                        Some(PhaseReason::WaitingForSlot),
+                    )
+                    .await
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Create move config for the replicas owned by volume.
 /// Also, Ensure max concurrent replica move limit is checked.
 async fn create_replica_move_config(context: &PollContext, pool: &mut OperationGuardArc<PoolSpec>) {
@@ -158,6 +242,13 @@ async fn create_replica_move_config(context: &PollContext, pool: &mut OperationG
         };
         let num_replicas = volume_guard.as_ref().num_replicas;
         let has_replica_move = volume_guard.as_ref().has_replica_move();
+        if volume_guard.as_ref().is_spare_replica(&replica.uuid) {
+            let Some(mut drain_cfg) = volume_guard.as_ref().metadata.drain_config() else {
+                continue;
+            };
+            drain_cfg.unwind_spare = Some(UnwindSpare::Respare);
+            update_drain_config(context, drain_cfg.clone(), &mut volume_guard, pool).await
+        }
         let Ok(pool_spec) = context.specs().pool(pool.id()) else {
             continue;
         };
@@ -194,13 +285,13 @@ async fn create_replica_move_config(context: &PollContext, pool: &mut OperationG
                 replica.uuid,
                 !drain_spec.policy.unsafe_evict,
             );
-            update_move_config(context, drain_config, pool, &mut volume_guard).await;
+            add_move_config(context, drain_config, pool, &mut volume_guard).await;
         }
     }
 }
 
 /// Update replica move config to pool drain record and the owner volume metadata.
-async fn update_move_config(
+async fn add_move_config(
     context: &PollContext,
     drain_config: DrainConfig,
     pool: &mut OperationGuardArc<PoolSpec>,
@@ -216,6 +307,27 @@ async fn update_move_config(
     } else {
         info!(pool.id = %pool.id(), "Drain config updated successfully");
         let move_requester = ReplicaMoveRequester::PoolDrain(drain_config);
+        volume.update_move_config(move_requester).await;
+    }
+}
+
+/// Updates drain config on pool and volume metadata.
+async fn update_drain_config(
+    context: &PollContext,
+    drain_cfg: DrainConfig,
+    volume: &mut OperationGuardArc<VolumeSpec>,
+    pool: &mut OperationGuardArc<PoolSpec>,
+) {
+    let request = DrainProgressOp::UpdateReplicaMove(drain_cfg.clone());
+    if let Err(err) = pool.update_drain_state(context.registry(), request).await {
+        error!(
+            pool.id = %pool.id(),
+            error = %err,
+            "Failed to update drain config"
+        );
+    } else {
+        info!(pool.id = %pool.id(), "Drain config updated successfully");
+        let move_requester = ReplicaMoveRequester::PoolDrain(drain_cfg);
         volume.update_move_config(move_requester).await;
     }
 }

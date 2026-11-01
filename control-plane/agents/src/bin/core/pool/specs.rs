@@ -515,6 +515,44 @@ impl ResourceSpecsLocked {
         pools
     }
 
+    /// Returns the ids of the pools currently in AwaitingCleanup phase.
+    pub(crate) fn pools_rsc_awaiting_cleanup(&self) -> Vec<PoolId> {
+        let specs = self.read();
+        let pools = specs
+            .pools
+            .to_vec()
+            .iter()
+            .filter_map(|pool| {
+                let pool = pool.lock();
+                if pool.is_draining() {
+                    Some(pool.id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        pools
+    }
+
+    /// Returns the ids of the pools currently in PartiallyDrained phase.
+    pub(crate) fn pools_rsc_partially_drained(&self) -> Vec<PoolId> {
+        let specs = self.read();
+        let pools = specs
+            .pools
+            .to_vec()
+            .iter()
+            .filter_map(|pool| {
+                let pool = pool.lock();
+                if pool.is_partially_drained() {
+                    Some(pool.id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        pools
+    }
+
     /// Returns list of PoolId whose drain is `Queued`, ordered by the drain request timestamp.
     pub(crate) fn pools_rsc_drain_queued(&self) -> Vec<PoolId> {
         let specs = self.read();

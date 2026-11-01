@@ -18,7 +18,7 @@ use stor_port::{
 use std::cmp::Ordering;
 use stor_port::types::v0::{
     store::{
-        pool::{DrainConfig, DrainProgressOp},
+        pool::{DrainConfig, DrainProgressOp, UnwindSpare},
         volume::ReplicaMoveRequester,
     },
     transport::ReplicaId,
@@ -359,6 +359,14 @@ async fn volume_replica_count_reconciler_traced(
                             return destroy_moving_replica(nexus, volume, context, moving_replica)
                                 .await;
                         }
+                        if let Some(unwind) = &cfg.unwind_spare {
+                            if unwind == &UnwindSpare::Respare {
+                                if let Some(spare) = cfg.spare() {
+                                    return destroy_spare_replica(nexus, volume, context, &spare)
+                                        .await;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -497,6 +505,51 @@ async fn evict_if_applicable(
         }
         _ => Ok(PollerState::Busy),
     }
+}
+
+async fn destroy_spare_replica(
+    nexus: Option<&mut OperationGuardArc<NexusSpec>>,
+    volume: &mut OperationGuardArc<VolumeSpec>,
+    context: &PollContext,
+    spare_replica: &ReplicaId,
+) -> PollResult {
+    let removed = match nexus {
+        Some(nexus) => match context.registry().nexus(nexus.uuid()).await {
+            Ok(nexus_state) => {
+                volume
+                    .remove_volume_replica_in_use(
+                        context.registry(),
+                        nexus,
+                        &nexus_state,
+                        spare_replica,
+                    )
+                    .await
+            }
+            Err(error) => Err(error),
+        },
+        None => {
+            volume
+                .remove_unused_volume_replica(context.registry(), spare_replica)
+                .await
+        }
+    };
+    if let Err(error) = &removed {
+        volume.warn_span(|| {
+            tracing::warn!(
+                "Failed to remove spare replica '{}': {}",
+                spare_replica,
+                error.full_string()
+            )
+        });
+        return Ok(PollerState::Busy);
+    } else {
+        let drain_cfg = volume.as_ref().metadata.drain_config();
+        if let Some(mut drain_cfg) = drain_cfg {
+            drain_cfg.remove_spare();
+            update_drain_status(context, drain_cfg.clone(), volume).await;
+        }
+    }
+    Ok(PollerState::Idle)
 }
 
 async fn destroy_moving_replica(

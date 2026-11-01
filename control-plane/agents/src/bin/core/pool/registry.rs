@@ -5,7 +5,7 @@ use crate::controller::{
 use agents::errors::{SvcError, SvcError::PoolNotFound};
 use stor_port::types::v0::{
     store::pool::PoolUsage,
-    transport::{CtrlPoolState, NodeId, Pool, PoolId, Replica, ReplicaId, VolumeId},
+    transport::{CtrlPoolState, NodeId, NodeStatus, Pool, PoolId, Replica, ReplicaId, VolumeId},
 };
 
 /// Pool helpers.
@@ -112,6 +112,16 @@ impl Registry {
         })
     }
 
+    /// Returns true of pool is empty.
+    pub(crate) async fn is_pool_empty(&self, pool_id: &PoolId) -> Result<bool, SvcError> {
+        let pool_wrapper = self.pool_wrapper(pool_id).await?;
+        if let Some(snap_count) = pool_wrapper.snap_count {
+            Ok(pool_wrapper.replicas().is_empty() && snap_count == 0)
+        } else {
+            Ok(false)
+        }
+    }
+
     /// Get all controller pools states (state + metadata).
     pub(crate) async fn ctrl_pool_states(&self) -> Vec<CtrlPoolState> {
         let nodes = self.node_wrappers().await;
@@ -157,6 +167,15 @@ impl Registry {
     pub(crate) async fn has_pool_state(&self, id: &PoolId) -> bool {
         let pools = self.pool_wrappers().await;
         pools.iter().any(|p| &p.id == id)
+    }
+
+    /// Returns true if node is Online.
+    pub(crate) async fn is_node_online(&self, id: &NodeId) -> bool {
+        if let Ok(state) = self.node_state(id).await {
+            state.status == NodeStatus::Online
+        } else {
+            false
+        }
     }
 
     /// Get the controller pool state for the specified id.

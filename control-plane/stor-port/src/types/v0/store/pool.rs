@@ -380,9 +380,32 @@ impl DrainConfig {
         }
     }
 
+    /// Sets Spare replica to None.
+    pub fn remove_spare(&mut self) {
+        if let Some(spare) = self.spare_replica.as_mut() {
+            spare.replica_id = None;
+        }
+    }
+
     /// Records current timestamp.
     pub fn update_placement_started_at(&mut self) {
         self.placement_started_at = Some(SystemTime::now());
+    }
+
+    /// Returns true if supplied replica id is the over-replicating spare.
+    pub fn is_spare(&self, replica: ReplicaId) -> bool {
+        self.spare_replica
+            .as_ref()
+            .is_some_and(|spare| spare.replica_id == Some(replica))
+    }
+
+    /// Returns spare replica id if already created.
+    pub fn spare(&self) -> Option<ReplicaId> {
+        if let Some(spare) = &self.spare_replica {
+            spare.replica_id.clone()
+        } else {
+            None
+        }
     }
 }
 
@@ -676,6 +699,31 @@ impl PoolSpec {
             self.drain_state().map(|r| r.phase()),
             Some(DrainPhase::Draining)
         )
+    }
+
+    /// Returns true if the pool is in AwaitingCleanup phase.
+    pub fn is_awaiting_cleanup(&self) -> bool {
+        matches!(
+            self.drain_state().map(|r| r.phase()),
+            Some(DrainPhase::AwaitingCleanup)
+        )
+    }
+
+    /// Returns true if the pool is in PartiallyDrained phase.
+    pub fn is_partially_drained(&self) -> bool {
+        matches!(
+            self.drain_state().map(|r| r.phase()),
+            Some(DrainPhase::PartiallyDrained)
+        )
+    }
+
+    /// Returns true if drain spec accepts snapshot loss.
+    pub fn accept_snapshot_loss(&self) -> bool {
+        if let Some(spec) = self.drain_spec() {
+            spec.policy.snapshot_policy == SnapshotPolicy::AcceptLoss
+        } else {
+            false
+        }
     }
 
     /// Returns the applied drain spec on the pool, if a drain has been admitted.
