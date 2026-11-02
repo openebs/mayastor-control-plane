@@ -21,9 +21,10 @@ use stor_port::{
         store::{
             pool::{
                 DrainPhase, DrainPhaseOp, DrainProgressOp, PhaseReason, PoolCordonOp, PoolDrainOp,
-                PoolOperation, PoolSpec,
+                PoolOperation, PoolSpec, UnwindSpare,
             },
             snapshots::replica::ReplicaSnapshot,
+            volume::ReplicaMoveRequester,
         },
         transport::{
             CreatePool, CtrlPoolState, DestroyPool, ExpandPool, NodeId, Pool, PoolDeleteResult,
@@ -340,6 +341,94 @@ impl ResourceDrain for OperationGuardArc<PoolSpec> {
 }
 
 impl OperationGuardArc<PoolSpec> {
+    /// Marks every over-replicating spare hosted on this pool for unwinding (`Respare`), so the
+    /// owning volume's move places a fresh spare elsewhere instead of waiting for a rebuild on a
+    /// pool which is about to be drained. The pool is already self-cordoned for replicas once its
+    /// drain spec is set, so no new spare can be placed on it afterwards.
+    pub(crate) async fn unwind_spares(&mut self, registry: &Registry) {
+        let replicas = registry.specs().pool_replicas(self.id());
+        for replica in replicas {
+            let (replica_id, volume_id) = {
+                let replica = replica.lock();
+                match replica.volume_owner() {
+                    Some(volume_id) => (replica.uuid.clone(), volume_id.clone()),
+                    None => continue,
+                }
+            };
+            let Ok(mut volume_guard) = registry.specs().volume(&volume_id).await else {
+                continue;
+            };
+            if !volume_guard.as_ref().is_spare_replica(&replica_id) {
+                continue;
+            }
+            let Some(mut drain_cfg) = volume_guard.as_ref().metadata.drain_config() else {
+                continue;
+            };
+            tracing::info!(
+                pool.id = %self.id(),
+                volume.uuid = %volume_id,
+                replica.uuid = %replica_id,
+                "Pool queued for drain hosts a spare replica, unwinding it"
+            );
+            // `unwind_spare` is runtime-only (not persisted), so only the volume's runtime
+            // move config needs updating.
+            drain_cfg.unwind_spare = Some(UnwindSpare::Respare);
+            volume_guard
+                .update_move_config(ReplicaMoveRequester::PoolDrain(drain_cfg))
+                .await;
+        }
+    }
+
+    /// Unwinds the in-flight replica moves of this pool after its drain was cancelled.
+    /// - Spare already placed: marks the move `Cancelled`.
+    /// - Spare not placed: nothing was changed on the volume, so the move config is simply removed
+    ///   from the pool record and the volume.
+    pub(crate) async fn cancel_moves(&mut self, registry: &Registry) {
+        let moves = match self.as_ref().drain_state() {
+            Some(state) => state.moving_replicas().clone(),
+            None => return,
+        };
+        for record_cfg in moves {
+            let Ok(mut volume_guard) = registry.specs().volume(&record_cfg.volume).await else {
+                continue;
+            };
+            // Prefer the volume's runtime config, as it is the most up to date.
+            let mut drain_cfg = volume_guard
+                .as_ref()
+                .metadata
+                .drain_config()
+                .unwrap_or(record_cfg);
+            if drain_cfg.spare_not_placed() {
+                tracing::info!(
+                    pool.id = %self.id(),
+                    volume.uuid = %drain_cfg.volume,
+                    "Drain cancelled, spare not placed, removing replica move"
+                );
+                let request = DrainProgressOp::RemoveReplicaMove(drain_cfg);
+                match self.update_drain_state(registry, request).await {
+                    Ok(_) => volume_guard.remove_move_config().await,
+                    Err(error) => tracing::error!(
+                        pool.id = %self.id(),
+                        error = %error,
+                        "Failed to remove replica move on drain cancel"
+                    ),
+                }
+            } else {
+                tracing::info!(
+                    pool.id = %self.id(),
+                    volume.uuid = %drain_cfg.volume,
+                    "Drain cancelled, spare placed, unwinding it"
+                );
+                // `unwind_spare` is runtime-only (not persisted), so only the volume's runtime
+                // move config needs updating.
+                drain_cfg.unwind_spare = Some(UnwindSpare::Cancelled);
+                volume_guard
+                    .update_move_config(ReplicaMoveRequester::PoolDrain(drain_cfg))
+                    .await;
+            }
+        }
+    }
+
     /// Sets drain phase for the pool.
     /// Returns early if the phase and reason are already set for the pool.
     /// Failures are logged.

@@ -161,8 +161,8 @@ message DrainConfig {
   string volume = 2;
   // Id of the pool moving_replica belongs to.
   string pool = 3;
-  // Id of the draining replica. It's None when it's evacuated successfully.
-  optional string moving_replica = 4;
+  // Id of the replica being moved off the pool.
+  string moving_replica = 4;
   // Id of the spare replica created as part of drain procedure.
   optional SpareReplica spare_replica = 5;
   // Why a move's over-replicated spare is being removed.

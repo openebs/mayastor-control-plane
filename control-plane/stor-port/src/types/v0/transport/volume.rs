@@ -60,6 +60,10 @@ impl Volume {
                         if let Some(status) = &replica_state.child_status {
                             return *status == ChildState::Online;
                         }
+                        return match replica_state.healthy {
+                            Some(healthy) => healthy,
+                            None => replica_state.status == ReplicaStatus::Online,
+                        };
                     }
                 }
             }

@@ -425,7 +425,7 @@ impl VolumeMetadata {
     /// Returns true if spare replica is needed.
     pub fn need_spare(&self) -> bool {
         if let Some(drain_cfg) = self.drain_config() {
-            return drain_cfg.spare_replica.is_some() && drain_cfg.moving_replica.is_some();
+            return drain_cfg.spare_replica.is_some();
         }
         false
     }

@@ -515,6 +515,36 @@ impl ResourceSpecsLocked {
         pools
     }
 
+    /// Returns the ids of the pools currently in Cancelled phase.
+    pub(crate) fn pools_rsc_cancelled(&self) -> Vec<PoolId> {
+        let specs = self.read();
+        let pools = specs
+            .pools
+            .to_vec()
+            .iter()
+            .filter_map(|pool| {
+                let pool = pool.lock();
+                pool.is_drain_cancelled().then(|| pool.id.clone())
+            })
+            .collect::<Vec<_>>();
+        pools
+    }
+
+    /// Returns the ids of the pools whose drain was cancelled and has no moves left to unwind.
+    pub(crate) fn pools_rsc_cancel_finished(&self) -> Vec<PoolId> {
+        let specs = self.read();
+        let pools = specs
+            .pools
+            .to_vec()
+            .iter()
+            .filter_map(|pool| {
+                let pool = pool.lock();
+                pool.drain_cancel_finished().then(|| pool.id.clone())
+            })
+            .collect::<Vec<_>>();
+        pools
+    }
+
     /// Returns the ids of the pools currently in AwaitingCleanup phase.
     pub(crate) fn pools_rsc_awaiting_cleanup(&self) -> Vec<PoolId> {
         let specs = self.read();
