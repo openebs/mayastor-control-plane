@@ -1,4 +1,7 @@
-use crate::controller::{resources::OperationGuardArc, task_poller::PollContext};
+use crate::controller::{
+    resources::{operations_helper::OperationSequenceGuard, OperationGuardArc},
+    task_poller::PollContext,
+};
 use stor_port::types::v0::{
     store::{
         pool::{DrainConfig, DrainPhase, DrainProgressOp, PhaseReason, PoolSpec},
@@ -107,8 +110,12 @@ pub(crate) async fn advance_draining_pools(context: &PollContext) {
                             )
                             .await;
                     } else {
-                        // TODO: implement snapshot cleanup. Just Log for now.
-                        info!(pool.id = %pool_id, "cleanup all snapshots");
+                        destroy_pool_snapshots(context, &pool_id).await;
+                        if context.specs().calculate_snap_count(&pool_id) == 0 {
+                            pool_guard
+                                .update_drain_phase(context.registry(), DrainPhase::Drained, None)
+                                .await;
+                        }
                     }
                 }
             }
@@ -217,6 +224,44 @@ async fn update_move_config(
         info!(pool.id = %pool.id(), "Drain config updated successfully");
         let move_requester = ReplicaMoveRequester::PoolDrain(drain_config);
         volume.update_move_config(move_requester).await;
+    }
+}
+
+/// Destroys all the replica snapshots residing on the draining pool, leaving the replica
+/// snapshots on other pools alone.
+async fn destroy_pool_snapshots(context: &PollContext, pool_id: &PoolId) {
+    let snapshots = context
+        .specs()
+        .volume_snapshots_rsc()
+        .into_iter()
+        .filter(|s| {
+            s.lock()
+                .metadata()
+                .has_destroyable_snapshot_on_pool(pool_id)
+        });
+    for snapshot in snapshots {
+        let Ok(mut guard) = snapshot.operation_guard() else {
+            continue;
+        };
+        if !guard.as_ref().status().created()
+            || !guard
+                .as_ref()
+                .metadata()
+                .has_destroyable_snapshot_on_pool(pool_id)
+        {
+            continue;
+        }
+        match guard
+            .destroy_pool_snapshots(context.registry(), pool_id)
+            .await
+        {
+            Ok(()) => {
+                info!(pool.id = %pool_id, snapshot.id = %guard.uuid(), "Destroyed draining pool snapshots")
+            }
+            Err(error) => {
+                warn!(pool.id = %pool_id, snapshot.id = %guard.uuid(), %error, "Failed to destroy pool snapshots")
+            }
+        }
     }
 }
 

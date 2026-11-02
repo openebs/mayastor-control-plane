@@ -99,6 +99,11 @@ impl ReplicaSnapshot {
         self.status = ReplicaSnapshotSpecStatus::Deleting;
         self.clear_op();
     }
+    /// Mark the status as deleted.
+    pub fn set_status_deleted(&mut self) {
+        self.status = ReplicaSnapshotSpecStatus::Deleted;
+        self.clear_op();
+    }
 }
 
 /// Replica snapshot metadata, which is control-plane specific data that allows it
