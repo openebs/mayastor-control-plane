@@ -311,7 +311,7 @@ impl ResourceSpecs {
             let this_pool = transactions
                 .values()
                 .flatten()
-                .any(|r| r.spec().source_id().pool_id() == id);
+                .any(|r| !r.status().deleted() && r.spec().source_id().pool_id() == id);
 
             if this_pool {
                 snapshots += 1;
@@ -335,7 +335,7 @@ impl ResourceSpecs {
             let this_pool = transactions
                 .values()
                 .flatten()
-                .any(|r| r.spec().source_id().pool_id() == id);
+                .any(|r| !r.status().deleted() && r.spec().source_id().pool_id() == id);
             if this_pool {
                 return true;
             }

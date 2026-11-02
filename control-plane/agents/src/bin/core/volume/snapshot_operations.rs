@@ -31,7 +31,7 @@ use stor_port::{
             volume::{VolumeOperation, VolumeSpec, VolumeTarget},
         },
         transport::{
-            CreateReplicaSnapshot, DestroyReplicaSnapshot, NodeBugFix, NodeId, SnapshotId,
+            CreateReplicaSnapshot, DestroyReplicaSnapshot, NodeBugFix, NodeId, PoolId, SnapshotId,
             SnapshotParameters, SnapshotTxId, VolumeId,
         },
     },
@@ -296,6 +296,66 @@ impl ResourcePruning for OperationGuardArc<VolumeSnapshot> {
 }
 
 impl OperationGuardArc<VolumeSnapshot> {
+    /// Destroy every replica snapshot of this volume snapshot which resides on the given pool,
+    /// across all transactions.
+    pub(crate) async fn destroy_pool_snapshots(
+        &mut self,
+        registry: &Registry,
+        pool_id: &PoolId,
+    ) -> Result<(), SvcError> {
+        let spec = self.lock().clone();
+        if !spec.status().created() || !spec.metadata().has_pool_snapshots(pool_id) {
+            return Ok(());
+        }
+
+        let mut spec_clone = self
+            .start_update(
+                registry,
+                &spec,
+                VolumeSnapshotOperation::CleanupPoolSnapshots(pool_id.clone()),
+            )
+            .await?;
+
+        let mut remaining = HashMap::new();
+        for (txn, snapshots) in spec.metadata().transactions() {
+            let (on_pool, mut keep): (Vec<_>, Vec<_>) = snapshots
+                .iter()
+                .cloned()
+                .partition(|r| !r.status().deleted() && r.spec().source_id().pool_id() == pool_id);
+            let failed = Self::destroy_transaction_snapshots(registry, &on_pool).await;
+            // Keep the destroyed ones, marked as deleted.
+            for mut snapshot in on_pool {
+                if !failed
+                    .iter()
+                    .any(|f| f.spec().uuid() == snapshot.spec().uuid())
+                {
+                    snapshot.set_status_deleted();
+                    keep.push(snapshot);
+                }
+            }
+            keep.extend(failed);
+            if !keep.is_empty() {
+                remaining.insert(txn.clone(), keep);
+            }
+        }
+
+        let all_deleted = remaining.values().flatten().all(|r| r.status().deleted());
+        self.lock().set_transactions(remaining.clone());
+        spec_clone.set_transactions(remaining);
+        self.complete_update(registry, Ok(()), spec_clone).await?;
+
+        if all_deleted {
+            // Nothing is left of this snapshot, so complete its removal.
+            let request = DestroyVolumeSnapshotRequest::new(
+                self.resource().clone(),
+                None,
+                self.uuid().clone(),
+            );
+            self.destroy(registry, &request).await?;
+        }
+        Ok(())
+    }
+
     fn snapshot_params(
         &self,
         replicas: &Vec<ChildItem>,
@@ -570,6 +630,9 @@ impl OperationGuardArc<VolumeSnapshot> {
     ) -> Vec<ReplicaSnapshot> {
         let mut failed = vec![];
         for snapshot in snapshots {
+            if snapshot.status().deleted() {
+                continue;
+            }
             if Self::destroy_replica_snapshot(registry, snapshot)
                 .await
                 .is_err()
@@ -595,7 +658,11 @@ impl OperationGuardArc<VolumeSnapshot> {
         registry: &Registry,
     ) -> Result<u32, SvcError> {
         let repl_snapshots = self.as_ref().metadata().replica_snapshots();
-        for repl_snap in repl_snapshots.into_iter().flatten() {
+        for repl_snap in repl_snapshots
+            .into_iter()
+            .flatten()
+            .filter(|r| !r.status().deleted())
+        {
             let pool_id = repl_snap.spec().source_id().pool_id();
             if let Some(pool) = registry.specs().pool_rsc(pool_id) {
                 return Ok(pool.lock().cluster_size);

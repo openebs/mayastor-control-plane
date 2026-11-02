@@ -361,7 +361,7 @@ impl Registry {
         let mut allocated_size = None;
         if let Some(meta_snapshots) = snapshot.metadata().replica_snapshots() {
             replica_snaps = Vec::with_capacity(meta_snapshots.len());
-            for replica_snap in meta_snapshots {
+            for replica_snap in meta_snapshots.iter().filter(|r| !r.status().deleted()) {
                 replica_snaps.push(
                     if let Ok(state) = self.snapshot_replica(replica_snap.spec()).await {
                         allocated_size = Some(state.allocated_size());

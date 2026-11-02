@@ -1243,7 +1243,7 @@ pub(crate) fn analyze_snapshot_loss(
         let mut on_these_pools = 0u32;
 
         for txn_replicas in vol_snap.metadata().transactions().values() {
-            for rs in txn_replicas {
+            for rs in txn_replicas.iter().filter(|r| !r.status().deleted()) {
                 total_replica_snaps += 1;
                 if pool_ids.contains(rs.spec().source_id().pool_id()) {
                     on_these_pools += 1;

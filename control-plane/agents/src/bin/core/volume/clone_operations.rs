@@ -223,12 +223,21 @@ impl SnapshotCloneOp<'_> {
         let registry = context.registry;
         let snapshot = self.1.as_ref();
 
-        let snapshots = match snapshot.metadata().replica_snapshots() {
-            Some(snapshots) if !snapshots.is_empty() => Ok(snapshots),
-            _ => Err(SvcError::NoHealthyReplicas {
+        let snapshots = snapshot
+            .metadata()
+            .replica_snapshots()
+            .map(|snaps| {
+                snaps
+                    .iter()
+                    .filter(|r| !r.status().deleted())
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .filter(|snaps| !snaps.is_empty())
+            .ok_or_else(|| SvcError::NoHealthyReplicas {
                 id: new_volume.uuid_str(),
-            }),
-        }?;
+            })?;
+        let snapshots = &snapshots;
 
         let pools = CloneVolumeSnapshot::builder_with_defaults(registry, new_volume, snapshots)
             .await
