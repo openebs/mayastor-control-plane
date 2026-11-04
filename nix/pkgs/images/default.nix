@@ -44,7 +44,10 @@ let
   # distinguishes one rebuild of a version from another, so it is fixed rather
   # than threaded through from a build argument nothing would ever set.
   release = "1";
-  build-control-plane-image = { buildType, name, package, description, summary ? description, config ? { } }:
+  # Images run as an unprivileged uid unless an image opts out with
+  # `user = null`, which leaves User unset and so runs as root.
+  nonroot-user = "65534:65534";
+  build-control-plane-image = { buildType, name, package, description, summary ? description, config ? { }, user ? nonroot-user }:
     dockerTools.buildImage {
       inherit tag;
       created = "now";
@@ -61,6 +64,8 @@ let
           name = "${img_prefix}-${name}${image_suffix.${buildType}}";
           version = tag;
         };
+      } // lib.optionalAttrs (user != null) {
+        User = user;
       } // config;
     };
   descriptions = {
@@ -82,9 +87,9 @@ let
       package = control-plane.${buildType}.agents.${name};
       description = descriptions.${name};
     };
-  build-agent-cat-image = { buildType, name, category }:
+  build-agent-cat-image = { buildType, name, category, user ? nonroot-user }:
     build-control-plane-image {
-      inherit buildType;
+      inherit buildType user;
       name = "agent-${category}-${name}";
       package = control-plane.${buildType}.agents.${category}.${name};
       description = descriptions.${category}.${name};
@@ -109,9 +114,9 @@ let
       package = control-plane.${buildType}.operators.${name};
       description = descriptions.${name};
     };
-  build-csi-image = { buildType, name, config ? { } }:
+  build-csi-image = { buildType, name, config ? { }, user ? nonroot-user }:
     build-control-plane-image {
-      inherit buildType config;
+      inherit buildType config user;
       name = "csi-${name}";
       package = control-plane.${buildType}.csi.${name};
       description = descriptions.${name};
@@ -128,14 +133,17 @@ let
       name = "jsongrpc";
     };
     ha = rec {
-      build-ha-agent-image = { buildType, name }:
+      build-ha-agent-image = { buildType, name, user ? nonroot-user }:
         build-agent-cat-image {
-          inherit buildType name;
+          inherit buildType name user;
           category = "ha";
         };
       node = build-ha-agent-image {
         inherit buildType;
         name = "node";
+        # Runs privileged with hostPath mounts into /dev, /sys and /run/udev,
+        # so root is not incidental here.
+        user = null;
       };
       cluster = build-ha-agent-image {
         inherit buildType;
@@ -151,6 +159,9 @@ let
     node = build-csi-image {
       inherit buildType;
       name = "node";
+      # Mounts filesystems and uses mknod, privileged with hostPath mounts into
+      # /dev, /sys and the kubelet plugin tree, so root is not incidental here.
+      user = null;
       config = {
         Env = [ "PATH=${lib.makeBinPath [ "/" xfsprogs rdma-core e2fsprogs_1_46_2 btrfs-progs utillinux ]}" ];
       };
