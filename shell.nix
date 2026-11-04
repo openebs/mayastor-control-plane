@@ -50,6 +50,7 @@ mkShellNoCC {
     nix
     openapi-generator-cli
     pkg-config
+    rustfs-cli
     utillinux
     which
     paperclip

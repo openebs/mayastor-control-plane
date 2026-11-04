@@ -1,0 +1,11 @@
+{
+  "owner": "rustfs",
+  "repo": "cli",
+  "rev": "v0.1.37",
+  "hash": {
+    "linux-amd64": "sha256:31e79fe7697c870e60f5b5c9008adbb3ad5af7f9f2ab45a3d68585c5f87238d1",
+    "linux-arm64": "sha256:a02091205fe4d9fbf0d16a0dac3d46ad7fac7d5266024b5b17e76327a4e88aa8",
+    "macos-amd64": "sha256:c2040e10a845af300ec90026648eeb3c566a3560bc77a455e9d3f1100b7426ac",
+    "macos-arm64": "sha256:6e50068052314e45dc0048c2d6e218704c282659f11f9b6826b8e024536d9ee5"
+  }
+}

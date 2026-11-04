@@ -10,4 +10,5 @@ self: super: {
   e2fsprogs_1_46_5 = (import (super.sources).nixpkgs-22_05 { }).e2fsprogs;
   xfsprogs_5_16 = (import (super.sources).nixpkgs-22_05 { }).xfsprogs;
   paperclip = super.callPackage ./pkgs/paperclip { };
+  rustfs-cli = super.callPackage ./pkgs/rustfs-cli { };
 }
