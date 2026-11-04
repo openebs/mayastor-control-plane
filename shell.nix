@@ -79,6 +79,9 @@ mkShellNoCC {
   ETCD_BIN = "${pkgs.etcd}/bin/etcd";
   ETCDCTL_API = "3";
 
+  # point `rc` at the deployer's object store, so `rc ls local/default` works out of the box
+  RC_HOST_local = "http://GKde9ade9ade9ade9ade9ade9a:a9eda9eda9eda9eda9eda9eda9eda9eda9eda9eda9eda9eda9eda9eda9eda9ed@localhost:3900";
+
   # using the nix rust toolchain
   USE_NIX_RUST = "${toString (!norust)}";
   # copy the rust toolchain to a writable directory, see: https://github.com/rust-lang/cargo/issues/10096

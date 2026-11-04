@@ -12,7 +12,9 @@ mod jaeger;
 mod kibana;
 pub mod nats;
 mod rest;
+mod rustfs;
 mod rwx_vm;
+mod s3;
 
 use crate::ComposeTestNt;
 
@@ -463,6 +465,7 @@ impl_component! {
     Dns,            0,
     Etcd,           0,
     FioSpdk,        0,
+    Rustfs,         0,
     RwxVm,          0,
     Elastic,        1,
     Kibana,         1,

@@ -1106,6 +1106,12 @@ impl ClusterBuilder {
         }
         self
     }
+    /// Use the RustFS object store.
+    #[must_use]
+    pub fn with_rustfs(mut self, enabled: bool) -> Self {
+        self.opts = self.opts.with_rustfs(enabled);
+        self
+    }
     /// Specify whether rest is enabled or not and whether to use authentication or not.
     #[must_use]
     pub fn with_rest_auth(mut self, enabled: bool, jwk: Option<String>) -> Self {

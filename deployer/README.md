@@ -126,3 +126,36 @@ Sep 10 09:49:17.069  INFO actix_server::builder: Starting "actix-web-service-0.0
   }
 ]
 ```
+
+### Object Store
+
+Disaster recovery is mediated through an S3 object store, and the deployer can bring one up
+and tear it down with the cluster:
+
+```textmate
+deployer start --rustfs
+```
+
+That runs a single-node, ephemeral [RustFS](https://github.com/rustfs/rustfs) from
+`rustfs/rustfs:1.0.4`, publishing its S3 API on `localhost:3900` and creating a `default`
+bucket on startup.
+
+`rc` is RustFS's own S3 client (packaged in `nix/pkgs/rustfs-cli`). `shell.nix` defines its
+`local` alias through `RC_HOST_local`, so it works with no flags and no setup, and leaves any
+aliases you have configured for yourself alone:
+
+```textmate
+[nix-shell:~/git/control-plane]$ deployer start --rustfs --wait-timeout 60s
+[nix-shell:~/git/control-plane]$ rc ls local/default
+[nix-shell:~/git/control-plane]$ rc tree -L 8 -s local/default
+[nix-shell:~/git/control-plane]$ rc du local/default
+```
+
+`rc ls`/`rc cp`/`rc rm` are deprecated spellings of `rc object list`/`copy`/`remove`; both
+work. Add `--json` to any command for machine-readable output.
+
+RustFS **honours a conditional `DELETE`** (`If-Match`, refusing with `412`), which the
+retention side of the disaster recovery design depends on. Note that `rc` cannot exercise
+that: no subcommand exposes `If-Match`, and `-H` rejects any header name outside `x-amz-*`
+— the aws sdk it links does support it, so it is a missing flag rather than a missing
+capability.
