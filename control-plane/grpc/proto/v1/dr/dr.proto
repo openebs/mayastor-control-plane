@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package v1.dr;
+
+// Service for the disaster recovery agent.
+//
+// The agent's work is driven by its own schedule rather than by callers, so for now this
+// carries only the liveness probe every service here has. The operations that manage
+// relationships and failover are added as they are built.
+service DrGrpc {
+  // Liveness probe.
+  rpc Probe (ProbeRequest) returns (ProbeResponse) {}
+}
+
+// Liveness probe request.
+message ProbeRequest {
+  // Intentionally empty.
+}
+
+// Liveness probe response.
+message ProbeResponse {
+  // Whether the agent is ready to serve.
+  bool ready = 1;
+}

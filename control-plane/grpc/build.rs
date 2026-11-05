@@ -23,6 +23,7 @@ fn main() {
                 "proto/v1/snapshot/snapshot.proto",
                 "proto/v1/node/app_node.proto",
                 "proto/v1/registration/app_node_registration.proto",
+                "proto/v1/dr/dr.proto",
             ],
             &["proto/"],
         )
