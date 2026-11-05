@@ -471,6 +471,7 @@ impl_component! {
     Kibana,         1,
     CoreAgent,      2,
     JsonGrpcAgent,  2,
+    DrAgent,        2,
     Rest,           2,
     HaClusterAgent, 2,
     IoEngine,       3,
@@ -480,4 +481,10 @@ impl_component! {
 }
 
 // Control Plane Agents
-impl_ctrlp_agents!(CoreAgent, JsonGrpcAgent, HaNodeAgent, HaClusterAgent);
+impl_ctrlp_agents!(
+    CoreAgent,
+    JsonGrpcAgent,
+    HaNodeAgent,
+    HaClusterAgent,
+    DrAgent
+);
