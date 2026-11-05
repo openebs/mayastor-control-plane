@@ -28,6 +28,10 @@ path = "src/bin/ha/node/main.rs"
 name = "agent-ha-cluster"
 path = "src/bin/ha/cluster/main.rs"
 
+[[bin]]
+name = "agent-dr"
+path = "src/bin/dr/main.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 uuid = { workspace = true, features = ["serde", "v4"] }
