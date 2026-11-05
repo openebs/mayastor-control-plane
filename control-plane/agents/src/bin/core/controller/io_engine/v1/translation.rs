@@ -783,6 +783,7 @@ impl AgentToIoEngine for transport::CreatePool {
             disks: self.disks.iter().map(|d| d.to_string()).collect(),
             uuid: None,
             pooltype: v1::pool::PoolType::Lvs as i32,
+            lvm: None,
             cluster_size: self.cluster_size,
             md_args: Some(v1::pool::PoolMetadataArgs {
                 md_resv_ratio: None,
