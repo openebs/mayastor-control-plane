@@ -38,6 +38,9 @@ let
       core = agent_installer {
         name = "core";
       };
+      dr = agent_installer {
+        name = "agent-dr";
+      };
       ha = {
         node = agent_installer {
           name = "agent-ha-node";

@@ -71,6 +71,7 @@ let
   descriptions = {
     core = "Mayastor core agent - the control plane's central agent, reconciling nodes, pools, volumes and nexuses.";
     jsongrpc = "Mayastor JSON-gRPC agent - relays JSON-RPC calls to the data plane on behalf of the control plane.";
+    dr = "Mayastor DR agent - replicates volumes to a peer cluster through an object store.";
     ha = {
       node = "Mayastor HA node agent - watches local NVMe-oF paths and reports broken ones to the cluster agent.";
       cluster = "Mayastor HA cluster agent - drives switchover of volume targets when a node reports a failed path.";
@@ -131,6 +132,10 @@ let
     jsongrpc = build-agent-image {
       inherit buildType;
       name = "jsongrpc";
+    };
+    dr = build-agent-image {
+      inherit buildType;
+      name = "dr";
     };
     ha = rec {
       build-ha-agent-image = { buildType, name, user ? nonroot-user }:
