@@ -164,7 +164,10 @@ async fn missing_pool_state_reconciler(
         }
 
         if !pool.probe(&pool_spec, &node).await? {
-            // if probing fails, there's no point in trying to import
+            // If probing fails, there's no point in trying to import.
+            // This also covers the data-plane telling us it's already importing the pool, in
+            // which case issuing another import would only earn us an aborted request and a
+            // noisy log line, see [`PoolErrorCode::BusyImporting`].
             return PollResult::Ok(PollerState::Idle);
         }
 

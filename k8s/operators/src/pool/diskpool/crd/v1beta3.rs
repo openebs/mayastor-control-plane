@@ -101,6 +101,8 @@ pub enum PoolErrorCode {
     BusyCreating,
     /// The data-plane is still importing the pool.
     BusyImporting,
+    /// The data-plane is still destroying the pool.
+    BusyDestroying,
     // If the Disk is already claimed by something.
     // This may happen if the disk is used by another pool for example.
     DiskClaimed,
@@ -679,6 +681,9 @@ impl From<openapi::models::PoolProbeErrorCode> for PoolErrorCode {
             openapi::models::PoolProbeErrorCode::ImportDisabled => PoolErrorCode::ImportDisabled,
             openapi::models::PoolProbeErrorCode::TimeOut => PoolErrorCode::TimeOut,
             openapi::models::PoolProbeErrorCode::Aborted => PoolErrorCode::Aborted,
+            openapi::models::PoolProbeErrorCode::BusyCreating => PoolErrorCode::BusyCreating,
+            openapi::models::PoolProbeErrorCode::BusyImporting => PoolErrorCode::BusyImporting,
+            openapi::models::PoolProbeErrorCode::BusyDestroying => PoolErrorCode::BusyDestroying,
             openapi::models::PoolProbeErrorCode::DiskClaimed => PoolErrorCode::DiskClaimed,
             openapi::models::PoolProbeErrorCode::PciDriverUnsupported => {
                 PoolErrorCode::PciDriverUnsupported
@@ -690,8 +695,6 @@ impl From<openapi::models::PoolProbeErrorCode> for PoolErrorCode {
                 PoolErrorCode::DiskNotImportable
             }
             openapi::models::PoolProbeErrorCode::UriNotHandled => PoolErrorCode::UriNotHandled,
-            openapi::models::PoolProbeErrorCode::BusyCreating => PoolErrorCode::BusyCreating,
-            openapi::models::PoolProbeErrorCode::BusyImporting => PoolErrorCode::BusyImporting,
         }
     }
 }

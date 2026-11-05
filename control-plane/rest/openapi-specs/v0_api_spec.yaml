@@ -4187,6 +4187,7 @@ components:
         - UriNotHandled
         - BusyCreating
         - BusyImporting
+        - BusyDestroying
     PoolErrorInfo:
       type: object
       description: Pool alerts and error information

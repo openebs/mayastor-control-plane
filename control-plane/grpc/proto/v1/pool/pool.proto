@@ -65,6 +65,8 @@ enum ProbeErrorCode {
   PoolBusyCreating = 20;
   // The data-plane is still importing the pool.
   PoolBusyImporting = 21;
+  // The data-plane is still destroying the pool.
+  PoolBusyDestroying = 22;
 }
 message ProbeError {
   ProbeErrorCode code = 1;

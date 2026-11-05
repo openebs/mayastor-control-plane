@@ -120,12 +120,14 @@ pub enum PoolErrorCode {
     TimeOut,
     /// gRPC aborted because it took too long.
     Aborted,
-    /// The data-plane is still creating the pool.
-    /// Only ever set as the direct result of a create request.
+    /// The data-plane is still creating the pool: there is no pool yet, so nothing is wrong
+    /// with it, it simply isn't there to be used.
     BusyCreating,
-    /// The data-plane is still importing the pool.
-    /// Only ever set as the direct result of an import request.
+    /// The data-plane is still importing the pool: it exists, but is not usable until that
+    /// finishes.
     BusyImporting,
+    /// The data-plane is still destroying the pool: it exists, but is on its way out.
+    BusyDestroying,
     // If the Disk is already claimed by something.
     // This may happen if the disk is used by another pool for example.
     DiskClaimed,
@@ -467,6 +469,7 @@ impl From<PoolErrorCode> for models::PoolProbeErrorCode {
             PoolErrorCode::Aborted => Self::Aborted,
             PoolErrorCode::BusyCreating => Self::BusyCreating,
             PoolErrorCode::BusyImporting => Self::BusyImporting,
+            PoolErrorCode::BusyDestroying => Self::BusyDestroying,
             PoolErrorCode::DiskClaimed => Self::DiskClaimed,
             PoolErrorCode::PCIDriverUnsupported => Self::PciDriverUnsupported,
             PoolErrorCode::PCIKernelBound => Self::PciKernelBound,

@@ -844,6 +844,9 @@ impl From<PoolErrorCode> for pool::ProbeErrorCode {
             PoolErrorCode::ImportDisabled => Self::ImportDisabled,
             PoolErrorCode::TimeOut => Self::TimeOut,
             PoolErrorCode::Aborted => Self::Aborted,
+            PoolErrorCode::BusyCreating => Self::PoolBusyCreating,
+            PoolErrorCode::BusyImporting => Self::PoolBusyImporting,
+            PoolErrorCode::BusyDestroying => Self::PoolBusyDestroying,
             PoolErrorCode::DiskClaimed => Self::DiskClaimed,
             PoolErrorCode::PCIDriverUnsupported => Self::PciDriverUnsupported,
             PoolErrorCode::PCIKernelBound => Self::PciKernelBound,
@@ -851,8 +854,6 @@ impl From<PoolErrorCode> for pool::ProbeErrorCode {
             PoolErrorCode::InvalidDiskUri => Self::InvalidDiskUri,
             PoolErrorCode::DiskNotImportable => Self::DiskNotImportable,
             PoolErrorCode::UriNotHandled => Self::UriNotHandled,
-            PoolErrorCode::BusyCreating => Self::PoolBusyCreating,
-            PoolErrorCode::BusyImporting => Self::PoolBusyImporting,
         }
     }
 }
@@ -888,6 +889,9 @@ impl From<pool::ProbeErrorCode> for PoolErrorCode {
             pool::ProbeErrorCode::ImportDisabled => Self::ImportDisabled,
             pool::ProbeErrorCode::TimeOut => Self::TimeOut,
             pool::ProbeErrorCode::Aborted => Self::Aborted,
+            pool::ProbeErrorCode::PoolBusyCreating => Self::BusyCreating,
+            pool::ProbeErrorCode::PoolBusyImporting => Self::BusyImporting,
+            pool::ProbeErrorCode::PoolBusyDestroying => Self::BusyDestroying,
             pool::ProbeErrorCode::DiskClaimed => Self::DiskClaimed,
             pool::ProbeErrorCode::PciDriverUnsupported => Self::PCIDriverUnsupported,
             pool::ProbeErrorCode::PciKernelBound => Self::PCIKernelBound,
@@ -895,8 +899,6 @@ impl From<pool::ProbeErrorCode> for PoolErrorCode {
             pool::ProbeErrorCode::InvalidDiskUri => Self::InvalidDiskUri,
             pool::ProbeErrorCode::DiskNotImportable => Self::DiskNotImportable,
             pool::ProbeErrorCode::UriNotHandled => Self::UriNotHandled,
-            pool::ProbeErrorCode::PoolCreating => Self::Creating,
-            pool::ProbeErrorCode::PoolImporting => Self::Importing,
         }
     }
 }

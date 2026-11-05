@@ -93,6 +93,37 @@ pub(crate) struct DestroySnapRebuild {
     pub(crate) uuid: transport::ReplicaId,
 }
 
+/// An operation the data-plane is already performing on a pool.
+/// Mirrors what the data-plane reports; whether any given one is worth reporting onwards is
+/// for the pool logic to decide, see `OperationGuardArc::<PoolSpec>::operation_error_code`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PoolOperationInProgress {
+    /// An operation is in progress which the data-plane gave no specific value for.
+    Unknown,
+    /// The pool is being created.
+    Create,
+    /// The pool is being imported.
+    Import,
+    /// The pool is being destroyed.
+    Destroy,
+    /// The pool is being grown.
+    Grow,
+    /// The pool is being exported.
+    Export,
+    /// The pool's errors are being cleared.
+    ClearErrors,
+    /// A replica is being created on the pool.
+    ReplicaCreate,
+    /// A replica is being destroyed on the pool.
+    ReplicaDestroy,
+    /// A snapshot is being destroyed on the pool.
+    SnapshotDestroy,
+    /// A replica on the pool is being shared.
+    ReplicaShare,
+    /// A replica on the pool is being unshared.
+    ReplicaUnshare,
+}
+
 /// Probe pool disks for errors.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ProbePoolRequest {
@@ -126,7 +157,10 @@ pub(crate) struct ProbePoolResponse {
     pub(crate) unimpl: bool,
     /// All the probe errors (per disk).
     pub(crate) errors: HashMap<String, ProbeDiskInfo>,
+    /// An operation the data-plane is already performing on the pool, if any.
+    pub(crate) in_progress: Option<PoolOperationInProgress>,
 }
+
 impl ProbePoolResponse {
     /// The target io-engine does not implement this api.
     pub(crate) fn new_unimpl() -> Self {
