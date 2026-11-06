@@ -497,6 +497,7 @@ pub mod io_engine {
                     cluster_size: None,
                     md_args: None,
                     encryption: None,
+                    lvm: None,
                 })
                 .await?;
             Ok(())
@@ -691,9 +692,9 @@ pub mod v1 {
             CreatePoolRequest, DestroyPoolRequest, DeviceIdentity, DiskInfo, DiskSmart,
             GrowPoolRequest, ImportPoolRequest, ListPoolOptions, ListPoolsResponse,
             ListPoolsSmartOptions, ListPoolsSmartResponse, NvmeErrorLogEntry, NvmeSmart, Pool,
-            PoolAlert, PoolAlertStatus, PoolAlerts, PoolErrors, PoolMetadataArgs, PoolProbeMeta,
-            PoolProbes, PoolSmart, PoolType, ProbeDiskInfo, ProbeError, ProbeErrorCode,
-            ProbePoolRequest, ProbePoolResponse, SmartAttribute, SmartData,
+            PoolAlert, PoolAlertStatus, PoolAlerts, PoolErrors, PoolMetadataArgs, PoolOperation,
+            PoolProbeMeta, PoolProbes, PoolSmart, PoolType, ProbeDiskInfo, ProbeError,
+            ProbeErrorCode, ProbePoolRequest, ProbePoolResponse, SmartAttribute, SmartData,
         };
     }
 

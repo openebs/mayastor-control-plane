@@ -32,6 +32,17 @@ enum PoolCordonDrainState {
     Cordoned,
 }
 
+/// The operation a `Busy` probe code stands for, which is how it reads as a transition.
+/// These say what is happening to the pool rather than what is wrong with it.
+fn busy_operation(code: models::PoolProbeErrorCode) -> Option<&'static str> {
+    match code {
+        models::PoolProbeErrorCode::BusyCreating => Some("Creating"),
+        models::PoolProbeErrorCode::BusyImporting => Some("Importing"),
+        models::PoolProbeErrorCode::BusyDestroying => Some("Destroying"),
+        _ => None,
+    }
+}
+
 impl CreateRow for openapi::models::Pool {
     fn row(&self) -> Row {
         // The spec would be empty if it was not created using
@@ -55,21 +66,38 @@ impl CreateRow for openapi::models::Pool {
             Some(diag) => diag.status,
             None => state.status,
         };
-        let status = if managed && spec.status != models::SpecStatus::Created {
-            format!("{}/{status}", spec.status)
+        let pool_diag_error = diag.error.as_ref().map(|e| e.code);
+        // A pool is rendered on two axes: the transition it's going through, if any, and the
+        // health of the pool itself. An in-flight spec operation takes precedence over a
+        // transition reported by the control-plane.
+        let creating = managed && spec.status == models::SpecStatus::Creating;
+        let busy = pool_diag_error.and_then(busy_operation);
+        let transition = if managed && spec.status != models::SpecStatus::Created {
+            Some(spec.status.to_string())
         } else {
-            status.to_string()
+            busy.map(ToString::to_string)
+        };
+        let status = match &transition {
+            // A pool which is still being created doesn't exist in the data-plane yet, so it has
+            // no health of its own to report and the transition is the whole story.
+            Some(transition) if creating => transition.clone(),
+            Some(transition) => format!("{transition}/{status}"),
+            None => status.to_string(),
         };
 
-        let pool_diag_error = diag.error.as_ref().map(|e| e.code);
-        let statuses = match (spec.cordon_drain, pool_diag_error) {
-            (None, None) => status.to_string(),
-            (None, Some(error)) => format!("{status} ({error})"),
+        // A Busy code says what is happening to the pool, which the transition already shows -
+        // either promoted from the code itself, or from the spec operation which implies it.
+        let reason = pool_diag_error
+            .filter(|_| busy.is_none())
+            .map(|error| error.to_string());
+        let statuses = match (spec.cordon_drain, reason) {
+            (None, None) => status,
+            (None, Some(reason)) => format!("{status} ({reason})"),
             (Some(_), None) => {
                 format!("{status}, {}", PoolCordonDrainState::Cordoned)
             }
-            (Some(_), Some(error)) => {
-                format!("{status} ({error}), {}", PoolCordonDrainState::Cordoned)
+            (Some(_), Some(reason)) => {
+                format!("{status} ({reason}), {}", PoolCordonDrainState::Cordoned)
             }
         };
         let alert_status = state.error_info.as_ref().map(|e| e.alerts.status);

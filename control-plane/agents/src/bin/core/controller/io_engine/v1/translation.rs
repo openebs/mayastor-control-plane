@@ -2,7 +2,8 @@ use crate::controller::io_engine::{
     translation::{IoEngineToAgent, TryIoEngineToAgent},
     types::{
         CreateNexusSnapReplDescr, CreateNexusSnapshot, CreateNexusSnapshotReplicaStatus,
-        CreateNexusSnapshotResp, ProbeDiskInfo, ProbePoolRequest, ProbePoolResponse,
+        CreateNexusSnapshotResp, PoolOperationInProgress, ProbeDiskInfo, ProbePoolRequest,
+        ProbePoolResponse,
     },
 };
 use agents::errors::SvcError;
@@ -783,6 +784,7 @@ impl AgentToIoEngine for transport::CreatePool {
             disks: self.disks.iter().map(|d| d.to_string()).collect(),
             uuid: None,
             pooltype: v1::pool::PoolType::Lvs as i32,
+            lvm: None,
             cluster_size: self.cluster_size,
             md_args: Some(v1::pool::PoolMetadataArgs {
                 md_resv_ratio: None,
@@ -1060,6 +1062,25 @@ impl AgentToIoEngine for ProbePoolRequest {
 
 impl From<v1::pool::ProbePoolResponse> for ProbePoolResponse {
     fn from(value: v1::pool::ProbePoolResponse) -> Self {
+        let in_progress = value.in_progress.map(|operation| {
+            use v1::pool::PoolOperation as RpcOp;
+            match RpcOp::try_from(operation) {
+                Ok(RpcOp::Create) => PoolOperationInProgress::Create,
+                Ok(RpcOp::Import) => PoolOperationInProgress::Import,
+                Ok(RpcOp::Destroy) => PoolOperationInProgress::Destroy,
+                Ok(RpcOp::Grow) => PoolOperationInProgress::Grow,
+                Ok(RpcOp::Export) => PoolOperationInProgress::Export,
+                Ok(RpcOp::ClearPoolErrors) => PoolOperationInProgress::ClearErrors,
+                Ok(RpcOp::ReplicaCreate) => PoolOperationInProgress::ReplicaCreate,
+                Ok(RpcOp::ReplicaDestroy) => PoolOperationInProgress::ReplicaDestroy,
+                Ok(RpcOp::SnapshotDestroy) => PoolOperationInProgress::SnapshotDestroy,
+                Ok(RpcOp::ReplicaShare) => PoolOperationInProgress::ReplicaShare,
+                Ok(RpcOp::ReplicaUnshare) => PoolOperationInProgress::ReplicaUnshare,
+                Ok(RpcOp::Stat) => PoolOperationInProgress::Unknown,
+                Ok(RpcOp::Smart) => PoolOperationInProgress::Unknown,
+                Ok(RpcOp::OpUnknown) | Err(_) => PoolOperationInProgress::Unknown,
+            }
+        });
         Self {
             success: value.success,
             unimpl: false,
@@ -1068,38 +1089,48 @@ impl From<v1::pool::ProbePoolResponse> for ProbePoolResponse {
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
+            in_progress,
         }
+    }
+}
+
+/// Convert a data-plane probe error into its control-plane counterpart.
+/// The error may be reported against a single disk, or against the pool as a whole.
+fn rpc_probe_error_to_agent(error: rpc::v1::pool::ProbeError) -> PoolError {
+    use rpc::v1::pool::ProbeErrorCode as RpcErrorCode;
+    PoolError {
+        code: match error.code() {
+            RpcErrorCode::ProbeUnknown => PoolErrorCode::Unknown,
+            RpcErrorCode::DiskNotFound => PoolErrorCode::DiskNotFound,
+            RpcErrorCode::DiskReadIoError => PoolErrorCode::DiskReadIoError,
+            RpcErrorCode::ForeignPoolName => PoolErrorCode::ForeignPoolName,
+            RpcErrorCode::ForeignPoolUid => PoolErrorCode::ForeignPoolUid,
+            RpcErrorCode::SuperBlockIoError => PoolErrorCode::SuperBlockIoError,
+            RpcErrorCode::InvalidSuperBlock => PoolErrorCode::InvalidSuperBlock,
+            RpcErrorCode::DiskClaimed => PoolErrorCode::DiskClaimed,
+            RpcErrorCode::PciDriverUnsupported => PoolErrorCode::PCIDriverUnsupported,
+            RpcErrorCode::PciKernelBound => PoolErrorCode::PCIKernelBound,
+            RpcErrorCode::PciNotNvme => PoolErrorCode::PCINotNvme,
+            RpcErrorCode::InvalidDiskUri => PoolErrorCode::InvalidDiskUri,
+            RpcErrorCode::DiskNotImportable => PoolErrorCode::DiskNotImportable,
+            RpcErrorCode::UriNotHandled => PoolErrorCode::UriNotHandled,
+        },
+        msg: error.msg,
     }
 }
 
 impl From<rpc::v1::pool::ProbeDiskInfo> for ProbeDiskInfo {
     fn from(value: rpc::v1::pool::ProbeDiskInfo) -> Self {
-        use rpc::v1::pool::ProbeErrorCode as RpcErrorCode;
-        let errors = value.error.into_iter();
-        let errors = errors.map(|error| PoolDiskError {
-            disk: value.disk.clone(),
-            error: PoolError {
-                code: match error.code() {
-                    RpcErrorCode::ProbeUnknown => PoolErrorCode::Unknown,
-                    RpcErrorCode::DiskNotFound => PoolErrorCode::DiskNotFound,
-                    RpcErrorCode::DiskReadIoError => PoolErrorCode::DiskReadIoError,
-                    RpcErrorCode::ForeignPoolName => PoolErrorCode::ForeignPoolName,
-                    RpcErrorCode::ForeignPoolUid => PoolErrorCode::ForeignPoolUid,
-                    RpcErrorCode::SuperBlockIoError => PoolErrorCode::SuperBlockIoError,
-                    RpcErrorCode::InvalidSuperBlock => PoolErrorCode::InvalidSuperBlock,
-                    RpcErrorCode::DiskClaimed => PoolErrorCode::DiskClaimed,
-                    RpcErrorCode::PciDriverUnsupported => PoolErrorCode::PCIDriverUnsupported,
-                    RpcErrorCode::PciKernelBound => PoolErrorCode::PCIKernelBound,
-                    RpcErrorCode::PciNotNvme => PoolErrorCode::PCINotNvme,
-                    RpcErrorCode::InvalidDiskUri => PoolErrorCode::InvalidDiskUri,
-                    RpcErrorCode::DiskNotImportable => PoolErrorCode::DiskNotImportable,
-                    RpcErrorCode::UriNotHandled => PoolErrorCode::UriNotHandled,
-                },
-                msg: error.msg,
-            },
-        });
+        let disk = value.disk;
         Self {
-            error: errors.collect(),
+            error: value
+                .error
+                .into_iter()
+                .map(|error| PoolDiskError {
+                    disk: disk.clone(),
+                    error: rpc_probe_error_to_agent(error),
+                })
+                .collect(),
         }
     }
 }

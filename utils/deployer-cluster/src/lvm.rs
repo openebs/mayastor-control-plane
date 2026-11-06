@@ -39,6 +39,11 @@ pub struct Lvol {
     name: String,
     path: String,
 }
+impl std::fmt::Display for Lvol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}@{}", self.name, self.path)
+    }
+}
 impl Lvol {
     /// Get the host path for the lvol.
     pub fn path(&self) -> &str {
@@ -102,7 +107,7 @@ impl Lvol {
 }
 impl Drop for Lvol {
     fn drop(&mut self) {
-        println!("Dropping Lvol {}", self.name);
+        println!("Dropping Lvol {self}");
         self.resume().ok();
     }
 }

@@ -1,6 +1,9 @@
 use crate::{
     controller::{
-        io_engine::{types::ProbePoolRequest, HostApi, PoolApi},
+        io_engine::{
+            types::{PoolOperationInProgress, ProbePoolRequest},
+            HostApi, PoolApi,
+        },
         registry::Registry,
         resources::{
             operations::ResourceLifecycle,
@@ -156,6 +159,9 @@ impl OperationGuardArc<PoolSpec> {
             PoolErrorCode::ImportDisabled => PoolStatus::Offline,
             PoolErrorCode::TimeOut => PoolStatus::Unknown,
             PoolErrorCode::Aborted => PoolStatus::Unknown,
+            PoolErrorCode::BusyCreating => PoolStatus::Unknown,
+            PoolErrorCode::BusyImporting => PoolStatus::Offline,
+            PoolErrorCode::BusyDestroying => PoolStatus::Unknown,
             PoolErrorCode::DiskClaimed => PoolStatus::Offline,
             PoolErrorCode::PCIDriverUnsupported => PoolStatus::Offline,
             PoolErrorCode::PCIKernelBound => PoolStatus::Offline,
@@ -177,6 +183,8 @@ impl OperationGuardArc<PoolSpec> {
     }
 
     /// Probes a pool for any errors with its backing devices.
+    /// A probe may also report that the data-plane is already creating or importing the pool, in
+    /// which case this is not an error at all: the caller simply has nothing to do but wait.
     /// # NOTE
     /// In case probe fails we should not log any information to stdout, as we're trying to avoid
     /// thrashing the logs when a pool is in a bad state for a long time.
@@ -188,8 +196,27 @@ impl OperationGuardArc<PoolSpec> {
         let request = ImportPool::new(&spec.node, &spec.id, &spec.disks, &spec.encryption);
         let probed = node.probe_pool(&request.into()).await?;
 
-        if probed.success || probed.unimpl {
+        if probed.unimpl {
             return Ok(true);
+        }
+
+        if probed.success {
+            let Some(operation) = probed.in_progress else {
+                return Ok(true);
+            };
+            let Some(code) = Self::operation_error_code(operation) else {
+                return Ok(true);
+            };
+            let mut pool = self.lock();
+            pool.metadata.runtime.diag = Some(PoolDiag {
+                error: Some(PoolError {
+                    code,
+                    msg: Some(format!("pool busy with {operation:?} operation")),
+                }),
+                status: Self::pool_error_to_status(code),
+                ..Default::default()
+            });
+            return Ok(false);
         }
 
         let mut diag = PoolDiag::default();
@@ -208,6 +235,18 @@ impl OperationGuardArc<PoolSpec> {
         Ok(false)
     }
 
+    /// Why a pool isn't usable because of what the data-plane is doing to it, if that is
+    /// something worth reporting. Operations against an already-open pool are not: the pool
+    /// would be listed, so we would have state for it and never be probing it at all.
+    fn operation_error_code(operation: PoolOperationInProgress) -> Option<PoolErrorCode> {
+        match operation {
+            PoolOperationInProgress::Create => Some(PoolErrorCode::BusyCreating),
+            PoolOperationInProgress::Import => Some(PoolErrorCode::BusyImporting),
+            PoolOperationInProgress::Destroy => Some(PoolErrorCode::BusyDestroying),
+            _ => None,
+        }
+    }
+
     /// Probes a pool for any errors with its backing devices during a create operation.
     /// # NOTE
     /// In case probe fails we should not log any information to stdout, as we're trying to avoid
@@ -218,8 +257,27 @@ impl OperationGuardArc<PoolSpec> {
     ) -> Result<(), SvcError> {
         let probed = node.probe_pool(&ProbePoolRequest::from(create)).await?;
 
-        if probed.success || probed.unimpl {
+        if probed.unimpl {
             return Ok(());
+        }
+
+        if probed.success {
+            let Some(operation) = probed.in_progress else {
+                return Ok(());
+            };
+            let Some(error_code) = Self::operation_error_code(operation) else {
+                return Ok(());
+            };
+            let (code, kind) = Self::pool_error_to_kind(error_code);
+            let diag = PoolDiag {
+                error: Some(PoolError {
+                    code: error_code,
+                    msg: Some(format!("pool busy with {operation:?} operation")),
+                }),
+                status: Self::pool_error_to_status(error_code),
+                ..Default::default()
+            };
+            return Err(SvcError::PoolCreateError { diag, code, kind });
         }
 
         let mut diag = PoolDiag::default();
@@ -262,13 +320,22 @@ impl OperationGuardArc<PoolSpec> {
         );
         let result = node.import_pool(&request).await;
         if let Err(error) = &result {
-            if let Some(error) = Self::pool_import_error(error) {
+            if let Some(mut error) = Self::pool_import_error(error) {
                 let disks = pool_spec.disks.first().map(|d| d.to_string());
+                let import_errors =
+                    if matches!(error.code, PoolErrorCode::Aborted | PoolErrorCode::TimeOut) {
+                        // Either the data-plane told us an import is already in flight, or our own deadline
+                        // expired while it was still working on it.
+                        error.code = PoolErrorCode::BusyImporting;
+                        vec![]
+                    } else {
+                        vec![PoolDiskError {
+                            error: error.clone(),
+                            disk: disks.unwrap_or_default(),
+                        }]
+                    };
                 *reporter.lock().expect("not poisoned") = Some(PoolDiag {
-                    import_errors: vec![PoolDiskError {
-                        error: error.clone(),
-                        disk: disks.unwrap_or_default(),
-                    }],
+                    import_errors,
                     status: PoolStatus::Offline,
                     error: Some(error),
                     import: ImportBackoff::new(&spec.metadata.runtime, registry.reconcile_period()),
@@ -358,6 +425,11 @@ impl OperationGuardArc<PoolSpec> {
             }
             PoolErrorCode::TimeOut => (Code::Cancelled, ReplyErrorKind::Cancelled),
             PoolErrorCode::Aborted => (Code::Aborted, ReplyErrorKind::Aborted),
+            // Only ever set on the stored diagnostics, never used to build a reply, which
+            // keeps the gRPC code the data-plane actually gave us.
+            PoolErrorCode::BusyCreating
+            | PoolErrorCode::BusyImporting
+            | PoolErrorCode::BusyDestroying => (Code::Aborted, ReplyErrorKind::Aborted),
             PoolErrorCode::DiskClaimed => (Code::InvalidArgument, ReplyErrorKind::InvalidArgument),
             PoolErrorCode::PCIDriverUnsupported => {
                 (Code::InvalidArgument, ReplyErrorKind::InvalidArgument)
