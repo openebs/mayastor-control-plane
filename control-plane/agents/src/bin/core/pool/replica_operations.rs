@@ -88,13 +88,17 @@ impl ResourceLifecycle for Option<&mut OperationGuardArc<ReplicaSpec>> {
         registry: &Registry,
         request: &Self::Destroy,
     ) -> Result<(), SvcError> {
-        let node = registry.node_wrapper(&request.node).await?;
-
         if let Some(replica) = self {
             replica
                 .start_destroy_by(registry, &request.disowners)
                 .await?;
-
+            let node = registry.node_wrapper(&request.node).await?;
+            // We do not send request to io-engine if pool is not loaded.
+            if !registry.has_pool_state(&request.pool_id).await {
+                return Err(SvcError::PoolNotLoaded {
+                    pool_id: request.pool_id.clone(),
+                });
+            }
             let result = match node.destroy_replica(request).await {
                 Ok(()) => Ok(()),
                 Err(error) if error.tonic_code() == tonic::Code::NotFound => Ok(()),
@@ -104,6 +108,12 @@ impl ResourceLifecycle for Option<&mut OperationGuardArc<ReplicaSpec>> {
             registry.specs().on_repl_destroy(&request.pool_id);
             Ok(())
         } else {
+            let node = registry.node_wrapper(&request.node).await?;
+            if !registry.has_pool_state(&request.pool_id).await {
+                return Err(SvcError::PoolNotLoaded {
+                    pool_id: request.pool_id.clone(),
+                });
+            }
             node.destroy_replica(request).await
         }
     }
