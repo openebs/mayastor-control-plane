@@ -1,5 +1,8 @@
 use crate::{
     controller::{
+        reconciler::volume::offline_rebuild::{
+            has_scale_up_rebuild_target, offline_rebuild_budget, start_offline_rebuild,
+        },
         registry::Registry,
         resources::{
             operations::{
@@ -22,8 +25,8 @@ use grpc::{
             CreateVolumeSnapshotInfo, DestroyShutdownTargetsInfo, DestroyVolumeInfo,
             DestroyVolumeSnapshot, DestroyVolumeSnapshotInfo, PublishVolumeInfo,
             RepublishVolumeInfo, ResizeVolumeInfo, SetVolumePropertyInfo, SetVolumeReplicaInfo,
-            ShareVolumeInfo, UnpublishVolumeInfo, UnshareVolumeInfo, VolumeOperations,
-            VolumeSnapshot, VolumeSnapshots,
+            ShareVolumeInfo, TriggerRebuildInfo, UnpublishVolumeInfo, UnshareVolumeInfo,
+            VolumeOperations, VolumeSnapshot, VolumeSnapshots,
         },
         Pagination,
     },
@@ -38,7 +41,7 @@ use stor_port::{
         transport::{
             CreateSnapshotVolume, CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter,
             PublishVolume, RepublishVolume, ResizeVolume, SetVolumeProperty, SetVolumeReplica,
-            ShareVolume, UnpublishVolume, UnshareVolume, Volume,
+            ShareVolume, TriggerRebuild, UnpublishVolume, UnshareVolume, Volume, VolumeStatus,
         },
     },
 };
@@ -172,6 +175,18 @@ impl VolumeOperations for Service {
         let volume =
             Context::spawn(async move { service.set_volume_property(&set_volume_property).await })
                 .await??;
+        Ok(volume)
+    }
+
+    async fn trigger_rebuild(
+        &self,
+        req: &dyn TriggerRebuildInfo,
+        _ctx: Option<Context>,
+    ) -> Result<Volume, ReplyError> {
+        let request = TriggerRebuild::from(req);
+        let service = self.clone();
+        let volume =
+            Context::spawn(async move { service.trigger_rebuild(&request).await }).await??;
         Ok(volume)
     }
 
@@ -426,6 +441,76 @@ impl Service {
     ) -> Result<Volume, SvcError> {
         let mut volume = self.specs().volume(&request.uuid).await?;
         volume.set_property(&self.registry, request).await?;
+        self.registry.volume(&request.uuid).await
+    }
+    /// Ask for the volume's rebuild to skip the wait it would otherwise serve out.
+    ///
+    /// Today the only wait that can be skipped is the offline-rebuild grace period, so
+    /// this applies to a degraded, unpublished volume. Anything else is rejected rather
+    /// than silently accepted. A published volume is already rebuilt by the hot-spare
+    /// path without a grace period, and a volume that is not degraded has nothing to
+    /// rebuild. Leaving the entry point generic so an online-rebuild trigger can be
+    /// added here later.
+    ///
+    /// Queued by default: the volume skips the wait and is taken ahead of other
+    /// offline rebuilds, oldest request first, but it still waits for a free slot.
+    /// With `now` the rebuild is started here instead and the request fails if it
+    /// cannot be, and with `force` it is started even when the limits are reached.
+    #[tracing::instrument(level = "info", skip(self, request), err, fields(volume.uuid = %request.uuid, now = request.now, force = request.force))]
+    pub(super) async fn trigger_rebuild(
+        &self,
+        request: &TriggerRebuild,
+    ) -> Result<Volume, SvcError> {
+        // Refuse rather than accept a request that can never be honoured: the
+        // reconciler does not run at all when disabled, and since enabling it needs a
+        // restart, which clears the runtime marker, the request could never take
+        // effect later either.
+        if !self.registry.offline_rebuild_enabled() {
+            return Err(SvcError::OfflineRebuildDisabled {});
+        }
+
+        // Health-aware state: an unpublished volume's plain state derives its status
+        // from the replica spec count, which does not change when a node dies, so it
+        // would report Online and every legitimate request would be rejected here.
+        let state = self.registry.volume_state_health(&request.uuid).await?;
+        if state.target.is_some() {
+            return Err(SvcError::RebuildTriggerVolumePublished {
+                vol_id: request.uuid.to_string(),
+            });
+        }
+        if state.status != VolumeStatus::Degraded {
+            return Err(SvcError::RebuildTriggerVolumeNotDegraded {
+                vol_id: request.uuid.to_string(),
+            });
+        }
+
+        let mut volume = self.specs().volume(&request.uuid).await?;
+
+        if !request.now {
+            volume.lock().metadata.request_offline_rebuild();
+            return self.registry.volume(&request.uuid).await;
+        }
+
+        // Starting in line with the request, so the limits have to be answered here
+        // rather than left to the next poll. `force` is the operator overruling a
+        // limit they set themselves, which is why it is not the default.
+        if !request.force {
+            if self.registry.rebuild_allowed().await.is_err() {
+                return Err(SvcError::RebuildTriggerLimited {
+                    vol_id: request.uuid.to_string(),
+                });
+            }
+            let volumes = self.specs().volumes_rsc();
+            if offline_rebuild_budget(&volumes, &self.registry).await == Some(0) {
+                return Err(SvcError::RebuildTriggerLimited {
+                    vol_id: request.uuid.to_string(),
+                });
+            }
+        }
+
+        let has_in_place_target =
+            has_scale_up_rebuild_target(&volume, &state.replica_topology, &self.registry).await?;
+        start_offline_rebuild(&mut volume, &state, &self.registry, has_in_place_target).await?;
         self.registry.volume(&request.uuid).await
     }
     /// Create a volume snapshot.

@@ -137,6 +137,28 @@ pub enum ClearErrors {
     },
 }
 
+/// The types of resources that support an operator-triggered rebuild.
+#[derive(clap::Subcommand, Debug)]
+pub enum RebuildResources {
+    /// Rebuild a volume without waiting out the grace period.
+    ///
+    /// By default the volume is queued: the wait is skipped and it is taken ahead
+    /// of other offline rebuilds, oldest request first, but it still waits for a
+    /// free rebuild slot. Use --now to start it as part of this command instead.
+    Volume {
+        /// ID of the volume.
+        id: VolumeId,
+        /// Start the rebuild as part of this command rather than queueing it, and
+        /// fail if it cannot be started.
+        #[clap(long)]
+        now: bool,
+        /// Start the rebuild even when the configured rebuild limits are already
+        /// reached. Only meaningful with --now.
+        #[clap(long, alias = "override-max-concurrent", requires = "now")]
+        force: bool,
+    },
+}
+
 /// The types of resources that support cordoning.
 #[derive(clap::Subcommand, Debug)]
 pub enum CordonResources {
