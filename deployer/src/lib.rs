@@ -87,6 +87,14 @@ pub struct StartOptions {
     #[clap(long, env = "EXTERNAL_JAEGER")]
     pub external_jaeger: Option<String>,
 
+    /// Use the RustFS S3-compatible object store.
+    ///
+    /// Brings up a single-node, ephemeral store on the host port named by
+    /// `infra::s3::S3_HOST_PORT`, with the bucket and credentials the checked-in
+    /// `RC_HOST_local` in `shell.nix` names, so `rc` reaches it with no flags.
+    #[clap(long)]
+    pub rustfs: bool,
+
     /// Use the elasticsearch service.
     #[clap(short, long)]
     pub elastic: bool,
@@ -293,6 +301,7 @@ pub struct StartOptions {
     pub no_etcd: bool,
 
     /// Make the etcd service data persistent across etcd restarts.
+    /// The object store, when enabled, keeps its data on the host the same way.
     #[clap(long)]
     pub persistent_etcd: bool,
 
@@ -582,6 +591,12 @@ impl StartOptions {
     #[must_use]
     pub fn with_jaeger(mut self, jaeger: bool) -> Self {
         self.jaeger = jaeger;
+        self
+    }
+    /// Use the RustFS object store.
+    #[must_use]
+    pub fn with_rustfs(mut self, rustfs: bool) -> Self {
+        self.rustfs = rustfs;
         self
     }
     #[must_use]
