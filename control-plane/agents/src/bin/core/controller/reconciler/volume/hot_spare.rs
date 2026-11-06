@@ -15,6 +15,7 @@ use stor_port::{
     },
 };
 
+use agents::errors::SvcError;
 use std::cmp::Ordering;
 use stor_port::types::v0::{
     store::{
@@ -257,35 +258,57 @@ async fn volume_replica_count_reconciler(
     context: &PollContext,
 ) -> PollResult {
     forget_lost_spare(volume, context).await;
-    let required_replica_count = volume.as_ref().num_replicas as usize;
-    let effective_replica_count = volume.as_ref().effective_replica_count() as usize;
-    let current_replica_count = context.specs().volume_replicas(volume.uuid()).len();
-    match current_replica_count.cmp(&effective_replica_count) {
-        Ordering::Less | Ordering::Greater => {
-            volume_replica_count_reconciler_traced(
-                volume,
-                nexus,
-                context,
-                required_replica_count,
-                effective_replica_count,
-                current_replica_count,
-            )
-            .await
+    let step = ReplicaCountStep::next(
+        volume.as_ref().num_replicas as usize,
+        context.specs().volume_replicas(volume.uuid()).len(),
+        volume.as_ref().metadata.drain_config(),
+    );
+    match step {
+        ReplicaCountStep::Idle => PollResult::Ok(PollerState::Idle),
+        step => volume_replica_count_reconciler_traced(volume, nexus, context, step).await,
+    }
+}
+
+/// The next step of the volume replica count reconciliation.
+#[derive(Debug)]
+enum ReplicaCountStep {
+    /// The volume has fewer replicas than required.
+    /// Restoring the required replica count takes precedence over any replica move.
+    CreateMissing { current: usize, required: usize },
+    /// The replica move needs its spare placed.
+    CreateSpare(DrainConfig),
+    /// The volume has more replicas than expected.
+    RemoveExcess { current: usize, expected: usize },
+    /// The replica count is as expected, drive the replica move.
+    ProgressMove(DrainConfig),
+    /// The replica count is as expected and there is no replica move.
+    Idle,
+}
+
+impl ReplicaCountStep {
+    /// Decide the next step, given the required and current replica counts and the replica move.
+    fn next(required: usize, current: usize, drain_cfg: Option<DrainConfig>) -> Self {
+        if current < required {
+            return Self::CreateMissing { current, required };
         }
-        Ordering::Equal => {
-            if volume.as_ref().has_replica_move() {
-                volume_replica_count_reconciler_traced(
-                    volume,
-                    nexus,
-                    context,
-                    required_replica_count,
-                    effective_replica_count,
-                    current_replica_count,
-                )
-                .await
+        let Some(cfg) = drain_cfg else {
+            return if current > required {
+                Self::RemoveExcess {
+                    current,
+                    expected: required,
+                }
             } else {
-                Ok(PollerState::Idle)
-            }
+                Self::Idle
+            };
+        };
+        // A replica move which over-replicates is entitled to one replica above the required count.
+        let expected = required + usize::from(!cfg.unsafe_evict());
+        if current > expected {
+            Self::RemoveExcess { current, expected }
+        } else if current < expected && cfg.spare_not_placed() {
+            Self::CreateSpare(cfg)
+        } else {
+            Self::ProgressMove(cfg)
         }
     }
 }
@@ -295,136 +318,182 @@ async fn volume_replica_count_reconciler_traced(
     volume: &mut OperationGuardArc<VolumeSpec>,
     nexus: Option<&mut OperationGuardArc<NexusSpec>>,
     context: &PollContext,
-    required_replica_count: usize,
-    effective_replica_count: usize,
-    mut current_replica_count: usize,
+    step: ReplicaCountStep,
 ) -> PollResult {
-    match current_replica_count.cmp(&effective_replica_count) {
-        Ordering::Less => {
-            // Guard: do not materialise a fresh, empty replica when the volume has
-            // already been published but currently has zero spec'd replicas.
-            //
-            // A volume that has never been published has no `health_info_id` and
-            // no data to lose, so a fresh replica there is correct.
-            if current_replica_count == 0 && volume.as_ref().health_info_id().is_some() {
-                // The reconciler cannot recover this volume on its own.
-                // Emit the warning exactly once per agent lifetime per volume to avoid flooding
-                // logs at the reconcile cadence.
-                if !volume.as_ref().data_loss_warned() {
-                    // Mark first, then log. The lock is dropped before the
-                    // tracing macro fires so the lock isn't held across logging.
-                    volume.lock().set_data_loss_warned();
-                    volume.warn_span(|| {
-                        tracing::warn!(
-                            "Volume has no remaining replicas; hot-spare will not create \
-                            additional replicas since no rebuild is possible"
-                        )
-                    });
-                }
-                return PollResult::Ok(PollerState::Idle);
-            }
-
-            volume.warn_span(|| {
-                tracing::warn!(
-                    "The volume has '{}' replica(s) but it should have '{}'",
-                    current_replica_count,
-                    effective_replica_count
-                )
-            });
-
-            let missing_replica_count =
-                required_replica_count.saturating_sub(current_replica_count);
-            let drain_cfg = volume.as_ref().metadata.drain_config();
-            // As volume replica count cannot be modified while replica move is applied on volume and
-            // replica move cannot be applied on a non-online volume. We can get non-zero base_diff
-            // while replica move is also there only if user tries to force trigger rebuild and replica
-            // is removed. In that case doing a Full rebuild takes precedence.
-            let creating_spare = missing_replica_count == 0
-                && drain_cfg.as_ref().is_some_and(|cfg| cfg.spare_not_placed());
-            if creating_spare {
-                return create_spare_replica(volume, context, drain_cfg, nexus).await;
-            } else {
-                current_replica_count +=
-                    create_missing_replica(volume, context, missing_replica_count).await
-            }
+    match step {
+        // Guard: do not materialise a fresh, empty replica when the volume has
+        // already been published but currently has zero spec'd replicas.
+        //
+        // A volume that has never been published has no `health_info_id` and
+        // no data to lose, so a fresh replica there is correct.
+        ReplicaCountStep::CreateMissing { current: 0, .. }
+            if volume.as_ref().health_info_id().is_some() =>
+        {
+            warn_data_loss_once(volume);
+            PollResult::Ok(PollerState::Idle)
         }
-        Ordering::Greater => {
-            volume.warn_span(|| {
-                tracing::warn!(
-                    "The volume has '{}' replica(s) but it should only have '{}'. Removing...",
-                    current_replica_count,
-                    effective_replica_count
-                )
-            });
-
-            let diff = current_replica_count - effective_replica_count;
-            match volume
-                .remove_unused_volume_replicas(context.registry(), diff)
-                .await
-            {
-                Ok(_) => {
-                    volume.info("Successfully removed unused replicas");
-                }
-                Err(error) => {
-                    volume.warn_span(|| {
-                        tracing::warn!(
-                            "Failed to remove unused replicas from volume, error: '{}'",
-                            error.full_string()
-                        )
-                    });
-                }
-            }
+        ReplicaCountStep::CreateMissing { current, required } => {
+            add_missing_replicas(volume, context, current, required).await
         }
-        Ordering::Equal => {
-            if let Some(cfg) = volume.as_ref().metadata.drain_config() {
-                if let Ok(vol) = context.registry().volume(&volume.as_ref().uuid).await {
-                    let moving_replica = &cfg.moving_replica;
-                    if cfg.unsafe_evict() && vol.state().status == VolumeStatus::Online {
-                        info!(
-                            "remove replica {:?} from volume {:?}",
-                            cfg.moving_replica,
-                            volume.as_ref().uuid
-                        );
-                        return destroy_moving_replica(nexus, volume, context, moving_replica)
-                            .await;
-                    }
-                    if let Some(unwind) = &cfg.unwind_spare {
-                        match unwind {
-                            UnwindSpare::Respare => {
-                                if let Some(spare) = cfg.spare() {
-                                    return destroy_spare_replica(nexus, volume, context, spare)
-                                        .await;
-                                }
-                            }
-                            UnwindSpare::Cancelled => {
-                                // Drain cancelled: destroy the spare and end the move,
-                                // keeping the moving replica.
-                                return match cfg.spare() {
-                                    Some(spare) => {
-                                        destroy_spare_replica(nexus, volume, context, spare).await
-                                    }
-                                    None => {
-                                        remove_drain_status(context, cfg.clone(), volume).await;
-                                        Ok(PollerState::Idle)
-                                    }
-                                };
-                            }
-                        }
-                    }
-                    if vol.spare_online() {
-                        return destroy_moving_replica(nexus, volume, context, moving_replica)
-                            .await;
-                    }
-                }
-            }
+        ReplicaCountStep::CreateSpare(cfg) => {
+            create_spare_replica(volume, context, cfg, nexus).await
         }
+        ReplicaCountStep::RemoveExcess { current, expected } => {
+            remove_excess_replicas(volume, context, expected, current).await
+        }
+        ReplicaCountStep::ProgressMove(cfg) => {
+            progress_replica_move(volume, nexus, context, cfg).await
+        }
+        ReplicaCountStep::Idle => PollResult::Ok(PollerState::Idle),
     }
+}
 
-    PollResult::Ok(if current_replica_count == effective_replica_count {
+/// The volume has fewer replicas than required: create the missing ones.
+async fn add_missing_replicas(
+    volume: &mut OperationGuardArc<VolumeSpec>,
+    context: &PollContext,
+    current_replica_count: usize,
+    required_replica_count: usize,
+) -> PollResult {
+    volume.warn_span(|| {
+        tracing::warn!(
+            "The volume has '{current_replica_count}' replica(s) but it should have '{required_replica_count}'",
+        )
+    });
+
+    let missing_replica_count = required_replica_count - current_replica_count;
+    let created = create_missing_replica(volume, context, missing_replica_count).await;
+    PollResult::Ok(if created == missing_replica_count {
         PollerState::Idle
     } else {
         PollerState::Busy
     })
+}
+
+/// The reconciler cannot recover a published volume with no replicas on its own.
+/// Emit the warning exactly once per agent lifetime per volume to avoid flooding
+/// logs at the reconcile cadence.
+fn warn_data_loss_once(volume: &mut OperationGuardArc<VolumeSpec>) {
+    if volume.as_ref().data_loss_warned() {
+        return;
+    }
+    // Mark first, then log. The lock is dropped before the
+    // tracing macro fires so the lock isn't held across logging.
+    volume.lock().set_data_loss_warned();
+    volume.warn_span(|| {
+        tracing::warn!(
+            "Volume has no remaining replicas; hot-spare will not create \
+            additional replicas since no rebuild is possible"
+        )
+    });
+}
+
+/// The volume has more replicas than its effective replica count: remove the unused ones.
+async fn remove_excess_replicas(
+    volume: &mut OperationGuardArc<VolumeSpec>,
+    context: &PollContext,
+    effective_replica_count: usize,
+    current_replica_count: usize,
+) -> PollResult {
+    volume.warn_span(|| {
+        tracing::warn!(
+            "The volume has '{}' replica(s) but it should only have '{}'. Removing...",
+            current_replica_count,
+            effective_replica_count
+        )
+    });
+
+    let diff = current_replica_count - effective_replica_count;
+    match volume
+        .remove_unused_volume_replicas(context.registry(), diff)
+        .await
+    {
+        Ok(_) => {
+            volume.info("Successfully removed unused replicas");
+        }
+        Err(error) => {
+            volume.warn_span(|| {
+                tracing::warn!(
+                    "Failed to remove unused replicas from volume, error: '{}'",
+                    error.full_string()
+                )
+            });
+        }
+    }
+    // The replica count is re-evaluated on the next poll.
+    PollResult::Ok(PollerState::Busy)
+}
+
+/// The next step of a replica move, once the volume is at its effective replica count.
+#[derive(Debug, PartialEq)]
+enum ReplicaMoveStep {
+    /// No spare is required, so the moving replica is evicted straight away.
+    EvictMoving,
+    /// The spare is online, so the moving replica can be retired.
+    RetireMoving,
+    /// The spare has to be unwound.
+    DestroySpare(ReplicaId),
+    /// The move was cancelled and there is no spare left: drop the move config.
+    EndMove,
+    /// Nothing to do yet (eg: the spare is still rebuilding).
+    Wait,
+}
+
+impl ReplicaMoveStep {
+    /// Decide the next step of the replica move.
+    fn next(cfg: &DrainConfig, volume_online: bool, spare_online: bool) -> Self {
+        if cfg.unsafe_evict() && volume_online {
+            return Self::EvictMoving;
+        }
+        match (&cfg.unwind_spare, cfg.spare()) {
+            (Some(UnwindSpare::Respare | UnwindSpare::Cancelled), Some(spare)) => {
+                return Self::DestroySpare(spare.clone());
+            }
+            // Drain cancelled: end the move, keeping the moving replica.
+            (Some(UnwindSpare::Cancelled), None) => return Self::EndMove,
+            _ => {}
+        }
+        if spare_online {
+            Self::RetireMoving
+        } else {
+            Self::Wait
+        }
+    }
+}
+
+/// The volume is at its expected replica count: drive the in-progress replica move.
+async fn progress_replica_move(
+    volume: &mut OperationGuardArc<VolumeSpec>,
+    nexus: Option<&mut OperationGuardArc<NexusSpec>>,
+    context: &PollContext,
+    cfg: DrainConfig,
+) -> PollResult {
+    let Ok(vol) = context.registry().volume(&volume.as_ref().uuid).await else {
+        return PollResult::Ok(PollerState::Idle);
+    };
+    let volume_online = vol.state().status == VolumeStatus::Online;
+
+    match ReplicaMoveStep::next(&cfg, volume_online, vol.spare_online()) {
+        ReplicaMoveStep::EvictMoving => {
+            info!(
+                "remove replica {:?} from volume {:?}",
+                cfg.moving_replica,
+                volume.as_ref().uuid
+            );
+            destroy_moving_replica(nexus, volume, context, &cfg.moving_replica).await
+        }
+        ReplicaMoveStep::RetireMoving => {
+            destroy_moving_replica(nexus, volume, context, &cfg.moving_replica).await
+        }
+        ReplicaMoveStep::DestroySpare(spare) => {
+            destroy_spare_replica(nexus, volume, context, &spare).await
+        }
+        ReplicaMoveStep::EndMove => {
+            remove_drain_status(context, cfg, volume).await;
+            PollResult::Ok(PollerState::Idle)
+        }
+        ReplicaMoveStep::Wait => PollResult::Ok(PollerState::Idle),
+    }
 }
 
 /// If the drain config records a spare replica which is no longer a replica of this volume (its
@@ -456,14 +525,18 @@ async fn forget_lost_spare(volume: &mut OperationGuardArc<VolumeSpec>, context: 
 async fn create_spare_replica(
     volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
-    mut drain_cfg: Option<DrainConfig>,
+    mut drain_cfg: DrainConfig,
     nexus: Option<&mut OperationGuardArc<NexusSpec>>,
 ) -> PollResult {
-    if let Some(drain_cfg) = drain_cfg.as_mut() {
-        if drain_cfg.placement_started_at.is_none() {
-            drain_cfg.update_placement_started_at();
-            update_drain_status(context, drain_cfg.clone(), volume).await;
-        }
+    volume.info_span(|| {
+        tracing::info!(
+            replica.uuid = %drain_cfg.moving_replica,
+            "Creating a spare replica for the moving replica"
+        )
+    });
+    if drain_cfg.placement_started_at.is_none() {
+        drain_cfg.update_placement_started_at();
+        update_drain_status(context, drain_cfg.clone(), volume).await;
     }
     match volume.create_volume_replicas(context.registry(), 1).await {
         Ok(result) => {
@@ -476,27 +549,18 @@ async fn create_spare_replica(
                     )
                 });
 
-                if let Some(drain_cfg) = drain_cfg.as_mut() {
-                    drain_cfg.update_spare(Some(replica.clone()));
-                    update_drain_status(context, drain_cfg.clone(), volume).await;
-                }
+                drain_cfg.update_spare(Some(replica.clone()));
+                update_drain_status(context, drain_cfg, volume).await;
                 Ok(PollerState::Idle)
             } else {
                 error!(volume.uuid = %volume.uuid(), "No spare replica was created for volume");
-                if let Some(drain_cfg) = drain_cfg {
-                    return evict_if_applicable(context, drain_cfg, nexus, volume).await;
-                }
-                Ok(PollerState::Busy)
+                evict_if_applicable(context, drain_cfg, nexus, volume).await
             }
         }
         Err(error) => {
             let reason = error.full_string();
             error!(volume.uuid = %volume.uuid(), "No spare replica was created for volume: {reason}");
-            //volume.error(&format!("Failed to create replicas: {reason}"));
-            if let Some(drain_cfg) = drain_cfg {
-                return evict_if_applicable(context, drain_cfg, nexus, volume).await;
-            }
-            Ok(PollerState::Busy)
+            evict_if_applicable(context, drain_cfg, nexus, volume).await
         }
     }
 }
@@ -576,32 +640,35 @@ async fn evict_if_applicable(
     }
 }
 
+/// Removes the replica from the volume, detaching it from the nexus first if there is one.
+async fn remove_volume_replica(
+    nexus: Option<&mut OperationGuardArc<NexusSpec>>,
+    volume: &mut OperationGuardArc<VolumeSpec>,
+    context: &PollContext,
+    replica: &ReplicaId,
+) -> Result<(), SvcError> {
+    match nexus {
+        Some(nexus) => {
+            let nexus_state = context.registry().nexus(nexus.uuid()).await?;
+            volume
+                .remove_volume_replica_in_use(context.registry(), nexus, &nexus_state, replica)
+                .await
+        }
+        None => {
+            volume
+                .remove_unused_volume_replica(context.registry(), replica)
+                .await
+        }
+    }
+}
+
 async fn destroy_spare_replica(
     nexus: Option<&mut OperationGuardArc<NexusSpec>>,
     volume: &mut OperationGuardArc<VolumeSpec>,
     context: &PollContext,
     spare_replica: &ReplicaId,
 ) -> PollResult {
-    let removed = match nexus {
-        Some(nexus) => match context.registry().nexus(nexus.uuid()).await {
-            Ok(nexus_state) => {
-                volume
-                    .remove_volume_replica_in_use(
-                        context.registry(),
-                        nexus,
-                        &nexus_state,
-                        spare_replica,
-                    )
-                    .await
-            }
-            Err(error) => Err(error),
-        },
-        None => {
-            volume
-                .remove_unused_volume_replica(context.registry(), spare_replica)
-                .await
-        }
-    };
+    let removed = remove_volume_replica(nexus, volume, context, spare_replica).await;
     if let Err(error) = &removed {
         volume.warn_span(|| {
             tracing::warn!(
@@ -633,26 +700,7 @@ async fn destroy_moving_replica(
     context: &PollContext,
     moving_replica: &ReplicaId,
 ) -> PollResult {
-    let removed = match nexus {
-        Some(nexus) => match context.registry().nexus(nexus.uuid()).await {
-            Ok(nexus_state) => {
-                volume
-                    .remove_volume_replica_in_use(
-                        context.registry(),
-                        nexus,
-                        &nexus_state,
-                        moving_replica,
-                    )
-                    .await
-            }
-            Err(error) => Err(error),
-        },
-        None => {
-            volume
-                .remove_unused_volume_replica(context.registry(), moving_replica)
-                .await
-        }
-    };
+    let removed = remove_volume_replica(nexus, volume, context, moving_replica).await;
     if let Err(error) = &removed {
         volume.warn_span(|| {
             tracing::warn!(
