@@ -123,6 +123,12 @@ pub const DEFAULT_NODE_AGENT_SERVER_IP: std::net::IpAddr =
 /// The default value to be assigned as node-agent GRPC port if not overridden.
 pub const DEFAULT_NODE_AGENT_SERVER_PORT: u16 = 11600;
 
+/// The default value to be assigned as dr-agent GRPC server addr if not overridden.
+pub const DEFAULT_DR_AGENT_SERVER_ADDR: &str = "[::]:11700";
+
+/// The default value to be assigned as dr-agent GRPC client addr if not overridden.
+pub const DEFAULT_DR_AGENT_CLIENT_ADDR: &str = "https://agent-dr:11700";
+
 /// The default worker threads cap for the api-rest service.
 pub const DEFAULT_REST_MAX_WORKER_THREADS: &str = "8";
 
