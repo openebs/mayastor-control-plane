@@ -227,6 +227,18 @@ pub(crate) async fn unstage_fs_volume(msg: &NodeUnstageVolumeRequest) -> Result<
             ));
         }
 
+        // Flush first: if anything else still references this superblock, the umount below only
+        // drops one mount and writes nothing back, and the detach that follows would throw the
+        // page cache away.
+        if let Err(error) = mount::syncfs_path(fs_staging_path).await {
+            error!(
+                volume.uuid = %volume_id,
+                "Failed to flush the file system at {}: {}",
+                fs_staging_path,
+                error
+            );
+        }
+
         if let Err(error) = mount::filesystem_unmount(fs_staging_path).await {
             return Err(failure!(
                 Code::Internal,
@@ -238,7 +250,8 @@ pub(crate) async fn unstage_fs_volume(msg: &NodeUnstageVolumeRequest) -> Result<
             ));
         }
 
-        mount::wait_fs_shutdown(&device, Some(mount.fstype)).await?;
+        // detach() waits (bounded) for the file system to let go of the device before
+        // disconnecting it.
     }
 
     Ok(())
