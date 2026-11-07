@@ -49,6 +49,7 @@ impl TaskPoller for OfflineRebuildReconciler {
         if !context.registry().offline_rebuild_enabled() {
             return PollResult::Ok(PollerState::Idle);
         }
+        tracing::info!("reached 52");
 
         let mut results = vec![];
         let volumes = context.specs().volumes_rsc();
@@ -130,10 +131,14 @@ async fn offline_rebuild_reconcile(
         Ok(guard) => guard,
         Err(_) => return PollResult::Ok(PollerState::Busy),
     };
+    tracing::info!("reached 134");
 
-    if !volume.as_ref().policy.self_heal || !volume.as_ref().status.created() {
+    if (!volume.as_ref().policy.self_heal && volume.as_ref().metadata.drain_config().is_none())
+        || !volume.as_ref().status.created()
+    {
         return PollResult::Ok(PollerState::Idle);
     }
+    tracing::info!("reached 141");
 
     // Early bails that don't need the volume state: a real (shared) publish is
     // not our concern, an unshared target we don't own is also not our concern
@@ -142,17 +147,20 @@ async fn offline_rebuild_reconcile(
     let has_offline_rebuild_target = match volume.as_ref().target() {
         Some(target) => {
             if target.protocol().is_some() || !volume.as_ref().is_offline_rebuild_target() {
+                tracing::info!("reached 151");
                 return PollResult::Ok(PollerState::Idle);
             }
             true
         }
         None => {
             if volume.as_ref().health_info_id().is_none() {
+                tracing::info!("reached 158");
                 return PollResult::Ok(PollerState::Idle);
             }
             false
         }
     };
+    tracing::info!("has offline rebuild target {}", has_offline_rebuild_target);
 
     // Must use the health-aware state: for an unpublished volume the plain
     // volume_state() derives status from the replica spec count (unchanged when a
@@ -174,14 +182,23 @@ async fn offline_rebuild_reconcile(
         return PollResult::Ok(PollerState::Idle);
     }
 
+    let spare_need_rebuilding = volume.as_ref().metadata.need_spare()
+        && !context
+            .registry()
+            .volume(volume.uuid())
+            .await
+            .is_ok_and(|v| v.spare_online());
+
     // Scale-up added a replica that was never part of the last-published
     // nexus, so it is definitively out-of-sync — not a transient blip the
     // grace period is meant to absorb. If that replica is also currently
     // online it can serve as an in-place rebuild target, so no fresh pool is
-    // needed either.
+    // needed either. Also,
     let has_in_place_target =
-        has_scale_up_rebuild_target(&volume, &volume_state.replica_topology, context).await?;
+        has_scale_up_rebuild_target(&volume, &volume_state.replica_topology, context).await?
+            || spare_need_rebuilding;
 
+    tracing::info!("has in place target {}", has_in_place_target);
     if !has_in_place_target {
         let degraded_for = volume.lock().metadata.offline_rebuild_degraded();
         let grace_period = context.registry().offline_rebuild_grace_period();

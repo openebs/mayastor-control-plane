@@ -328,8 +328,8 @@ pub struct DrainConfig {
     pub volume: VolumeId,
     /// Id of the pool moving_replica belongs to.
     pub pool: PoolId,
-    /// Id of the draining replica. It's None when it's evacuated successfully.
-    pub moving_replica: Option<ReplicaId>,
+    /// Id of the replica being moved off the pool.
+    pub moving_replica: ReplicaId,
     /// Id of the spare replica created as part of drain procedure.
     pub spare_replica: Option<SpareReplica>,
     /// Why a move's over-replicated spare is being removed.
@@ -349,9 +349,56 @@ impl DrainConfig {
             placement_started_at: None,
             volume,
             pool,
-            moving_replica: Some(replica_id),
+            moving_replica: replica_id,
             spare_replica,
             unwind_spare: None,
+        }
+    }
+
+    /// Return true if over-replication is not required.
+    pub fn unsafe_evict(&self) -> bool {
+        self.spare_replica.is_none()
+    }
+
+    /// Return true if over-replication is required but spare is not placed yet.
+    pub fn spare_not_placed(&self) -> bool {
+        self.spare_replica
+            .as_ref()
+            .is_none_or(|spare| spare.replica_id.is_none())
+    }
+
+    /// Updates spare_replica id.
+    pub fn update_spare(&mut self, replica: Option<ReplicaId>) {
+        if let Some(spare) = self.spare_replica.as_mut() {
+            spare.replica_id = replica;
+        }
+    }
+
+    /// Sets Spare replica to None.
+    pub fn remove_spare(&mut self) {
+        if let Some(spare) = self.spare_replica.as_mut() {
+            spare.replica_id = None;
+        }
+    }
+
+    /// Records current timestamp.
+    pub fn update_placement_started_at(&mut self) {
+        self.placement_started_at = Some(SystemTime::now());
+    }
+
+    /// Returns true if supplied replica id is the over-replicating spare.
+    pub fn is_spare(&self, replica: ReplicaId) -> bool {
+        self.spare_replica
+            .as_ref()
+            .is_some_and(|spare| spare.replica_id == Some(replica))
+    }
+
+    /// Returns spare replica id if already created.
+    pub fn spare(&self) -> Option<&ReplicaId> {
+        if let Some(spare) = &self.spare_replica {
+            spare.replica_id.as_ref()
+        } else {
+            None
         }
     }
 }
@@ -577,15 +624,32 @@ impl PoolSpec {
             if drain_state.phase == DrainPhase::Draining {
                 drain_state.phase = DrainPhase::Cancelled
             } else {
-                if let Some(CordonDrainState::Drain(drain)) = &self.cordon_drain {
-                    self.cordon_drain = drain
-                        .pool_cordon
-                        .as_ref()
-                        .map(|uc| CordonDrainState::Cordoned(uc.clone()));
-                    self.metadata.persisted.drain_state = None
-                }
+                self.clear_drain();
             }
         }
+    }
+
+    /// Removes the drain spec and state, reverting to the user's cordon, if any.
+    fn clear_drain(&mut self) {
+        if let Some(CordonDrainState::Drain(drain)) = &self.cordon_drain {
+            self.cordon_drain = drain
+                .pool_cordon
+                .as_ref()
+                .map(|uc| CordonDrainState::Cordoned(uc.clone()));
+            self.metadata.persisted.drain_state = None
+        }
+    }
+
+    /// Returns true if the pool is in Cancelled phase.
+    pub fn is_drain_cancelled(&self) -> bool {
+        self.drain_state()
+            .is_some_and(|s| s.phase == DrainPhase::Cancelled)
+    }
+
+    /// Returns true if the drain was cancelled and every replica move has been unwound.
+    pub fn drain_cancel_finished(&self) -> bool {
+        self.drain_state()
+            .is_some_and(|s| s.phase == DrainPhase::Cancelled && s.moving_replicas.is_empty())
     }
 
     /// Updates the drain phase of the pool.
@@ -600,9 +664,42 @@ impl PoolSpec {
     }
 
     /// Pushes replica move config to drain record.
-    pub fn updated_replica_move(&mut self, drain_config: DrainConfig) {
+    pub fn add_replica_move(&mut self, drain_config: DrainConfig) {
         if let Some(record) = self.drain_state_mut() {
             record.moving_replicas.push(drain_config);
+        }
+    }
+
+    /// Update the drain config with passed value.
+    pub fn update_replica_move(&mut self, drain_config: DrainConfig) {
+        if let Some(record) = self.drain_state_mut() {
+            if let Some(existing) = record
+                .moving_replicas
+                .iter_mut()
+                .find(|c| c.volume == drain_config.volume)
+            {
+                *existing = drain_config;
+            }
+        }
+    }
+
+    /// Removed the drain config.
+    pub fn remove_replica_move(&mut self, drain_config: DrainConfig) {
+        if let Some(record) = self.drain_state_mut() {
+            if let Some(i) = record
+                .moving_replicas
+                .iter()
+                .position(|r| r.volume == drain_config.volume)
+            {
+                record.moving_replicas.remove(i);
+            }
+        }
+    }
+
+    /// Clear the drain config.
+    pub fn clear_replica_move(&mut self) {
+        if let Some(record) = self.drain_state_mut() {
+            record.moving_replicas = vec![]
         }
     }
 
@@ -622,6 +719,31 @@ impl PoolSpec {
         )
     }
 
+    /// Returns true if the pool is in AwaitingCleanup phase.
+    pub fn is_awaiting_cleanup(&self) -> bool {
+        matches!(
+            self.drain_state().map(|r| r.phase()),
+            Some(DrainPhase::AwaitingCleanup)
+        )
+    }
+
+    /// Returns true if the pool is in PartiallyDrained phase.
+    pub fn is_partially_drained(&self) -> bool {
+        matches!(
+            self.drain_state().map(|r| r.phase()),
+            Some(DrainPhase::PartiallyDrained)
+        )
+    }
+
+    /// Returns true if drain spec accepts snapshot loss.
+    pub fn accept_snapshot_loss(&self) -> bool {
+        if let Some(spec) = self.drain_spec() {
+            spec.policy.snapshot_policy == SnapshotPolicy::AcceptLoss
+        } else {
+            false
+        }
+    }
+
     /// Returns the applied drain spec on the pool, if a drain has been admitted.
     pub fn drain_spec(&self) -> Option<&DrainSpec> {
         match self.cordon_drain.as_ref()? {
@@ -635,6 +757,29 @@ impl PoolSpec {
         match self.drain_spec() {
             Some(spec) => {
                 spec.policy.unsafe_evict || spec.policy.unsafe_rebuild_otherwise_evict.is_some()
+            }
+            None => false,
+        }
+    }
+
+    /// Returns true if unsafe_rebuild_otherwise_evict is 0 or the duration to place a
+    /// spare is elapsed.
+    pub fn evict_now(&self, placement_started_at: Option<SystemTime>) -> bool {
+        match self.drain_spec() {
+            Some(spec) => {
+                if let Some(duration) = spec.policy.unsafe_rebuild_otherwise_evict {
+                    if duration.is_zero() {
+                        return true;
+                    }
+                    if let Some(placement_started_at) = placement_started_at {
+                        if let Ok(elapsed) = placement_started_at.elapsed() {
+                            if elapsed > duration {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                false
             }
             None => false,
         }
@@ -813,7 +958,19 @@ impl SpecTransaction<PoolOperation> for PoolSpec {
                         }
                     }
                     DrainProgressOp::AddReplicaMove(drain_config) => {
-                        self.updated_replica_move(drain_config)
+                        self.add_replica_move(drain_config)
+                    }
+                    DrainProgressOp::UpdateReplicaMove(drain_config) => {
+                        self.update_replica_move(drain_config)
+                    }
+                    DrainProgressOp::RemoveReplicaMove(drain_config) => {
+                        self.remove_replica_move(drain_config)
+                    }
+                    DrainProgressOp::ClearReplicaMove() => self.clear_replica_move(),
+                    DrainProgressOp::ClearDrain => {
+                        if self.drain_cancel_finished() {
+                            self.clear_drain();
+                        }
                     }
                 },
             }
@@ -946,6 +1103,13 @@ pub enum DrainProgressOp {
     PhaseUpdate(DrainPhaseOp),
     /// Add a new replica move to the drain record.
     AddReplicaMove(DrainConfig),
+    /// Update an existing replica move.
+    UpdateReplicaMove(DrainConfig),
+    ClearReplicaMove(),
+    /// Remove the drain spec and state of a cancelled drain, once all its moves are unwound.
+    ClearDrain,
+    /// Remove an existing replica move.
+    RemoveReplicaMove(DrainConfig),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -1340,7 +1504,7 @@ impl From<DrainConfig> for models::ReplicaMoveConfig {
         Self {
             placement_started_at: config.placement_started_at.map(rfc3339),
             volume: config.volume.to_string(),
-            moving_replica: config.moving_replica.map(|id| id.to_string()),
+            moving_replica: config.moving_replica.to_string(),
             spare_replica: config
                 .spare_replica
                 .and_then(|spare| spare.replica_id)

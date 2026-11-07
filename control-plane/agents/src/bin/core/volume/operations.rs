@@ -658,6 +658,10 @@ impl OperationGuardArc<VolumeSpec> {
     pub(crate) async fn update_move_config(&mut self, request: ReplicaMoveRequester) {
         self.lock().metadata.update_replica_move(request);
     }
+    /// Removes the replica move config.
+    pub(crate) async fn remove_move_config(&mut self) {
+        self.lock().metadata.remove_replica_move();
+    }
     /// Publish a volume, recording the supplied `target_mode` on the resulting
     /// `target_config`. This is the internal entry point used by callers that
     /// need to set up a target for a non-app purpose (the offline-rebuild

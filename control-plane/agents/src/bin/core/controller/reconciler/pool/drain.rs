@@ -1,7 +1,8 @@
 use crate::controller::{resources::OperationGuardArc, task_poller::PollContext};
+
 use stor_port::types::v0::{
     store::{
-        pool::{DrainConfig, DrainPhase, DrainProgressOp, PhaseReason, PoolSpec},
+        pool::{DrainConfig, DrainPhase, DrainProgressOp, PhaseReason, PoolSpec, UnwindSpare},
         replica::ReplicaSpec,
         volume::{ReplicaMoveRequester, VolumeSpec},
     },
@@ -23,10 +24,19 @@ pub(crate) async fn drain_state_promoter(context: &PollContext) {
 }
 
 /// Restores the volume runtime replica move metadata from the persisted drain record of every
-/// draining pool.
+/// draining or cancelled pool.
+///
+/// For a cancelled pool, a move whose spare is placed is restored as `Cancelled` (`unwind_spare`
+/// is runtime-only), so the hot-spare reconciler destroys the spare and ends the move. A move
+/// without a placed spare has nothing to unwind and is dropped from the pool record instead.
 pub(crate) async fn populate_missing_replica_move(context: &PollContext) {
-    for pool_id in context.specs().pools_rsc_draining() {
-        let Ok(_pool_guard) = context.specs().guarded_pool(&pool_id).await else {
+    let pools = context
+        .specs()
+        .pools_rsc_draining()
+        .into_iter()
+        .chain(context.specs().pools_rsc_cancelled());
+    for pool_id in pools {
+        let Ok(mut pool_guard) = context.specs().guarded_pool(&pool_id).await else {
             continue;
         };
         let Ok(pool_spec) = context.specs().pool(&pool_id) else {
@@ -38,12 +48,45 @@ pub(crate) async fn populate_missing_replica_move(context: &PollContext) {
         else {
             continue;
         };
-        for drain_config in moves {
+        let is_cancelled = pool_spec.is_drain_cancelled();
+        for mut drain_config in moves {
             let Ok(mut volume) = context.specs().volume(&drain_config.volume).await else {
                 continue;
             };
             if volume.as_ref().has_replica_move() {
                 continue;
+            }
+            if is_cancelled {
+                if drain_config.spare_not_placed() {
+                    info!(
+                        pool.id = %pool_id,
+                        volume.uuid = %drain_config.volume,
+                        "Drain cancelled, spare not placed, dropping replica move"
+                    );
+                    let request = DrainProgressOp::RemoveReplicaMove(drain_config);
+                    if let Err(error) = pool_guard
+                        .update_drain_state(context.registry(), request)
+                        .await
+                    {
+                        error!(
+                            pool.id = %pool_id,
+                            error = %error,
+                            "Failed to drop replica move of cancelled drain"
+                        );
+                    }
+                    continue;
+                }
+                drain_config.unwind_spare = Some(UnwindSpare::Cancelled);
+            } else if let Some(replica) = drain_config.spare() {
+                if let Ok(replica) = context.registry().replica(replica).await {
+                    if context
+                        .specs()
+                        .pool(&replica.pool_id)
+                        .is_ok_and(|p| p.drain_state().is_some())
+                    {
+                        drain_config.unwind_spare = Some(UnwindSpare::Respare);
+                    }
+                }
             }
             info!(
                 pool.id = %pool_id,
@@ -84,6 +127,12 @@ pub(crate) async fn advance_draining_pools(context: &PollContext) {
             usage.snap_count,
         ) {
             (0, 0, 0) => {
+                if let Some(state) = pool_guard.as_ref().drain_state() {
+                    // This can happen if volumes were deleted by user while drain was in progress.
+                    if !state.moving_replicas.is_empty() {
+                        empty_move_config(context, &mut pool_guard).await;
+                    }
+                }
                 pool_guard
                     .update_drain_phase(context.registry(), DrainPhase::Drained, None)
                     .await;
@@ -145,6 +194,110 @@ pub(crate) async fn advance_draining_pools(context: &PollContext) {
     }
 }
 
+/// Finalises cancelled drains: once every replica move of a Cancelled pool is unwound, removes
+/// the drain spec and state, reverting to the user's cordon, if any.
+pub(crate) async fn handle_cancelled(context: &PollContext) {
+    for pool in context.specs().pools_rsc_cancel_finished() {
+        let Ok(mut pool_guard) = context.specs().guarded_pool(&pool).await else {
+            continue;
+        };
+        match pool_guard
+            .update_drain_state(context.registry(), DrainProgressOp::ClearDrain)
+            .await
+        {
+            Ok(_) => info!(pool.id = %pool, "Cancelled drain finalised, drain state removed"),
+            Err(error) => error!(
+                pool.id = %pool,
+                error = %error,
+                "Failed to finalise cancelled drain"
+            ),
+        }
+    }
+}
+
+/// Set drain phase to Drained if usage is 0 on AwaitingCleanup pool.
+pub(crate) async fn handle_awaiting_cleanup(context: &PollContext) {
+    for pool in context.specs().pools_rsc_awaiting_cleanup() {
+        let Ok(mut pool_guard) = context.specs().guarded_pool(&pool).await else {
+            continue;
+        };
+        let Ok(empty) = context.registry().is_pool_empty(&pool).await else {
+            continue;
+        };
+        if empty {
+            pool_guard
+                .update_drain_phase(context.registry(), DrainPhase::Drained, None)
+                .await;
+        }
+    }
+}
+
+/// Goes through all PartiallyDrained pools and checks if they can be moved back to Queued state.
+pub(crate) async fn handle_partially_drained(context: &PollContext) {
+    for pool in context.specs().pools_rsc_partially_drained() {
+        let Ok(mut pool_guard) = context.specs().guarded_pool(&pool).await else {
+            continue;
+        };
+        let Some(drain_state) = pool_guard.as_ref().drain_state() else {
+            continue;
+        };
+        let Some(reason) = drain_state.reason.as_ref() else {
+            continue;
+        };
+        match reason {
+            PhaseReason::OfflinePool => {
+                if context.registry().has_pool_state(&pool).await {
+                    pool_guard
+                        .update_drain_phase(
+                            context.registry(),
+                            DrainPhase::Queued,
+                            Some(PhaseReason::WaitingForSlot),
+                        )
+                        .await
+                }
+                if context
+                    .registry()
+                    .is_node_online(&pool_guard.as_ref().node)
+                    .await
+                    && pool_guard
+                        .as_ref()
+                        .effective_cordon()
+                        .is_some_and(|c| c.import)
+                {
+                    pool_guard
+                        .update_drain_phase(
+                            context.registry(),
+                            DrainPhase::PartiallyDrained,
+                            Some(PhaseReason::ImportCordoned),
+                        )
+                        .await
+                }
+            }
+            PhaseReason::SingleReplicaEviction => {
+                if !pool_guard.as_ref().is_drain_unsafe() {
+                    pool_guard
+                        .update_drain_phase(
+                            context.registry(),
+                            DrainPhase::Queued,
+                            Some(PhaseReason::WaitingForSlot),
+                        )
+                        .await
+                }
+            }
+            PhaseReason::SnapshotsRetained if pool_guard.as_ref().accept_snapshot_loss() => {
+                pool_guard
+                    .update_drain_phase(
+                        context.registry(),
+                        DrainPhase::Queued,
+                        Some(PhaseReason::WaitingForSlot),
+                    )
+                    .await
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Create move config for the replicas owned by volume.
 /// Also, Ensure max concurrent replica move limit is checked.
 async fn create_replica_move_config(context: &PollContext, pool: &mut OperationGuardArc<PoolSpec>) {
@@ -194,13 +347,13 @@ async fn create_replica_move_config(context: &PollContext, pool: &mut OperationG
                 replica.uuid,
                 !drain_spec.policy.unsafe_evict,
             );
-            update_move_config(context, drain_config, pool, &mut volume_guard).await;
+            add_move_config(context, drain_config, pool, &mut volume_guard).await;
         }
     }
 }
 
 /// Update replica move config to pool drain record and the owner volume metadata.
-async fn update_move_config(
+async fn add_move_config(
     context: &PollContext,
     drain_config: DrainConfig,
     pool: &mut OperationGuardArc<PoolSpec>,
@@ -217,6 +370,18 @@ async fn update_move_config(
         info!(pool.id = %pool.id(), "Drain config updated successfully");
         let move_requester = ReplicaMoveRequester::PoolDrain(drain_config);
         volume.update_move_config(move_requester).await;
+    }
+}
+
+/// Clear all move replica configs from Pool metadata.
+async fn empty_move_config(context: &PollContext, pool: &mut OperationGuardArc<PoolSpec>) {
+    let request = DrainProgressOp::ClearReplicaMove();
+    if let Err(err) = pool.update_drain_state(context.registry(), request).await {
+        error!(
+            pool.id = %pool.id(),
+            error = %err,
+            "Failed to clear drain config"
+        );
     }
 }
 

@@ -69,6 +69,9 @@ impl TaskPoller for PoolReconciler {
         }
         drain::drain_state_promoter(context).await;
         drain::advance_draining_pools(context).await;
+        drain::handle_awaiting_cleanup(context).await;
+        drain::handle_partially_drained(context).await;
+        drain::handle_cancelled(context).await;
         Self::squash_results(results)
     }
 
