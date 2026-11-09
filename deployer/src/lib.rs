@@ -422,6 +422,9 @@ pub struct StartOptions {
     /// Drain requests beyond this stay queued.
     #[clap(long)]
     pub max_concurrent_pool_drain: Option<u16>,
+    /// Maximum number of replicas moved concurrently from a draining pool.
+    #[clap(long)]
+    pub pool_replica_move_limit: Option<u32>,
     #[clap(long, hide = true)]
     no_deprecated_access_mode: bool,
 
@@ -793,6 +796,13 @@ impl StartOptions {
     #[must_use]
     pub fn with_max_concurrent_pool_drain(mut self, max: Option<u16>) -> Self {
         self.max_concurrent_pool_drain = max;
+        self
+    }
+
+    /// Maximum number of replicas moved concurrently from a draining pool.
+    #[must_use]
+    pub fn with_pool_replica_move_limit(mut self, max: Option<u32>) -> Self {
+        self.pool_replica_move_limit = max;
         self
     }
 
