@@ -91,7 +91,7 @@ pub struct StartOptions {
     ///
     /// Brings up a single-node, ephemeral store on the host port named by
     /// `infra::s3::S3_HOST_PORT`, with the bucket and credentials the checked-in
-    /// `RC_HOST_local` in `shell.nix` names, so `rc` reaches it with no flags.
+    /// `RC_HOST_local` in `nix/shells/test.nix` names, so `rc` reaches it with no flags.
     #[clap(long)]
     pub rustfs: bool,
 
