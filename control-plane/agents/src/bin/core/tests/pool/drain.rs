@@ -1,0 +1,1271 @@
+#![cfg(test)]
+
+//! End-to-end (deployer) coverage for pool drain.
+//!
+//! A drained pool stays cordoned, which would otherwise leak into the placement of the following
+//! scenario. So scenarios which need the same cluster setup share one cluster, which is reset
+//! (volumes deleted, drains cancelled and verified to be gone) after every scenario, see
+//! [`run_scenarios`]. Scenarios needing a different setup get their own cluster.
+
+use deployer_cluster::{Cluster, ClusterBuilder, FindVolumeRequest};
+use std::{collections::HashMap, time::Duration};
+use stor_port::types::v0::openapi::models::{
+    self, PoolDrainPhase, PoolDrainPhaseReason, VolumePolicy, VolumeStatus,
+};
+use uuid::Uuid;
+
+const RECONCILE_PERIOD_MS: u64 = 250;
+const POOL_SIZE: u64 = 100 * 1024 * 1024;
+const VOLUME_SIZE: u64 = 10 * 1024 * 1024;
+const DRAIN_TIMEOUT: Duration = Duration::from_secs(90);
+const POLL: Duration = Duration::from_millis(100);
+
+/// Polls `check` every [`POLL`] until it returns `Ok`. Once `timeout` has elapsed the last `Err`
+/// (the current observation) is reported in the panic.
+async fn wait_for<T, Fut>(what: &str, timeout: Duration, mut check: impl FnMut() -> Fut) -> T
+where
+    Fut: std::future::Future<Output = Result<T, String>>,
+{
+    let start = std::time::Instant::now();
+    loop {
+        match check().await {
+            Ok(value) => return value,
+            Err(current) if start.elapsed() > timeout => {
+                panic!("Timeout waiting for {what}, current: {current}")
+            }
+            Err(_) => tokio::time::sleep(POLL).await,
+        }
+    }
+}
+
+/// Builds a cluster with `nodes` io-engines, each with one tmpfs pool, tuned for drain tests.
+async fn drain_cluster(
+    nodes: u32,
+    max_concurrent_drains: Option<u16>,
+    replica_move_limit: Option<u32>,
+) -> Cluster {
+    drain_cluster_with_csi(nodes, max_concurrent_drains, replica_move_limit, false).await
+}
+
+/// Same as [`drain_cluster`], optionally with the csi node so that I/O can be issued to a
+/// published volume.
+async fn drain_cluster_with_csi(
+    nodes: u32,
+    max_concurrent_drains: Option<u16>,
+    replica_move_limit: Option<u32>,
+    csi: bool,
+) -> Cluster {
+    let reconcile = Duration::from_millis(RECONCILE_PERIOD_MS);
+    ClusterBuilder::builder()
+        .with_rest(true)
+        .with_csi(csi, csi)
+        .with_io_engines(nodes)
+        .with_tmpfs_pool(POOL_SIZE)
+        .with_cache_period("250ms")
+        .with_reconcile_period(reconcile, reconcile)
+        .with_options(|o| {
+            // The csi node connects to the nexus from within its own container, which needs
+            // isolated io-engines.
+            o.with_isolated_io_engine(csi)
+                .with_max_concurrent_pool_drain(max_concurrent_drains)
+                .with_pool_replica_move_limit(replica_move_limit)
+        })
+        .build()
+        .await
+        .unwrap()
+}
+
+/// Creates a volume with `replicas` replicas, optionally publishing it on the first node.
+async fn create_volume(cluster: &Cluster, replicas: u8, publish: bool) -> Uuid {
+    let api_client = cluster.rest_v00();
+    let volume_api = api_client.volumes_api();
+    let id = Uuid::new_v4();
+    let body =
+        models::CreateVolumeBody::new(VolumePolicy::new(true), replicas, VOLUME_SIZE, false, false);
+    volume_api.put_volume(&id, body).await.unwrap();
+    if publish {
+        volume_api
+            .put_volume_target(
+                &id,
+                models::PublishVolumeBody::new_all(
+                    HashMap::new(),
+                    None,
+                    cluster.node(0).to_string(),
+                    models::VolumeShareProtocol::Nvmf,
+                    None,
+                    cluster.csi_node(0),
+                    None,
+                ),
+            )
+            .await
+            .expect("Should publish volume");
+    }
+    id
+}
+
+/// The replicas owned by the volume.
+async fn volume_replicas(cluster: &Cluster, volume: &Uuid) -> Vec<models::Replica> {
+    let api = cluster.rest_v00();
+    let specs = api.specs_api().get_specs().await.unwrap();
+    let owned = specs
+        .replicas
+        .iter()
+        .filter(|r| r.owners.volume == Some(*volume))
+        .map(|r| r.uuid)
+        .collect::<Vec<_>>();
+    api.replicas_api()
+        .get_replicas()
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|r| owned.contains(&r.uuid))
+        .collect()
+}
+
+/// The replica specs owned by the volume which are not (being) deleted. Unlike
+/// [`volume_replicas`] these are also reported for replicas on a stopped node, which have no state.
+async fn volume_replica_specs(cluster: &Cluster, volume: &Uuid) -> Vec<models::ReplicaSpec> {
+    cluster
+        .rest_v00()
+        .specs_api()
+        .get_specs()
+        .await
+        .unwrap()
+        .replicas
+        .into_iter()
+        .filter(|r| r.owners.volume == Some(*volume) && r.status == models::SpecStatus::Created)
+        .collect()
+}
+
+/// The ids of the pools hosting a replica of the volume.
+async fn volume_pools(cluster: &Cluster, volume: &Uuid) -> Vec<String> {
+    volume_replicas(cluster, volume)
+        .await
+        .into_iter()
+        .map(|r| r.pool)
+        .collect()
+}
+
+/// Starts draining the pool with the given request.
+async fn start_drain(cluster: &Cluster, pool: &str, request: models::PoolDrainReq) {
+    cluster
+        .rest_v00()
+        .pools_api()
+        .put_pool_drain(pool, request)
+        .await
+        .expect("Should accept the drain request");
+}
+
+/// Cancels the drain of the pool.
+async fn cancel_drain(cluster: &Cluster, pool: &str) {
+    let request = models::PoolCordonReq {
+        drain: Some(true),
+        ..Default::default()
+    };
+    cluster
+        .rest_v00()
+        .pools_api()
+        .del_pool_cordon(pool, request)
+        .await
+        .expect("Should accept the drain cancel request");
+}
+
+/// The current drain state of the pool, None if it has none.
+async fn drain_state(cluster: &Cluster, pool: &str) -> Option<models::PoolDrainStateExt> {
+    cluster
+        .rest_v00()
+        .pools_api()
+        .get_pool_drain(pool)
+        .await
+        .ok()
+}
+
+/// Whether the pool still carries a drain spec.
+async fn has_drain_spec(cluster: &Cluster, pool: &str) -> bool {
+    let pool = cluster.rest_v00().pools_api().get_pool(pool).await.unwrap();
+    matches!(
+        pool.spec.and_then(|s| s.cordon_drain),
+        Some(models::PoolCordonDrain::drain(_))
+    )
+}
+
+/// Wait until the pool reaches the phase, and return its drain state.
+async fn wait_for_phase(
+    cluster: &Cluster,
+    pool: &str,
+    phase: PoolDrainPhase,
+    timeout: Duration,
+) -> models::PoolDrainStateExt {
+    wait_for(
+        &format!("pool '{pool}' to reach {phase:?}"),
+        timeout,
+        || async {
+            match drain_state(cluster, pool).await {
+                Some(state) if state.phase == phase => Ok(state),
+                state => Err(format!("{state:?}")),
+            }
+        },
+    )
+    .await
+}
+
+/// Wait until the pool is draining with at least one replica move in flight.
+async fn wait_for_active_move(cluster: &Cluster, pool: &str) -> models::PoolDrainStateExt {
+    let what = format!("a replica move on pool '{pool}'");
+    wait_for(&what, Duration::from_secs(30), || async {
+        match drain_state(cluster, pool).await {
+            Some(state)
+                if state.phase == PoolDrainPhase::Draining && !state.moving_replicas.is_empty() =>
+            {
+                Ok(state)
+            }
+            state => Err(format!("{state:?}")),
+        }
+    })
+    .await
+}
+
+/// Wait until the volume is Online.
+async fn wait_volume_online(cluster: &Cluster, volume: &Uuid, timeout: Duration) {
+    wait_for(
+        &format!("volume '{volume}' to be Online"),
+        timeout,
+        || async {
+            let vol = cluster.rest_v00().volumes_api().get_volume(volume).await;
+            match vol {
+                Ok(v) if v.state.status == VolumeStatus::Online => Ok(()),
+                vol => Err(format!("{vol:?}")),
+            }
+        },
+    )
+    .await
+}
+
+/// Wait until the volume has exactly `count` replicas.
+async fn wait_volume_replica_count(
+    cluster: &Cluster,
+    volume: &Uuid,
+    count: usize,
+    timeout: Duration,
+) -> Vec<models::Replica> {
+    let what = format!("volume '{volume}' to have {count} replicas");
+    wait_for(&what, timeout, || async {
+        let replicas = volume_replicas(cluster, volume).await;
+        if replicas.len() == count {
+            Ok(replicas)
+        } else {
+            Err(format!("{replicas:?}"))
+        }
+    })
+    .await
+}
+
+/// A safe drain of a pool hosting a replica of a 2-replica volume over-replicates (spare on the
+/// third node), rebuilds the spare and then removes the replica from the drained pool.
+async fn drain_moves_replica_to_spare(cluster: &Cluster) {
+    let volume = create_volume(cluster, 2, true).await;
+
+    let source = volume_pools(cluster, &volume).await.remove(0);
+    start_drain(cluster, &source, models::PoolDrainReq::default()).await;
+
+    let mut max_replicas = 0;
+    let start = std::time::Instant::now();
+    loop {
+        max_replicas = max_replicas.max(volume_replicas(cluster, &volume).await.len());
+        let state = drain_state(cluster, &source).await;
+        if state.is_some_and(|s| s.phase == PoolDrainPhase::Drained) {
+            break;
+        }
+        assert!(
+            start.elapsed() < DRAIN_TIMEOUT,
+            "Timeout waiting for Drained"
+        );
+        tokio::time::sleep(POLL).await;
+    }
+    // The spare is added before the source replica is removed, so the volume is over-replicated
+    // for a short while: 2 replicas + 1 spare, and never more than one spare.
+    assert_eq!(
+        max_replicas, 3,
+        "Expected exactly one extra replica during the move, saw at most {max_replicas}"
+    );
+
+    let state = drain_state(cluster, &source).await.unwrap();
+    assert!(
+        state.moving_replicas.is_empty(),
+        "No move may be left behind: {state:?}"
+    );
+
+    let replicas = wait_volume_replica_count(cluster, &volume, 2, DRAIN_TIMEOUT).await;
+    assert!(
+        replicas.iter().all(|r| r.pool != source),
+        "No replica may stay on the drained pool: {replicas:?}"
+    );
+    wait_volume_online(cluster, &volume, DRAIN_TIMEOUT).await;
+
+    let vol = cluster
+        .rest_v00()
+        .volumes_api()
+        .get_volume(&volume)
+        .await
+        .unwrap();
+    assert_eq!(vol.spec.num_replicas, 2, "The replica count is unchanged");
+    let target = vol.state.target.expect("Volume is still published");
+    assert_eq!(target.children.len(), 2, "The nexus has 2 children");
+    // Child uris carry the replica uuid, not the pool name, so match them against the replicas.
+    let replica_ids = replicas
+        .iter()
+        .map(|r| r.uuid.to_string())
+        .collect::<Vec<_>>();
+    assert!(
+        target
+            .children
+            .iter()
+            .all(|c| replica_ids.iter().any(|id| c.uri.contains(id))),
+        "The nexus must only use the volume's current replicas: {target:?}"
+    );
+}
+
+/// A single replica volume is moved by a safe drain, but an unsafe drain refuses to evict it.
+async fn drain_single_replica_volume(cluster: &Cluster) {
+    let volume = create_volume(cluster, 1, false).await;
+
+    // Safe drain: the single replica is moved through a spare.
+    let first = volume_pools(cluster, &volume).await.remove(0);
+    start_drain(cluster, &first, models::PoolDrainReq::default()).await;
+    wait_for_phase(cluster, &first, PoolDrainPhase::Drained, DRAIN_TIMEOUT).await;
+
+    let replicas = wait_volume_replica_count(cluster, &volume, 1, DRAIN_TIMEOUT).await;
+    let second = replicas[0].pool.clone();
+    assert_ne!(second, first, "The replica must have left the drained pool");
+    wait_volume_online(cluster, &volume, DRAIN_TIMEOUT).await;
+
+    // Unsafe drain of the pool which now holds the only copy: the drain must not make progress.
+    let unsafe_drain = models::PoolDrainReq {
+        unsafe_evict: Some(true),
+        ..Default::default()
+    };
+    start_drain(cluster, &second, unsafe_drain).await;
+    let state = wait_for_phase(
+        cluster,
+        &second,
+        PoolDrainPhase::PartiallyDrained,
+        DRAIN_TIMEOUT,
+    )
+    .await;
+    assert_eq!(
+        state.reason,
+        Some(PoolDrainPhaseReason::SingleReplicaEviction)
+    );
+    let replicas = volume_replicas(cluster, &volume).await;
+    assert_eq!(replicas.len(), 1, "The only replica must be kept");
+    assert_eq!(replicas[0].pool, second);
+}
+
+/// On a cluster with no pool to host the spare, a safe drain keeps the replica in place. Scaling
+/// is refused while the move is pending, and deleting the volume lets the drain finish.
+async fn drain_without_spare_candidate_blocks(cluster: &Cluster) {
+    let volume = create_volume(cluster, 2, false).await;
+
+    let source = volume_pools(cluster, &volume).await.remove(0);
+    start_drain(cluster, &source, models::PoolDrainReq::default()).await;
+    wait_for_active_move(cluster, &source).await;
+
+    // Nothing may be removed, as we could not over replicate somewhere.
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    let state = drain_state(cluster, &source).await.unwrap();
+    assert_eq!(state.phase, PoolDrainPhase::Draining);
+    let replicas = volume_replicas(cluster, &volume).await;
+    assert_eq!(
+        replicas.len(),
+        2,
+        "Both replicas must be kept: {replicas:?}"
+    );
+    assert!(replicas.iter().any(|r| r.pool == source));
+
+    // The replica count can't be changed while a move is pending.
+    let error = cluster
+        .rest_v00()
+        .volumes_api()
+        .put_volume_replica_count(&volume, 3)
+        .await
+        .expect_err("Scale up must be refused during a replica move");
+    assert!(
+        format!("{error:?}").contains("waiting for one of its replicas to move"),
+        "Unexpected error: {error:?}"
+    );
+
+    // The volume goes away mid-drain: the pool has nothing left, and finishes.
+    cluster
+        .rest_v00()
+        .volumes_api()
+        .del_volume(&volume)
+        .await
+        .unwrap();
+    let state = wait_for_phase(cluster, &source, PoolDrainPhase::Drained, DRAIN_TIMEOUT).await;
+    assert!(state.moving_replicas.is_empty());
+}
+
+/// Cancelling a drain whose spare could not be placed drops the move and the drain, leaving the
+/// volume untouched.
+async fn drain_cancel_without_spare(cluster: &Cluster) {
+    let volume = create_volume(cluster, 2, false).await;
+
+    let source = volume_pools(cluster, &volume).await.remove(0);
+    start_drain(cluster, &source, models::PoolDrainReq::default()).await;
+    wait_for_active_move(cluster, &source).await;
+
+    cancel_drain(cluster, &source).await;
+
+    wait_drain_finalised(cluster, &source).await;
+
+    let replicas = volume_replicas(cluster, &volume).await;
+    assert_eq!(replicas.len(), 2, "No replica may be touched: {replicas:?}");
+    assert!(replicas.iter().any(|r| r.pool == source));
+    let vol = cluster
+        .rest_v00()
+        .volumes_api()
+        .get_volume(&volume)
+        .await
+        .unwrap();
+    assert_eq!(
+        vol.state.status,
+        VolumeStatus::Online,
+        "Volume must be untouched: {vol:?}"
+    );
+
+    // With the move gone, the replica count can be changed again.
+    cluster
+        .rest_v00()
+        .volumes_api()
+        .put_volume_replica_count(&volume, 1)
+        .await
+        .expect("Scale down is allowed once the move is gone");
+}
+
+/// Cancelling a drain whose spare is already placed lets the in-flight move complete, after which
+/// the drain spec and state are removed.
+async fn drain_cancel_with_spare(cluster: &Cluster) {
+    let volume = create_volume(cluster, 2, true).await;
+
+    let source = volume_pools(cluster, &volume).await.remove(0);
+    start_drain(cluster, &source, models::PoolDrainReq::default()).await;
+
+    // Cancel as soon as the spare is placed, while the volume is over-replicated.
+    wait_for("the spare to be placed", DRAIN_TIMEOUT, || async {
+        let replicas = volume_replicas(cluster, &volume).await;
+        (replicas.len() >= 3)
+            .then_some(())
+            .ok_or(format!("{replicas:?}"))
+    })
+    .await;
+    cancel_drain(cluster, &source).await;
+
+    // The in-flight move completes, after which the drain spec and state are removed.
+    wait_drain_finalised(cluster, &source).await;
+    assert!(
+        drain_state(cluster, &source).await.is_none(),
+        "The drain state must be removed once the cancelled drain is finalised"
+    );
+}
+
+/// A single replica volume on 3 nodes: draining the pool hosting the placed spare while the move
+/// of the source pool is in flight. Both pools eventually get drained.
+async fn drain_respares_single_replica_volume(cluster: &Cluster) {
+    // Published, so the spare has to be rebuilt through the nexus, which keeps the window in
+    // which the spare exists open long enough to drain its pool.
+    let volume = create_volume(cluster, 1, true).await;
+
+    let source = volume_pools(cluster, &volume).await.remove(0);
+    start_drain(cluster, &source, models::PoolDrainReq::default()).await;
+
+    // Wait for the spare to be placed, and find the pool hosting it.
+    let spare_pool = wait_for("the spare to be placed", DRAIN_TIMEOUT, || async {
+        let replicas = volume_replicas(cluster, &volume).await;
+        match replicas.iter().find(|r| r.pool != source) {
+            Some(spare) => Ok(spare.pool.clone()),
+            None => Err(format!("{replicas:?}")),
+        }
+    })
+    .await;
+
+    start_drain(cluster, &spare_pool, models::PoolDrainReq::default()).await;
+
+    // Both pools end up drained.
+    wait_for_phase(cluster, &source, PoolDrainPhase::Drained, DRAIN_TIMEOUT * 2).await;
+    wait_for_phase(
+        cluster,
+        &spare_pool,
+        PoolDrainPhase::Drained,
+        DRAIN_TIMEOUT * 2,
+    )
+    .await;
+}
+
+/// With `unsafe_evict`, the replica is removed from the pool without placing a spare.
+async fn drain_unsafe_evict(cluster: &Cluster) {
+    let volume = create_volume(cluster, 2, false).await;
+
+    let source = volume_pools(cluster, &volume).await.remove(0);
+    let request = models::PoolDrainReq {
+        unsafe_evict: Some(true),
+        ..Default::default()
+    };
+    start_drain(cluster, &source, request).await;
+    wait_for_phase(cluster, &source, PoolDrainPhase::Drained, DRAIN_TIMEOUT).await;
+
+    let replicas = volume_replicas(cluster, &volume).await;
+    assert!(
+        replicas.iter().all(|r| r.pool != source),
+        "The replica must be evicted from the drained pool: {replicas:?}"
+    );
+}
+
+/// With `unsafe_rebuild_otherwise_evict`, the replica is evicted only once the grace period for
+/// placing a spare has elapsed.
+async fn drain_unsafe_rebuild_otherwise_evict(cluster: &Cluster) {
+    const GRACE: Duration = Duration::from_secs(8);
+
+    let volume = create_volume(cluster, 2, false).await;
+
+    let source = volume_pools(cluster, &volume).await.remove(0);
+    let request = models::PoolDrainReq {
+        unsafe_rebuild_otherwise_evict: Some(format!("{}s", GRACE.as_secs())),
+        ..Default::default()
+    };
+    let started = std::time::Instant::now();
+    start_drain(cluster, &source, request).await;
+    wait_for_active_move(cluster, &source).await;
+
+    // No spare can be placed, so the replica stays until the grace period has passed.
+    tokio::time::sleep(GRACE / 2).await;
+    assert!(
+        volume_replicas(cluster, &volume)
+            .await
+            .iter()
+            .any(|r| r.pool == source),
+        "The replica may not be evicted before the grace period"
+    );
+
+    wait_for_phase(cluster, &source, PoolDrainPhase::Drained, DRAIN_TIMEOUT).await;
+    assert!(
+        started.elapsed() >= GRACE,
+        "Evicted before the grace period of {GRACE:?}: {:?}",
+        started.elapsed()
+    );
+    let replicas = volume_replicas(cluster, &volume).await;
+    assert!(replicas.iter().all(|r| r.pool != source), "{replicas:?}");
+}
+
+/// With the concurrent drain cap at 1, the second pool waits in `Queued` until the first one is
+/// done, and both eventually finish.
+async fn drain_respects_max_concurrent_drains(cluster: &Cluster) {
+    let first_volume = create_volume(cluster, 2, false).await;
+    let second_volume = create_volume(cluster, 2, false).await;
+
+    let pool_a = volume_pools(cluster, &first_volume).await.remove(0);
+    let pool_b = volume_pools(cluster, &second_volume)
+        .await
+        .into_iter()
+        .find(|p| *p != pool_a)
+        .expect("The volume has replicas on 2 distinct pools");
+
+    // Requested in order, so `pool_a` is the first in line.
+    start_drain(cluster, &pool_a, models::PoolDrainReq::default()).await;
+    start_drain(cluster, &pool_b, models::PoolDrainReq::default()).await;
+
+    let mut saw_queued_behind_draining = false;
+    let start = std::time::Instant::now();
+    loop {
+        let a = drain_state(cluster, &pool_a).await.map(|s| s.phase);
+        let b = drain_state(cluster, &pool_b).await.map(|s| s.phase);
+        assert!(
+            !(a == Some(PoolDrainPhase::Draining) && b == Some(PoolDrainPhase::Draining)),
+            "Both pools are draining despite the cap of 1"
+        );
+        assert!(
+            !(b == Some(PoolDrainPhase::Draining) && a == Some(PoolDrainPhase::Queued)),
+            "pool_b was promoted ahead of pool_a, violating FIFO order"
+        );
+        saw_queued_behind_draining |=
+            a == Some(PoolDrainPhase::Draining) && b == Some(PoolDrainPhase::Queued);
+        if a == Some(PoolDrainPhase::Drained) && b == Some(PoolDrainPhase::Drained) {
+            break;
+        }
+        assert!(
+            start.elapsed() < DRAIN_TIMEOUT * 2,
+            "Timeout waiting for both pools to drain: {a:?} {b:?}"
+        );
+        tokio::time::sleep(POLL).await;
+    }
+    assert!(
+        saw_queued_behind_draining,
+        "One pool must have waited in Queued while the other was Draining"
+    );
+
+    for volume in [first_volume, second_volume] {
+        let replicas = wait_volume_replica_count(cluster, &volume, 2, DRAIN_TIMEOUT).await;
+        assert!(
+            replicas
+                .iter()
+                .all(|r| r.pool != pool_a && r.pool != pool_b),
+            "Replicas must leave both drained pools: {replicas:?}"
+        );
+        wait_volume_online(cluster, &volume, DRAIN_TIMEOUT).await;
+    }
+}
+
+/// With a replica move limit of 1, a pool never has more than one move in flight, even if
+/// several volumes have a replica on it.
+async fn drain_respects_replica_move_limit(cluster: &Cluster) {
+    let mut volumes = vec![];
+    for _ in 0..3 {
+        volumes.push(create_volume(cluster, 2, false).await);
+    }
+
+    // 6 replicas over 3 pools: at least one pool hosts 2 or more of them.
+    let mut per_pool: HashMap<String, usize> = HashMap::new();
+    for volume in &volumes {
+        for pool in volume_pools(cluster, volume).await {
+            *per_pool.entry(pool).or_default() += 1;
+        }
+    }
+    let (source, hosted) = per_pool.into_iter().max_by_key(|(_, n)| *n).unwrap();
+    assert!(hosted >= 2, "The test needs several replicas on one pool");
+
+    start_drain(cluster, &source, models::PoolDrainReq::default()).await;
+
+    let mut max_moves = 0;
+    let start = std::time::Instant::now();
+    loop {
+        let state = drain_state(cluster, &source).await;
+        if let Some(state) = state {
+            max_moves = max_moves.max(state.moving_replicas.len());
+            assert!(
+                state.moving_replicas.len() <= 1,
+                "The move limit of 1 was exceeded: {state:?}"
+            );
+            if state.phase == PoolDrainPhase::Drained {
+                break;
+            }
+        }
+        assert!(
+            start.elapsed() < DRAIN_TIMEOUT * 2,
+            "Timeout waiting for the pool to drain"
+        );
+        tokio::time::sleep(POLL).await;
+    }
+    assert_eq!(max_moves, 1, "At least one move must have been observed");
+
+    for volume in volumes {
+        let replicas = wait_volume_replica_count(cluster, &volume, 2, DRAIN_TIMEOUT).await;
+        assert!(replicas.iter().all(|r| r.pool != source), "{replicas:?}");
+        wait_volume_online(cluster, &volume, DRAIN_TIMEOUT).await;
+    }
+}
+
+/// Stages the volume on csi node 0 and runs one small random-write fio pass against it.
+/// Writes to a stopped replica fail right away, so the nexus faults that child quickly.
+async fn run_small_fio(cluster: &Cluster, volume: &models::Volume) {
+    let mut node = cluster.csi_node_client(0).await.unwrap();
+    node.node_stage_volume(volume, HashMap::from([("ioTimeout".into(), "11".into())]))
+        .await
+        .unwrap();
+    let device = node
+        .internal()
+        .find_volume(FindVolumeRequest {
+            volume_id: volume.spec.uuid.to_string(),
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .device_path;
+    let cmd = [
+        "taskset",
+        "-c",
+        cluster.fio_taskset().as_str(),
+        "fio",
+        "--direct=1",
+        "--ioengine=libaio",
+        "--bs=4k",
+        "--iodepth=16",
+        "--size=4m",
+        "--loops=1",
+        "--numjobs=1",
+        "--name=fio",
+        "--readwrite=randwrite",
+    ]
+    .into_iter()
+    .map(ToString::to_string)
+    .chain([format!("--filename={}", device.trim_end())])
+    .collect::<Vec<_>>();
+    let (code, out) = cluster
+        .composer()
+        .exec(&cluster.csi_container(0), cmd)
+        .await
+        .unwrap();
+    assert_eq!(
+        code,
+        Some(0),
+        "fio must pass on the remaining healthy children: {out}"
+    );
+}
+
+/// Wait until `check` holds for the nexus children backed by `replica`.
+async fn wait_child(
+    cluster: &Cluster,
+    volume: &Uuid,
+    replica: &Uuid,
+    what: &str,
+    check: impl Fn(&[&models::Child]) -> bool,
+) {
+    let what = format!("the child of replica '{replica}' to {what}");
+    wait_for(&what, DRAIN_TIMEOUT, || async {
+        let vol = cluster
+            .rest_v00()
+            .volumes_api()
+            .get_volume(volume)
+            .await
+            .unwrap();
+        let children = vol
+            .state
+            .target
+            .as_ref()
+            .map(|t| {
+                t.children
+                    .iter()
+                    .filter(|c| c.uri.contains(&replica.to_string()))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        match vol.state.target.is_some() && check(&children) {
+            true => Ok(()),
+            false => Err(format!("{children:?}")),
+        }
+    })
+    .await
+}
+
+/// Wait until the nexus child backed by `replica` is no longer Online.
+async fn wait_child_unhealthy(cluster: &Cluster, volume: &Uuid, replica: &Uuid) {
+    wait_child(cluster, volume, replica, "fault", |c| {
+        c.iter().any(|c| c.state != models::ChildState::Online)
+    })
+    .await
+}
+
+/// Resets the cluster to a clean slate, so that another scenario can use it: all volumes (and
+/// their snapshots) are deleted, any drain is cancelled and finalised, and every pool is verified
+/// to be free of drain state, cordons and replicas.
+async fn reset_cluster(cluster: &Cluster, csi: bool) {
+    let api = cluster.rest_v00();
+    let volumes = api
+        .volumes_api()
+        .get_volumes(1000, None, None)
+        .await
+        .unwrap()
+        .entries;
+    for volume in volumes {
+        let id = volume.spec.uuid;
+        if csi {
+            // Not staged is fine.
+            let mut node = cluster.csi_node_client(0).await.unwrap();
+            node.node_unstage_volume(&volume).await.ok();
+        }
+        if volume.state.target.is_some() {
+            api.volumes_api()
+                .del_volume_target(&id, Some(true), None)
+                .await
+                .expect("Should unpublish the volume");
+        }
+        let snapshots = api
+            .snapshots_api()
+            .get_volumes_snapshots(1000, None, Some(&id), None)
+            .await
+            .unwrap()
+            .entries;
+        for snapshot in snapshots {
+            api.snapshots_api()
+                .del_snapshot(&snapshot.definition.spec.uuid)
+                .await
+                .expect("Should delete the snapshot");
+        }
+        api.volumes_api()
+            .del_volume(&id)
+            .await
+            .expect("Should delete the volume");
+    }
+
+    // With the volumes gone, there is nothing left to move: cancelling finalises right away.
+    for pool in api.pools_api().get_pools(None).await.unwrap() {
+        if has_drain_spec(cluster, &pool.id).await {
+            cancel_drain(cluster, &pool.id).await;
+        }
+        wait_drain_finalised(cluster, &pool.id).await;
+    }
+
+    let start = std::time::Instant::now();
+    loop {
+        let replicas = api.replicas_api().get_replicas().await.unwrap();
+        let mut dirty = replicas
+            .iter()
+            .map(|r| format!("replica {}", r.uuid))
+            .collect::<Vec<_>>();
+        for pool in api.pools_api().get_pools(None).await.unwrap() {
+            let spec = pool.spec.expect("Pool spec");
+            if spec.cordon_drain.is_some() || drain_state(cluster, &pool.id).await.is_some() {
+                dirty.push(format!("pool {} still cordoned/draining", pool.id));
+            }
+        }
+        if dirty.is_empty() {
+            return;
+        }
+        assert!(
+            start.elapsed() < DRAIN_TIMEOUT,
+            "The cluster is not clean after the scenario: {dirty:?}"
+        );
+        tokio::time::sleep(POLL).await;
+    }
+}
+
+/// Runs the scenarios one after the other on the cluster, resetting it after each of them so the
+/// next one starts clean.
+macro_rules! run_scenarios {
+    ($cluster:expr, csi: $csi:expr, $($scenario:ident),+ $(,)?) => {{
+        $(
+            eprintln!("scenario: {}", stringify!($scenario));
+            $scenario($cluster).await;
+            reset_cluster($cluster, $csi).await;
+        )+
+    }};
+}
+
+/// Wait until the drain spec of the pool is gone.
+async fn wait_drain_finalised(cluster: &Cluster, pool: &str) {
+    wait_for(
+        &format!("the drain of '{pool}' to be finalised"),
+        DRAIN_TIMEOUT,
+        || async {
+            match has_drain_spec(cluster, pool).await {
+                true => Err("still has a drain spec".to_string()),
+                false => Ok(()),
+            }
+        },
+    )
+    .await
+}
+
+/// A published `replicas` replica volume (on a cluster with at least `replicas` + 1 nodes), drain
+/// started and the spare placed. The source is the replica on the nexus node, if any. Then an
+/// unrelated replica (not on the source pool, nor on the nexus node) is Faulted by stopping its io-engine
+/// and issuing a small fio. The move can't complete while that replica is unhealthy.
+/// Returns (volume, original replicas, source pool, faulted replica).
+async fn drain_with_unrelated_faulted(
+    cluster: &Cluster,
+    replicas: u8,
+    snapshot: bool,
+) -> (Uuid, Vec<models::Replica>, String, models::Replica) {
+    let volume_id = create_volume(cluster, replicas, true).await;
+    if snapshot {
+        cluster
+            .rest_v00()
+            .snapshots_api()
+            .put_volume_snapshot(&volume_id, &Uuid::new_v4())
+            .await
+            .expect("Should create the snapshot");
+    }
+
+    let originals = volume_replicas(cluster, &volume_id).await;
+    let nexus_node = cluster.node(0).to_string();
+    let source = originals
+        .iter()
+        .find(|r| r.node == nexus_node)
+        .unwrap_or(&originals[0])
+        .pool
+        .clone();
+    start_drain(cluster, &source, models::PoolDrainReq::default()).await;
+
+    // Wait for the spare to be placed.
+    wait_for("the spare to be placed", DRAIN_TIMEOUT, || async {
+        let placed = volume_replicas(cluster, &volume_id).await;
+        (placed.len() > replicas as usize)
+            .then_some(())
+            .ok_or(format!("{placed:?}"))
+    })
+    .await;
+
+    let victim = originals
+        .iter()
+        .find(|r| r.pool != source && r.node != nexus_node)
+        .expect("An unrelated replica which is not on the nexus node")
+        .clone();
+    cluster.composer().stop(&victim.node).await.unwrap();
+
+    let volume = cluster
+        .rest_v00()
+        .volumes_api()
+        .get_volume(&volume_id)
+        .await
+        .unwrap();
+    run_small_fio(cluster, &volume).await;
+    wait_child_unhealthy(cluster, &volume_id, &victim.uuid).await;
+
+    // If the move already completed we lost the race against the rebuild: fail clearly.
+    assert!(
+        has_drain_spec(cluster, &source).await,
+        "The move completed before the unrelated replica faulted, the test lost the race"
+    );
+    (volume_id, originals, source, victim)
+}
+
+/// Cancelling a drain while the spare is online and an unrelated replica is Faulted: the move
+/// can't complete while that replica is unhealthy. Once its node is back and it rebuilds, the move
+/// completes and the drain spec and state are removed.
+async fn drain_cancel_with_unrelated_faulted(cluster: &Cluster) {
+    let (_volume, _originals, source, victim) =
+        drain_with_unrelated_faulted(cluster, 2, false).await;
+
+    cancel_drain(cluster, &source).await;
+
+    cluster.composer().start(&victim.node).await.unwrap();
+    wait_drain_finalised(cluster, &source).await;
+    assert!(
+        drain_state(cluster, &source).await.is_none(),
+        "The drain state must be removed once the cancelled drain is finalised"
+    );
+}
+
+/// Same as above but with a snapshot: the faulted replica holds snapshot data, so it is not
+/// removed and the move stays in place. Once the replica's node is back and it rebuilds, the move
+/// completes and the drain spec and state are removed.
+async fn drain_cancel_with_unrelated_faulted_and_snapshot(cluster: &Cluster) {
+    let (volume, _originals, source, victim) = drain_with_unrelated_faulted(cluster, 2, true).await;
+
+    cancel_drain(cluster, &source).await;
+
+    // Hold for ~10 reconcile periods, checking on every poll that nothing was removed.
+    let polls = (10 * RECONCILE_PERIOD_MS / POLL.as_millis() as u64).max(1);
+    for _ in 0..polls {
+        let replicas = volume_replica_specs(cluster, &volume).await;
+        assert!(
+            replicas.iter().any(|r| r.uuid == victim.uuid),
+            "A replica of a volume with snapshots must not be removed: {replicas:?}"
+        );
+        assert!(
+            has_drain_spec(cluster, &source).await,
+            "The move must stay while an unrelated replica is unhealthy"
+        );
+        tokio::time::sleep(POLL).await;
+    }
+
+    // The unrelated replica's node comes back: the child rebuilds (partially) and the move
+    // can now complete.
+    cluster.composer().start(&victim.node).await.unwrap();
+    wait_drain_finalised(cluster, &source).await;
+    assert!(
+        drain_state(cluster, &source).await.is_none(),
+        "The drain state must be removed once the cancelled drain is finalised"
+    );
+}
+
+/// Wait until the nexus child backed by `replica` is not Online, or is removed from the nexus.
+async fn wait_child_not_online(cluster: &Cluster, volume: &Uuid, replica: &Uuid) {
+    wait_child(cluster, volume, replica, "go offline", |c| {
+        c.iter().all(|c| c.state != models::ChildState::Online)
+    })
+    .await
+}
+
+/// Wait until the nexus child backed by `replica` is Online.
+async fn wait_child_online(cluster: &Cluster, volume: &Uuid, replica: &Uuid) {
+    wait_child(cluster, volume, replica, "be Online", |c| {
+        c.iter().any(|c| c.state == models::ChildState::Online)
+    })
+    .await
+}
+
+/// A published 3 replica volume with replicas R1, R2 and R3 on 4 nodes, the nexus on R2's node.
+/// R3's pool is drained, so R4 is placed as the spare and rebuilt from R2. R1 and R3 go down while
+/// R4 is being placed. Once R4 is Online the moving replica R3 must still be kept, as long as the
+/// unrelated R1 is not Online again. Once R1 is back Online the moving replica is removed.
+async fn drain_keeps_moving_replica_while_unrelated_faulted_and_spare_online(cluster: &Cluster) {
+    let volume_id = create_volume(cluster, 3, true).await;
+
+    let originals = volume_replicas(cluster, &volume_id).await;
+    let nexus_node = cluster.node(0).to_string();
+    // R2 is kept up, the nexus node must never be stopped so R1 and R3 are not on it.
+    let r2 = originals
+        .iter()
+        .find(|r| r.node == nexus_node)
+        .unwrap_or(&originals[0])
+        .clone();
+    let (r3, r1) = {
+        let mut others = originals.iter().filter(|r| r.uuid != r2.uuid).cloned();
+        (others.next().unwrap(), others.next().unwrap())
+    };
+
+    start_drain(cluster, &r3.pool, models::PoolDrainReq::default()).await;
+
+    // Wait for the spare (R4) to be placed.
+    let r4 = wait_for("the spare to be placed", DRAIN_TIMEOUT, || async {
+        let replicas = volume_replicas(cluster, &volume_id).await;
+        match replicas
+            .iter()
+            .find(|r| !originals.iter().any(|o| o.uuid == r.uuid))
+        {
+            Some(spare) => Ok(spare.clone()),
+            None => Err(format!("{replicas:?}")),
+        }
+    })
+    .await;
+
+    // Wait for R4 to be added to the nexus, where it rebuilds from R2.
+    let start = std::time::Instant::now();
+    loop {
+        let vol = cluster
+            .rest_v00()
+            .volumes_api()
+            .get_volume(&volume_id)
+            .await
+            .unwrap();
+        let added = vol.state.target.as_ref().is_some_and(|target| {
+            target
+                .children
+                .iter()
+                .any(|c| c.uri.contains(&r4.uuid.to_string()))
+        });
+        if added {
+            break;
+        }
+        assert!(
+            start.elapsed() < DRAIN_TIMEOUT,
+            "Timeout waiting for the spare to be added to the nexus"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    // Bring down R1 and R3 while R4 is rebuilding from R2.
+    cluster.composer().stop(&r1.node).await.unwrap();
+    cluster.composer().stop(&r3.node).await.unwrap();
+    let volume = cluster
+        .rest_v00()
+        .volumes_api()
+        .get_volume(&volume_id)
+        .await
+        .unwrap();
+    run_small_fio(cluster, &volume).await;
+    wait_child_not_online(cluster, &volume_id, &r1.uuid).await;
+    wait_child_not_online(cluster, &volume_id, &r3.uuid).await;
+
+    // If the move already completed we lost the race against the rebuild: fail clearly.
+    assert!(
+        has_drain_spec(cluster, &r3.pool).await,
+        "The move completed before R1 and R3 faulted, the test lost the race"
+    );
+
+    wait_child_online(cluster, &volume_id, &r4.uuid).await;
+
+    // Hold for ~20 reconcile periods, checking on every poll that R3 and R1 are kept.
+    let polls = (20 * RECONCILE_PERIOD_MS / POLL.as_millis() as u64).max(1);
+    for _ in 0..polls {
+        let replicas = volume_replica_specs(cluster, &volume_id).await;
+        let remaining = replicas
+            .iter()
+            .map(|r| (r.uuid.to_string(), r.pool.to_string()))
+            .collect::<Vec<_>>();
+        assert!(
+            replicas.iter().any(|r| r.uuid == r3.uuid),
+            "Moving replica R3 {} (pool {}) was removed while unrelated R1 {} was still down and spare R4 {} was Online; remaining: {remaining:?}",
+            r3.uuid,
+            r3.pool,
+            r1.uuid,
+            r4.uuid,
+        );
+        assert!(
+            replicas.iter().any(|r| r.uuid == r1.uuid),
+            "Unrelated replica R1 {} (pool {}) was removed; remaining: {remaining:?}",
+            r1.uuid,
+            r1.pool,
+        );
+        assert!(
+            has_drain_spec(cluster, &r3.pool).await,
+            "The move must stay while an unrelated replica is unhealthy"
+        );
+        tokio::time::sleep(POLL).await;
+    }
+
+    // R1 is back, the moving replica can now be removed.
+    cluster.composer().start(&r1.node).await.unwrap();
+    wait_child_online(cluster, &volume_id, &r1.uuid).await;
+    let start = std::time::Instant::now();
+    loop {
+        let replicas = volume_replica_specs(cluster, &volume_id).await;
+        if replicas.iter().all(|r| r.uuid != r3.uuid) {
+            assert!(
+                replicas.iter().any(|r| r.uuid == r1.uuid),
+                "The unrelated replica must not be removed: {replicas:?}"
+            );
+            break;
+        }
+        assert!(
+            start.elapsed() < DRAIN_TIMEOUT,
+            "Timeout waiting for the moving replica to be removed: {replicas:?}"
+        );
+        tokio::time::sleep(POLL).await;
+    }
+
+    // The removed replica can only be destroyed once its node is back, completing the drain.
+    cluster.composer().start(&r3.node).await.unwrap();
+    wait_for_phase(cluster, &r3.pool, PoolDrainPhase::Drained, DRAIN_TIMEOUT).await;
+}
+
+/// A published 2-replica volume with a snapshot, to be drained from the pool hosting its first
+/// replica. Returns (volume, source pool).
+async fn volume_with_snapshot(cluster: &Cluster) -> (Uuid, String) {
+    let volume = create_volume(cluster, 2, true).await;
+    cluster
+        .rest_v00()
+        .snapshots_api()
+        .put_volume_snapshot(&volume, &Uuid::new_v4())
+        .await
+        .expect("Should create the snapshot");
+    let source = volume_pools(cluster, &volume).await.remove(0);
+    (volume, source)
+}
+
+/// The number of snapshots the pool reports.
+async fn pool_snapshot_count(cluster: &Cluster, pool: &str) -> u64 {
+    let pool = cluster.rest_v00().pools_api().get_pool(pool).await.unwrap();
+    pool.state
+        .and_then(|s| s.snapshot_count)
+        .expect("The pool reports its snapshot count")
+}
+
+/// Once the drain is done, the volume lives on 2 other pools, still has its snapshot, and the
+/// drained pool holds no snapshot.
+async fn assert_drained_with_snapshot_lost(cluster: &Cluster, volume: &Uuid, source: &str) {
+    let replicas = wait_volume_replica_count(cluster, volume, 2, DRAIN_TIMEOUT).await;
+    assert!(
+        replicas.iter().all(|r| r.pool != source),
+        "No replica may stay on the drained pool: {replicas:?}"
+    );
+    wait_volume_online(cluster, volume, DRAIN_TIMEOUT).await;
+    assert_eq!(pool_snapshot_count(cluster, source).await, 0);
+    let snapshots = cluster
+        .rest_v00()
+        .snapshots_api()
+        .get_volumes_snapshots(1000, None, Some(volume), None)
+        .await
+        .unwrap()
+        .entries;
+    assert_eq!(snapshots.len(), 1, "The volume snapshot must survive");
+}
+
+/// With AcceptLoss, the snapshots left on the pool once its replica is moved are destroyed and
+/// the pool goes straight to Drained.
+async fn drain_accept_loss_destroys_snapshots(cluster: &Cluster) {
+    let (volume, source) = volume_with_snapshot(cluster).await;
+
+    let request = models::PoolDrainReq {
+        snapshot_policy: Some(models::PoolDrainSnapshotPolicy::AcceptLoss),
+        ..Default::default()
+    };
+    start_drain(cluster, &source, request).await;
+    wait_for_phase(cluster, &source, PoolDrainPhase::Drained, DRAIN_TIMEOUT).await;
+
+    assert_drained_with_snapshot_lost(cluster, &volume, &source).await;
+}
+
+/// With the default Ignore policy the pool stops at PartiallyDrained (SnapshotsRetained) and
+/// keeps its snapshot. Re-draining with AcceptLoss destroys the snapshot and drains the pool.
+async fn drain_retained_snapshots_then_accept_loss(cluster: &Cluster) {
+    let (volume, source) = volume_with_snapshot(cluster).await;
+
+    start_drain(cluster, &source, models::PoolDrainReq::default()).await;
+    let state = wait_for_phase(
+        cluster,
+        &source,
+        PoolDrainPhase::PartiallyDrained,
+        DRAIN_TIMEOUT,
+    )
+    .await;
+    assert_eq!(state.reason, Some(PoolDrainPhaseReason::SnapshotsRetained));
+    assert_eq!(
+        pool_snapshot_count(cluster, &source).await,
+        1,
+        "The snapshot is retained on the pool"
+    );
+
+    let request = models::PoolDrainReq {
+        snapshot_policy: Some(models::PoolDrainSnapshotPolicy::AcceptLoss),
+        ..Default::default()
+    };
+    start_drain(cluster, &source, request).await;
+    wait_for_phase(cluster, &source, PoolDrainPhase::Drained, DRAIN_TIMEOUT).await;
+
+    assert_drained_with_snapshot_lost(cluster, &volume, &source).await;
+}
+
+/// 2 nodes: no third pool to host a spare.
+#[tokio::test]
+async fn drain_two_nodes() {
+    let cluster = drain_cluster(2, None, None).await;
+    run_scenarios!(
+        &cluster,
+        csi: false,
+        drain_single_replica_volume,
+        drain_without_spare_candidate_blocks,
+        drain_cancel_without_spare,
+        drain_unsafe_evict,
+        drain_unsafe_rebuild_otherwise_evict,
+    );
+}
+
+/// 3 nodes: a spare can be placed on the third node.
+#[tokio::test]
+async fn drain_three_nodes() {
+    let cluster = drain_cluster(3, None, None).await;
+    run_scenarios!(
+        &cluster,
+        csi: false,
+        drain_moves_replica_to_spare,
+        drain_cancel_with_spare,
+        drain_respares_single_replica_volume,
+        drain_accept_loss_destroys_snapshots,
+        drain_retained_snapshots_then_accept_loss,
+    );
+}
+
+/// 3 nodes with the csi node, so I/O can fault replicas of a published volume.
+#[tokio::test]
+async fn drain_three_nodes_csi() {
+    let cluster = drain_cluster_with_csi(3, None, None, true).await;
+    run_scenarios!(
+        &cluster,
+        csi: true,
+        drain_cancel_with_unrelated_faulted,
+        drain_cancel_with_unrelated_faulted_and_snapshot,
+    );
+}
+
+/// These need a specific control plane configuration, so each gets its own cluster.
+#[tokio::test]
+async fn drain_max_concurrent_drains() {
+    let cluster = drain_cluster(4, Some(1), None).await;
+    run_scenarios!(&cluster, csi: false, drain_respects_max_concurrent_drains);
+}
+
+#[tokio::test]
+async fn drain_replica_move_limit() {
+    let cluster = drain_cluster(3, None, Some(1)).await;
+    run_scenarios!(&cluster, csi: false, drain_respects_replica_move_limit);
+}
+
+#[tokio::test]
+async fn drain_four_nodes_csi() {
+    let cluster = drain_cluster_with_csi(4, None, None, true).await;
+    run_scenarios!(
+        &cluster,
+        csi: true,
+        drain_keeps_moving_replica_while_unrelated_faulted_and_spare_online
+    );
+}

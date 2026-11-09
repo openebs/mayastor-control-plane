@@ -317,7 +317,11 @@ impl ResourceCordon for OperationGuardArc<PoolSpec> {
         };
         let spec_clone = self.lock().clone();
         let spec_clone = self
-            .start_update(registry, &spec_clone, PoolOperation::Uncordon(request.clone()))
+            .start_update(
+                registry,
+                &spec_clone,
+                PoolOperation::Uncordon(request.clone()),
+            )
             .await?;
 
         self.complete_update(registry, Ok(()), spec_clone).await?;
