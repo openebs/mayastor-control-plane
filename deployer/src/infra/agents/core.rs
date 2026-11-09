@@ -92,6 +92,9 @@ impl ComponentAction for CoreAgent {
         if let Some(max_drains) = options.max_concurrent_pool_drain {
             binary = binary.with_args(vec!["--max-concurrent-pool-drain", &max_drains.to_string()]);
         }
+        if let Some(limit) = options.pool_replica_move_limit {
+            binary = binary.with_args(vec!["--pool-replica-move-limit", &limit.to_string()]);
+        }
         if !options.no_deprecated_access_mode {
             binary = binary.with_arg("--deprecated-access-mode");
         }
