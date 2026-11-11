@@ -4,6 +4,7 @@
 pub(crate) mod app_node;
 /// The controller logic for all resources.
 pub(crate) mod controller;
+pub(crate) mod dr_pair;
 /// The nexus related operations.
 pub(crate) mod nexus;
 /// The node related operations.
@@ -400,7 +401,8 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         .configure(volume::configure)
         .configure(watch::configure)
         .configure(registry::configure)
-        .configure(app_node::configure);
+        .configure(app_node::configure)
+        .configure(dr_pair::configure);
 
     registry.start().await;
     let result = run_grpc_server(

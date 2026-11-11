@@ -9,6 +9,7 @@ use stor_port::types::v0::store::{
 };
 
 mod app_node;
+mod dr_pair;
 mod migration;
 mod nexus;
 mod node;

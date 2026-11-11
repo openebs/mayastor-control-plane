@@ -16,6 +16,7 @@ use stor_port::{
             definitions::{
                 key_prefix_obj, ObjectKey, StorableObject, StorableObjectType, Store, StoreError,
             },
+            dr_pair::DrClusterPairSpec,
             nexus::NexusSpec,
             node::NodeSpec,
             pool::PoolSpec,
@@ -25,7 +26,7 @@ use stor_port::{
             OperationMode, SpecStatus, SpecTransaction,
         },
         transport::{
-            AppNodeId, NexusId, NodeId, PoolId, ReplicaId, ReplicaTopology, SnapshotId,
+            AppNodeId, DrPairId, NexusId, NodeId, PoolId, ReplicaId, ReplicaTopology, SnapshotId,
             SnapshotLossDetail, SnapshotLossInfo, VolumeId, VolumeLossDetail, VolumeLossInfo,
         },
     },
@@ -942,6 +943,8 @@ pub(crate) struct ResourceSpecs {
     /// Top-level volume snapshots.
     pub(crate) volume_snapshots: ResourceMutexMap<SnapshotId, VolumeSnapshot>,
     pub(crate) app_nodes: ResourceMutexMap<AppNodeId, AppNodeSpec>,
+    /// Dr cluster pairs, keyed by the id volumes refer to them by.
+    pub(crate) dr_pairs: ResourceMutexMap<DrPairId, DrClusterPairSpec>,
 }
 
 impl ResourceSpecsLocked {
@@ -964,6 +967,7 @@ impl ResourceSpecsLocked {
             StorableObjectType::ReplicaSpec,
             StorableObjectType::VolumeSnapshot,
             StorableObjectType::AppNodeSpec,
+            StorableObjectType::DrClusterPairSpec,
         ];
         for spec in &spec_types {
             self.populate_specs(store, *spec, legacy_prefix_present, etcd_max_page_size)
@@ -1121,6 +1125,14 @@ impl ResourceSpecsLocked {
                         obj_type: StorableObjectType::AppNodeSpec,
                     })?;
                 resource_specs.app_nodes.populate(specs);
+            }
+            StorableObjectType::DrClusterPairSpec => {
+                let specs = Self::deserialise_specs::<DrClusterPairSpec>(store_values).context(
+                    Deserialise {
+                        obj_type: StorableObjectType::DrClusterPairSpec,
+                    },
+                )?;
+                resource_specs.dr_pairs.populate(specs);
             }
             _ => {
                 // Not all spec types are persisted in the store.
