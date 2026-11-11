@@ -2650,6 +2650,121 @@ paths:
             $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  /dr/pairs:
+    get:
+      tags:
+        - DisasterRecovery
+      operationId: get_dr_pairs
+      parameters:
+        - in: query
+          name: show_secrets
+          description: |-
+            Return the store credentials in full. Left out, the secret key is absent from
+            the response: it is read back only when a caller says it wants it.
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DrClusterPair'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
+  '/dr/pairs/{pair_id}':
+    put:
+      tags:
+        - DisasterRecovery
+      operationId: put_dr_pair
+      description: |-
+        Create the pair, or adopt one that already exists with the same terms. Repeating the
+        call is not an error, so an operator reconciling the same desired state converges
+        rather than failing on the second pass.
+      parameters:
+        - in: path
+          name: pair_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/DrPairId'
+          x-actix-tail-match: true
+      requestBody:
+        description: Terms of the cluster pair.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDrClusterPairBody'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrClusterPair'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
+    get:
+      tags:
+        - DisasterRecovery
+      operationId: get_dr_pair
+      parameters:
+        - in: path
+          name: pair_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/DrPairId'
+          x-actix-tail-match: true
+        - in: query
+          name: show_secrets
+          description: |-
+            Return the store credentials in full. Left out, the secret key is absent from
+            the response: it is read back only when a caller says it wants it.
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrClusterPair'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
+    delete:
+      tags:
+        - DisasterRecovery
+      operationId: del_dr_pair
+      parameters:
+        - in: path
+          name: pair_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/DrPairId'
+          x-actix-tail-match: true
+      responses:
+        '204':
+          description: OK
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
 components:
   securitySchemes:
     JWT:
@@ -2673,6 +2788,159 @@ components:
       description: storage node identifier
       example: io-engine-1
       type: string
+    DrPairId:
+      description: |-
+        Identifier of a dr cluster pair.
+
+        A single path segment: not empty, and carrying no `/`. The path matches the rest of
+        the url so that the id survives a proxy that does not preserve percent-encoding, so
+        an id carrying a `/` would be read as part of the path; the api refuses one.
+      example: dr-west
+      type: string
+    DrClusterId:
+      description: |-
+        The name of one side's subtree in the store. Each side writes only under its own:
+        `<prefix>/dr/<dr-id>/<cluster>/<clusterUid>/`. A pair names both, so the peer's
+        pair has to mirror them - its `cluster` is this pair's `peer` and the other way
+        about - or neither side looks where the other writes.
+
+        A label rather than an identity: the uid is what distinguishes two clusters given
+        the same name, which is why one cluster can hold both ends of a relationship.
+
+        A single path segment, like the pair's id: not empty, and carrying no `/`, since
+        the store layout is built from it.
+      example: east
+      type: string
+    DrClusterUid:
+      description: |-
+        A cluster's own identity, as its control plane keys its persistent store on. Filled
+        in by the control plane rather than supplied: it is not the caller's to choose.
+      example: 9c2b7e14-5f3a-4a21-9f0e-1d2c3b4a5e6f
+      type: string
+    DrS3Transport:
+      description: |-
+        An s3-compatible object store both clusters can reach.
+
+        An s3-compatible object store both clusters can reach.
+
+        Credentials are optional: absent, the agent uses its own environment.
+      type: object
+      properties:
+        endpoint:
+          description: Endpoint URL of the store.
+          type: string
+        bucket:
+          description: Bucket the relationships live in.
+          type: string
+        prefix:
+          description: Key prefix within the bucket, when it is shared with something else.
+          type: string
+        region:
+          description: Region the bucket lives in.
+          example: eu-west-1
+          type: string
+        credentials:
+          description: How the agent authenticates to this store.
+          allOf:
+            - $ref: '#/components/schemas/DrS3Credentials'
+      required:
+        - endpoint
+        - bucket
+    DrS3Keys:
+      description: |-
+        Keys for a store, carried by the pair. Both are required: half a credential cannot
+        sign anything, so a put has to state both.
+
+        A get answers with the secret only when `show_secrets` asked for it, and with an
+        empty string otherwise - empty rather than absent, so that the field can be
+        required in the direction that matters. A put carrying an empty secret is refused,
+        which is what stops a get, edited and sent back, from storing the empty string.
+      type: object
+      properties:
+        accessKey:
+          description: Access key id.
+          type: string
+        secretKey:
+          description: |-
+            Secret access key. Empty in a response unless `show_secrets` asked for it; a
+            put carrying an empty one is refused.
+          type: string
+      required:
+        - accessKey
+        - secretKey
+    DrS3Credentials:
+      description: |-
+        Where the agent gets the credentials for a store. Exactly one of these is set.
+
+        Absent from the transport altogether means the agent's own environment, which is
+        the single-store case and the one that keeps instance roles working. That default
+        cannot serve two stores at once, which is what a name is for: the pair says which
+        credentials, the agent's environment holds them, and a cluster can be party to
+        relationships over different stores without any of their secrets being stored here.
+      type: object
+      properties:
+        keys:
+          description: Keys carried by the pair, used for this store alone.
+          allOf:
+            - $ref: '#/components/schemas/DrS3Keys'
+        named:
+          description: A name the agent resolves against its own environment.
+          type: string
+      additionalProperties: false
+      oneOf:
+        - required:
+            - keys
+        - required:
+            - named
+    DrTransport:
+      description: |-
+        How a relationship moves data between the two clusters. Exactly one transport is
+        set: a body naming none has not said where the relationship lives, and one naming
+        several has not said which to believe.
+      type: object
+      properties:
+        s3:
+          description: An s3-compatible object store both clusters can reach.
+          allOf:
+            - $ref: '#/components/schemas/DrS3Transport'
+      additionalProperties: false
+      oneOf:
+        - required:
+            - s3
+    DrClusterPair:
+      description: |-
+        The pairing of this cluster with a peer, and the store they share. Cluster-scoped
+        rather than per-volume: many volumes name the same pair.
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/DrPairId'
+        cluster:
+          $ref: '#/components/schemas/DrClusterId'
+        clusterUid:
+          $ref: '#/components/schemas/DrClusterUid'
+        peer:
+          $ref: '#/components/schemas/DrClusterId'
+        transport:
+          $ref: '#/components/schemas/DrTransport'
+      required:
+        - id
+        - cluster
+        - clusterUid
+        - peer
+    CreateDrClusterPairBody:
+      description: Terms of a cluster pair to create or adopt.
+      type: object
+      properties:
+        cluster:
+          $ref: '#/components/schemas/DrClusterId'
+        peer:
+          $ref: '#/components/schemas/DrClusterId'
+        transport:
+          $ref: '#/components/schemas/DrTransport'
+      required:
+        - cluster
+        - peer
     AppNodeId:
       description: App node identifier.
       example: csi-node-1

@@ -5,6 +5,7 @@
 pub mod app_node;
 pub mod block_devices;
 pub mod children;
+pub mod dr;
 pub mod jsongrpc;
 pub mod nexuses;
 pub mod nodes;
@@ -25,7 +26,10 @@ use actix_web::{
     web, FromRequest, HttpRequest,
 };
 use futures::future::Ready;
-use grpc::{client::CoreClient, operations::jsongrpc::client::JsonGrpcClient};
+use grpc::{
+    client::CoreClient,
+    operations::{dr::client::DrClient, jsongrpc::client::JsonGrpcClient},
+};
 use once_cell::sync::OnceCell;
 use rest_client::versions::v0::*;
 use serde::Deserialize;
@@ -40,6 +44,10 @@ pub use stor_port::{
 
 /// Once cell static variable to store the grpc client and initialise once at startup
 pub static CORE_CLIENT: OnceCell<CoreClient> = OnceCell::new();
+/// The dr agent's client, which is `None` unless the rest server was given its address:
+/// the dr agent is optional, so the dr endpoints answer that it is absent rather than the
+/// server refusing to start without it.
+pub static DR_PAIR_CLIENT: OnceCell<DrClient> = OnceCell::new();
 /// Once cell static variable to store the json grpc client and initialise once at startup
 pub static JSON_GRPC_CLIENT: OnceCell<JsonGrpcClient> = OnceCell::new();
 
@@ -51,6 +59,19 @@ pub(crate) fn core_grpc<'a>() -> &'a CoreClient {
 }
 
 /// Get Json gRPC Client
+pub(crate) fn dr_pair_grpc<'a>() -> Result<&'a DrClient, ReplyError> {
+    match DR_PAIR_CLIENT.get() {
+        None => Err(ReplyError {
+            kind: ReplyErrorKind::Unavailable,
+            resource: ResourceKind::DrClusterPair,
+            source: "Dr Agent is not configured/running.".to_string(),
+            extra: "".to_string(),
+        }),
+        Some(client) => Ok(client),
+    }
+}
+
+/// Get JsonGrpc gRPC Client
 pub(crate) fn json_grpc<'a>() -> Result<&'a JsonGrpcClient, ReplyError> {
     match JSON_GRPC_CLIENT.get() {
         None => Err(ReplyError {
