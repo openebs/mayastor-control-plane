@@ -1,6 +1,7 @@
 pub mod app_node;
 pub mod child;
 pub mod definitions;
+pub mod dr;
 pub mod nexus;
 pub mod nexus_child;
 pub mod nexus_persistence;
