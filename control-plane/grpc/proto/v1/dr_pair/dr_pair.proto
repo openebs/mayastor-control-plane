@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+import "v1/misc/common.proto";
+
+package v1.dr_pair;
+
+// An S3-compatible object store both clusters can reach.
+//
+// Credentials are optional: given, they are used for this store alone; omitted, the agent
+// falls back to its own environment, which is what keeps short-lived credentials working.
+message DrS3Transport {
+  // Endpoint URL of the store.
+  string endpoint = 1;
+  // Bucket the relationships live in.
+  string bucket = 2;
+  // Key prefix within the bucket, when it is shared with something else.
+  optional string prefix = 3;
+  // Region the bucket lives in.
+  optional string region = 4;
+  // Access key id for this store. Absent means the agent's environment.
+  optional string access_key = 5;
+  // Secret access key for this store. Absent means the agent's environment.
+  optional string secret_key = 6;
+}
+
+// Where a relationship's store lives, and how it is reached.
+message DrTransport {
+  oneof transport {
+    DrS3Transport s3 = 1;
+  }
+}
+
+// The pairing of this cluster with a peer, and the store they share.
+message DrClusterPair {
+  // How volumes refer to this pair.
+  string id = 1;
+  // This cluster's name in the store.
+  string cluster = 2;
+  // This cluster's own identity, as core reads it from the platform.
+  string cluster_uid = 3;
+  // The peer's name in the store.
+  string peer = 4;
+  // Where the store is.
+  DrTransport transport = 5;
+}
+
+// Multiple cluster pairs.
+message DrClusterPairs {
+  repeated DrClusterPair entries = 1;
+  // Token to resume from, when more remain.
+  optional uint64 next_token = 2;
+}
+
+// Request type for a CreateDrClusterPair request.
+//
+// Creating a pair that already exists with the same terms is not an error: an operator
+// reconciling the same desired state converges rather than failing on the second pass.
+message CreateDrClusterPairRequest {
+  string id = 1;
+  string cluster = 2;
+  string peer = 3;
+  DrTransport transport = 4;
+}
+
+// Request type for a GetDrClusterPair request.
+message GetDrClusterPairRequest {
+  string id = 1;
+}
+
+// Request type for a ListDrClusterPairs request.
+message ListDrClusterPairsRequest {}
+
+// Request type for a DestroyDrClusterPair request.
+message DestroyDrClusterPairRequest {
+  string id = 1;
+}
+
+// Reply carrying a single cluster pair, or why there is none.
+message DrClusterPairReply {
+  oneof reply {
+    DrClusterPair pair = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Reply carrying a page of cluster pairs, or why there is none.
+message DrClusterPairsReply {
+  oneof reply {
+    DrClusterPairs pairs = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Reply to a destroy, carrying only a failure.
+message DestroyDrClusterPairReply {
+  optional common.ReplyError error = 1;
+}
+
+service DrPairGrpc {
+  rpc CreateDrClusterPair (CreateDrClusterPairRequest) returns (DrClusterPairReply) {}
+  rpc GetDrClusterPair (GetDrClusterPairRequest) returns (DrClusterPairReply) {}
+  rpc ListDrClusterPairs (ListDrClusterPairsRequest) returns (DrClusterPairsReply) {}
+  rpc DestroyDrClusterPair (DestroyDrClusterPairRequest) returns (DestroyDrClusterPairReply) {}
+}

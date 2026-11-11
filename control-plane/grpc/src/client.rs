@@ -2,6 +2,7 @@ use crate::{
     context::Context,
     operations::{
         app_node::{client::AppNodeClient, traits::AppNodeOperations},
+        dr_pair::{client::DrPairClient, traits::DrPairOperations},
         nexus::{client::NexusClient, traits::NexusOperations},
         node::{client::NodeClient, traits::NodeOperations},
         pool::{client::PoolClient, traits::PoolOperations},
@@ -22,6 +23,7 @@ pub struct CoreClient {
     volume: VolumeClient,
     node: NodeClient,
     app_node: AppNodeClient,
+    dr_pair: DrPairClient,
     registry: RegistryClient,
     nexus: NexusClient,
     watch: WatchClient,
@@ -36,6 +38,7 @@ impl CoreClient {
         let volume_client = VolumeClient::new(addr.clone(), timeout_opts.clone()).await;
         let node_client = NodeClient::new(addr.clone(), timeout_opts.clone()).await;
         let app_node_client = AppNodeClient::new(addr.clone(), timeout_opts.clone()).await;
+        let dr_pair_client = DrPairClient::new(addr.clone(), timeout_opts.clone()).await;
         let registry_client = RegistryClient::new(addr.clone(), timeout_opts.clone()).await;
         let nexus_client = NexusClient::new(addr.clone(), timeout_opts.clone()).await;
         let watch_client = WatchClient::new(addr, timeout_opts).await;
@@ -45,6 +48,7 @@ impl CoreClient {
             volume: volume_client,
             node: node_client,
             app_node: app_node_client,
+            dr_pair: dr_pair_client,
             registry: registry_client,
             nexus: nexus_client,
             watch: watch_client,
@@ -68,6 +72,8 @@ impl CoreClient {
             NodeClient::new_with_tls(addr.clone(), timeout_opts.clone(), tls.clone()).await?;
         let app_node =
             AppNodeClient::new_with_tls(addr.clone(), timeout_opts.clone(), tls.clone()).await?;
+        let dr_pair =
+            DrPairClient::new_with_tls(addr.clone(), timeout_opts.clone(), tls.clone()).await?;
         let registry =
             RegistryClient::new_with_tls(addr.clone(), timeout_opts.clone(), tls.clone()).await?;
         let nexus =
@@ -80,6 +86,7 @@ impl CoreClient {
             volume,
             node,
             app_node,
+            dr_pair,
             registry,
             nexus,
             watch,
@@ -104,6 +111,10 @@ impl CoreClient {
     /// Retrieve the corresponding app node client.
     pub fn app_node(&self) -> impl AppNodeOperations {
         self.app_node.clone()
+    }
+    /// Retrieve the corresponding dr cluster pair client.
+    pub fn dr_pair(&self) -> impl DrPairOperations {
+        self.dr_pair.clone()
     }
     /// retrieve the corresponding registry client
     pub fn registry(&self) -> impl RegistryOperations {

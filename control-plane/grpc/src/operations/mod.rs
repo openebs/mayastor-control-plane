@@ -28,6 +28,9 @@ pub mod registry;
 /// Module for all corresponding client, server, traits for jsongrpc transport.
 pub mod jsongrpc;
 
+/// Module for all corresponding client, server, traits for the dr cluster pair transport.
+pub mod dr_pair;
+
 /// Module for all corresponding client, server, traits for the dr agent transport.
 pub mod dr;
 
