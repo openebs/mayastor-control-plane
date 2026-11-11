@@ -5,6 +5,7 @@
 pub mod app_node;
 pub mod block_devices;
 pub mod children;
+pub mod dr_pairs;
 pub mod jsongrpc;
 pub mod nexuses;
 pub mod nodes;
