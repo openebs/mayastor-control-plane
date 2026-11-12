@@ -1112,6 +1112,12 @@ impl ClusterBuilder {
         self.opts = self.opts.with_rustfs(enabled);
         self
     }
+    /// Run disaster recovery: the dr agent and the object store it works through.
+    #[must_use]
+    pub fn with_dr(mut self, enabled: bool) -> Self {
+        self.opts = self.opts.with_dr(enabled);
+        self
+    }
     /// Specify whether rest is enabled or not and whether to use authentication or not.
     #[must_use]
     pub fn with_rest_auth(mut self, enabled: bool, jwk: Option<String>) -> Self {

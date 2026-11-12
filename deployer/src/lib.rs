@@ -95,6 +95,15 @@ pub struct StartOptions {
     #[clap(long)]
     pub rustfs: bool,
 
+    /// Run disaster recovery: the dr agent, and a store for it to work through.
+    ///
+    /// Shorthand for adding `Dr` to `--agents` and turning on the deployer's object
+    /// store. A relationship is mediated entirely by that store, so starting the agent
+    /// without one gives a cluster that cannot do anything, which is not a useful
+    /// default for a convenience flag.
+    #[clap(long)]
+    pub dr: bool,
+
     /// Use the elasticsearch service.
     #[clap(short, long)]
     pub elastic: bool,
@@ -604,6 +613,11 @@ impl StartOptions {
         self
     }
     #[must_use]
+    pub fn with_dr(mut self, dr: bool) -> Self {
+        self.dr = dr;
+        self
+    }
+    #[must_use]
     pub fn with_build(mut self, build: bool) -> Self {
         self.build = build;
         self
@@ -804,6 +818,29 @@ impl StartOptions {
             false => binary.with_env("ENABLE_FIPS", "true"),
             true => binary,
         }
+    }
+
+    /// Expand `--dr` into the components it stands for.
+    ///
+    /// The agent is appended rather than replacing `--agents`, so the flag composes with
+    /// whatever else was asked for, and is a no-op if `Dr` was already named. The store
+    /// is whichever one the deployer ships; a second one would make this a choice rather
+    /// than an implication.
+    pub fn dr_expanded(&self) -> Self {
+        let mut options = self.clone();
+        if options.dr {
+            if !options
+                .agents
+                .iter()
+                .any(|agent| matches!(agent, ControlPlaneAgent::DrAgent(_)))
+            {
+                options
+                    .agents
+                    .push(ControlPlaneAgent::DrAgent(DrAgent::default()));
+            }
+            options.rustfs = true;
+        }
+        options
     }
 
     pub async fn start(&self) -> Result<ComposeTestNt, Error> {

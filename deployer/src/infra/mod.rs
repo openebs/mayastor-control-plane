@@ -273,6 +273,9 @@ macro_rules! impl_component {
 
         impl Components {
             pub fn new(options: StartOptions) -> Components {
+                // Both the cli and the test cluster builder funnel through here, so the
+                // `--dr` expansion happens once rather than at each entry point.
+                let options = options.dr_expanded();
                 let agents = options.agents.clone();
                 let components = agents
                     .iter()

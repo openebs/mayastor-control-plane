@@ -56,6 +56,12 @@ async fn main() -> anyhow::Result<()> {
     init_tracing();
 
     let mut cli_args = CliArgs::parse();
+    // Expand the shorthand flags before logging, so the logged options are the ones the
+    // cluster is actually started with. `Components::new` expands again for callers that
+    // bypass the cli, which is harmless since the expansion is idempotent.
+    if let Action::Start(options) = &mut cli_args.action {
+        **options = options.dr_expanded();
+    }
     tracing::info!("Using options: {:?}", &cli_args);
 
     composer::initialize(
