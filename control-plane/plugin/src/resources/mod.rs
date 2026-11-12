@@ -1,6 +1,7 @@
 use crate::resources::{
     app_node::{GetAppNodeArgs, GetAppNodesArgs},
     blockdevice::BlockDeviceArgs,
+    dr_pair::{CreateDrPairArgs, DeleteDrPairArgs, GetDrPairArgs, GetDrPairsArgs},
     node::{DrainNodeArgs, GetNodeArgs, GetNodesArgs},
     pool::{DrainPoolArgs, GetPoolArgs, GetPoolSmartArgs, GetPoolsArgs, GetPoolsSmartArgs},
     snapshot::VolumeSnapshotArgs,
@@ -10,6 +11,7 @@ use crate::resources::{
 pub mod app_node;
 pub mod blockdevice;
 pub mod cordon;
+pub mod dr_pair;
 pub mod drain;
 pub mod error;
 pub mod impact;
@@ -26,6 +28,7 @@ pub type SnapshotId = openapi::apis::Uuid;
 pub type ReplicaCount = u8;
 pub type PoolId = String;
 pub type NodeId = String;
+pub type DrPairId = String;
 
 /// The types of resources that support the 'get' operation.
 #[derive(clap::Subcommand, Debug)]
@@ -70,10 +73,21 @@ pub enum GetResources {
     AppNodes(GetAppNodesArgs),
     /// Get a given node.
     AppNode(GetAppNodeArgs),
+    /// Get all dr cluster pairs.
+    DrPairs(GetDrPairsArgs),
+    /// Get the dr cluster pair with the given ID.
+    DrPair(GetDrPairArgs),
     /// Get BlockDevices present on the Node. Lists usable devices by default.
     /// Currently, disks having blobstore pools not created by control-plane are also shown as
     /// usable.
     BlockDevices(BlockDeviceArgs),
+}
+
+/// The types of resources that support the 'create' operation.
+#[derive(clap::Subcommand, Debug)]
+pub enum CreateResources {
+    /// Create a dr cluster pair, or adopt the one already under this id.
+    DrPair(CreateDrPairArgs),
 }
 
 /// The types of resources that support the 'scale' operation.
@@ -289,6 +303,8 @@ pub enum DeleteResources {
     },
     /// Deletes the specified volume snapshot resource.
     VolumeSnapshot(snapshot::DelVolumeSnapshotArgs),
+    /// Deletes the specified dr cluster pair resource.
+    DrPair(DeleteDrPairArgs),
 }
 
 /// Prompt the user with the given question, and collect a y/n answer.

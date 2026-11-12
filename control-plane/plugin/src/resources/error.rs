@@ -17,6 +17,29 @@ pub enum Error {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
+    /// Error when listing dr cluster pairs fails.
+    #[snafu(display("Failed to list dr cluster pairs. Error {source}"))]
+    ListDrPairsError {
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
+    /// Error when get dr cluster pair request fails.
+    #[snafu(display("Failed to get dr cluster pair {id}. Error {source}"))]
+    GetDrPairError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
+    /// Error when delete dr cluster pair request fails.
+    #[snafu(display("Failed to delete dr cluster pair {id}. Error {source}"))]
+    DelDrPairError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
+    /// Error when create dr cluster pair request fails.
+    #[snafu(display("Failed to create dr cluster pair {id}. Error {source}"))]
+    CreateDrPairError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
     /// Error when node cordon request fails.
     #[snafu(display("Failed to get node {id}. Error {source}"))]
     NodeCordonError {

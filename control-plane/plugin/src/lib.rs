@@ -10,15 +10,16 @@ use utils::tracing_telemetry::{FmtLayer, FmtStyle};
 
 use crate::{
     operations::{
-        Cordoning, Delete, Drain, Errors, Expand, Get, GetBlockDevices, GetSnapshotTopology,
-        GetSnapshots, GetWithArgs, List, ListExt, ListWithArgs, Operations, PluginResult,
-        RebuildHistory, ReplicaTopology, Scale,
+        Cordoning, Create, Delete, Drain, Errors, Expand, Get, GetBlockDevices,
+        GetSnapshotTopology, GetSnapshots, GetWithArgs, List, ListExt, ListWithArgs, Operations,
+        PluginResult, RebuildHistory, ReplicaTopology, Scale,
     },
     resources::{
-        app_node, blockdevice, cordon, drain, node, pool, snapshot, volume,
-        volume::VolumeTopologiesArgs, ClearErrors, CordonResources, DeleteArgs, DeleteResources,
-        DrainResources, ExpandResources, GetCordonArgs, GetDrainArgs, GetResources, GetSmartArgs,
-        ScaleResources, SetPropertyResources, SetVolumeProperties, UnCordonResources,
+        app_node, blockdevice, cordon, dr_pair, drain, node, pool, snapshot, volume,
+        volume::VolumeTopologiesArgs, ClearErrors, CordonResources, CreateResources, DeleteArgs,
+        DeleteResources, DrainResources, ExpandResources, GetCordonArgs, GetDrainArgs,
+        GetResources, GetSmartArgs, ScaleResources, SetPropertyResources, SetVolumeProperties,
+        UnCordonResources,
     },
 };
 
@@ -118,6 +119,7 @@ impl ExecuteOperation for Operations {
             Operations::Cordon(resource) => resource.execute(cli_args).await,
             Operations::Uncordon(resource) => resource.execute(cli_args).await,
             Operations::Label(resource) => resource.execute(cli_args).await,
+            Operations::Create(resource) => resource.execute(cli_args).await,
             Operations::Delete(resource) => resource.execute(cli_args).await,
         }
     }
@@ -205,6 +207,10 @@ impl ExecuteOperation for GetResources {
             GetResources::AppNodes(args) => app_node::AppNodes::list(args, &cli_args.output).await,
             GetResources::AppNode(args) => {
                 app_node::AppNode::get(&args.node_id, &cli_args.output).await
+            }
+            GetResources::DrPairs(args) => dr_pair::DrPairs::list(args, &cli_args.output).await,
+            GetResources::DrPair(args) => {
+                dr_pair::DrPair::get(&args.pair_id, args, &cli_args.output).await
             }
             GetResources::BlockDevices(bdargs) => {
                 blockdevice::BlockDevice::get_blockdevices(
@@ -337,6 +343,17 @@ impl ExecuteOperation for LabelResources {
 }
 
 #[async_trait::async_trait(?Send)]
+impl ExecuteOperation for CreateResources {
+    type Args = CliArgs;
+    type Error = crate::resources::Error;
+    async fn execute(&self, cli_args: &CliArgs) -> PluginResult {
+        match self {
+            CreateResources::DrPair(args) => dr_pair::DrPair::create(args, &cli_args.output).await,
+        }
+    }
+}
+
+#[async_trait::async_trait(?Send)]
 impl ExecuteOperation for DeleteArgs {
     type Args = CliArgs;
     type Error = resources::Error;
@@ -373,6 +390,10 @@ impl ExecuteOperation for DeleteArgs {
                             &cli_args.output,
                         )
                         .await
+                    }
+                    DeleteResources::DrPair(args) => {
+                        dr_pair::DrPair::del(&args.pair_id, self.ignore_not_found, &cli_args.output)
+                            .await
                     }
                 }
             }
