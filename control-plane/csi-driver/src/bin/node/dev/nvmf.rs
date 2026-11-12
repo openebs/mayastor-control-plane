@@ -19,7 +19,7 @@ use crate::{
 };
 use csi_driver::PublishParams;
 use glob::glob;
-use nvmeadm::nvmf_subsystem::Subsystem;
+use nvmeadm::nvmf_subsystem::{Subsystem, SYSFS_NVME_CTRLR_PREFIX};
 use regex::Regex;
 use tracing::warn;
 use udev::{Device, Enumerator};
@@ -28,6 +28,45 @@ use uuid::Uuid;
 
 lazy_static::lazy_static! {
     static ref DEVICE_REGEX: Regex = Regex::new(r"nvme(\d{1,5})n(\d{1,5})").unwrap();
+}
+
+/// Find controllers by NQN, reading only `subsysnqn` per controller and fully
+/// parsing sysfs only for matches.
+pub(crate) fn subsystems_by_nqn(nqn: &str) -> Result<Vec<Subsystem>, NvmeError> {
+    let entries = match std::fs::read_dir(SYSFS_NVME_CTRLR_PREFIX) {
+        Ok(entries) => entries,
+        // No fabrics directory means no controllers, not a scan failure.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(NvmeError::NqnNotFound { nqn: nqn.into() });
+        }
+        Err(source) => {
+            return Err(NvmeError::FileIoFailed {
+                filename: SYSFS_NVME_CTRLR_PREFIX.into(),
+                source,
+            });
+        }
+    };
+
+    let mut matches = Vec::new();
+    for entry in entries.flatten() {
+        if !entry.file_name().to_string_lossy().starts_with("nvme") {
+            continue;
+        }
+        let path = entry.path();
+        // Skip controllers removed mid-scan, as Subsystem::try_from_nqn does.
+        let Ok(subsysnqn) = std::fs::read_to_string(path.join("subsysnqn")) else {
+            continue;
+        };
+        if subsysnqn.trim() != nqn {
+            continue;
+        }
+        matches.push(Subsystem::new(&path)?);
+    }
+
+    if matches.is_empty() {
+        return Err(NvmeError::NqnNotFound { nqn: nqn.into() });
+    }
+    Ok(matches)
 }
 
 pub(super) struct NvmfAttach {

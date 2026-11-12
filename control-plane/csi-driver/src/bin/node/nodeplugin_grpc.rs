@@ -5,7 +5,7 @@
 //! IoEngine CSI node plugin is deployed.
 
 use crate::{
-    dev::Device,
+    dev::{self, Device},
     findmnt,
     fsfreeze::{fsfreeze, FsFreezeOpt},
     mount::lazy_unmount_mountpaths,
@@ -23,7 +23,7 @@ use csi_driver::{
     },
 };
 use nodeplugin_svc::TypeOfMount;
-use nvmeadm::{error::NvmeError, nvmf_subsystem::Subsystem};
+use nvmeadm::error::NvmeError;
 use utils::nvme_target_nqn_prefix;
 
 use tonic::{transport::Server, Request, Response, Status};
@@ -83,7 +83,7 @@ impl NodePlugin for NodePluginSvc {
         debug!("Starting cleanup for volume: {volume_id}");
 
         let nqn = format!("{}:{volume_id}", nvme_target_nqn_prefix());
-        match Subsystem::try_from_nqn(&nqn) {
+        match dev::nvmf::subsystems_by_nqn(&nqn) {
             Ok(subsystem_paths) => {
                 for subsystem_path in subsystem_paths {
                     info!("Processing subsystem: {subsystem_path:?}");
