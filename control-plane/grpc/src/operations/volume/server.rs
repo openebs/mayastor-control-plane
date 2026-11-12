@@ -5,7 +5,7 @@ use crate::{
         create_snapshot_reply, create_snapshot_volume_reply, create_volume_reply,
         get_snapshots_reply, get_volumes_reply, publish_volume_reply, republish_volume_reply,
         resize_volume_reply, set_volume_property_reply, set_volume_replica_reply,
-        share_volume_reply, unpublish_volume_reply,
+        share_volume_reply, trigger_rebuild_reply, unpublish_volume_reply,
         volume_grpc_server::{VolumeGrpc, VolumeGrpcServer},
         CreateSnapshotReply, CreateSnapshotRequest, CreateSnapshotVolumeReply,
         CreateSnapshotVolumeRequest, CreateVolumeReply, CreateVolumeRequest,
@@ -15,7 +15,8 @@ use crate::{
         PublishVolumeReply, PublishVolumeRequest, RepublishVolumeReply, RepublishVolumeRequest,
         ResizeVolumeReply, ResizeVolumeRequest, SetVolumePropertyReply, SetVolumePropertyRequest,
         SetVolumeReplicaReply, SetVolumeReplicaRequest, ShareVolumeReply, ShareVolumeRequest,
-        UnpublishVolumeReply, UnpublishVolumeRequest, UnshareVolumeReply, UnshareVolumeRequest,
+        TriggerRebuildReply, TriggerRebuildRequest, UnpublishVolumeReply, UnpublishVolumeRequest,
+        UnshareVolumeReply, UnshareVolumeRequest,
     },
 };
 use std::{convert::TryFrom, sync::Arc};
@@ -227,6 +228,20 @@ impl VolumeGrpc for VolumeServer {
             })),
             Err(err) => Ok(Response::new(SetVolumePropertyReply {
                 reply: Some(set_volume_property_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+    async fn trigger_rebuild(
+        &self,
+        request: tonic::Request<TriggerRebuildRequest>,
+    ) -> Result<tonic::Response<TriggerRebuildReply>, tonic::Status> {
+        let req = request.into_inner().validated()?;
+        match self.service.trigger_rebuild(&req, None).await {
+            Ok(volume) => Ok(Response::new(TriggerRebuildReply {
+                reply: Some(trigger_rebuild_reply::Reply::Volume(volume.into())),
+            })),
+            Err(err) => Ok(Response::new(TriggerRebuildReply {
+                reply: Some(trigger_rebuild_reply::Reply::Error(err.into())),
             })),
         }
     }

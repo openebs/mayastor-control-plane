@@ -2005,6 +2005,53 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  '/volumes/{volume_id}/rebuild':
+    put:
+      tags:
+        - Volumes
+      operationId: put_volume_rebuild
+      description: |-
+        Rebuild a degraded, unpublished volume without waiting out the grace period.
+
+        By default the request is queued: the wait is skipped and the volume is taken
+        ahead of other offline rebuilds, oldest request first, but it still waits for a
+        free rebuild slot. With `now` the rebuild is started as part of this request
+        instead, and the request fails if it cannot be started. With `force`, which
+        applies only alongside `now`, it is started even when the configured rebuild
+        limits are already reached.
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+        - in: query
+          name: now
+          required: false
+          description: Start the rebuild as part of this request rather than queueing it.
+          schema:
+            type: boolean
+            default: false
+        - in: query
+          name: force
+          required: false
+          description: Start the rebuild even when the rebuild limits are reached; only with `now`.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Volume'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/volumes/{volume_id}/target':
     put:
       tags:
