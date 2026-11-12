@@ -5,6 +5,9 @@ use nvmeadm::{
 use std::{
     collections::HashMap,
     convert::{From, TryFrom},
+    fs::File,
+    io::{self, Read, Write},
+    os::fd::{AsRawFd, FromRawFd},
     path::Path,
     str::FromStr,
 };
@@ -19,6 +22,10 @@ use crate::{
 };
 use csi_driver::PublishParams;
 use glob::glob;
+use nix::{
+    fcntl::{openat, OFlag},
+    sys::stat::Mode,
+};
 use nvmeadm::nvmf_subsystem::{Subsystem, SYSFS_NVME_CTRLR_PREFIX};
 use regex::Regex;
 use tracing::warn;
@@ -60,13 +67,95 @@ pub(crate) fn subsystems_by_nqn(nqn: &str) -> Result<Vec<Subsystem>, NvmeError> 
         if subsysnqn.trim() != nqn {
             continue;
         }
-        matches.push(Subsystem::new(&path)?);
+        let subsystem = Subsystem::new(&path)?;
+        if subsystem.nqn == nqn {
+            matches.push(subsystem);
+        }
     }
 
     if matches.is_empty() {
         return Err(NvmeError::NqnNotFound { nqn: nqn.into() });
     }
     Ok(matches)
+}
+
+/// Disconnect a controller from the force-unstage scan after validating its NQN.
+pub(crate) fn disconnect_subsystem(subsystem: &Subsystem) -> Result<(), NvmeError> {
+    let path = Path::new(SYSFS_NVME_CTRLR_PREFIX).join(&subsystem.name);
+    File::open(&path)
+        .and_then(|controller| disconnect_if_nqn(&controller, &subsystem.nqn))
+        .map_err(|source| NvmeError::FileIoFailed {
+            filename: path.display().to_string(),
+            source,
+        })
+}
+
+fn disconnect_if_nqn(controller: &File, nqn: &str) -> io::Result<()> {
+    // Resolve each attribute from the same controller directory so reusing
+    // an nvmeX name cannot redirect the delete to a different controller.
+    let open_attr = |name: &str, flags: OFlag| {
+        let fd = openat(
+            Some(controller.as_raw_fd()),
+            name,
+            flags | OFlag::O_CLOEXEC,
+            Mode::empty(),
+        )
+        .map_err(|error| io::Error::from_raw_os_error(error as i32))?;
+        // SAFETY: openat returned a new owned descriptor.
+        Ok::<File, io::Error>(unsafe { File::from_raw_fd(fd) })
+    };
+
+    let mut current_nqn = String::new();
+    open_attr("subsysnqn", OFlag::O_RDONLY)?.read_to_string(&mut current_nqn)?;
+    if current_nqn.trim() != nqn {
+        return Err(io::Error::other(
+            "NVMe controller NQN changed before disconnect",
+        ));
+    }
+
+    let mut state = String::new();
+    open_attr("state", OFlag::O_RDONLY)?.read_to_string(&mut state)?;
+    if !state.contains("deleting") {
+        open_attr("delete_controller", OFlag::O_WRONLY)?.write_all(b"1")?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod disconnect_tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn disconnect_checks_nqn_and_keeps_original_directory_after_name_reuse() -> io::Result<()> {
+        let root = std::env::temp_dir().join(format!("nvme-disconnect-{}", Uuid::new_v4()));
+        let controller = root.join("nvme7");
+        fs::create_dir_all(&controller)?;
+        fs::write(controller.join("subsysnqn"), "nqn-volume-a\n")?;
+        fs::write(controller.join("state"), "live\n")?;
+        fs::write(controller.join("delete_controller"), "0")?;
+        let original = File::open(&controller)?;
+
+        let old_path = root.join("removed-nvme7");
+        fs::rename(&controller, &old_path)?;
+        fs::create_dir(&controller)?;
+        fs::write(controller.join("subsysnqn"), "nqn-volume-b\n")?;
+        fs::write(controller.join("state"), "live\n")?;
+        fs::write(controller.join("delete_controller"), "0")?;
+
+        let replacement = File::open(&controller)?;
+        assert!(disconnect_if_nqn(&replacement, "nqn-volume-a").is_err());
+        disconnect_if_nqn(&original, "nqn-volume-a")?;
+        assert_eq!(fs::read_to_string(old_path.join("delete_controller"))?, "1");
+        fs::remove_dir_all(old_path)?;
+        assert!(disconnect_if_nqn(&original, "nqn-volume-a").is_err());
+        assert_eq!(
+            fs::read_to_string(controller.join("delete_controller"))?,
+            "0"
+        );
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
 }
 
 pub(super) struct NvmfAttach {

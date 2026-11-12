@@ -87,15 +87,12 @@ impl NodePlugin for NodePluginSvc {
             Ok(subsystem_paths) => {
                 for subsystem_path in subsystem_paths {
                     info!("Processing subsystem: {subsystem_path:?}");
-                    if !subsystem_path.state.contains("deleting") {
-                        runtime::spawn_blocking(move || {
-                            subsystem_path
-                                .disconnect()
-                                .map_err(|error| Status::aborted(error.to_string()))
-                        })
-                        .await
-                        .map_err(|error| Status::aborted(error.to_string()))??;
-                    }
+                    runtime::spawn_blocking(move || {
+                        dev::nvmf::disconnect_subsystem(&subsystem_path)
+                            .map_err(|error| Status::aborted(error.to_string()))
+                    })
+                    .await
+                    .map_err(|error| Status::aborted(error.to_string()))??;
                 }
                 Err(Status::internal(format!(
                     "Cleanup initiated for all stale entries of: {volume_id}. Returning error for validation on retry."
