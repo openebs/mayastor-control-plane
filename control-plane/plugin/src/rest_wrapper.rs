@@ -69,6 +69,14 @@ impl RestClient {
         &REST_SERVER.get().unwrap().client
     }
 
+    /// Get the disaster recovery api.
+    ///
+    /// Short for `disaster_recovery_api`, which is named for the tag.
+    pub fn dr_api(
+    ) -> &'static dyn openapi::apis::disaster_recovery_api::tower::client::DisasterRecovery {
+        Self::client().disaster_recovery_api()
+    }
+
     /// Get the Rest Base Url.
     pub fn uri(&self) -> &Uri {
         &self.uri

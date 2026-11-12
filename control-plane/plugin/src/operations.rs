@@ -1,7 +1,7 @@
 use crate::resources::{
-    error::Error, utils, ClearErrors, CordonResources, DeleteArgs, DrainResources, ExpandResources,
-    GetResources, LabelResources, RebuildResources, ScaleResources, SetPropertyResources,
-    UnCordonResources,
+    error::Error, utils, ClearErrors, CordonResources, CreateResources, DeleteArgs, DrainResources,
+    ExpandResources, GetResources, LabelResources, RebuildResources, ScaleResources,
+    SetPropertyResources, UnCordonResources,
 };
 use async_trait::async_trait;
 
@@ -38,6 +38,9 @@ pub enum Operations {
     /// 'Label' resources.
     #[clap(subcommand)]
     Label(LabelResources),
+    /// 'Create' resources.
+    #[clap(subcommand)]
+    Create(CreateResources),
     /// 'Rebuild' resources.
     #[clap(subcommand)]
     Rebuild(RebuildResources),
@@ -236,6 +239,14 @@ pub trait Cordoning {
         label: &Self::UREQ,
         output: &utils::OutputFormat,
     ) -> PluginResult;
+}
+
+/// Create trait.
+/// To be implemented by resources which support the 'create' operation.
+#[async_trait(?Send)]
+pub trait Create {
+    type Args;
+    async fn create(args: &Self::Args, output: &utils::OutputFormat) -> PluginResult;
 }
 
 /// Delete trait.
