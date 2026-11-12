@@ -52,12 +52,12 @@ jobs:
           sudo systemctl restart docker
 
       - name: Setup Nix Environment
-        uses: ./.github/actions/setup-nix
+        uses: ./utils/dependencies/.github/actions/setup-nix
         with:
-          preFetchNix: ./shell.nix
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-          hide_cachix_token: true
-          rust_cache: true
+          pre-fetch-nix: ./shell.nix
+          github-access-token: ${{ secrets.GITHUB_TOKEN }}
+          hide-cachix-token: true
+          rust-cache: true
 
       - name: Build rust binaries
         run: nix-shell --run "cargo build --bins"
@@ -67,12 +67,7 @@ jobs:
 
       - name: Setup Test Pre-Requisites
         run: |
-          sudo debconf-communicate <<< "set man-db/auto-update false" || true
-          sudo dpkg-reconfigure man-db || true
-          sudo sysctl -w vm.nr_hugepages=2560
-          sudo apt-get update || (sleep 5; sudo apt-get update)
-          sudo apt-get install linux-modules-extra-$(uname -r)
-          sudo modprobe nvme_tcp
+          sudo ./utils/dependencies/scripts/prereq.sh --nvme-tcp --hugepages 2560
           # Check if nvme config is valid, otherwise apply it
           sudo ./utils/dependencies/scripts/nvme-conf.sh --check --apply --overwrite
           # On the arm runners we have:

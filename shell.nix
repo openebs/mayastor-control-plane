@@ -1,9 +1,6 @@
 { norust ? false, devrustup ? true, rust-profile ? "stable", io-engine ? "" }:
 let
-  sources = import ./nix/sources.nix;
-  pkgs = import sources.nixpkgs {
-    overlays = [ (_: _: { inherit sources; }) (import ./nix/overlay.nix { }) (import sources.rust-overlay) ];
-  };
+  pkgs = import ./nix/pkgs.nix;
 in
 with pkgs;
 let
@@ -12,17 +9,10 @@ let
   devrustup_moth =
     "You have requested an environment for rustup, you should provide it!";
   io-engine-moth = "Using the following io-engine binary: ${io-engine}";
-  channel = import ./nix/lib/rust.nix { inherit pkgs; };
-  # python environment for tests/bdd
-  pytest_inputs = python3.withPackages
-    (ps: with ps; [ virtualenv grpcio grpcio-tools black isort autoflake ]);
-  rust_chan = channel.default_src;
-  rust = rust_chan.${rust-profile}.overrideAttrs (oldAttrs: {
-    # don't propagate any build inputs - this allows us to set cc in stdenv below
-    propagatedBuildInputs = [ ];
-    depsHostHostPropagated = [ clang ];
-    depsTargetTargetPropagated = [ ];
-  });
+  rust-shell = import ./nix/shells/rust.nix { inherit pkgs rust-profile; cc = clang; };
+  build-shell = import ./nix/shells/build.nix { inherit pkgs; };
+  test-shell = import ./nix/shells/test.nix { inherit pkgs; };
+  rust = rust-shell.rust;
   usePreCommit = builtins.getEnv "IN_NIX_SHELL" == "impure" && builtins.getEnv "CI" != "1";
   pre-commit = pkgs.runCommand "pre-commit" { } ''
     mkdir -p $out/bin
@@ -31,56 +21,16 @@ let
 in
 mkShellNoCC {
   name = "control-plane-shell";
+  inputsFrom = [ build-shell test-shell ] ++ pkgs.lib.optional (!norust) rust-shell;
   buildInputs = [
-    llvmPackages.bintools
-    clang
-    # aws-lc-rs fips
-    cmake
-    go
-    perl
     commitlint
     cowsay
-    docker
-    etcd
-    fio
-    git
     jq
-    llvmPackages.libclang
     nixpkgs-fmt
     nix
     openapi-generator-cli
-    pkg-config
-    rustfs-cli
     utillinux
-    which
-    paperclip
-    pytest_inputs
-    python3
-  ] ++ pkgs.lib.optional (!norust) rust
-  ++ pkgs.lib.optional (usePreCommit) pre-commit
-  ++ pkgs.lib.optionals (system != "aarch64-darwin") [
-    e2fsprogs
-    xfsprogs_5_16
-    btrfs-progs
-    nvme-cli
-    # python3.9-pyopenssl-22.0.0 marked as broken but fixed on master..
-    tini
-    udev
-    lvm2
-    rdma-core
-  ] ++ pkgs.lib.optional (system == "aarch64-darwin") darwin.apple_sdk.frameworks.Security;
-
-  nativeBuildInputs = [ rustPlatform.bindgenHook ];
-
-  PROTOC = "${protobuf}/bin/protoc";
-  PROTOC_INCLUDE = "${protobuf}/include";
-
-  # variables used to easily create containers with docker files
-  ETCD_BIN = "${pkgs.etcd}/bin/etcd";
-  ETCDCTL_API = "3";
-
-  # point `rc` at the deployer's object store, so `rc ls local/default` works out of the box
-  RC_HOST_local = "http://GKde9ade9ade9ade9ade9ade9a:a9eda9eda9eda9eda9eda9eda9eda9eda9eda9eda9eda9eda9eda9eda9eda9ed@localhost:3900";
+  ] ++ pkgs.lib.optional (usePreCommit) pre-commit;
 
   # using the nix rust toolchain
   USE_NIX_RUST = "${toString (!norust)}";
@@ -121,7 +71,5 @@ mkShellNoCC {
       export DOCKER_USER=$(echo $DOCKER_TOKEN | cut -d':' -f1)
       export DOCKER_PASS=$(echo $DOCKER_TOKEN | cut -d':' -f2)
     fi
-    unset CC
-    unset AR
   '';
 }

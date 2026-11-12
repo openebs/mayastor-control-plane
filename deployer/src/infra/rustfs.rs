@@ -71,7 +71,7 @@ impl ComponentAction for Rustfs {
         Components::wait_url(&format!("http://localhost:{S3_HOST_PORT}/")).await?;
 
         // Create the bucket, so that the S3 CLIs work against this instance with no manual
-        // setup: see the `RC_HOST_local` variable in `shell.nix`.
+        // setup: see the `RC_HOST_local` variable in `nix/shells/test.nix`.
         create_default_bucket().await
     }
 }

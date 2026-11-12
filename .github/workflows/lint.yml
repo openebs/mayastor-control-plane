@@ -15,11 +15,11 @@ jobs:
         with:
           submodules: 'recursive'
       - name: Setup Nix Environment
-        uses: ./.github/actions/setup-nix
+        uses: ./utils/dependencies/.github/actions/setup-nix
         with:
-          preFetchNix: ./shell.nix
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-          rust_cache: true
+          pre-fetch-nix: ./shell.nix
+          github-access-token: ${{ secrets.GITHUB_TOKEN }}
+          rust-cache: true
       - name: Lint rust code
         run: nix-shell --run "./scripts/rust/linter.sh"
       - name: Lint python code

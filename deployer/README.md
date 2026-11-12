@@ -140,7 +140,7 @@ That runs a single-node, ephemeral [RustFS](https://github.com/rustfs/rustfs) fr
 `rustfs/rustfs:1.0.4`, publishing its S3 API on `localhost:3900` and creating a `default`
 bucket on startup.
 
-`rc` is RustFS's own S3 client (packaged in `nix/pkgs/rustfs-cli`). `shell.nix` defines its
+`rc` is RustFS's own S3 client (packaged in `nix/pkgs/rustfs-cli`). `nix/shells/test.nix` defines its
 `local` alias through `RC_HOST_local`, so it works with no flags and no setup, and leaves any
 aliases you have configured for yourself alone:
 

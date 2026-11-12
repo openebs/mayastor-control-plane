@@ -5,7 +5,7 @@
 //! [`crate::infra::Rustfs`], started by `deployer start --rustfs`.
 //!
 //! The bucket, credentials, region and published host port live here rather than in the
-//! component, because `RC_HOST_local` in `shell.nix` names the same values — that is what
+//! component, because `RC_HOST_local` in `nix/shells/test.nix` names the same values — that is what
 //! makes `rc` work against a freshly started store with no flags. Keeping them in one place
 //! is also what lets the store be swapped without touching anything that talks to it.
 
@@ -15,7 +15,7 @@ use crate::StartOptions;
 pub(crate) const S3_BUCKET: &str = "default";
 
 /// Fixed S3 access key ID granted access to [`S3_BUCKET`] on every startup.
-/// Kept in sync with `RC_HOST_local` in `shell.nix`.
+/// Kept in sync with `RC_HOST_local` in `nix/shells/test.nix`.
 pub(crate) const S3_ACCESS_KEY_ID: &str = "GKde9ade9ade9ade9ade9ade9a";
 
 /// Fixed S3 secret access key for [`S3_ACCESS_KEY_ID`] (see there).
@@ -31,12 +31,12 @@ pub(crate) const S3_SECRET_ACCESS_KEY: &str =
 pub(crate) const S3_REGION: &str = "local-deployer";
 
 /// Host port the store's S3 API is published on. Named here rather than in the component
-/// so that it and `RC_HOST_local` in `shell.nix` have one place to agree with.
+/// so that it and `RC_HOST_local` in `nix/shells/test.nix` have one place to agree with.
 pub(crate) const S3_HOST_PORT: &str = "3900";
 
 /// Alias `rc` is given for the store. Supplied through `RC_HOST_<alias>` in the
 /// environment rather than written into the user's own `~/.config/rc/config.toml`, both
-/// here and in `shell.nix`.
+/// here and in `nix/shells/test.nix`.
 pub(crate) const RC_ALIAS: &str = "local";
 
 /// The `RC_HOST_<alias>` value naming the store, its credentials inline.

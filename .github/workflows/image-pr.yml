@@ -21,9 +21,9 @@ jobs:
         with:
           submodules: 'recursive'
       - name: Setup Nix Environment
-        uses: ./.github/actions/setup-nix
+        uses: ./utils/dependencies/.github/actions/setup-nix
         with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          github-access-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Test building the release images
         # SBOMs are generated here too so a break in the SBOM path is caught
         # pre-merge rather than on the develop push. Nothing is signed, since

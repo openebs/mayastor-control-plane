@@ -91,7 +91,7 @@ pub struct StartOptions {
     ///
     /// Brings up a single-node, ephemeral store on the host port named by
     /// `infra::s3::S3_HOST_PORT`, with the bucket and credentials the checked-in
-    /// `RC_HOST_local` in `shell.nix` names, so `rc` reaches it with no flags.
+    /// `RC_HOST_local` in `nix/shells/test.nix` names, so `rc` reaches it with no flags.
     #[clap(long)]
     pub rustfs: bool,
 
@@ -228,6 +228,10 @@ pub struct StartOptions {
     /// Run each io_engine on separate cores.
     #[clap(long)]
     pub io_engine_isolate: bool,
+
+    /// Run each io_engine in interrupt mode.
+    #[clap(long)]
+    pub io_engine_interrupt: bool,
 
     /// Run each io_engine with these many cores.
     /// A value of 0 means we'll rely on the default value set by the io-engine.
@@ -641,6 +645,11 @@ impl StartOptions {
     #[must_use]
     pub fn with_isolated_io_engine(mut self, isolate: bool) -> Self {
         self.io_engine_isolate = isolate;
+        self
+    }
+    #[must_use]
+    pub fn with_io_engine_interrupt(mut self, interrupt: bool) -> Self {
+        self.io_engine_interrupt = interrupt;
         self
     }
     #[must_use]
