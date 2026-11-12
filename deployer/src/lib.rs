@@ -229,6 +229,10 @@ pub struct StartOptions {
     #[clap(long)]
     pub io_engine_isolate: bool,
 
+    /// Run each io_engine in interrupt mode.
+    #[clap(long)]
+    pub io_engine_interrupt: bool,
+
     /// Run each io_engine with these many cores.
     /// A value of 0 means we'll rely on the default value set by the io-engine.
     #[clap(long, default_value = "0")]
@@ -641,6 +645,11 @@ impl StartOptions {
     #[must_use]
     pub fn with_isolated_io_engine(mut self, isolate: bool) -> Self {
         self.io_engine_isolate = isolate;
+        self
+    }
+    #[must_use]
+    pub fn with_io_engine_interrupt(mut self, interrupt: bool) -> Self {
+        self.io_engine_interrupt = interrupt;
         self
     }
     #[must_use]
