@@ -598,8 +598,27 @@ impl Service {
         let mut snapshot = self.specs().volume_snapshot(snap_uuid).await?;
         let cluster_size_for_clone_vol =
             snapshot.pool_cluster_size_for_clone(&self.registry).await?;
+        let snapshot_size = snapshot.as_ref().metadata().spec_size();
+        let requested_size = request.params().size;
         request.params_mut().cluster_size = Some(cluster_size_for_clone_vol);
+
+        let resize_after_clone = self.registry.snapshot_resize_on_clone_enabled()
+            && requested_size > snapshot_size;
+
+        if resize_after_clone {
+            request.params_mut().size = snapshot_size;
+        }
         snapshot.create_clone(&self.registry, request).await?;
+
+        if resize_after_clone {
+            let resize_req = ResizeVolume::new(
+                request.params().uuid.clone(),
+                requested_size,
+                None,
+            );
+            self.resize_volume(&resize_req).await?;
+        }
+
         self.registry.volume(&request.params().uuid).await
     }
 
