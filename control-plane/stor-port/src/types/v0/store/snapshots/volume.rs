@@ -2,7 +2,7 @@ use super::{replica::ReplicaSnapshot, SnapshotId, SnapshotSpec};
 use crate::types::v0::{
     store::{SpecStatus, SpecTransaction},
     transport::{
-        GenericSnapshotParameters, NexusVersion, SnapshotParameters, SnapshotTxId, VolumeId,
+        GenericSnapshotParameters, NexusVersion, PoolId, SnapshotParameters, SnapshotTxId, VolumeId,
     },
 };
 use chrono::{DateTime, Utc};
@@ -186,6 +186,13 @@ impl VolumeSnapshotMeta {
     pub fn transactions(&self) -> &HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> {
         &self.transactions
     }
+    /// Check if any replica snapshot of any transaction resides on the given pool.
+    pub fn has_pool_snapshots(&self, pool_id: &PoolId) -> bool {
+        self.transactions
+            .values()
+            .flatten()
+            .any(|r| r.spec().source_id().pool_id() == pool_id)
+    }
     /// Get the stale transactions.
     pub fn stale_transactions(&self) -> HashMap<SnapshotTxId, Vec<ReplicaSnapshot>> {
         self.stale_transactions_ref()
@@ -256,6 +263,7 @@ pub enum VolumeSnapshotOperation {
     Create(VolumeSnapshotCreateInfo),
     Destroy,
     CleanupStaleTransactions,
+    CleanupPoolSnapshots(PoolId),
     CreateRestore(CreateRestoreInfo),
     DestroyRestore(DestroyRestoreInfo),
 }
@@ -425,6 +433,7 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
                 }
             }
             VolumeSnapshotOperation::CleanupStaleTransactions => {}
+            VolumeSnapshotOperation::CleanupPoolSnapshots(_) => {}
             VolumeSnapshotOperation::CreateRestore(info) => self.insert_restore(info.volume_uuid()),
             VolumeSnapshotOperation::DestroyRestore(info) => {
                 self.remove_restore(info.volume_uuid())
@@ -457,6 +466,7 @@ impl SpecTransaction<VolumeSnapshotOperation> for VolumeSnapshot {
             }
             VolumeSnapshotOperation::Destroy => {}
             VolumeSnapshotOperation::CleanupStaleTransactions => {}
+            VolumeSnapshotOperation::CleanupPoolSnapshots(_) => {}
             VolumeSnapshotOperation::CreateRestore(_) => {}
             VolumeSnapshotOperation::DestroyRestore(_) => {}
         }
