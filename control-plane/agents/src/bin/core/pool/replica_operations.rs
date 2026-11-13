@@ -89,6 +89,12 @@ impl ResourceLifecycle for Option<&mut OperationGuardArc<ReplicaSpec>> {
         request: &Self::Destroy,
     ) -> Result<(), SvcError> {
         let node = registry.node_wrapper(&request.node).await?;
+        // We do not send request to io-engine if pool is not loaded.
+        if !registry.has_pool_state(&request.pool_id).await {
+            return Err(SvcError::PoolNotLoaded {
+                pool_id: request.pool_id.clone(),
+            });
+        }
 
         if let Some(replica) = self {
             replica
