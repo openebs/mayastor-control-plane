@@ -25,6 +25,19 @@ use stor_port::{
     },
 };
 
+/// Convert a refused pool drain into the error returned to the caller.
+pub(crate) fn drain_refused_error(name: &PoolId, refused: DrainRefused) -> SvcError {
+    match refused {
+        DrainRefused::Unchanged => SvcError::NoPolicyUpdateOnDrain { name: name.clone() },
+        DrainRefused::Terminal(phase) => SvcError::AlreadyTerminal {
+            name: name.clone(),
+            phase,
+        },
+        DrainRefused::InDraining => SvcError::PoolAlreadyDraining { name: name.clone() },
+        DrainRefused::UnsafeEvictPolicyConflict => SvcError::UnsafeEvictPolicyConflict {},
+    }
+}
+
 #[async_trait::async_trait]
 impl GuardedOperationsHelper for OperationGuardArc<PoolSpec> {
     type Create = CreatePool;
@@ -129,21 +142,7 @@ impl SpecOperationsHelper for PoolSpec {
             },
             PoolOperation::Drain(drain) => {
                 self.validate_drain(drain)
-                    .map_err(|refused| match refused {
-                        DrainRefused::Unchanged => SvcError::NoPolicyUpdateOnDrain {
-                            name: self.id().clone(),
-                        },
-                        DrainRefused::Terminal(phase) => SvcError::AlreadyTerminal {
-                            name: self.id().clone(),
-                            phase,
-                        },
-                        DrainRefused::InDraining => SvcError::PoolAlreadyDraining {
-                            name: self.id().clone(),
-                        },
-                        DrainRefused::UnsafeEvictPolicyConflict => {
-                            SvcError::UnsafeEvictPolicyConflict {}
-                        }
-                    })?;
+                    .map_err(|refused| drain_refused_error(self.id(), refused))?;
                 self.start_op(op);
                 Ok(())
             }
