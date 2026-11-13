@@ -378,6 +378,18 @@ pub struct StartOptions {
     #[clap(long)]
     max_rebuilds: Option<u32>,
 
+    /// Enable the offline rebuild reconciler in the core agent.
+    #[clap(long)]
+    offline_rebuild_enabled: bool,
+
+    /// Grace period before initiating an offline rebuild for a degraded volume.
+    #[clap(long)]
+    offline_rebuild_grace_period: Option<humantime::Duration>,
+
+    /// Maximum number of concurrent offline rebuilds (should be below max-rebuilds).
+    #[clap(long)]
+    max_offline_rebuilds: Option<u32>,
+
     /// Deploy a fio-spdk container.
     /// This can be used for userspace io against a volume's nvmf target using the spdk ioengine.
     #[clap(long)]
@@ -410,6 +422,9 @@ pub struct StartOptions {
     /// Drain requests beyond this stay queued.
     #[clap(long)]
     pub max_concurrent_pool_drain: Option<u16>,
+    /// Maximum number of replicas moved concurrently from a draining pool.
+    #[clap(long)]
+    pub pool_replica_move_limit: Option<u32>,
     #[clap(long, hide = true)]
     no_deprecated_access_mode: bool,
 
@@ -726,6 +741,27 @@ impl StartOptions {
         self.max_rebuilds = max;
         self
     }
+    /// Enable/Disable the offline rebuild reconciler.
+    #[must_use]
+    pub fn with_offline_rebuild_enabled(mut self, enabled: bool) -> Self {
+        self.offline_rebuild_enabled = enabled;
+        self
+    }
+    /// Set the offline rebuild grace period.
+    #[must_use]
+    pub fn with_offline_rebuild_grace_period(
+        mut self,
+        period: Option<humantime::Duration>,
+    ) -> Self {
+        self.offline_rebuild_grace_period = period;
+        self
+    }
+    /// Set the maximum number of concurrent offline rebuilds.
+    #[must_use]
+    pub fn with_max_offline_rebuilds(mut self, max: Option<u32>) -> Self {
+        self.max_offline_rebuilds = max;
+        self
+    }
     /// Enable/Disable the fio-spdk container.
     #[must_use]
     pub fn with_fio_spdk(mut self, fio_spdk: bool) -> Self {
@@ -760,6 +796,13 @@ impl StartOptions {
     #[must_use]
     pub fn with_max_concurrent_pool_drain(mut self, max: Option<u16>) -> Self {
         self.max_concurrent_pool_drain = max;
+        self
+    }
+
+    /// Maximum number of replicas moved concurrently from a draining pool.
+    #[must_use]
+    pub fn with_pool_replica_move_limit(mut self, max: Option<u32>) -> Self {
+        self.pool_replica_move_limit = max;
         self
     }
 

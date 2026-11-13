@@ -1149,7 +1149,7 @@ impl SpecOperationsHelper for VolumeSpec {
             VolumeOperation::SetReplica(replica_count) => {
                 // We should not stack one more rebuild on a volume which is expecting/undergoing
                 // a Full rebuild.
-                if self.has_replica_move() {
+                if self.has_over_replication() {
                     return Err(SvcError::VolumeReplicaMoveInProgress {});
                 } else if *replica_count == self.num_replicas {
                     Err(SvcError::ReplicaCountAchieved {

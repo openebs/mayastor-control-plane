@@ -15,7 +15,11 @@ use stor_port::{
     },
 };
 
+use crate::controller::reconciler::volume::drain_utils::{
+    create_missing_replica, create_spare_replica, forget_lost_spare, handle_drain_replica_move,
+};
 use std::cmp::Ordering;
+use stor_port::types::v0::store::volume::OverReplicationRequester;
 
 /// Volume HotSpare reconciler
 #[derive(Debug)]
@@ -50,7 +54,7 @@ async fn hot_spare_reconcile(
     };
     let volume_state = context.registry().volume_state(volume.uuid()).await?;
 
-    if !volume.as_ref().policy.self_heal {
+    if !volume.as_ref().policy.self_heal && volume.as_ref().metadata.drain_config().is_none() {
         return PollResult::Ok(PollerState::Idle);
     }
     if !volume.as_ref().status.created() {
@@ -58,8 +62,12 @@ async fn hot_spare_reconcile(
     }
 
     match volume_state.status {
-        VolumeStatus::Online => volume_replica_count_reconciler(&mut volume, context).await,
-        VolumeStatus::Unknown | VolumeStatus::Degraded => {
+        VolumeStatus::Online if volume.as_ref().metadata.drain_config().is_none() => {
+            volume_replica_count_reconciler(&mut volume, None, context).await
+        }
+        // An Online volume with a pool drain in progress also needs its nexus children
+        // reconciled, as the spare replica has to be added to the nexus.
+        VolumeStatus::Online | VolumeStatus::Unknown | VolumeStatus::Degraded => {
             hot_spare_nexus_reconcile(&mut volume, &volume_state, context).await
         }
         VolumeStatus::Faulted => PollResult::Ok(PollerState::Idle),
@@ -87,11 +95,11 @@ async fn hot_spare_nexus_reconcile(
 
         // fixup the volume replica count: creates new replicas when we're behind
         // removes extra replicas but only if they're UNUSED (by a nexus)
-        results.push(volume_replica_count_reconciler(volume, context).await);
+        results.push(volume_replica_count_reconciler(volume, Some(&mut nexus), context).await);
         // fixup the nexus replica count to match the volume's replica count
         results.push(nexus_replica_count_reconciler(volume, &mut nexus, context).await);
     } else {
-        results.push(volume_replica_count_reconciler(volume, context).await);
+        results.push(volume_replica_count_reconciler(volume, None, context).await);
     }
 
     squash_results(results)
@@ -157,11 +165,9 @@ async fn nexus_replica_count_reconciler(
     let nexus_uuid = nexus.uuid();
     let nexus_state = context.registry().nexus(nexus_uuid).await?;
 
-    let vol_spec_clone = volume.as_ref();
-    let nexus_spec_clone = nexus.as_ref();
-    let volume_replicas = vol_spec_clone.num_replicas as usize;
     let nexus_replica_children =
-        nexus_spec_clone
+        nexus
+            .as_ref()
             .children
             .iter()
             .fold(0usize, |mut counter, child| {
@@ -173,14 +179,15 @@ async fn nexus_replica_count_reconciler(
                 }
                 counter
             });
-
-    match nexus_replica_children.cmp(&volume_replicas) {
+    let effective_replica_count = volume.as_ref().effective_replica_count() as usize;
+    match nexus_replica_children.cmp(&effective_replica_count) {
         Ordering::Less | Ordering::Greater => {
             nexus_replica_count_reconciler_traced(
                 volume,
                 nexus,
                 nexus_state,
                 nexus_replica_children,
+                effective_replica_count,
                 context,
             )
             .await
@@ -194,18 +201,16 @@ async fn nexus_replica_count_reconciler_traced(
     nexus: &mut OperationGuardArc<NexusSpec>,
     nexus_state: Nexus,
     nexus_replica_children: usize,
+    effective_replica_count: usize,
     context: &PollContext,
 ) -> PollResult {
-    let vol_spec_clone = volume.as_ref();
-    let volume_replicas = vol_spec_clone.num_replicas as usize;
-
-    match nexus_replica_children.cmp(&volume_replicas) {
+    match nexus_replica_children.cmp(&effective_replica_count) {
         Ordering::Less => {
             nexus.warn_span(|| {
                 tracing::warn!(
                     "The nexus only has '{}' replica(s) but the volume requires '{}' replica(s)",
                     nexus_replica_children,
-                    volume_replicas
+                    effective_replica_count
                 )
             });
             volume
@@ -217,7 +222,7 @@ async fn nexus_replica_count_reconciler_traced(
                 tracing::warn!(
                     "The nexus has more replicas(s) ('{}') than the required replica count ('{}')",
                     nexus_replica_children,
-                    volume_replicas
+                    effective_replica_count
                 )
             });
             volume
@@ -227,45 +232,70 @@ async fn nexus_replica_count_reconciler_traced(
         Ordering::Equal => {}
     }
 
-    PollResult::Ok(if nexus.as_ref().children.len() == volume_replicas {
-        PollerState::Idle
-    } else {
-        PollerState::Busy
-    })
+    PollResult::Ok(
+        if nexus.as_ref().children.len() == effective_replica_count {
+            PollerState::Idle
+        } else {
+            PollerState::Busy
+        },
+    )
 }
 
-/// Given a degraded volume
 /// When the number of created volume replicas is different to the required number of replicas
 /// Then the number of created volume replicas should eventually match the required number of
-/// replicas
+/// replicas.
+/// Also, handles the over-replication requests. Currently, over-replication is requested by Pool drain.
+/// Creates a spare replica if requested, monitors the spare and destroys moving replica when
+/// spare rebuild completes.
 async fn volume_replica_count_reconciler(
     volume: &mut OperationGuardArc<VolumeSpec>,
+    nexus: Option<&mut OperationGuardArc<NexusSpec>>,
     context: &PollContext,
 ) -> PollResult {
+    forget_lost_spare(volume, context).await;
     let required_replica_count = volume.as_ref().num_replicas as usize;
-
-    let current_replicas = context.specs().volume_replicas(volume.uuid());
-    let current_replica_count = current_replicas.len();
-
-    match current_replica_count.cmp(&required_replica_count) {
+    let effective_replica_count = volume.as_ref().effective_replica_count() as usize;
+    let current_replica_count = context.specs().volume_replicas(volume.uuid()).len();
+    match current_replica_count.cmp(&effective_replica_count) {
         Ordering::Less | Ordering::Greater => {
-            volume_replica_count_reconciler_traced(volume, context).await
+            volume_replica_count_reconciler_traced(
+                volume,
+                nexus,
+                context,
+                required_replica_count,
+                effective_replica_count,
+                current_replica_count,
+            )
+            .await
         }
-        Ordering::Equal => PollResult::Ok(PollerState::Idle),
+        Ordering::Equal => {
+            if volume.as_ref().has_over_replication() {
+                volume_replica_count_reconciler_traced(
+                    volume,
+                    nexus,
+                    context,
+                    required_replica_count,
+                    effective_replica_count,
+                    current_replica_count,
+                )
+                .await
+            } else {
+                Ok(PollerState::Idle)
+            }
+        }
     }
 }
 
 #[tracing::instrument(skip(context, volume), fields(volume.uuid = %volume.uuid(), request.reconcile = true, event = ?context.event()))]
 async fn volume_replica_count_reconciler_traced(
     volume: &mut OperationGuardArc<VolumeSpec>,
+    nexus: Option<&mut OperationGuardArc<NexusSpec>>,
     context: &PollContext,
+    required_replica_count: usize,
+    effective_replica_count: usize,
+    mut current_replica_count: usize,
 ) -> PollResult {
-    let required_replica_count = volume.as_ref().num_replicas as usize;
-
-    let current_replicas = context.specs().volume_replicas(volume.uuid());
-    let mut current_replica_count = current_replicas.len();
-
-    match current_replica_count.cmp(&required_replica_count) {
+    match current_replica_count.cmp(&effective_replica_count) {
         Ordering::Less => {
             // Guard: do not materialise a fresh, empty replica when the volume has
             // already been published but currently has zero spec'd replicas.
@@ -294,36 +324,24 @@ async fn volume_replica_count_reconciler_traced(
                 tracing::warn!(
                     "The volume has '{}' replica(s) but it should have '{}'",
                     current_replica_count,
-                    required_replica_count
+                    effective_replica_count
                 )
             });
 
-            let diff = required_replica_count - current_replica_count;
-            match volume
-                .create_volume_replicas(context.registry(), diff)
-                .await?
-            {
-                result if !result.is_empty() => {
-                    current_replica_count += result.len();
-                    let replicas = result.iter().fold(String::new(), |acc, replica| {
-                        if acc.is_empty() {
-                            format!("{replica}")
-                        } else {
-                            format!("{acc},{replica}")
-                        }
-                    });
-
-                    volume.info_span(|| {
-                        tracing::info!(
-                            replicas = %replicas,
-                            "Successfully created '{}' new replica(s)",
-                            result.len()
-                        )
-                    });
-                }
-                _ => {
-                    volume.error("Failed to create replicas");
-                }
+            let missing_replica_count =
+                required_replica_count.saturating_sub(current_replica_count);
+            let drain_cfg = volume.as_ref().metadata.drain_config();
+            // As volume replica count cannot be modified while replica move is applied on volume and
+            // replica move cannot be applied on a non-online volume. We can get non-zero base_diff
+            // while replica move is also there only if user tries to force trigger rebuild and replica
+            // is removed. In that case doing a Full rebuild takes precedence.
+            let creating_spare = missing_replica_count == 0
+                && drain_cfg.as_ref().is_some_and(|cfg| cfg.spare_not_placed());
+            if creating_spare {
+                return create_spare_replica(volume, context, drain_cfg, nexus).await;
+            } else {
+                current_replica_count +=
+                    create_missing_replica(volume, context, missing_replica_count).await
             }
         }
         Ordering::Greater => {
@@ -331,11 +349,11 @@ async fn volume_replica_count_reconciler_traced(
                 tracing::warn!(
                     "The volume has '{}' replica(s) but it should only have '{}'. Removing...",
                     current_replica_count,
-                    required_replica_count
+                    effective_replica_count
                 )
             });
 
-            let diff = current_replica_count - required_replica_count;
+            let diff = current_replica_count - effective_replica_count;
             match volume
                 .remove_unused_volume_replicas(context.registry(), diff)
                 .await
@@ -353,10 +371,18 @@ async fn volume_replica_count_reconciler_traced(
                 }
             }
         }
-        Ordering::Equal => {}
+        Ordering::Equal => {
+            if let Some(requester) = volume.as_ref().metadata.over_replication() {
+                return match requester {
+                    OverReplicationRequester::PoolDrain(drain) => {
+                        handle_drain_replica_move(volume, nexus, context, drain).await
+                    }
+                };
+            }
+        }
     }
 
-    PollResult::Ok(if current_replica_count == required_replica_count {
+    PollResult::Ok(if current_replica_count == effective_replica_count {
         PollerState::Idle
     } else {
         PollerState::Busy

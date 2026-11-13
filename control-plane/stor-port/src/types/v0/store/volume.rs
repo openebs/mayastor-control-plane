@@ -398,9 +398,38 @@ impl VolumeMetadata {
         self.persisted.requested_size
     }
 
-    /// Update the replica move configuration for the volume.
-    pub fn update_replica_move(&mut self, replica_move: ReplicaMoveRequester) {
-        self.runtime.moving_replica = Some(replica_move)
+    /// Record the over-replication request for the volume.
+    pub fn update_over_replication(&mut self, requester: OverReplicationRequester) {
+        self.runtime.over_replication = Some(requester)
+    }
+
+    /// Clear the over-replication request.
+    pub fn remove_over_replication(&mut self) {
+        self.runtime.over_replication = None
+    }
+
+    /// Return drain config if present.
+    pub fn drain_config(&self) -> Option<DrainConfig> {
+        if let Some(requester) = &self.runtime.over_replication {
+            match requester {
+                OverReplicationRequester::PoolDrain(config) => Some(config.clone()),
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Return over replication config if present.
+    pub fn over_replication(&self) -> Option<OverReplicationRequester> {
+        self.runtime.over_replication.clone()
+    }
+
+    /// Returns true if spare replica is needed.
+    pub fn need_spare(&self) -> bool {
+        if let Some(drain_cfg) = self.drain_config() {
+            return drain_cfg.spare_replica.is_some();
+        }
+        false
     }
 }
 
@@ -431,8 +460,8 @@ pub struct VolumeRuntimeMetadata {
     /// Degraded; used to enforce the grace period before starting a rebuild.
     /// Tied to the volume's lifetime so it goes away when the volume is deleted.
     offline_rebuild_degraded_since: Option<std::time::Instant>,
-    /// Configuration for the replica move operation, if any.
-    moving_replica: Option<ReplicaMoveRequester>,
+    /// Over-replication request (and its config) currently applied to the volume, if any.
+    over_replication: Option<OverReplicationRequester>,
 }
 impl VolumeRuntimeMetadata {
     /// Check if there's any snapshot.
@@ -463,11 +492,11 @@ impl VolumeRuntimeMetadata {
     }
 }
 
-/// The entity on whose behalf a replica move is being carried out, along with the move
+/// The entity on whose behalf the volume is being over-replicated, along with the
 /// configuration specific to it.
 #[derive(Debug, Clone, PartialEq)]
-pub enum ReplicaMoveRequester {
-    /// The move was requested by a pool drain.
+pub enum OverReplicationRequester {
+    /// The over-replication was requested by a pool drain.
     PoolDrain(DrainConfig),
 }
 
@@ -806,14 +835,25 @@ impl VolumeSpec {
         }
     }
 
-    /// Returns true if remove move is set.
-    pub fn has_replica_move(&self) -> bool {
-        self.metadata.runtime.moving_replica.is_some()
+    /// Returns true if an over-replication request is set.
+    pub fn has_over_replication(&self) -> bool {
+        self.metadata.runtime.over_replication.is_some()
+    }
+
+    /// Returns true if supplied replica id is the over-replicating spare.
+    pub fn is_spare_replica(&self, replica: &ReplicaId) -> bool {
+        self.metadata
+            .drain_config()
+            .is_some_and(|drain_cfg| drain_cfg.is_spare(replica.clone()))
     }
 
     /// Returns true if it's a single replica volume.
     pub fn is_single_replica(&self) -> bool {
         self.num_replicas == 1
+    }
+
+    pub fn effective_replica_count(&self) -> u8 {
+        self.num_replicas + self.metadata.need_spare() as u8
     }
 }
 

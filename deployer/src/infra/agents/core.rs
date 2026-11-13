@@ -74,6 +74,15 @@ impl ComponentAction for CoreAgent {
         if let Some(max_rebuilds) = &options.max_rebuilds {
             binary = binary.with_args(vec!["--max-rebuilds", &max_rebuilds.to_string()]);
         }
+        if options.offline_rebuild_enabled {
+            binary = binary.with_arg("--offline-rebuild-enabled");
+        }
+        if let Some(period) = &options.offline_rebuild_grace_period {
+            binary = binary.with_args(vec!["--offline-rebuild-grace-period", &period.to_string()]);
+        }
+        if let Some(max) = &options.max_offline_rebuilds {
+            binary = binary.with_args(vec!["--max-offline-rebuilds", &max.to_string()]);
+        }
         if options.allow_non_persistent_devlink {
             binary = binary.with_args(vec!["--allow-non-persistent-devlink"]);
         }
@@ -82,6 +91,9 @@ impl ComponentAction for CoreAgent {
         }
         if let Some(max_drains) = options.max_concurrent_pool_drain {
             binary = binary.with_args(vec!["--max-concurrent-pool-drain", &max_drains.to_string()]);
+        }
+        if let Some(limit) = options.pool_replica_move_limit {
+            binary = binary.with_args(vec!["--pool-replica-move-limit", &limit.to_string()]);
         }
         if !options.no_deprecated_access_mode {
             binary = binary.with_arg("--deprecated-access-mode");

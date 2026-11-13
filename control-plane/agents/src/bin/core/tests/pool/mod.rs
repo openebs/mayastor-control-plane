@@ -1,3 +1,4 @@
+mod drain;
 mod purge;
 
 use anyhow::{anyhow, Result};

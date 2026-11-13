@@ -112,6 +112,12 @@ impl Registry {
         })
     }
 
+    /// Returns true of pool is empty.
+    pub(crate) async fn is_pool_empty(&self, pool_id: &PoolId) -> Result<bool, SvcError> {
+        let pool_usage = self.pool_usage(pool_id).await?;
+        Ok(pool_usage.repl_count + pool_usage.snap_count == 0)
+    }
+
     /// Get all controller pools states (state + metadata).
     pub(crate) async fn ctrl_pool_states(&self) -> Vec<CtrlPoolState> {
         let nodes = self.node_wrappers().await;
@@ -167,11 +173,23 @@ impl Registry {
 
     /// Get the pool object corresponding to the id.
     pub(crate) async fn ctrl_pool(&self, id: &PoolId) -> Result<Pool, SvcError> {
-        Pool::try_new(
-            self.specs().pool(id).ok(),
-            self.ctrl_pool_state(id).await.ok(),
-        )
-        .ok_or(PoolNotFound {
+        let mut spec = self.specs().pool(id).ok();
+        if let Some(drain_state) = spec.as_mut().and_then(|spec| spec.drain_state_mut()) {
+            // `unwind_spare` is runtime-only, so it is not part of the persisted pool record.
+            // Report the one from the volume's runtime move config, which drives the move.
+            for config in drain_state.moving_replicas.iter_mut() {
+                let unwind = self
+                    .specs()
+                    .volume_clone(&config.volume)
+                    .ok()
+                    .and_then(|volume| volume.metadata.drain_config())
+                    .and_then(|runtime| runtime.unwind_spare);
+                if unwind.is_some() {
+                    config.unwind_spare = unwind;
+                }
+            }
+        }
+        Pool::try_new(spec, self.ctrl_pool_state(id).await.ok()).ok_or(PoolNotFound {
             pool_id: id.to_owned(),
         })
     }

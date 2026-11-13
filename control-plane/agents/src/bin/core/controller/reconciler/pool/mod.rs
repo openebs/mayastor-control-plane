@@ -65,10 +65,13 @@ impl TaskPoller for PoolReconciler {
             context.event(),
             PollEvent::Triggered(PollTriggerEvent::Start)
         ) {
-            drain::populate_missing_replica_move(context).await;
+            drain::populate_missing_drain_config(context).await;
         }
         drain::drain_state_promoter(context).await;
         drain::advance_draining_pools(context).await;
+        drain::handle_awaiting_cleanup(context).await;
+        drain::handle_partially_drained(context).await;
+        drain::handle_cancelled(context).await;
         Self::squash_results(results)
     }
 
