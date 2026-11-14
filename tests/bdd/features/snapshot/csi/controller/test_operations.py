@@ -204,3 +204,41 @@ def a_CreateVolumeRequest_request_with_snapshot_as_source_is_sent_to_the_CSI_con
 @then("the volume creation should succeed")
 def the_volume_creation_should_fail(grpc_error):
     assert grpc_error is None
+
+
+@pytest.mark.parametrize("thin", [None, "true"])
+def test_snapshot_restore_retry_preserves_default_thin(setup, thin):
+    """Retry after losing the first response must reuse the already-created clone."""
+    csi_create_1_replica_nvmf_volume1()
+    try:
+        ApiClient.snapshots_api().put_volume_snapshot(VOLUME1_UUID, SNAP1_UUID)
+        try:
+            parameters = {"protocol": "nvmf", "repl": "1"}
+            if thin is not None:
+                parameters["thin"] = thin
+            request = pb.CreateVolumeRequest(
+                name=PVC_VOLUME2_NAME,
+                capacity_range=pb.CapacityRange(required_bytes=VOLUME1_SIZE),
+                parameters=parameters,
+                volume_content_source=pb.VolumeContentSource(
+                    snapshot=pb.VolumeContentSource.SnapshotSource(snapshot_id=SNAP1_UUID)
+                ),
+            )
+            try:
+                # Deliberately discard the response: the retry must work using only
+                # the original request, as after a successful but lost response.
+                csi_rpc_handle().controller.CreateVolume(request)
+                response = csi_rpc_handle().controller.CreateVolume(request)
+                assert response.volume.volume_id == VOLUME2_UUID
+                assert ApiClient.volumes_api().get_volume(VOLUME2_UUID).spec.thin
+                # Explicit false must still fail compatibility with a thin clone.
+                request.parameters["thin"] = "false"
+                with pytest.raises(grpc.RpcError) as error:
+                    csi_rpc_handle().controller.CreateVolume(request)
+                assert error.value.code() == grpc.StatusCode.ALREADY_EXISTS
+            finally:
+                Volume.cleanup(VOLUME2_UUID)
+        finally:
+            Snapshot.cleanup(SNAP1_UUID)
+    finally:
+        csi_delete_1_replica_nvmf_volume1()
