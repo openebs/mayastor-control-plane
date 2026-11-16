@@ -1,6 +1,8 @@
 syntax = "proto3";
 
 import "v1/misc/common.proto";
+import "v1/replica/replica.proto";
+import "v1/volume/volume.proto";
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
@@ -659,6 +661,56 @@ service PoolGrpc {
 
   // Retrieve SMART / health information for the disk(s) backing pool(s)
   rpc GetPoolsSmart (GetPoolsSmartRequest) returns (GetPoolsSmartReply) {}
+
+  // Retrieve the replicas of a pool along with the volumes which own them
+  rpc GetPoolReplicasInfo (GetPoolReplicasInfoRequest) returns (GetPoolReplicasInfoReply) {}
+}
+
+// Request to get the replicas of a pool along with their owning volumes.
+message GetPoolReplicasInfoRequest {
+  // Id of the pool.
+  string pool_id = 1;
+}
+
+// Reply wrapper for GetPoolReplicasInfo.
+message GetPoolReplicasInfoReply {
+  oneof reply {
+    GetPoolReplicasInfoResponse response = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Response containing the volume replicas of a pool.
+message GetPoolReplicasInfoResponse {
+  // Replicas on the pool which are owned by a volume.
+  repeated PoolReplicaInfo replicas = 1;
+}
+
+// A replica on a pool along with the properties of the volume which owns it.
+// Everything is taken from the replica and volume specs.
+message PoolReplicaInfo {
+  // Id of the replica.
+  string replica_id = 1;
+  // Id of the volume which owns the replica.
+  string volume_id = 2;
+  // Size of the replica in bytes.
+  uint64 size = 3;
+  // Thin provisioning flag of the replica.
+  bool thin = 4;
+  // Data encryption of the replica.
+  bool encrypted = 5;
+  // Kind of the replica, unset on replicas created by older versions (regular).
+  optional replica.ReplicaKind kind = 6;
+  // Cluster size required by the volume of the pools hosting its replicas, in bytes.
+  uint32 cluster_size = 7;
+  // Number of replicas the volume should have.
+  uint32 num_replicas = 8;
+  // Custom labels of the volume.
+  optional common.StringMapValue labels = 9;
+  // Replica placement topology of the volume.
+  optional volume.Topology topology = 10;
+  // Affinity group of the volume.
+  optional volume.AffinityGroup affinity_group = 11;
 }
 
 // Request to get SMART / health data for pool-backing disks.

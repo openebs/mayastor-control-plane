@@ -13,10 +13,36 @@ use stor_port::{
         store::pool::DrainPolicy,
         transport::{DestroyPool, ExpandPool, Filter, PoolSmart, UnlabelPool},
     },
+    IntoOption,
 };
 
 fn client() -> impl PoolOperations {
     core_grpc().pool()
+}
+
+/// Get the volume replicas of the pool, each along with the properties of the volume owning it.
+async fn pool_replicas_info(
+    pool_id: String,
+) -> Result<Vec<models::PoolReplicaInfo>, RestError<RestJsonError>> {
+    let info = client().get_pool_replicas_info(&pool_id.into()).await?;
+
+    Ok(info
+        .replicas
+        .into_iter()
+        .map(|info| models::PoolReplicaInfo {
+            name: info.replica.into(),
+            volume: info.volume.into(),
+            kind: info.kind.into(),
+            size: info.size,
+            labels: info.labels,
+            num_replicas: info.num_replicas,
+            topology: info.topology.into_opt(),
+            thin: info.thin,
+            affinity_group: info.affinity_group.into_opt(),
+            encrypted: info.encrypted,
+            cluster_size: info.cluster_size,
+        })
+        .collect())
 }
 
 /// Shared pool deletion logic. Returns `Some(result)` for purge, `None` for normal delete.
@@ -158,6 +184,12 @@ impl apis::actix_server::Pools for RestApi {
             client().get_pools_smart(&request).await?.pools.first(),
         )?;
         Ok(pool.into())
+    }
+
+    async fn get_pool_replicas_info(
+        Path(pool_id): Path<String>,
+    ) -> Result<Vec<models::PoolReplicaInfo>, RestError<RestJsonError>> {
+        pool_replicas_info(pool_id).await
     }
 
     async fn put_node_pool(

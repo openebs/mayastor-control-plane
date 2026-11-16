@@ -215,6 +215,13 @@ mod test {
             {
                 todo!()
             }
+            async fn get_pool_replicas_info(
+                &self,
+                _pool_id: &stor_port::types::v0::transport::PoolId,
+            ) -> Result<stor_port::types::v0::transport::GetPoolReplicasInfoResponse, ReplyError>
+            {
+                todo!()
+            }
         }
     }
 }

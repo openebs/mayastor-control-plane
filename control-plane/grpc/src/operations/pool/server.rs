@@ -3,17 +3,19 @@ use crate::{
     operations::pool::traits::PoolOperations,
     pool::{
         self, clear_errors_reply, cordon_pool_reply, create_pool_reply, drain_pool_reply,
-        expand_pool_reply, get_pools_reply, get_pools_smart_reply, label_pool_reply,
+        expand_pool_reply, get_pool_replicas_info_reply, get_pools_reply, get_pools_smart_reply,
+        label_pool_reply,
         pool_grpc_server::{PoolGrpc, PoolGrpcServer},
         unlabel_pool_reply, ClearErrorsReply, ClearErrorsRequest, CordonPoolReply,
         CordonPoolRequest, CreatePoolReply, CreatePoolRequest, DestroyPoolReply,
         DestroyPoolRequest, DrainPoolReply, DrainPoolRequest, ExpandPoolReply, ExpandPoolRequest,
-        GetPoolsReply, GetPoolsRequest, GetPoolsSmartReply, GetPoolsSmartRequest, LabelPoolReply,
-        LabelPoolRequest, UnlabelPoolReply, UnlabelPoolRequest,
+        GetPoolReplicasInfoReply, GetPoolReplicasInfoRequest, GetPoolsReply, GetPoolsRequest,
+        GetPoolsSmartReply, GetPoolsSmartRequest, LabelPoolReply, LabelPoolRequest,
+        UnlabelPoolReply, UnlabelPoolRequest,
     },
 };
 use std::sync::Arc;
-use stor_port::types::v0::transport::Filter;
+use stor_port::types::v0::transport::{Filter, PoolId};
 use tonic::{Request, Response, Status};
 
 /// gRPC Pool Server
@@ -218,6 +220,30 @@ impl PoolGrpc for PoolServer {
             })),
             Err(err) => Ok(Response::new(GetPoolsSmartReply {
                 reply: Some(get_pools_smart_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+
+    async fn get_pool_replicas_info(
+        &self,
+        request: Request<GetPoolReplicasInfoRequest>,
+    ) -> Result<tonic::Response<GetPoolReplicasInfoReply>, tonic::Status> {
+        let pool_id = match PoolId::try_from(request.into_inner()) {
+            Ok(pool_id) => pool_id,
+            Err(err) => {
+                return Ok(Response::new(GetPoolReplicasInfoReply {
+                    reply: Some(get_pool_replicas_info_reply::Reply::Error(err.into())),
+                }))
+            }
+        };
+        match self.service.get_pool_replicas_info(&pool_id).await {
+            Ok(response) => Ok(Response::new(GetPoolReplicasInfoReply {
+                reply: Some(get_pool_replicas_info_reply::Reply::Response(
+                    response.into(),
+                )),
+            })),
+            Err(err) => Ok(Response::new(GetPoolReplicasInfoReply {
+                reply: Some(get_pool_replicas_info_reply::Reply::Error(err.into())),
             })),
         }
     }
