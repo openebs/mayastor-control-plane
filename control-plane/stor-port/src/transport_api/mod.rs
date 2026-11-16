@@ -186,7 +186,12 @@ impl From<HostNqnParseError> for ReplyError {
 
 impl From<tonic::Status> for ReplyError {
     fn from(status: tonic::Status) -> Self {
-        Self::tonic_reply_error(status.code().into(), status.to_string(), String::new())
+        let source = match status.code() {
+            // Nothing the agent said, so `Display` would add only its debug wrapper.
+            tonic::Code::Unavailable => status.message().to_string(),
+            _ => status.to_string(),
+        };
+        Self::tonic_reply_error(status.code().into(), source, String::new())
     }
 }
 
