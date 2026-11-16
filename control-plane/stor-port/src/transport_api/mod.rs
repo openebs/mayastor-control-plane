@@ -161,6 +161,8 @@ pub enum ResourceKind {
     AffinityGroup,
     /// App Node.
     AppNode,
+    /// Dr Cluster Pair.
+    DrClusterPair,
 }
 
 /// Error type which is returned over the transport for any operation.

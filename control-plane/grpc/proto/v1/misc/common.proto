@@ -137,6 +137,8 @@ enum ResourceKind {
   ReplicaSnapshotClone = 21;
   // App Node
   AppNode = 22;
+  // Dr Cluster Pair
+  DrClusterPair = 23;
 }
 
 // Filter by Node and Replica id

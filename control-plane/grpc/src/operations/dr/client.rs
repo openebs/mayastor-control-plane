@@ -1,10 +1,16 @@
 use crate::{
     context::{Client, Context, TracedChannel},
-    dr::{dr_grpc_client, ProbeRequest},
+    dr,
+    dr::{cluster_pair_reply, cluster_pairs_reply, dr_grpc_client, ProbeRequest},
     operations::dr::traits::DrOperations,
 };
 use std::{ops::Deref, time::Duration};
-use stor_port::transport_api::{ReplyError, TimeoutOptions};
+use stor_port::{
+    transport_api::{ReplyError, ResourceKind, TimeoutOptions},
+    types::v0::transport::{
+        CreateDrClusterPair, DestroyDrClusterPair, DrClusterPair, DrClusterPairs, GetDrClusterPair,
+    },
+};
 use tonic::transport::Uri;
 
 /// RPC Dr Client
@@ -20,6 +26,16 @@ impl DrClient {
             .await
             .expect("a plaintext gRPC channel cannot fail to initialise");
         Self { inner: client }
+    }
+    /// Creates a TLS-enabled client whose certificate files are reloaded after rotation.
+    pub async fn new_with_tls<O: Into<Option<TimeoutOptions>> + Clone>(
+        addr: Uri,
+        opts: O,
+        tls: crate::tls::TlsConfig,
+    ) -> anyhow::Result<Self> {
+        let client =
+            Client::new_with_tls(addr, opts, Some(tls), dr_grpc_client::DrGrpcClient::new).await?;
+        Ok(Self { inner: client })
     }
     /// Try to wait until the Dr service is ready, up to a timeout, by using the Probe method.
     pub async fn wait_ready(&self, timeout_opts: Option<TimeoutOptions>) -> Result<(), ()> {
@@ -56,6 +72,15 @@ impl Deref for DrClient {
     }
 }
 
+/// Unwraps a single-pair reply, which carries either the pair or why there is none.
+fn pair(reply: dr::ClusterPairReply) -> Result<DrClusterPair, ReplyError> {
+    match reply.reply {
+        Some(cluster_pair_reply::Reply::Pair(pair)) => pair.try_into(),
+        Some(cluster_pair_reply::Reply::Error(error)) => Err(error.into()),
+        None => Err(ReplyError::invalid_response(ResourceKind::DrClusterPair)),
+    }
+}
+
 #[tonic::async_trait]
 impl DrOperations for DrClient {
     #[tracing::instrument(name = "DrClient::probe", level = "debug", skip(self))]
@@ -63,6 +88,71 @@ impl DrOperations for DrClient {
         match self.client().probe(ProbeRequest {}).await {
             Ok(resp) => Ok(resp.into_inner().ready),
             Err(e) => Err(e.into()),
+        }
+    }
+
+    // Not `skip(self)`: the request carries the store credentials, and `err` logs it.
+    #[tracing::instrument(name = "DrClient::create", level = "debug", skip_all, fields(pair.id = %req.id), err)]
+    async fn create(
+        &self,
+        req: &CreateDrClusterPair,
+        _ctx: Option<Context>,
+    ) -> Result<DrClusterPair, ReplyError> {
+        let request: dr::CreateClusterPairRequest = req.into();
+        let reply = self
+            .client()
+            .create_cluster_pair(request)
+            .await?
+            .into_inner();
+        pair(reply)
+    }
+
+    #[tracing::instrument(name = "DrClient::get", level = "debug", skip(self), err)]
+    async fn get(
+        &self,
+        req: &GetDrClusterPair,
+        _ctx: Option<Context>,
+    ) -> Result<DrClusterPair, ReplyError> {
+        let reply = self
+            .client()
+            .get_cluster_pair(dr::GetClusterPairRequest {
+                id: req.id.to_string(),
+            })
+            .await?
+            .into_inner();
+        pair(reply)
+    }
+
+    #[tracing::instrument(name = "DrClient::list", level = "debug", skip(self), err)]
+    async fn list(&self, _ctx: Option<Context>) -> Result<DrClusterPairs, ReplyError> {
+        let reply = self
+            .client()
+            .list_cluster_pairs(dr::ListClusterPairsRequest {})
+            .await?
+            .into_inner();
+        match reply.reply {
+            Some(cluster_pairs_reply::Reply::Pairs(pairs)) => pairs.try_into(),
+            Some(cluster_pairs_reply::Reply::Error(error)) => Err(error.into()),
+            None => Err(ReplyError::invalid_response(ResourceKind::DrClusterPair)),
+        }
+    }
+
+    #[tracing::instrument(name = "DrClient::destroy", level = "debug", skip(self), err)]
+    async fn destroy(
+        &self,
+        req: &DestroyDrClusterPair,
+        _ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let reply = self
+            .client()
+            .destroy_cluster_pair(dr::DestroyClusterPairRequest {
+                id: req.id.to_string(),
+            })
+            .await?
+            .into_inner();
+        match reply.error {
+            Some(error) => Err(error.into()),
+            None => Ok(()),
         }
     }
 }
