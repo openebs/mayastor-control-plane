@@ -686,11 +686,79 @@ message CreateSnapshotVolumeReply {
   }
 }
 
+// Request to get the replicas of a pool along with their owning volumes.
+message GetPoolReplicasInfoRequest {
+  // Id of the pool.
+  string pool_id = 1;
+}
+
+// Reply wrapper for GetPoolReplicasInfo.
+message GetPoolReplicasInfoReply {
+  oneof reply {
+    GetPoolReplicasInfoResponse response = 1;
+    common.ReplyError error = 2;
+  }
+}
+
+// Response containing the volume replicas of a pool.
+message GetPoolReplicasInfoResponse {
+  // Replicas on the pool which are owned by a volume.
+  repeated PoolReplicaInfo replicas = 1;
+}
+
+// A replica on a pool along with the volume which owns it.
+message PoolReplicaInfo {
+  // Id of the replica.
+  string replica_id = 1;
+  // Kind of the replica.
+  replica.ReplicaKind kind = 2;
+  // The volume which owns the replica.
+  VolumeInfo volume = 3;
+  // Id of the pool hosting the replica.
+  string pool = 4;
+  // Id of the node hosting the pool.
+  string node = 5;
+  // Size of the replica in bytes.
+  uint64 size = 6;
+  // Thin provisioning flag of the replica.
+  bool thin = 7;
+  // Data encryption of the replica.
+  bool encrypted = 8;
+  // Protocol used for exposing the replica.
+  common.Protocol protocol = 9;
+  // Space usage of the replica, unset if the replica state can't be found.
+  optional replica.ReplicaSpaceUsage usage = 10;
+}
+
+// The properties of the volume which owns a replica on a pool.
+// Everything is taken from the volume spec.
+message VolumeInfo {
+  // Id of the volume.
+  string volume_id = 1;
+  // Size of the volume in bytes.
+  uint64 size = 2;
+  // Thin provisioning flag of the volume.
+  bool thin = 3;
+  // Data encryption of the volume.
+  bool encrypted = 4;
+  // Cluster size required by the volume of the pools hosting its replicas, in bytes.
+  uint32 cluster_size = 5;
+  // Number of replicas the volume should have.
+  uint32 num_replicas = 6;
+  // Custom labels of the volume.
+  optional common.StringMapValue labels = 7;
+  // Replica placement topology of the volume.
+  optional Topology topology = 8;
+  // Affinity group of the volume.
+  optional AffinityGroup affinity_group = 9;
+}
+
 service VolumeGrpc {
   rpc CreateVolume (CreateVolumeRequest) returns (CreateVolumeReply) {}
   rpc DestroyVolume (DestroyVolumeRequest) returns (DestroyVolumeReply) {}
   rpc DestroyShutdownTarget (DestroyShutdownTargetRequest) returns (DestroyShutdownTargetReply) {}
   rpc GetVolumes (GetVolumesRequest) returns (GetVolumesReply) {}
+  rpc GetPoolReplicasInfo (GetPoolReplicasInfoRequest) returns (GetPoolReplicasInfoReply) {}
   rpc PublishVolume (PublishVolumeRequest) returns (PublishVolumeReply) {}
   rpc RepublishVolume (RepublishVolumeRequest) returns (RepublishVolumeReply) {}
   rpc ResizeVolume (ResizeVolumeRequest) returns (ResizeVolumeReply) {}

@@ -3,23 +3,24 @@ use crate::{
     operations::{volume::traits::VolumeOperations, Event, Pagination},
     volume::{
         create_snapshot_reply, create_snapshot_volume_reply, create_volume_reply,
-        get_snapshots_reply, get_volumes_reply, publish_volume_reply, republish_volume_reply,
-        resize_volume_reply, set_volume_property_reply, set_volume_replica_reply,
-        share_volume_reply, unpublish_volume_reply,
+        get_pool_replicas_info_reply, get_snapshots_reply, get_volumes_reply, publish_volume_reply,
+        republish_volume_reply, resize_volume_reply, set_volume_property_reply,
+        set_volume_replica_reply, share_volume_reply, unpublish_volume_reply,
         volume_grpc_server::{VolumeGrpc, VolumeGrpcServer},
         CreateSnapshotReply, CreateSnapshotRequest, CreateSnapshotVolumeReply,
         CreateSnapshotVolumeRequest, CreateVolumeReply, CreateVolumeRequest,
         DestroyShutdownTargetReply, DestroyShutdownTargetRequest, DestroySnapshotReply,
-        DestroySnapshotRequest, DestroyVolumeReply, DestroyVolumeRequest, GetSnapshotsReply,
-        GetSnapshotsRequest, GetVolumesReply, GetVolumesRequest, ProbeRequest, ProbeResponse,
-        PublishVolumeReply, PublishVolumeRequest, RepublishVolumeReply, RepublishVolumeRequest,
-        ResizeVolumeReply, ResizeVolumeRequest, SetVolumePropertyReply, SetVolumePropertyRequest,
-        SetVolumeReplicaReply, SetVolumeReplicaRequest, ShareVolumeReply, ShareVolumeRequest,
-        UnpublishVolumeReply, UnpublishVolumeRequest, UnshareVolumeReply, UnshareVolumeRequest,
+        DestroySnapshotRequest, DestroyVolumeReply, DestroyVolumeRequest, GetPoolReplicasInfoReply,
+        GetPoolReplicasInfoRequest, GetSnapshotsReply, GetSnapshotsRequest, GetVolumesReply,
+        GetVolumesRequest, ProbeRequest, ProbeResponse, PublishVolumeReply, PublishVolumeRequest,
+        RepublishVolumeReply, RepublishVolumeRequest, ResizeVolumeReply, ResizeVolumeRequest,
+        SetVolumePropertyReply, SetVolumePropertyRequest, SetVolumeReplicaReply,
+        SetVolumeReplicaRequest, ShareVolumeReply, ShareVolumeRequest, UnpublishVolumeReply,
+        UnpublishVolumeRequest, UnshareVolumeReply, UnshareVolumeRequest,
     },
 };
 use std::{convert::TryFrom, sync::Arc};
-use stor_port::types::v0::transport::Filter;
+use stor_port::types::v0::transport::{Filter, PoolId};
 use tonic::{Request, Response, Status};
 
 /// RPC Volume Server
@@ -145,6 +146,29 @@ impl VolumeGrpc for VolumeServer {
             })),
             Err(err) => Ok(Response::new(RepublishVolumeReply {
                 reply: Some(republish_volume_reply::Reply::Error(err.into())),
+            })),
+        }
+    }
+    async fn get_pool_replicas_info(
+        &self,
+        request: tonic::Request<GetPoolReplicasInfoRequest>,
+    ) -> Result<tonic::Response<GetPoolReplicasInfoReply>, tonic::Status> {
+        let pool_id = match PoolId::try_from(request.into_inner()) {
+            Ok(pool_id) => pool_id,
+            Err(err) => {
+                return Ok(Response::new(GetPoolReplicasInfoReply {
+                    reply: Some(get_pool_replicas_info_reply::Reply::Error(err.into())),
+                }))
+            }
+        };
+        match self.service.get_pool_replicas_info(&pool_id, None).await {
+            Ok(response) => Ok(Response::new(GetPoolReplicasInfoReply {
+                reply: Some(get_pool_replicas_info_reply::Reply::Response(
+                    response.into(),
+                )),
+            })),
+            Err(err) => Ok(Response::new(GetPoolReplicasInfoReply {
+                reply: Some(get_pool_replicas_info_reply::Reply::Error(err.into())),
             })),
         }
     }

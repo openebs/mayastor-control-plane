@@ -62,6 +62,9 @@ pub enum GetResources {
     Pools(GetPoolsArgs),
     /// Get pool with the given ID.
     Pool(GetPoolArgs),
+    /// Get all the replicas on the pool with the given ID, along with the properties of the
+    /// volume owning each replica.
+    PoolReplicasInfo { id: PoolId },
     /// Get all nodes.
     Nodes(GetNodesArgs),
     /// Get node with the given ID.

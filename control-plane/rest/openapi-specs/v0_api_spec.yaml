@@ -1335,6 +1335,35 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  '/pools/{pool_id}/replicas-info':
+    get:
+      tags:
+        - Pools
+      operationId: get_pool_replicas_info
+      description: |
+        Get all the volume replicas on the pool along with the properties of the volume which owns each replica.
+        This is served from the specs, so it does not depend on the pool or its node being online.
+      parameters:
+        - in: path
+          name: pool_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/PoolId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PoolReplicaInfo'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
   '/pools/{pool_id}/replicas/{replica_id}':
     put:
       tags:
@@ -3795,6 +3824,91 @@ components:
         - name
         - node
         - disks
+    PoolReplicaInfo:
+      description: |
+        A volume replica on a pool along with the volume which owns it.
+        The information is taken from the volume spec.
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/ReplicaId'
+        kind:
+          $ref: '#/components/schemas/ReplicaKind'
+        volume:
+          $ref: '#/components/schemas/VolumeInfo'
+        pool:
+          $ref: '#/components/schemas/PoolId'
+        node:
+          $ref: '#/components/schemas/NodeId'
+        size:
+          description: Size of the replica in bytes
+          type: integer
+          format: int64
+          minimum: 0
+        thin:
+          description: Thin provisioning flag of the replica
+          type: boolean
+        encrypted:
+          description: Data encryption of the replica
+          type: boolean
+        protocol:
+          $ref: '#/components/schemas/Protocol'
+        usage:
+          $ref: '#/components/schemas/ReplicaSpaceUsage'
+      required:
+        - id
+        - kind
+        - volume
+        - pool
+        - node
+        - size
+        - thin
+        - encrypted
+        - protocol
+    VolumeInfo:
+      description: The properties of the volume which owns a replica on a pool.
+      type: object
+      properties:
+        uuid:
+          $ref: '#/components/schemas/VolumeId'
+        size:
+          description: Size of the volume in bytes
+          type: integer
+          format: int64
+          minimum: 0
+        thin:
+          description: Thin provisioning flag of the volume
+          type: boolean
+        encrypted:
+          description: Data encryption of the volume
+          type: boolean
+        cluster_size:
+          description: Cluster size required by the volume of the pools hosting its replicas, in bytes
+          type: integer
+          format: int32
+          minimum: 0
+        num_replicas:
+          description: Number of replicas the volume should have
+          type: integer
+          format: uint8
+          minimum: 0
+          maximum: 255
+        labels:
+          description: Custom labels of the volume
+          type: object
+          additionalProperties:
+            type: string
+        topology:
+          $ref: '#/components/schemas/Topology'
+        affinity_group:
+          $ref: '#/components/schemas/AffinityGroup'
+      required:
+        - uuid
+        - size
+        - thin
+        - encrypted
+        - cluster_size
+        - num_replicas
     DiskSmart:
       example:
         disk_uri: 'aio:///var/local/openebs/blob?size=100GiB'
