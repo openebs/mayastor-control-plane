@@ -9,10 +9,10 @@ use crate::{
     replica, volume,
     volume::{
         get_volumes_request, AccessMode, CreateSnapshotVolumeRequest, CreateVolumeRequest,
-        DestroyShutdownTargetRequest, DestroyVolumeRequest, PublishVolumeRequest,
-        RegisteredTargets, RepublishVolumeRequest, ResizeVolumeRequest, SetVolumePropertyRequest,
-        SetVolumeReplicaRequest, ShareVolumeRequest, TriggerRebuildRequest, UnpublishVolumeRequest,
-        UnshareVolumeRequest,
+        DestroyShutdownTargetRequest, DestroyVolumeRequest, GetPoolReplicasInfoRequest,
+        PublishVolumeRequest, RegisteredTargets, RepublishVolumeRequest, ResizeVolumeRequest,
+        SetVolumePropertyRequest, SetVolumeReplicaRequest, ShareVolumeRequest,
+        TriggerRebuildRequest, UnpublishVolumeRequest, UnshareVolumeRequest,
     },
 };
 use events_api::event::{EventAction, EventCategory, EventMessage, EventMeta, EventSource};
@@ -29,13 +29,14 @@ use stor_port::{
         },
         transport::{
             AffinityGroup, CreateSnapshotVolume, CreateVolume, DestroyShutdownTargets,
-            DestroyVolume, ExplicitNodeTopology, Filter, LabelledTopology, Nexus, NexusId,
-            NexusNvmfConfig, NexusVersion, NodeId, NodeTopology, NvmeNqn, PoolTopology,
-            PublishVolume, ReplicaId, ReplicaStatus, ReplicaTopology, ReplicaUsage,
-            RepublishVolume, ResizeVolume, SetVolumeProperty, SetVolumeReplica, ShareVolume,
-            SnapshotId, SnapshotRestorePolicy, Topology, TriggerRebuild, UnpublishVolume,
-            UnshareVolume, Volume, VolumeAccessMode, VolumeHealth, VolumeId, VolumeLabels,
-            VolumePolicy, VolumeProperty, VolumeShareProtocol, VolumeState, VolumeUsage,
+            DestroyVolume, ExplicitNodeTopology, Filter, GetPoolReplicasInfoResponse,
+            LabelledTopology, Nexus, NexusId, NexusNvmfConfig, NexusVersion, NodeId, NodeTopology,
+            NvmeNqn, PoolId, PoolReplicaInfo, PoolTopology, PublishVolume, ReplicaId,
+            ReplicaStatus, ReplicaTopology, ReplicaUsage, RepublishVolume, ResizeVolume,
+            SetVolumeProperty, SetVolumeReplica, ShareVolume, SnapshotId, SnapshotRestorePolicy,
+            Topology, TriggerRebuild, UnpublishVolume, UnshareVolume, Volume, VolumeAccessMode,
+            VolumeHealth, VolumeId, VolumeInfo, VolumeLabels, VolumePolicy, VolumeProperty,
+            VolumeShareProtocol, VolumeState, VolumeUsage,
         },
     },
     IntoOption, IntoVec, TryIntoOption,
@@ -152,6 +153,135 @@ pub trait VolumeOperations: Send + Sync {
         req: &dyn ResizeVolumeInfo,
         ctx: Option<Context>,
     ) -> Result<Volume, ReplyError>;
+    /// Get the replicas of the pool which are owned by a volume, each along with its volume.
+    async fn get_pool_replicas_info(
+        &self,
+        pool_id: &PoolId,
+        ctx: Option<Context>,
+    ) -> Result<GetPoolReplicasInfoResponse, ReplyError>;
+}
+
+impl TryFrom<GetPoolReplicasInfoRequest> for PoolId {
+    type Error = ReplyError;
+    fn try_from(value: GetPoolReplicasInfoRequest) -> Result<Self, Self::Error> {
+        if value.pool_id.is_empty() {
+            return Err(ReplyError::missing_argument(ResourceKind::Pool, "pool_id"));
+        }
+        Ok(value.pool_id.into())
+    }
+}
+
+impl From<GetPoolReplicasInfoResponse> for volume::GetPoolReplicasInfoResponse {
+    fn from(value: GetPoolReplicasInfoResponse) -> Self {
+        Self {
+            replicas: value.replicas.into_vec(),
+        }
+    }
+}
+
+impl From<PoolReplicaInfo> for volume::PoolReplicaInfo {
+    fn from(value: PoolReplicaInfo) -> Self {
+        Self {
+            replica_id: value.replica.to_string(),
+            kind: replica::ReplicaKind::from(value.kind) as i32,
+            volume: Some(value.volume.into()),
+            pool: value.pool.to_string(),
+            node: value.node.to_string(),
+            size: value.size,
+            thin: value.thin,
+            encrypted: value.encrypted,
+            protocol: common::Protocol::from(value.protocol) as i32,
+            usage: value.usage.into_opt(),
+        }
+    }
+}
+
+impl From<VolumeInfo> for volume::VolumeInfo {
+    fn from(value: VolumeInfo) -> Self {
+        Self {
+            volume_id: value.uuid.to_string(),
+            size: value.size,
+            thin: value.thin,
+            encrypted: value.encrypted,
+            cluster_size: value.cluster_size,
+            num_replicas: value.num_replicas.into(),
+            labels: value
+                .labels
+                .map(|labels| common::StringMapValue { value: labels }),
+            topology: value.topology.into_opt(),
+            affinity_group: value.affinity_group.into_opt(),
+        }
+    }
+}
+
+impl TryFrom<volume::GetPoolReplicasInfoResponse> for GetPoolReplicasInfoResponse {
+    type Error = ReplyError;
+    fn try_from(value: volume::GetPoolReplicasInfoResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            replicas: value
+                .replicas
+                .into_iter()
+                .map(PoolReplicaInfo::try_from)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+impl TryFrom<volume::PoolReplicaInfo> for PoolReplicaInfo {
+    type Error = ReplyError;
+    fn try_from(value: volume::PoolReplicaInfo) -> Result<Self, Self::Error> {
+        let kind = replica::ReplicaKind::try_from(value.kind)
+            .map_err(|error| {
+                ReplyError::invalid_argument(ResourceKind::Replica, "kind", error.to_string())
+            })?
+            .into();
+        let volume = value
+            .volume
+            .ok_or_else(|| ReplyError::missing_argument(ResourceKind::Volume, "volume"))?;
+        Ok(Self {
+            replica: ReplicaId::try_from(StringValue(Some(value.replica_id)))?,
+            kind,
+            volume: VolumeInfo::try_from(volume)?,
+            pool: value.pool.into(),
+            node: value.node.into(),
+            size: value.size,
+            thin: value.thin,
+            encrypted: value.encrypted,
+            protocol: common::Protocol::try_from(value.protocol)
+                .map_err(|error| {
+                    ReplyError::invalid_argument(
+                        ResourceKind::Replica,
+                        "protocol",
+                        error.to_string(),
+                    )
+                })?
+                .into(),
+            usage: value.usage.into_opt(),
+        })
+    }
+}
+
+impl TryFrom<volume::VolumeInfo> for VolumeInfo {
+    type Error = ReplyError;
+    fn try_from(value: volume::VolumeInfo) -> Result<Self, Self::Error> {
+        Ok(Self {
+            uuid: VolumeId::try_from(StringValue(Some(value.volume_id)))?,
+            size: value.size,
+            thin: value.thin,
+            encrypted: value.encrypted,
+            cluster_size: value.cluster_size,
+            num_replicas: u8::try_from(value.num_replicas).map_err(|error| {
+                ReplyError::invalid_argument(
+                    ResourceKind::Volume,
+                    "num_replicas",
+                    error.to_string(),
+                )
+            })?,
+            labels: value.labels.map(|labels| labels.value),
+            topology: value.topology.try_into_opt()?,
+            affinity_group: value.affinity_group.into_opt(),
+        })
+    }
 }
 
 impl From<VolumeSpec> for volume::VolumeDefinition {

@@ -197,6 +197,9 @@ impl ExecuteOperation for GetResources {
                 volume::Volume::topology(id, &cli_args.output, &VolumeTopologiesArgs::from(args))
                     .await
             }
+            GetResources::PoolReplicasInfo { id } => {
+                pool::Pools::replicas_info(id, &cli_args.output).await
+            }
             GetResources::Pools(args) => pool::Pools::list(args, &cli_args.output).await,
             GetResources::Pool(args) => {
                 pool::Pool::get(&args.pool_id(), args, &cli_args.output).await

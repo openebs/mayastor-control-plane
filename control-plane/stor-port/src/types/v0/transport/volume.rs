@@ -1192,3 +1192,59 @@ impl CreateSnapshotVolume {
         &mut self.volume_params
     }
 }
+
+/// The properties of the volume which owns a replica on a pool.
+/// Everything is taken from the volume spec.
+#[derive(Debug, Clone)]
+pub struct VolumeInfo {
+    /// Id of the volume.
+    pub uuid: VolumeId,
+    /// Size of the volume in bytes.
+    pub size: u64,
+    /// Thin provisioning flag of the volume.
+    pub thin: bool,
+    /// Data encryption of the volume.
+    pub encrypted: bool,
+    /// Cluster size required by the volume of the pools hosting its replicas, in bytes.
+    pub cluster_size: u32,
+    /// Number of replicas the volume should have.
+    pub num_replicas: u8,
+    /// Custom labels of the volume.
+    pub labels: Option<VolumeLabels>,
+    /// Replica placement topology of the volume.
+    pub topology: Option<Topology>,
+    /// Affinity group of the volume.
+    pub affinity_group: Option<AffinityGroup>,
+}
+
+/// A replica on a pool along with the volume which owns it.
+#[derive(Debug, Clone)]
+pub struct PoolReplicaInfo {
+    /// Id of the replica.
+    pub replica: ReplicaId,
+    /// Kind of the replica.
+    pub kind: ReplicaKind,
+    /// The volume which owns the replica.
+    pub volume: VolumeInfo,
+    /// Id of the pool hosting the replica.
+    pub pool: PoolId,
+    /// Id of the node hosting the pool.
+    pub node: NodeId,
+    /// Size of the replica in bytes.
+    pub size: u64,
+    /// Thin provisioning flag of the replica.
+    pub thin: bool,
+    /// Data encryption of the replica.
+    pub encrypted: bool,
+    /// Protocol used for exposing the replica.
+    pub protocol: Protocol,
+    /// Space usage of the replica, unset if the replica state can't be found.
+    pub usage: Option<ReplicaSpaceUsage>,
+}
+
+/// Response from a GetPoolReplicasInfo query.
+#[derive(Default, Debug, Clone)]
+pub struct GetPoolReplicasInfoResponse {
+    /// The replicas on the pool which are owned by a volume.
+    pub replicas: Vec<PoolReplicaInfo>,
+}

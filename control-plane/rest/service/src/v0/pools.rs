@@ -1,7 +1,10 @@
 use super::*;
-use grpc::operations::pool::traits::{
-    ClearErrors, ClearErrorsRequest, GetPoolsSmartFilter, GetPoolsSmartRequest, PoolCordonRequest,
-    PoolDrainRequest, PoolOperations,
+use grpc::operations::{
+    pool::traits::{
+        ClearErrors, ClearErrorsRequest, GetPoolsSmartFilter, GetPoolsSmartRequest,
+        PoolCordonRequest, PoolDrainRequest, PoolOperations,
+    },
+    volume::traits::VolumeOperations,
 };
 use openapi::apis::pools_api::actix::server::{delNodePoolResponse, delPoolResponse};
 use rest_client::versions::v0::{apis::Uuid, models::PoolClearErr};
@@ -13,10 +16,48 @@ use stor_port::{
         store::pool::DrainPolicy,
         transport::{DestroyPool, ExpandPool, Filter, PoolSmart, UnlabelPool},
     },
+    IntoOption,
 };
 
 fn client() -> impl PoolOperations {
     core_grpc().pool()
+}
+
+/// Get the volume replicas of the pool, each along with the properties of the volume owning it.
+async fn pool_replicas_info(
+    pool_id: String,
+) -> Result<Vec<models::PoolReplicaInfo>, RestError<RestJsonError>> {
+    let info = core_grpc()
+        .volume()
+        .get_pool_replicas_info(&pool_id.into(), None)
+        .await?;
+
+    Ok(info
+        .replicas
+        .into_iter()
+        .map(|info| models::PoolReplicaInfo {
+            id: info.replica.into(),
+            kind: info.kind.into(),
+            pool: info.pool.into(),
+            node: info.node.into(),
+            size: info.size,
+            thin: info.thin,
+            encrypted: info.encrypted,
+            protocol: info.protocol.into(),
+            usage: info.usage.into_opt(),
+            volume: models::VolumeInfo {
+                uuid: info.volume.uuid.into(),
+                size: info.volume.size,
+                thin: info.volume.thin,
+                encrypted: info.volume.encrypted,
+                cluster_size: info.volume.cluster_size,
+                num_replicas: info.volume.num_replicas,
+                labels: info.volume.labels,
+                topology: info.volume.topology.into_opt(),
+                affinity_group: info.volume.affinity_group.into_opt(),
+            },
+        })
+        .collect())
 }
 
 /// Shared pool deletion logic. Returns `Some(result)` for purge, `None` for normal delete.
@@ -158,6 +199,12 @@ impl apis::actix_server::Pools for RestApi {
             client().get_pools_smart(&request).await?.pools.first(),
         )?;
         Ok(pool.into())
+    }
+
+    async fn get_pool_replicas_info(
+        Path(pool_id): Path<String>,
+    ) -> Result<Vec<models::PoolReplicaInfo>, RestError<RestJsonError>> {
+        pool_replicas_info(pool_id).await
     }
 
     async fn put_node_pool(

@@ -16,16 +16,17 @@ use crate::{
     },
     volume::{
         create_snapshot_reply, create_snapshot_volume_reply, create_volume_reply,
-        get_snapshots_reply, get_snapshots_request, get_volumes_reply, get_volumes_request,
-        publish_volume_reply, republish_volume_reply, resize_volume_reply,
-        set_volume_property_reply, set_volume_replica_reply, share_volume_reply,
-        trigger_rebuild_reply, unpublish_volume_reply, volume_grpc_client::VolumeGrpcClient,
-        GetSnapshotsRequest, GetVolumesRequest, ProbeRequest,
+        get_pool_replicas_info_reply, get_snapshots_reply, get_snapshots_request,
+        get_volumes_reply, get_volumes_request, publish_volume_reply, republish_volume_reply,
+        resize_volume_reply, set_volume_property_reply, set_volume_replica_reply,
+        share_volume_reply, trigger_rebuild_reply, unpublish_volume_reply,
+        volume_grpc_client::VolumeGrpcClient, GetPoolReplicasInfoRequest, GetSnapshotsRequest,
+        GetVolumesRequest, ProbeRequest,
     },
 };
 use stor_port::{
     transport_api::{v0::Volumes, ReplyError, ResourceKind, TimeoutOptions},
-    types::v0::transport::{Filter, MessageIdVs, Volume},
+    types::v0::transport::{Filter, GetPoolReplicasInfoResponse, MessageIdVs, PoolId, Volume},
 };
 
 use std::{convert::TryFrom, ops::Deref};
@@ -145,6 +146,32 @@ impl VolumeOperations for VolumeClient {
                 resize_volume_reply::Reply::Volume(vol) => Ok(Volume::try_from(vol)?),
                 resize_volume_reply::Reply::Error(err) => Err(err.into()),
             },
+            None => Err(ReplyError::invalid_response(ResourceKind::Volume)),
+        }
+    }
+
+    #[tracing::instrument(
+        name = "VolumeClient::get_pool_replicas_info",
+        level = "info",
+        skip(self),
+        err
+    )]
+    async fn get_pool_replicas_info(
+        &self,
+        pool_id: &PoolId,
+        _ctx: Option<Context>,
+    ) -> Result<GetPoolReplicasInfoResponse, ReplyError> {
+        let request = GetPoolReplicasInfoRequest {
+            pool_id: pool_id.to_string(),
+        };
+        let response = self
+            .client()
+            .get_pool_replicas_info(request)
+            .await?
+            .into_inner();
+        match response.reply {
+            Some(get_pool_replicas_info_reply::Reply::Response(resp)) => Ok(resp.try_into()?),
+            Some(get_pool_replicas_info_reply::Reply::Error(err)) => Err(err.into()),
             None => Err(ReplyError::invalid_response(ResourceKind::Volume)),
         }
     }
