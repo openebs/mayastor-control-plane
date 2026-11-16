@@ -95,6 +95,13 @@ pub struct StartOptions {
     #[clap(long)]
     pub rustfs: bool,
 
+    /// Run disaster recovery: the dr agent, and a store for it to work through.
+    ///
+    /// A relationship is mediated entirely by the store, so the agent without one is a
+    /// cluster that cannot do anything.
+    #[clap(long)]
+    pub dr: bool,
+
     /// Use the elasticsearch service.
     #[clap(short, long)]
     pub elastic: bool,
@@ -604,6 +611,11 @@ impl StartOptions {
         self
     }
     #[must_use]
+    pub fn with_dr(mut self, dr: bool) -> Self {
+        self.dr = dr;
+        self
+    }
+    #[must_use]
     pub fn with_build(mut self, build: bool) -> Self {
         self.build = build;
         self
@@ -804,6 +816,12 @@ impl StartOptions {
             false => binary.with_env("ENABLE_FIPS", "true"),
             true => binary,
         }
+    }
+
+    /// Whether the object store runs: asked for in its own right, or because dr needs
+    /// one - a relationship is mediated entirely by a store.
+    pub fn rustfs_enabled(&self) -> bool {
+        self.rustfs || self.dr
     }
 
     pub async fn start(&self) -> Result<ComposeTestNt, Error> {

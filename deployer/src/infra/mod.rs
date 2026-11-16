@@ -272,14 +272,26 @@ macro_rules! impl_component {
         }
 
         impl Components {
-            pub fn new(options: StartOptions) -> Components {
-                let agents = options.agents.clone();
-                let components = agents
+            pub fn new(mut options: StartOptions) -> Components {
+                // `--dr` is a shorthand for the dr agent and a store. The agent has to be
+                // in the list here, because an agent is only a component if it is.
+                if options.dr
+                    && !options
+                        .agents
+                        .iter()
+                        .any(|agent| matches!(agent, ControlPlaneAgent::DrAgent(_)))
+                {
+                    options
+                        .agents
+                        .push(ControlPlaneAgent::DrAgent(DrAgent::default()));
+                }
+                let components = options
+                    .agents
                     .iter()
                     .map(Component::from)
                     .collect::<Vec<Component>>();
 
-                let mut components = Components(components, options.clone());
+                let mut components = Components(components, options);
                 $(components.push_generic_components(stringify!($name), $name::default().into());)+
                 components.0.sort();
                 components
