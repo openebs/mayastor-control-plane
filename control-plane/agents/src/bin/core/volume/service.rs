@@ -389,11 +389,12 @@ impl Service {
         &self,
         request: &RepublishVolume,
     ) -> Result<Volume, SvcError> {
-        // If HA is disabled there is no point in switchover.
+        // Let HA terminate stale switchover requests for deleted volumes, even when
+        // HA is disabled. Otherwise it keeps retrying FailedPrecondition forever.
+        let mut volume = self.specs().volume(&request.uuid).await?;
         if self.registry.ha_disabled() {
             return Err(SvcError::SwitchoverNotAllowedWhenHAisDisabled {});
         }
-        let mut volume = self.specs().volume(&request.uuid).await?;
         volume.republish(&self.registry, request).await
     }
 
