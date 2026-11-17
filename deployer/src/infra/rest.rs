@@ -63,6 +63,15 @@ impl ComponentAction for Rest {
                 binary = binary.with_args(vec!["--json-grpc", &json_grpc]);
             }
 
+            if cfg.container_exists(crate::infra::agents::dr::CONTAINER) {
+                let dr_grpc = format!(
+                    "{grpc_scheme}://{}:{}",
+                    crate::infra::agents::dr::CONTAINER,
+                    crate::infra::agents::dr::GRPC_PORT
+                );
+                binary = binary.with_args(vec!["--dr-grpc", &dr_grpc]);
+            }
+
             if let Some(size) = &options.otel_max_batch_size {
                 binary = binary.with_env("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", size);
             }
