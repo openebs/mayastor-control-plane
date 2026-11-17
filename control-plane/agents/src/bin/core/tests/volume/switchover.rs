@@ -1214,3 +1214,61 @@ async fn republished_nexus_core_agent_txn_fail() {
     let errcode = task.await.unwrap();
     assert!(errcode.is_some_and(|s| s == 0));
 }
+
+/// Deleted volumes must terminate HA retries even when failover is disabled.
+#[tokio::test]
+async fn deleted_volume_republish_with_ha_disabled() {
+    let cluster = ClusterBuilder::builder()
+        .with_io_engines(1)
+        .with_tmpfs_pool(POOL_SIZE_BYTES)
+        .with_options(|options| options.with_agents_env("HA_DISABLED", "true"))
+        .build()
+        .await
+        .unwrap();
+    let client = cluster.grpc_client().volume();
+    let volume = client
+        .create(
+            &CreateVolume {
+                uuid: "b39bf33d-842e-4ade-8939-2eeb6375b256".try_into().unwrap(),
+                size: 5242880,
+                replicas: 1,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    let request = RepublishVolume {
+        uuid: volume.uuid().clone(),
+        target_node: None,
+        share: VolumeShareProtocol::Nvmf,
+        reuse_existing: false,
+        frontend_node: cluster.node(0),
+        reuse_existing_fallback: false,
+    };
+    // Existing volumes must still reject failover when HA is disabled.
+    let error = client.republish(&request, None).await.unwrap_err();
+    assert_eq!(error.kind, ReplyErrorKind::FailedPrecondition);
+
+    client
+        .destroy(
+            &DestroyVolume {
+                uuid: volume.uuid().clone(),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    let error = client.republish(&request, None).await.unwrap_err();
+    assert_eq!(error.kind, ReplyErrorKind::NotFound);
+
+    // HA's errored-request cleanup accepts NotFound for deleted volumes.
+    let error = client
+        .destroy_shutdown_target(
+            &DestroyShutdownTargets::new(volume.uuid().clone(), None),
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind, ReplyErrorKind::NotFound);
+}
