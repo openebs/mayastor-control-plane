@@ -21,8 +21,16 @@ impl ComponentAction for DrAgent {
                 .status()?;
             build_error(&format!("the {CONTAINER} agent"), status.code())?;
         }
-        let mut binary =
-            Binary::from_dbg(CONTAINER).with_args(vec!["-g", &format!("[::]:{GRPC_PORT}")]);
+        let etcd = format!("etcd.{}:2379", options.cluster_label.name());
+        let mut binary = Binary::from_dbg(CONTAINER)
+            .with_args(vec!["-g", &format!("[::]:{GRPC_PORT}")])
+            // The pair is the dr agent's own resource, so it holds its own connection to
+            // the persistent store rather than reaching it through core.
+            .with_args(vec!["--store", &etcd]);
+
+        if let Some(timeout) = &options.store_timeout {
+            binary = binary.with_args(vec!["--store-timeout", &timeout.to_string()]);
+        }
 
         if let Some(env) = &options.agents_env {
             for kv in env {
