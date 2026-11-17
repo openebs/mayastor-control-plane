@@ -5,7 +5,7 @@
 //! IoEngine CSI node plugin is deployed.
 
 use crate::{
-    dev::Device,
+    dev::{self, Device},
     findmnt,
     fsfreeze::{fsfreeze, FsFreezeOpt},
     mount::lazy_unmount_mountpaths,
@@ -23,7 +23,7 @@ use csi_driver::{
     },
 };
 use nodeplugin_svc::TypeOfMount;
-use nvmeadm::{error::NvmeError, nvmf_subsystem::Subsystem};
+use nvmeadm::error::NvmeError;
 use utils::nvme_target_nqn_prefix;
 
 use tonic::{transport::Server, Request, Response, Status};
@@ -83,19 +83,16 @@ impl NodePlugin for NodePluginSvc {
         debug!("Starting cleanup for volume: {volume_id}");
 
         let nqn = format!("{}:{volume_id}", nvme_target_nqn_prefix());
-        match Subsystem::try_from_nqn(&nqn) {
+        match dev::nvmf::subsystems_by_nqn(&nqn) {
             Ok(subsystem_paths) => {
                 for subsystem_path in subsystem_paths {
                     info!("Processing subsystem: {subsystem_path:?}");
-                    if !subsystem_path.state.contains("deleting") {
-                        runtime::spawn_blocking(move || {
-                            subsystem_path
-                                .disconnect()
-                                .map_err(|error| Status::aborted(error.to_string()))
-                        })
-                        .await
-                        .map_err(|error| Status::aborted(error.to_string()))??;
-                    }
+                    runtime::spawn_blocking(move || {
+                        dev::nvmf::disconnect_subsystem(&subsystem_path)
+                            .map_err(|error| Status::aborted(error.to_string()))
+                    })
+                    .await
+                    .map_err(|error| Status::aborted(error.to_string()))??;
                 }
                 Err(Status::internal(format!(
                     "Cleanup initiated for all stale entries of: {volume_id}. Returning error for validation on retry."
@@ -106,31 +103,24 @@ impl NodePlugin for NodePluginSvc {
                     Status::invalid_argument(format!("Invalid volume UUID: {volume_id}, {error}"))
                 })?;
 
-                if let Ok(Some(device)) = Device::lookup(&uuid).await {
-                    let mountpaths = findmnt::get_mountpaths(&device.devname()).await?;
-                    debug!(
-                        "Device: {} found, with mount paths: {}, issuing unmount",
-                        device.devname(),
-                        mountpaths
-                            .iter()
-                            .map(|devmount| devmount.to_string())
-                            .collect::<Vec<String>>()
-                            .join(", ")
-                    );
-                    lazy_unmount_mountpaths(&mountpaths).await?;
-                } else {
-                    let mountpaths =
-                        findmnt::get_csi_mountpaths(&volume_id, Some(&self.kubelet_path)).await?;
-                    debug!(
-                        "Device was not found, detected mount paths: {}, issuing unmount",
-                        mountpaths
-                            .iter()
-                            .map(|devmount| devmount.to_string())
-                            .collect::<Vec<String>>()
-                            .join(", ")
-                    );
-                    lazy_unmount_mountpaths(&mountpaths).await?;
-                }
+                let device_path = Device::lookup(&uuid)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|device| device.devname());
+                let kubelet_path = self.kubelet_path.clone();
+                let mountpaths = runtime::spawn_blocking(move || {
+                    findmnt::force_unstage_mountpaths(
+                        device_path.as_deref(),
+                        &volume_id,
+                        &kubelet_path,
+                    )
+                })
+                .await
+                .map_err(|error| Status::aborted(error.to_string()))??;
+
+                debug!(?mountpaths, "Unmounting stale volume mounts");
+                lazy_unmount_mountpaths(&mountpaths).await?;
                 Ok(Response::new(ForceUnstageVolumeReply {}))
             }
             Err(error) => Err(Status::aborted(error.to_string())),
