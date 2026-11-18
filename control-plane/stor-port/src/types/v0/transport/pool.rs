@@ -1289,6 +1289,41 @@ pub struct GetPoolsSmartResponse {
     pub pools: Vec<PoolSmart>,
 }
 
+/// A replica on a pool along with the properties of the volume which owns it.
+/// Everything is taken from the replica and volume specs.
+#[derive(Debug, Clone)]
+pub struct PoolReplicaInfo {
+    /// Id of the replica.
+    pub replica: ReplicaId,
+    /// Id of the volume which owns the replica.
+    pub volume: VolumeId,
+    /// Size of the replica in bytes.
+    pub size: u64,
+    /// Thin provisioning flag of the replica.
+    pub thin: bool,
+    /// Data encryption of the replica.
+    pub encrypted: bool,
+    /// Kind of the replica.
+    pub kind: ReplicaKind,
+    /// Cluster size required by the volume of the pools hosting its replicas, in bytes.
+    pub cluster_size: u32,
+    /// Number of replicas the volume should have.
+    pub num_replicas: u8,
+    /// Custom labels of the volume.
+    pub labels: Option<VolumeLabels>,
+    /// Replica placement topology of the volume.
+    pub topology: Option<Topology>,
+    /// Affinity group of the volume.
+    pub affinity_group: Option<AffinityGroup>,
+}
+
+/// Response from a GetPoolReplicasInfo query.
+#[derive(Default, Debug, Clone)]
+pub struct GetPoolReplicasInfoResponse {
+    /// The replicas on the pool which are owned by a volume.
+    pub replicas: Vec<PoolReplicaInfo>,
+}
+
 /// SMART data for all disks backing a single pool.
 #[derive(Default, Debug, Clone)]
 pub struct PoolSmart {

@@ -31,9 +31,10 @@ use stor_port::{
     types::v0::{
         store::{pool::PoolSpec, replica::ReplicaSpec},
         transport::{
-            CreatePool, CreateReplica, DestroyPool, DestroyReplica, ExpandPool, Filter, GetPools,
-            GetPoolsSmartResponse, GetReplicas, LabelPool, NodeId, Pool, PoolDeleteResult, PoolId,
-            Replica, ResizeReplica, ShareReplica, UnlabelPool, UnshareReplica, VolumeId,
+            CreatePool, CreateReplica, DestroyPool, DestroyReplica, ExpandPool, Filter,
+            GetPoolReplicasInfoResponse, GetPools, GetPoolsSmartResponse, GetReplicas, LabelPool,
+            NodeId, Pool, PoolDeleteResult, PoolId, PoolReplicaInfo, Replica, ResizeReplica,
+            ShareReplica, UnlabelPool, UnshareReplica, VolumeId,
         },
     },
 };
@@ -159,6 +160,13 @@ impl PoolOperations for Service {
             Context::spawn(async move { service.get_pools_smart_inner(&request).await }).await??;
         Ok(response)
     }
+
+    async fn get_pool_replicas_info(
+        &self,
+        pool_id: &PoolId,
+    ) -> Result<GetPoolReplicasInfoResponse, ReplyError> {
+        Ok(self.pool_replicas_info(pool_id).await?)
+    }
 }
 
 #[tonic::async_trait]
@@ -254,6 +262,47 @@ impl Service {
             Filter::Volume(volume_id) => self.volume_pools(Some(volume_id)).await,
             _ => Err(SvcError::InvalidFilter { filter }),
         }
+    }
+
+    /// Get the volume replicas of the pool, each along with the properties of its volume.
+    /// Everything is taken from the specs, so neither the pool nor its node need to be online.
+    #[tracing::instrument(level = "info", skip(self), err)]
+    async fn pool_replicas_info(
+        &self,
+        pool_id: &PoolId,
+    ) -> Result<GetPoolReplicasInfoResponse, SvcError> {
+        // Fail for unknown pools rather than returning an empty list.
+        self.specs().pool(pool_id)?;
+
+        let mut replicas = Vec::new();
+        for replica in self.specs().pool_replicas(pool_id) {
+            let replica = replica.lock().clone();
+            // Replicas which are not owned by a volume are not of interest.
+            let Some(volume_id) = replica.owners.volume() else {
+                continue;
+            };
+            let volume = match self.specs().volume_clone(volume_id) {
+                Ok(volume) => volume,
+                // The volume may be getting deleted.
+                Err(SvcError::VolumeNotFound { .. }) => continue,
+                Err(error) => return Err(error),
+            };
+            replicas.push(PoolReplicaInfo {
+                replica: replica.uuid,
+                volume: volume.uuid,
+                size: replica.size,
+                thin: replica.thin,
+                encrypted: replica.encrypted,
+                kind: replica.kind.unwrap_or_default(),
+                cluster_size: volume.cluster_size,
+                num_replicas: volume.num_replicas,
+                labels: volume.labels,
+                topology: volume.topology,
+                affinity_group: volume.affinity_group,
+            });
+        }
+
+        Ok(GetPoolReplicasInfoResponse { replicas })
     }
 
     /// Get pools associated with the volume.

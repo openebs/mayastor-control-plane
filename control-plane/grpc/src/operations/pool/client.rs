@@ -8,15 +8,19 @@ use crate::{
     },
     pool::{
         self, clear_errors_reply, cordon_pool_reply, create_pool_reply, destroy_pool_reply,
-        drain_pool_reply, expand_pool_reply, get_pools_reply, get_pools_request,
-        get_pools_smart_reply, label_pool_reply, pool_grpc_client::PoolGrpcClient,
-        unlabel_pool_reply, CordonPoolRequest, ExpandPoolRequest, GetPoolsRequest,
+        drain_pool_reply, expand_pool_reply, get_pool_replicas_info_reply, get_pools_reply,
+        get_pools_request, get_pools_smart_reply, label_pool_reply,
+        pool_grpc_client::PoolGrpcClient, unlabel_pool_reply, CordonPoolRequest, ExpandPoolRequest,
+        GetPoolsRequest,
     },
 };
 use std::{convert::TryFrom, ops::Deref};
 use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind, TimeoutOptions},
-    types::v0::transport::{Filter, GetPoolsSmartResponse, MessageIdVs, Pool, PoolDeleteResult},
+    types::v0::transport::{
+        Filter, GetPoolReplicasInfoResponse, GetPoolsSmartResponse, MessageIdVs, Pool,
+        PoolDeleteResult, PoolId,
+    },
 };
 use tonic::transport::Uri;
 
@@ -246,6 +250,33 @@ impl PoolOperations for PoolClient {
             Some(reply) => match reply {
                 get_pools_smart_reply::Reply::Response(resp) => Ok(resp.into()),
                 get_pools_smart_reply::Reply::Error(err) => Err(err.into()),
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
+        }
+    }
+
+    #[tracing::instrument(
+        name = "PoolClient::get_pool_replicas_info",
+        level = "info",
+        skip(self),
+        err
+    )]
+    async fn get_pool_replicas_info(
+        &self,
+        pool_id: &PoolId,
+    ) -> Result<GetPoolReplicasInfoResponse, ReplyError> {
+        let request = pool::GetPoolReplicasInfoRequest {
+            pool_id: pool_id.to_string(),
+        };
+        let response = self
+            .client()
+            .get_pool_replicas_info(request)
+            .await?
+            .into_inner();
+        match response.reply {
+            Some(reply) => match reply {
+                get_pool_replicas_info_reply::Reply::Response(resp) => Ok(resp.try_into()?),
+                get_pool_replicas_info_reply::Reply::Error(err) => Err(err.into()),
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
         }

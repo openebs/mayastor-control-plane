@@ -1223,6 +1223,84 @@ impl GetWithArgs for PoolSmart {
     }
 }
 
+impl Pools {
+    /// Print the replicas on the pool along with the properties of the volumes owning them.
+    pub async fn replicas_info(id: &PoolId, output: &utils::OutputFormat) -> PluginResult {
+        let replicas = RestClient::client()
+            .pools_api()
+            .get_pool_replicas_info(id)
+            .await
+            .map(|replicas| replicas.into_body())
+            .map_err(|source| Error::GetPoolReplicasInfoError {
+                id: id.to_string(),
+                source,
+            })?;
+
+        print_table(output, replicas);
+        Ok(())
+    }
+}
+
+/// Headers of the pool replica info table, which has a row per replica.
+const POOL_REPLICA_INFO_HEADERS: [&str; 11] = [
+    "NAME",
+    "VOLUME",
+    "KIND",
+    "SIZE",
+    "THIN",
+    "ENCRYPTED",
+    "CLUSTER-SIZE",
+    "NUM-REPLICAS",
+    "AFFINITY-GROUP",
+    "TOPOLOGY",
+    "LABELS",
+];
+
+impl GetHeaderRow for Vec<models::PoolReplicaInfo> {
+    fn get_header_row(&self) -> Row {
+        Row::new(
+            POOL_REPLICA_INFO_HEADERS
+                .iter()
+                .map(|h| Cell::new(h))
+                .collect(),
+        )
+    }
+}
+
+impl CreateRows for Vec<models::PoolReplicaInfo> {
+    fn create_rows(&self) -> Vec<Row> {
+        self.iter()
+            .map(|info| {
+                let labels = info.labels.as_ref().map(|labels| {
+                    let mut labels = labels
+                        .iter()
+                        .map(|(key, value)| format!("{key}={value}"))
+                        .collect::<Vec<_>>();
+                    labels.sort();
+                    labels.join(",")
+                });
+                let topology = info
+                    .topology
+                    .as_ref()
+                    .and_then(|topology| serde_json::to_string(topology).ok());
+                row![
+                    info.name,
+                    info.volume,
+                    info.kind,
+                    ::utils::bytes::into_human(info.size),
+                    info.thin,
+                    info.encrypted,
+                    ::utils::bytes::into_human(info.cluster_size as u64),
+                    info.num_replicas,
+                    optional_cell(info.affinity_group.as_ref().map(|ag| ag.id.as_str())),
+                    optional_cell(topology),
+                    optional_cell(labels),
+                ]
+            })
+            .collect()
+    }
+}
+
 /// Headers of the pool SMART table, which has a row per disk.
 const POOL_SMART_HEADERS: [&str; 12] = [
     "POOL",

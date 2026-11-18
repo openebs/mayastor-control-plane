@@ -20,12 +20,12 @@ use stor_port::{
         },
         transport::{
             AtaSmart, CreatePool, CtrlPoolState, DestroyPool, DeviceIdentity, DiskInfo, DiskSmart,
-            ExpandPool, Filter, GetPoolsSmartResponse, LabelPool, NodeId, NvmeErrorLogEntry,
-            NvmeSmart, Pool, PoolAlert, PoolAlertStatus, PoolAlerts, PoolDef, PoolDeleteResult,
-            PoolDeviceUri, PoolDiag, PoolDiskError, PoolError, PoolErrorCode, PoolErrorInfo,
-            PoolId, PoolSmart, PoolState, PoolStatus, ReplicaId, SmartAttribute, SmartData,
-            SmartProtocol, SnapshotLossDetail, SnapshotLossInfo, UnlabelPool, VolumeId,
-            VolumeLossDetail, VolumeLossInfo,
+            ExpandPool, Filter, GetPoolReplicasInfoResponse, GetPoolsSmartResponse, LabelPool,
+            NodeId, NvmeErrorLogEntry, NvmeSmart, Pool, PoolAlert, PoolAlertStatus, PoolAlerts,
+            PoolDef, PoolDeleteResult, PoolDeviceUri, PoolDiag, PoolDiskError, PoolError,
+            PoolErrorCode, PoolErrorInfo, PoolId, PoolReplicaInfo, PoolSmart, PoolState,
+            PoolStatus, ReplicaId, SmartAttribute, SmartData, SmartProtocol, SnapshotLossDetail,
+            SnapshotLossInfo, UnlabelPool, VolumeId, VolumeLossDetail, VolumeLossInfo,
         },
     },
     IntoOption, IntoVec, TryIntoOption, TryIntoVec,
@@ -153,6 +153,12 @@ pub trait PoolOperations: Send + Sync {
         &self,
         request: &GetPoolsSmartRequest,
     ) -> Result<GetPoolsSmartResponse, ReplyError>;
+
+    /// Get the replicas of the pool, each along with the volume which owns it.
+    async fn get_pool_replicas_info(
+        &self,
+        pool_id: &PoolId,
+    ) -> Result<GetPoolReplicasInfoResponse, ReplyError>;
 }
 
 impl TryFrom<pool::PoolDefinition> for PoolSpec {
@@ -1791,6 +1797,86 @@ impl From<&GetPoolsSmartRequest> for pool::GetPoolsSmartRequest {
         Self {
             filter: Some(filter),
         }
+    }
+}
+
+impl TryFrom<pool::GetPoolReplicasInfoRequest> for PoolId {
+    type Error = ReplyError;
+    fn try_from(value: pool::GetPoolReplicasInfoRequest) -> Result<Self, Self::Error> {
+        if value.pool_id.is_empty() {
+            return Err(ReplyError::missing_argument(ResourceKind::Pool, "pool_id"));
+        }
+        Ok(value.pool_id.into())
+    }
+}
+
+impl From<GetPoolReplicasInfoResponse> for pool::GetPoolReplicasInfoResponse {
+    fn from(value: GetPoolReplicasInfoResponse) -> Self {
+        Self {
+            replicas: value.replicas.into_vec(),
+        }
+    }
+}
+
+impl From<PoolReplicaInfo> for pool::PoolReplicaInfo {
+    fn from(value: PoolReplicaInfo) -> Self {
+        Self {
+            replica_id: value.replica.to_string(),
+            volume_id: value.volume.to_string(),
+            size: value.size,
+            thin: value.thin,
+            encrypted: value.encrypted,
+            kind: Some(crate::replica::ReplicaKind::from(value.kind) as i32),
+            cluster_size: value.cluster_size,
+            num_replicas: value.num_replicas.into(),
+            labels: value
+                .labels
+                .map(|labels| common::StringMapValue { value: labels }),
+            topology: value.topology.into_opt(),
+            affinity_group: value.affinity_group.into_opt(),
+        }
+    }
+}
+
+impl TryFrom<pool::GetPoolReplicasInfoResponse> for GetPoolReplicasInfoResponse {
+    type Error = ReplyError;
+    fn try_from(value: pool::GetPoolReplicasInfoResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            replicas: value.replicas.try_into_vec()?,
+        })
+    }
+}
+
+impl TryFrom<pool::PoolReplicaInfo> for PoolReplicaInfo {
+    type Error = ReplyError;
+    fn try_from(value: pool::PoolReplicaInfo) -> Result<Self, Self::Error> {
+        let kind = match value.kind {
+            Some(kind) => crate::replica::ReplicaKind::try_from(kind)
+                .map_err(|error| {
+                    ReplyError::invalid_argument(ResourceKind::Replica, "kind", error.to_string())
+                })?
+                .into(),
+            None => Default::default(),
+        };
+        Ok(Self {
+            replica: ReplicaId::try_from(StringValue(Some(value.replica_id)))?,
+            volume: VolumeId::try_from(StringValue(Some(value.volume_id)))?,
+            size: value.size,
+            thin: value.thin,
+            encrypted: value.encrypted,
+            kind,
+            cluster_size: value.cluster_size,
+            num_replicas: u8::try_from(value.num_replicas).map_err(|error| {
+                ReplyError::invalid_argument(
+                    ResourceKind::Volume,
+                    "num_replicas",
+                    error.to_string(),
+                )
+            })?,
+            labels: value.labels.map(|labels| labels.value),
+            topology: value.topology.try_into_opt()?,
+            affinity_group: value.affinity_group.into_opt(),
+        })
     }
 }
 
