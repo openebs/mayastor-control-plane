@@ -526,6 +526,24 @@ message SetVolumePropertyReply {
   }
 }
 
+// Ask for a degraded unpublished volume's offline rebuild to start without
+// waiting out the grace period.
+message TriggerRebuildRequest {
+  // uuid of the volume
+  string uuid = 1;
+  // start the rebuild as part of this request rather than queueing it
+  bool now = 2;
+  // start the rebuild even when the rebuild limits are reached; only with now
+  bool force = 3;
+}
+
+message TriggerRebuildReply {
+  oneof reply {
+    Volume volume = 1;
+    common.ReplyError error = 2;
+  }
+}
+
 message ProbeRequest {
   // Intentionally empty.
 }
@@ -700,6 +718,7 @@ service VolumeGrpc {
   rpc SetVolumeReplica (SetVolumeReplicaRequest) returns (SetVolumeReplicaReply) {}
   rpc Probe (ProbeRequest) returns (ProbeResponse) {}
   rpc SetVolumeProperty (SetVolumePropertyRequest) returns (SetVolumePropertyReply) {}
+  rpc TriggerRebuild (TriggerRebuildRequest) returns (TriggerRebuildReply) {}
   // Snapshots
   rpc CreateSnapshot (CreateSnapshotRequest) returns (CreateSnapshotReply) {}
   rpc DestroySnapshot (DestroySnapshotRequest) returns (DestroySnapshotReply) {}
