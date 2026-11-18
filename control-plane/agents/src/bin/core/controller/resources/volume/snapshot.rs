@@ -16,10 +16,16 @@ impl ResourceUid for VolumeSnapshot {
     fn uid(&self) -> &Self::Uid {
         self.spec().uuid()
     }
+    fn rkind(&self) -> stor_port::transport_api::ResourceKind {
+        stor_port::transport_api::ResourceKind::VolumeSnapshot
+    }
 }
 impl ResourceUid for ReplicaSnapshotState {
     type Uid = SnapshotId;
     fn uid(&self) -> &Self::Uid {
         self.snapshot.snap_uuid()
+    }
+    fn rkind(&self) -> stor_port::transport_api::ResourceKind {
+        stor_port::transport_api::ResourceKind::ReplicaSnapshot
     }
 }
