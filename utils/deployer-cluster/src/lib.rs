@@ -175,14 +175,21 @@ impl Cluster {
             "Max tries exceeded, node service not up".to_string(),
         ))
     }
+    fn status_tmo(&self) -> std::time::Duration {
+        if self.grpc_tls() {
+            Duration::from_secs(3) // if tls is enabled, it may take a bit longer...
+        } else {
+            Duration::from_secs(2)
+        }
+    }
     /// Wait till the node is in the given status.
     pub async fn wait_node_status<I: AsRef<NodeId>>(
         &self,
         node_id: I,
         status: NodeStatus,
     ) -> Result<(), String> {
-        self.wait_node_status_tmo(node_id, status, Duration::from_secs(2))
-            .await
+        let tmo = self.status_tmo();
+        self.wait_node_status_tmo(node_id, status, tmo).await
     }
     /// Wait till the node is in the given status.
     pub async fn wait_node_status_ext<I: AsRef<NodeId>>(
@@ -190,8 +197,8 @@ impl Cluster {
         node_id: I,
         status: impl Fn(&NodeStatus) -> bool,
     ) -> Result<(), String> {
-        self.wait_node_status_tmo_ext(node_id, Duration::from_secs(2), status)
-            .await
+        let tmo = self.status_tmo();
+        self.wait_node_status_tmo_ext(node_id, tmo, status).await
     }
     /// Wait till the node is in the given status.
     pub async fn wait_node_status_tmo_ext<I: AsRef<NodeId>>(
@@ -270,8 +277,8 @@ impl Cluster {
     }
     /// Wait till the pool is online.
     pub async fn wait_pool_online(&self, pool_id: PoolId) -> Result<(), ()> {
-        self.wait_pool_online_tmo(pool_id, Duration::from_secs(2))
-            .await
+        let tmo = self.status_tmo();
+        self.wait_pool_online_tmo(pool_id, tmo).await
     }
     /// Wait till the pool is online, up to the given timeout.
     pub async fn wait_pool_online_tmo(&self, pool_id: PoolId, timeout: Duration) -> Result<(), ()> {
@@ -307,7 +314,7 @@ impl Cluster {
     }
     /// Wait till the pool is online.
     pub async fn wait_pools_online<I: AsRef<NodeId>>(&self, node: I) -> Result<(), String> {
-        let timeout = Duration::from_secs(2);
+        let timeout = self.status_tmo();
         let start = std::time::Instant::now();
         loop {
             let filter = Filter::Node(node.as_ref().clone());
