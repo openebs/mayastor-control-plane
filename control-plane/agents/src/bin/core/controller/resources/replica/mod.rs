@@ -16,11 +16,17 @@ impl ResourceUid for ReplicaSpec {
     fn uid(&self) -> &Self::Uid {
         &self.uuid
     }
+    fn rkind(&self) -> stor_port::transport_api::ResourceKind {
+        stor_port::transport_api::ResourceKind::Replica
+    }
 }
 
 impl ResourceUid for ReplicaState {
     type Uid = ReplicaId;
     fn uid(&self) -> &Self::Uid {
         &self.replica.uuid
+    }
+    fn rkind(&self) -> stor_port::transport_api::ResourceKind {
+        stor_port::transport_api::ResourceKind::Replica
     }
 }

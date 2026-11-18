@@ -888,7 +888,10 @@ impl<T: Clone + Sync + Send + Debug + ResourceUid> OperationSequenceGuard<T> for
                         mode.apply()
                     );
                 }
-                Err(SvcError::Conflict {})
+                Err(SvcError::Conflict {
+                    id: self.uid_str(),
+                    kind: self.rkind(),
+                })
             }
         }
     }

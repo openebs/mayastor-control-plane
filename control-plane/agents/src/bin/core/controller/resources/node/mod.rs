@@ -6,4 +6,7 @@ impl ResourceUid for NodeSpec {
     fn uid(&self) -> &Self::Uid {
         self.id()
     }
+    fn rkind(&self) -> stor_port::transport_api::ResourceKind {
+        stor_port::transport_api::ResourceKind::Node
+    }
 }

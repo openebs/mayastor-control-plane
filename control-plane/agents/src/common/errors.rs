@@ -256,8 +256,8 @@ pub enum SvcError {
     WatchResourceNotFound { kind: ResourceKind },
     #[snafu(display("Watch Already Exists"))]
     WatchAlreadyExists {},
-    #[snafu(display("Conflicts with existing operation - please retry"))]
-    Conflict {},
+    #[snafu(display("Conflicts with existing operation @ {id}/{kind} - please retry"))]
+    Conflict { id: String, kind: ResourceKind },
     #[snafu(display("{kind} Resource pending deletion - please retry"))]
     Deleting { kind: ResourceKind },
     #[snafu(display(

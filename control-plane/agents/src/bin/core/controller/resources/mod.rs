@@ -4,8 +4,11 @@ use std::{
     ops::{Deref, DerefMut},
     sync::Arc,
 };
-use stor_port::types::v0::store::{
-    OperationMode, OperationSequence, OperationSequenceState, OperationSequencer,
+use stor_port::{
+    transport_api::ResourceKind,
+    types::v0::store::{
+        OperationMode, OperationSequence, OperationSequenceState, OperationSequencer,
+    },
 };
 
 mod app_node;
@@ -68,12 +71,18 @@ impl<T: Clone + ResourceUid> ResourceUid for ResourceMutex<T> {
     fn uid(&self) -> &Self::Uid {
         self.immutable_ref().uid()
     }
+    fn rkind(&self) -> ResourceKind {
+        self.immutable_ref().rkind()
+    }
 }
 impl<T: Clone + ResourceUid> ResourceUid for Resource<T> {
     type Uid = T::Uid;
 
     fn uid(&self) -> &Self::Uid {
         self.inner.uid()
+    }
+    fn rkind(&self) -> ResourceKind {
+        self.inner.rkind()
     }
 }
 /// The mutable resource value together with its operation sequence state and FIFO waiters,
@@ -446,5 +455,9 @@ pub(crate) trait ResourceUid {
     fn uid(&self) -> &Self::Uid;
     fn uid_str(&self) -> String {
         self.uid().to_string()
+    }
+    /// The kind of resource.
+    fn rkind(&self) -> ResourceKind {
+        ResourceKind::Unknown
     }
 }

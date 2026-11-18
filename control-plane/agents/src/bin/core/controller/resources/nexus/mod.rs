@@ -23,6 +23,9 @@ impl ResourceUid for NexusSpec {
     fn uid(&self) -> &Self::Uid {
         &self.uuid
     }
+    fn rkind(&self) -> stor_port::transport_api::ResourceKind {
+        stor_port::transport_api::ResourceKind::Nexus
+    }
 }
 
 impl ResourceUid for RebuildHistory {
@@ -30,12 +33,18 @@ impl ResourceUid for RebuildHistory {
     fn uid(&self) -> &Self::Uid {
         &self.uuid
     }
+    fn rkind(&self) -> stor_port::transport_api::ResourceKind {
+        stor_port::transport_api::ResourceKind::Nexus
+    }
 }
 
 impl ResourceUid for NexusState {
     type Uid = NexusId;
     fn uid(&self) -> &Self::Uid {
         &self.nexus.uuid
+    }
+    fn rkind(&self) -> stor_port::transport_api::ResourceKind {
+        stor_port::transport_api::ResourceKind::Nexus
     }
 }
 
