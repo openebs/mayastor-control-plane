@@ -25,12 +25,18 @@ impl ResourceUid for VolumeSpec {
     fn uid(&self) -> &Self::Uid {
         &self.uuid
     }
+    fn rkind(&self) -> stor_port::transport_api::ResourceKind {
+        stor_port::transport_api::ResourceKind::Volume
+    }
 }
 
 impl ResourceUid for AffinityGroupSpec {
     type Uid = String;
     fn uid(&self) -> &Self::Uid {
         self.id()
+    }
+    fn rkind(&self) -> stor_port::transport_api::ResourceKind {
+        stor_port::transport_api::ResourceKind::AffinityGroup
     }
 }
 

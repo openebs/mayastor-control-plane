@@ -77,6 +77,7 @@ pub(super) fn match_nvmf_device<'a>(device: &'a Device, key: &str) -> Option<&'a
             // attribute matches but the property doesn't, likely the udev db is bad!?
             if Some(key) != id_wwn.and_then(|s| s.to_str()) {
                 tracing::error!(
+                    initialized = device.is_initialized(),
                     "{devname} has wwid of {key} != ID_WWN of {id_wwn:?}, is udev bad?",
                 );
             }

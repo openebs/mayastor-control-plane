@@ -16,12 +16,18 @@ impl ResourceUid for PoolSpec {
     fn uid(&self) -> &Self::Uid {
         &self.id
     }
+    fn rkind(&self) -> stor_port::transport_api::ResourceKind {
+        stor_port::transport_api::ResourceKind::Pool
+    }
 }
 
 impl ResourceUid for PoolState {
     type Uid = PoolId;
     fn uid(&self) -> &Self::Uid {
         &self.pool.id
+    }
+    fn rkind(&self) -> stor_port::transport_api::ResourceKind {
+        stor_port::transport_api::ResourceKind::Pool
     }
 }
 

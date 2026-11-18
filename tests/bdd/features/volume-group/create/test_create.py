@@ -33,9 +33,7 @@ AG_PARAM = {"id": "ag"}
 @pytest.fixture(autouse=True, scope="module")
 def init():
     """an io-engine cluster."""
-    Deployer.start(
-        io_engines=3,
-    )
+    Deployer.start(io_engines=3, io_engine_coreisol=True)
     yield
     Deployer.stop()
 
