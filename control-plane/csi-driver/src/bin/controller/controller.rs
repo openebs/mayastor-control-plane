@@ -432,7 +432,8 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
         let thin = match args.parameters.get("thin") {
             Some(value) => value == "true",
-            None => false,
+            // Snapshot restores are thin by default, including retries that find an existing volume.
+            None => volume_content_source.is_some(),
         };
 
         let mut volume_context = args.parameters.clone();
@@ -469,11 +470,6 @@ impl rpc::csi::controller_server::Controller for CsiControllerSvc {
 
                 let volume = match volume_content_source {
                     Some(snapshot_uuid) => {
-                        // This is to determine if user has passed `thin` arg.
-                        // This will help us not restore into thin volume if user has passed
-                        // thin:false explicitly.
-                        let thin_arg_passed = args.parameters.contains_key("thin");
-                        let thin = !thin_arg_passed || thin;
                         let snapshot_restore_policy = context
                             .snapshot_restore_policy()
                             .map(models::SnapshotRestorePolicy::from);
