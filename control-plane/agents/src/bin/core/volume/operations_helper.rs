@@ -446,8 +446,9 @@ impl OperationGuardArc<VolumeSpec> {
         &mut self,
         registry: &Registry,
         mut count: usize,
-    ) -> Result<(), SvcError> {
+    ) -> Result<usize, SvcError> {
         let state = registry.volume_state(self.uuid()).await?;
+        let requested = count;
 
         let mut candidates =
             volume_unused_replica_remove_candidates(self.as_ref(), &state, registry).await?;
@@ -479,7 +480,8 @@ impl OperationGuardArc<VolumeSpec> {
                 }
             }
         }
-        result
+        // the number of replicas removed, or the last error encountered
+        result.map(|_| requested - count)
     }
 
     /// Remove unused replica from the volume
@@ -659,6 +661,11 @@ impl OperationGuardArc<VolumeSpec> {
         let nexus_spec_clone = nexus.lock().clone();
         let volume_children =
             vol_spec_clone.num_replicas as usize + self.as_ref().metadata.need_spare() as usize;
+        let unwinding_spare = self
+            .as_ref()
+            .metadata
+            .drain_config()
+            .is_some_and(|config| config.unwind_spare.is_some());
         let mut nexus_replica_children =
             nexus_spec_clone
                 .children
@@ -679,9 +686,12 @@ impl OperationGuardArc<VolumeSpec> {
             if nexus_replica_children <= volume_children {
                 break;
             }
-            let child_uri = match candidate.child_state() {
-                None => break,
-                Some(child) => child.uri.clone(),
+            let child_uri = match (candidate.child_state(), candidate.child_spec()) {
+                (Some(child), _) => child.uri.clone(),
+                // While unwinding a drain's spare, the child of an unreachable replica (which has
+                // no state) may be the one to go, so fall back to the child spec.
+                (None, Some(child)) if unwinding_spare => child.uri(),
+                (None, _) => break,
             };
             match nexus
                 .remove_child_by_uri(registry, nexus_state, &child_uri)

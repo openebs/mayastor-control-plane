@@ -9,7 +9,7 @@ use stor_port::{
         store::{
             nexus::NexusSpec,
             nexus_persistence::NexusInfo,
-            pool::{DrainConfig, DrainProgressOp, UnwindSpare},
+            pool::{DrainConfig, DrainProgressOp},
             volume::{OverReplicationRequester, VolumeSpec},
         },
         transport::{ReplicaId, VolumeStatus},
@@ -204,38 +204,6 @@ async fn remove_replica(
     }
 }
 
-pub(crate) async fn destroy_spare_replica(
-    nexus: Option<&mut OperationGuardArc<NexusSpec>>,
-    volume: &mut OperationGuardArc<VolumeSpec>,
-    context: &PollContext,
-    spare_replica: &ReplicaId,
-) -> PollResult {
-    let removed = remove_replica(nexus, volume, context, spare_replica).await;
-    if let Err(error) = &removed {
-        volume.warn_span(|| {
-            tracing::warn!(
-                "Failed to remove spare replica '{}': {}",
-                spare_replica,
-                error.full_string()
-            )
-        });
-        return Ok(PollerState::Busy);
-    } else {
-        let drain_cfg = volume.as_ref().metadata.drain_config();
-        if let Some(mut drain_cfg) = drain_cfg {
-            if drain_cfg.unwind_spare == Some(UnwindSpare::Cancelled) {
-                // Drain cancelled: end the move in the same step, so the effective replica count
-                // drops with the spare and no new spare is created.
-                remove_drain_status(context, drain_cfg, volume).await;
-            } else {
-                drain_cfg.remove_spare();
-                update_drain_status(context, drain_cfg.clone(), volume).await;
-            }
-        }
-    }
-    Ok(PollerState::Idle)
-}
-
 pub(crate) async fn destroy_moving_replica(
     nexus: Option<&mut OperationGuardArc<NexusSpec>>,
     volume: &mut OperationGuardArc<VolumeSpec>,
@@ -332,45 +300,14 @@ pub(crate) async fn handle_drain_replica_move(
             return destroy_moving_replica(nexus, volume, context, moving_replica).await;
         }
 
-        if let Some(unwind) = &config.unwind_spare {
-            match unwind {
-                UnwindSpare::Respare => {
-                    if let Some(spare) = spare {
-                        return destroy_spare_replica(nexus, volume, context, spare).await;
-                    }
-                }
-                UnwindSpare::Cancelled => {
-                    // Drain cancelled: destroy the spare and end the move,
-                    // keeping the moving replica.
-                    return match spare {
-                        Some(replica_id) => {
-                            destroy_spare_replica(nexus, volume, context, replica_id).await
-                        }
-                        None => {
-                            remove_drain_status(context, config.clone(), volume).await;
-                            Ok(PollerState::Idle)
-                        }
-                    };
-                }
-            }
+        if config.drain_cancelled() && spare.is_none() {
+            // Drain cancelled and there is no spare to unwind: end the move. When there is a
+            // spare, it is removed as an excess replica by the replica count reconciler.
+            remove_drain_status(context, config, volume).await;
+            return Ok(PollerState::Idle);
         }
         if vol.spare_online() {
             return destroy_moving_replica(nexus, volume, context, moving_replica).await;
-        }
-    } else if vol.spare_online() && config.drain_cancelled() && !volume.has_snapshots() {
-        let unhealthy = &unrelated_unhealthy[0];
-        match remove_replica(nexus, volume, context, unhealthy).await {
-            Ok(_) => remove_drain_status(context, config, volume).await,
-            Err(error) => {
-                volume.warn_span(|| {
-                    tracing::warn!(
-                        "Failed to remove unhealthy replica while unwinding cancelled drain'{}': {}",
-                        unhealthy,
-                        error.full_string()
-                    )
-                });
-                return Ok(PollerState::Busy);
-            }
         }
     }
     Ok(PollerState::Idle)

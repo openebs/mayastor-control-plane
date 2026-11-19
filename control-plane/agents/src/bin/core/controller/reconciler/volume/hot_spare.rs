@@ -17,6 +17,7 @@ use stor_port::{
 
 use crate::controller::reconciler::volume::drain_utils::{
     create_missing_replica, create_spare_replica, forget_lost_spare, handle_drain_replica_move,
+    remove_drain_status,
 };
 use std::cmp::Ordering;
 use stor_port::types::v0::store::volume::OverReplicationRequester;
@@ -358,8 +359,21 @@ async fn volume_replica_count_reconciler_traced(
                 .remove_unused_volume_replicas(context.registry(), diff)
                 .await
             {
-                Ok(_) => {
-                    volume.info("Successfully removed unused replicas");
+                Ok(0) => {
+                    volume.info("No unused replicas are eligible for removal yet");
+                }
+                Ok(removed) => {
+                    volume.info(&format!("Successfully removed {removed} unused replica(s)"));
+                    current_replica_count -= removed;
+                    // A cancelled drain removed an unrelated unhealthy replica and kept the
+                    // spare, so the replica move ends here.
+                    if let Some(drain) = volume.as_ref().metadata.drain_config() {
+                        if drain.drain_cancelled()
+                            && current_replica_count <= required_replica_count
+                        {
+                            remove_drain_status(context, drain, volume).await;
+                        }
+                    }
                 }
                 Err(error) => {
                     volume.warn_span(|| {

@@ -436,10 +436,11 @@ impl VolumeMetadata {
         self.runtime.over_replication.clone()
     }
 
-    /// Returns true if spare replica is needed.
+    /// Returns true if spare replica is needed. It's not needed while the spare is being unwound,
+    /// which makes the spare an excess replica to be removed.
     pub fn need_spare(&self) -> bool {
         if let Some(drain_cfg) = self.drain_config() {
-            return drain_cfg.spare_replica.is_some();
+            return drain_cfg.spare_replica.is_some() && drain_cfg.unwind_spare.is_none();
         }
         false
     }
