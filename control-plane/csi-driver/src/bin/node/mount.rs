@@ -356,56 +356,75 @@ pub(crate) async fn blockdevice_unmount(target: &str) -> Result<(), Error> {
     .await?
 }
 
-/// Waits until a device's filesystem is shutdown.
-/// This is useful to know if it's safe to detach a device from a node or not as it seems that
-/// even after a umount completes the filesystem and more specifically the filesystem's journal
-/// might not be completely shutdown.
-/// Specifically, this waits for the filesystem (eg: ext4) shutdown and the filesystem's journal
-/// shutdown: jbd2.
-pub(crate) async fn wait_fs_shutdown(device: &str, fstype: Option<String>) -> Result<(), Error> {
-    let device_trim = device.replace("/dev/", "");
+/// How long the detach waits, after the staging path was flushed and unmounted, for the file
+/// system to let go of its device before it detaches anyway. A mount namespace kept alive by a
+/// reference (e.g. a security agent holding a dead container's mount namespace fd) keeps the
+/// superblock alive for a few seconds after every host-side mount is gone.
+const FS_SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
-    let start = std::time::Instant::now();
-    let timeout = std::time::Duration::from_secs(2);
-
-    if let Some(fstype) = fstype {
-        let proc_fs_str = format!("/proc/fs/{fstype}/{device_trim}");
-        let proc_fs = std::path::Path::new(&proc_fs_str);
-        wait_file_removal(proc_fs, start, timeout).await?;
-    }
-
-    let jbd2_pattern = format!("/proc/fs/jbd2/{device_trim}-*");
-    let proc_jbd2 = glob::glob(&jbd2_pattern)
-        .expect("valid pattern")
-        .next()
-        .and_then(|v| v.ok());
-    if let Some(proc_jbd2) = proc_jbd2 {
-        wait_file_removal(&proc_jbd2, start, timeout).await?;
-    }
-
-    Ok(())
+/// Flush the file system mounted at `path` with syncfs(2). Unlike umount(2), this writes back the
+/// superblock's dirty data and journal even when the superblock is referenced from elsewhere
+/// (another mount namespace, a private bind of /var/lib/kubelet, an open file), so a later device
+/// detach cannot lose it.
+pub(crate) async fn syncfs_path(path: &str) -> Result<(), Error> {
+    let path = path.to_string();
+    runtime::spawn_blocking(move || {
+        use std::os::fd::AsRawFd;
+        let dir = std::fs::File::open(&path)?;
+        // SAFETY: `dir` is open for the duration of the call.
+        if unsafe { nix::libc::syncfs(dir.as_raw_fd()) } != 0 {
+            return Err(Error::last_os_error());
+        }
+        debug!("Flushed the file system at {}", path);
+        Ok(())
+    })
+    .await?
 }
 
-/// Waits until a file is removed, up to a timeout.
-async fn wait_file_removal(
-    proc: &std::path::Path,
-    start: std::time::Instant,
-    timeout: std::time::Duration,
-) -> Result<(), Error> {
-    let check_interval = std::time::Duration::from_millis(200);
-    let proc_str = proc.to_string_lossy().to_string();
-    let mut exists = proc.exists();
-    while start.elapsed() < timeout && exists {
-        tracing::error!(proc = proc_str, "proc entry still exists");
-        tokio::time::sleep(check_interval).await;
-        exists = proc.exists();
+/// Whether any file system still claims `device`. A mounted file system holds its block device
+/// exclusively, in every mount namespace and for as long as anything references the superblock, so
+/// an O_EXCL open fails with EBUSY until the file system is really shut down. umount(2) succeeding
+/// on one mount proves nothing.
+fn device_claimed(device: &str) -> Result<bool, Error> {
+    use std::os::unix::fs::OpenOptionsExt;
+    match std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(nix::libc::O_EXCL)
+        .open(device)
+    {
+        Ok(_) => Ok(false),
+        Err(error) if error.raw_os_error() == Some(nix::libc::EBUSY) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
     }
-    match exists {
-        false => Ok(()),
-        true => Err(Error::new(
-            std::io::ErrorKind::TimedOut,
-            format!("Timed out waiting for '{proc_str}' to be removed"),
-        )),
+}
+
+/// Waits, up to `FS_SHUTDOWN_TIMEOUT`, until no file system claims `device`, so that it is safe to
+/// detach it. This covers every file system type: /proc/fs/<fstype>/<dev> and
+/// /proc/fs/jbd2/<dev>-* exist for ext4 only (XFS registers /sys/fs/xfs/<dev> instead).
+pub(crate) async fn wait_fs_shutdown(device: &str) -> Result<(), Error> {
+    let start = std::time::Instant::now();
+    let check_interval = std::time::Duration::from_millis(200);
+    loop {
+        let dev = device.to_string();
+        if !runtime::spawn_blocking(move || device_claimed(&dev)).await?? {
+            return Ok(());
+        }
+        if start.elapsed() >= FS_SHUTDOWN_TIMEOUT {
+            return Err(Error::new(
+                std::io::ErrorKind::TimedOut,
+                format!(
+                    "a file system still claims {device} {FS_SHUTDOWN_TIMEOUT:?} after its last \
+                     host mount went: it is mounted, or its superblock is referenced, outside the \
+                     host mount namespace"
+                ),
+            ));
+        }
+        tracing::warn!(
+            device,
+            "file system still claims the device; waiting before detach"
+        );
+        tokio::time::sleep(check_interval).await;
     }
 }
 
@@ -448,4 +467,28 @@ pub(crate) async fn lazy_unmount_mountpaths(mountpaths: &Vec<DeviceMount>) -> Re
         .map_err(|error| Status::aborted(error.to_string()))??;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A device node that is already gone is not claimed: the wait returns at once instead of
+    /// running into the bound.
+    #[tokio::test]
+    async fn wait_fs_shutdown_device_gone() {
+        let device = "/dev/csi-node-test-no-such-device";
+        assert!(!device_claimed(device).unwrap());
+        let start = std::time::Instant::now();
+        wait_fs_shutdown(device).await.unwrap();
+        assert!(start.elapsed() < FS_SHUTDOWN_TIMEOUT);
+    }
+
+    /// syncfs(2) flushes the file system a path lives on, and fails for a path that is gone.
+    #[tokio::test]
+    async fn syncfs_path_flushes() {
+        let dir = std::env::temp_dir();
+        syncfs_path(dir.to_str().unwrap()).await.unwrap();
+        assert!(syncfs_path("/csi-node-test-no-such-path").await.is_err());
+    }
 }
