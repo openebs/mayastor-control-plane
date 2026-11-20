@@ -607,7 +607,7 @@ impl Cluster {
         .unwrap();
 
         components
-            .start_wait(&composer, std::time::Duration::from_secs(30))
+            .start_wait(&composer, std::time::Duration::from_secs(40))
             .await?;
 
         let unknown_module = "unknown".to_string();

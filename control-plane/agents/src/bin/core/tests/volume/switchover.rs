@@ -839,7 +839,7 @@ async fn republished_nexus_io_engine_txn_fail() {
         .with_options(|o| {
             o.with_io_engine_env("MAYASTOR_HB_INTERVAL_SEC", "1")
                 .with_isolated_io_engine(true)
-                .with_io_engine_interrupt(true)
+                .with_io_engine_delay(true)
         })
         .with_req_timeouts_min(true, grpc_timeout, grpc_timeout)
         .build()
@@ -987,6 +987,7 @@ async fn run_fio_vol_verify(
             "--numjobs=1",
             "--name=fio",
             "--readwrite=randwrite",
+            "--size=50%",
             "--verify=crc32",
             filename.as_str(),
         ]

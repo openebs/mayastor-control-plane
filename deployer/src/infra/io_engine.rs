@@ -77,7 +77,9 @@ impl ComponentAction for IoEngine {
                     .with_bind("/run/udev", "/run/udev");
             }
 
-            if !options.io_engine_isolate || options.io_engine_interrupt {
+            if options.io_engine_delay {
+                spec = spec.with_env("MAYASTOR_DELAY", "true");
+            } else if !options.io_engine_isolate || options.io_engine_interrupt {
                 spec = spec.with_env("ENABLE_INTERRUPT_MODE", "true")
             }
 
