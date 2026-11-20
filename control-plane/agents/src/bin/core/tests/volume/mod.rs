@@ -1414,6 +1414,22 @@ async fn offline_node(cluster: &Cluster) {
         cluster.node(0).to_string()
     };
 
+    // Note the replica of volume2 on the node which is about to go offline.
+    let volume2_id: uuid::Uuid = VOLUME_2.parse().unwrap();
+    let specs = cluster.rest_v00().specs_api().get_specs().await.unwrap();
+    let replica_id = specs
+        .replicas
+        .iter()
+        .find(|r| {
+            r.owners.volume == Some(volume2_id)
+                && specs
+                    .pools
+                    .iter()
+                    .any(|p| p.id == r.pool && p.node == kill_node)
+        })
+        .expect("volume2 should have a replica on the node to be killed")
+        .uuid;
+
     // kill the node where the volume was published
     cluster
         .composer()
@@ -1442,6 +1458,32 @@ async fn offline_node(cluster: &Cluster) {
     assert_eq!(
         pub_vol1.state().target.unwrap().node,
         pub_vol2.state().target.unwrap().node
+    );
+
+    // Scale down volume2 while one of its replica nodes is offline, it should not fail
+    let scaled = volume_client
+        .set_replica(
+            &SetVolumeReplica {
+                uuid: VolumeId::try_from(VOLUME_2).unwrap(),
+                replicas: 1,
+            },
+            None,
+        )
+        .await
+        .expect("Scale down should not fail because of the offline replica node");
+    assert_eq!(scaled.spec().num_replicas, 1);
+
+    // The replica on the offline node can't be destroyed right away, so it must be disowned from
+    // the volume, allowing the reconciler to destroy it later.
+    let specs = cluster.rest_v00().specs_api().get_specs().await.unwrap();
+    let replica_spec = specs
+        .replicas
+        .into_iter()
+        .find(|r| r.uuid == replica_id)
+        .expect("the replica spec should still exist");
+    assert!(
+        replica_spec.owners.volume.is_none(),
+        "replica should be disowned: {replica_spec:#?}"
     );
 
     // Bring back the node to unpublish the volume2
