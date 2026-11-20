@@ -5,6 +5,16 @@ fn main() {
             ".v1.pool.SmartDataInfo.protocol",
             "#[allow(clippy::large_enum_variant)]",
         )
+        // A pair dwarfs the ReplyError it shares its oneof with, as every error-carrying
+        // reply does; boxing it would leak into every consumer for no gain.
+        .type_attribute(
+            ".v1.dr.ClusterPairReply.reply",
+            "#[allow(clippy::large_enum_variant)]",
+        )
+        .type_attribute(
+            ".v1.dr.ClusterPairsReply.reply",
+            "#[allow(clippy::large_enum_variant)]",
+        )
         .compile_protos(
             &[
                 "proto/v1/pool/pool.proto",

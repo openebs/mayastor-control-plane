@@ -1,6 +1,10 @@
-use crate::{dr, dr::dr_grpc_server, operations::dr::traits::DrOperations};
-
+use crate::{
+    dr,
+    dr::{cluster_pair_reply, cluster_pairs_reply, dr_grpc_server},
+    operations::dr::traits::DrOperations,
+};
 use std::sync::Arc;
+use stor_port::types::v0::transport::{DestroyDrClusterPair, GetDrClusterPair};
 use tonic::Response;
 
 /// RPC Dr Server
@@ -22,6 +26,24 @@ impl DrServer {
 }
 
 /// Implementation of the RPC methods.
+/// A single-pair reply, carrying either the pair or why there is none.
+///
+/// Errors travel in the payload rather than as a `tonic::Status`, so the kind and resource
+/// survive the hop instead of being flattened into a string.
+fn pair_reply(
+    result: Result<
+        stor_port::types::v0::transport::DrClusterPair,
+        stor_port::transport_api::ReplyError,
+    >,
+) -> dr::ClusterPairReply {
+    dr::ClusterPairReply {
+        reply: Some(match result {
+            Ok(pair) => cluster_pair_reply::Reply::Pair(pair.into()),
+            Err(error) => cluster_pair_reply::Reply::Error(error.into()),
+        }),
+    }
+}
+
 #[tonic::async_trait]
 impl dr_grpc_server::DrGrpc for DrServer {
     async fn probe(
@@ -32,5 +54,53 @@ impl dr_grpc_server::DrGrpc for DrServer {
             Ok(ready) => Ok(Response::new(dr::ProbeResponse { ready })),
             Err(_) => Ok(Response::new(dr::ProbeResponse { ready: false })),
         }
+    }
+
+    async fn create_cluster_pair(
+        &self,
+        request: tonic::Request<dr::CreateClusterPairRequest>,
+    ) -> Result<tonic::Response<dr::ClusterPairReply>, tonic::Status> {
+        let result = match request.into_inner().try_into() {
+            Ok(req) => self.service.create(&req, None).await,
+            Err(error) => Err(error),
+        };
+        Ok(Response::new(pair_reply(result)))
+    }
+
+    async fn get_cluster_pair(
+        &self,
+        request: tonic::Request<dr::GetClusterPairRequest>,
+    ) -> Result<tonic::Response<dr::ClusterPairReply>, tonic::Status> {
+        let req = GetDrClusterPair {
+            id: request.into_inner().id.into(),
+        };
+        Ok(Response::new(pair_reply(
+            self.service.get(&req, None).await,
+        )))
+    }
+
+    async fn list_cluster_pairs(
+        &self,
+        _request: tonic::Request<dr::ListClusterPairsRequest>,
+    ) -> Result<tonic::Response<dr::ClusterPairsReply>, tonic::Status> {
+        let reply = match self.service.list(None).await {
+            Ok(pairs) => cluster_pairs_reply::Reply::Pairs(dr::ClusterPairs {
+                entries: pairs.entries.into_iter().map(Into::into).collect(),
+            }),
+            Err(error) => cluster_pairs_reply::Reply::Error(error.into()),
+        };
+        Ok(Response::new(dr::ClusterPairsReply { reply: Some(reply) }))
+    }
+
+    async fn destroy_cluster_pair(
+        &self,
+        request: tonic::Request<dr::DestroyClusterPairRequest>,
+    ) -> Result<tonic::Response<dr::DestroyClusterPairReply>, tonic::Status> {
+        let req = DestroyDrClusterPair {
+            id: request.into_inner().id.into(),
+        };
+        Ok(Response::new(dr::DestroyClusterPairReply {
+            error: self.service.destroy(&req, None).await.err().map(Into::into),
+        }))
     }
 }

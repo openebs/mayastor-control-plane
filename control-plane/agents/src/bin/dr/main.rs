@@ -1,6 +1,6 @@
 mod service;
+mod store;
 
-use crate::service::DrAgentSvc;
 use agents::Service;
 use clap::Parser;
 use grpc::operations::dr::server::DrServer;
@@ -31,6 +31,14 @@ struct Cli {
     /// Auto-generate an ephemeral self-signed certificate for the dr-agent gRPC server.
     #[clap(long = "grpc-auto-tls", conflicts_with_all = ["grpc_tls_ca_file", "grpc_tls_cert_file", "grpc_tls_key_file"])]
     grpc_auto_tls: bool,
+
+    /// The persistent store endpoint (supports the http/https schema).
+    #[clap(long, short, default_value = "http://localhost:2379")]
+    store: http::Uri,
+
+    /// The timeout for store operations.
+    #[clap(long, default_value = utils::STORE_OP_TIMEOUT)]
+    store_timeout: humantime::Duration,
 
     /// Sends opentelemetry spans to the Jaeger endpoint agent.
     #[clap(long, short)]
@@ -96,9 +104,13 @@ async fn main() -> anyhow::Result<()> {
     println!("Using options: {cli:?}");
     initialize_tracing(&cli);
 
+    // The cluster's own identity, which a pair records and which is not the caller's to
+    // choose. Core keys its persistent store on the same value.
+    stor_port::platform::init_cluster_info_or_panic().await;
+
     let grpc_tls = cli.grpc_tls()?;
-    let service = Service::builder()
-        .with_service(DrServer::new(Arc::new(DrAgentSvc::new())).into_grpc_server());
+    let dr = service::new(&cli.store, cli.store_timeout.into()).await?;
+    let service = Service::builder().with_service(DrServer::new(Arc::new(dr)).into_grpc_server());
 
     info!("Starting dr-agent server");
     let result = match (cli.grpc_auto_tls, grpc_tls) {

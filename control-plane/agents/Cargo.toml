@@ -16,6 +16,10 @@ path = "src/bin/core/main.rs"
 name = "core"
 path = "src/bin/core/tests/test.rs"
 
+[[test]]
+name = "dr"
+path = "src/bin/dr/tests/test.rs"
+
 [[bin]]
 name = "jsongrpc"
 path = "src/bin/jsongrpc/main.rs"

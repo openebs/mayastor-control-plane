@@ -57,7 +57,7 @@ pub(crate) fn rc_path(suffix: &str) -> String {
 // Consumed by the dr agent, which is not wired up yet.
 #[allow(dead_code)]
 pub(crate) fn s3_endpoint(options: &StartOptions) -> Option<String> {
-    options.rustfs.then(|| {
+    options.rustfs_enabled().then(|| {
         format!(
             "http://{}.{}:{}",
             super::rustfs::CONTAINER,

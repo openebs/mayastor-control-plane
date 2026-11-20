@@ -28,7 +28,7 @@ const PERSISTENT_DATA_DIR: &str = "/host-tmp/rustfs-data";
 #[async_trait]
 impl ComponentAction for Rustfs {
     fn configure(&self, options: &StartOptions, cfg: Builder) -> Result<Builder, Error> {
-        Ok(if !options.rustfs {
+        Ok(if !options.rustfs_enabled() {
             cfg
         } else {
             let data_dir = if options.persistent_etcd {
@@ -53,7 +53,7 @@ impl ComponentAction for Rustfs {
     }
 
     async fn start(&self, options: &StartOptions, cfg: &crate::ComposeTestNt) -> Result<(), Error> {
-        if !options.rustfs {
+        if !options.rustfs_enabled() {
             return Ok(());
         }
         cfg.start(CONTAINER).await?;
@@ -65,7 +65,7 @@ impl ComponentAction for Rustfs {
         options: &StartOptions,
         _cfg: &crate::ComposeTestNt,
     ) -> Result<(), Error> {
-        if !options.rustfs {
+        if !options.rustfs_enabled() {
             return Ok(());
         }
         Components::wait_url(&format!("http://localhost:{S3_HOST_PORT}/")).await?;
