@@ -1,3 +1,4 @@
+mod drain_dry_run;
 mod purge;
 
 use anyhow::{anyhow, Result};

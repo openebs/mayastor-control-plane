@@ -141,7 +141,7 @@ mod test {
         use std::time::Duration;
         use stor_port::{
             transport_api::{v0::Pools, ReplyError},
-            types::v0::transport::{Filter, Pool, PoolDeleteResult},
+            types::v0::transport::{DrainDryRunReply, Filter, Pool, PoolDeleteResult},
         };
 
         pub(super) struct Server {}
@@ -206,6 +206,12 @@ mod test {
             }
 
             async fn drain(&self, _request: &PoolDrainRequest) -> Result<Pool, ReplyError> {
+                todo!()
+            }
+            async fn drain_dry_run(
+                &self,
+                _request: &PoolDrainRequest,
+            ) -> Result<DrainDryRunReply, ReplyError> {
                 todo!()
             }
             async fn get_pools_smart(

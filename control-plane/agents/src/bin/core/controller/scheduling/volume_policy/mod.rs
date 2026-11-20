@@ -8,6 +8,7 @@ use crate::controller::scheduling::volume::{
 use std::collections::HashMap;
 
 mod affinity_group;
+pub(crate) mod immovable;
 pub(crate) mod node;
 pub(crate) mod pool;
 mod simple;

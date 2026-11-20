@@ -213,7 +213,11 @@ impl SimplePolicy {
 
     /// Minimum free space is the currently allocated usage plus some percentage of volume size
     /// slack.
-    fn min_free_space(&self, request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+    pub(super) fn min_free_space(
+        &self,
+        request: &GetSuitablePoolsContext,
+        item: &PoolItem,
+    ) -> bool {
         if !request.as_thin() {
             return item.pool.free_space() > request.repl_size();
         }
@@ -250,7 +254,11 @@ impl SimplePolicy {
         )
     }
 
-    fn pool_overcommit(&self, request: &GetSuitablePoolsContext, item: &PoolItem) -> bool {
+    pub(super) fn pool_overcommit(
+        &self,
+        request: &GetSuitablePoolsContext,
+        item: &PoolItem,
+    ) -> bool {
         PoolBaseFilters::overcommit(request, item, self.cli_args.pool_commitment)
     }
 

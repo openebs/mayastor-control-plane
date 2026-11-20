@@ -16,7 +16,9 @@ use crate::{
 use std::{convert::TryFrom, ops::Deref};
 use stor_port::{
     transport_api::{v0::Pools, ReplyError, ResourceKind, TimeoutOptions},
-    types::v0::transport::{Filter, GetPoolsSmartResponse, MessageIdVs, Pool, PoolDeleteResult},
+    types::v0::transport::{
+        DrainDryRunReply, Filter, GetPoolsSmartResponse, MessageIdVs, Pool, PoolDeleteResult,
+    },
 };
 use tonic::transport::Uri;
 
@@ -230,6 +232,29 @@ impl PoolOperations for PoolClient {
             Some(reply) => match reply {
                 drain_pool_reply::Reply::Pool(pool) => Ok(Pool::try_from(pool)?),
                 drain_pool_reply::Reply::Error(err) => Err(err.into()),
+                drain_pool_reply::Reply::DryRun(_) => {
+                    Err(ReplyError::invalid_response(ResourceKind::Pool))
+                }
+            },
+            None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
+        }
+    }
+
+    #[tracing::instrument(name = "PoolClient::drain_dry_run", level = "info", skip(self), err)]
+    async fn drain_dry_run(
+        &self,
+        request: &PoolDrainRequest,
+    ) -> Result<DrainDryRunReply, ReplyError> {
+        let mut request = pool::DrainPoolRequest::from(request.clone());
+        request.dry_run = true;
+        let response = self.client().drain_pool(request).await?.into_inner();
+        match response.reply {
+            Some(reply) => match reply {
+                drain_pool_reply::Reply::DryRun(reply) => Ok(DrainDryRunReply::try_from(reply)?),
+                drain_pool_reply::Reply::Error(err) => Err(err.into()),
+                drain_pool_reply::Reply::Pool(_) => {
+                    Err(ReplyError::invalid_response(ResourceKind::Pool))
+                }
             },
             None => Err(ReplyError::invalid_response(ResourceKind::Pool)),
         }
