@@ -93,11 +93,42 @@ pub struct Cluster {
     builder: ClusterBuilder,
 }
 
+/// The object store a cluster was started with: where it is, and who to be to it.
+///
+/// The bucket named here is created on startup, so a test may write to it directly.
+pub struct S3Access {
+    /// Endpoint of the s3 api, scheme included.
+    pub endpoint: String,
+    /// Region a request signature must be scoped to.
+    pub region: String,
+    /// Bucket created on startup.
+    pub bucket: String,
+    /// Access key id granted that bucket.
+    pub access_key_id: String,
+    /// Secret for the above.
+    pub secret_access_key: String,
+}
+
 impl Cluster {
     /// A reference to the compose test utility.
     pub fn composer(&self) -> &ComposeTest {
         &self.composer
     }
+    /// The object store's s3 api, as reachable from the host, and the credentials it
+    /// was started with.
+    ///
+    /// Only meaningful where the cluster was built `with_rustfs` or `with_dr`; the
+    /// values are the deployer's own, so a test does not carry a second copy of them.
+    pub fn s3(&self) -> S3Access {
+        S3Access {
+            endpoint: format!("http://localhost:{}", deployer_lib::infra::s3::S3_HOST_PORT),
+            region: deployer_lib::infra::s3::S3_REGION.to_string(),
+            bucket: deployer_lib::infra::s3::S3_BUCKET.to_string(),
+            access_key_id: deployer_lib::infra::s3::S3_ACCESS_KEY_ID.to_string(),
+            secret_access_key: deployer_lib::infra::s3::S3_SECRET_ACCESS_KEY.to_string(),
+        }
+    }
+
     /// A reference to our wrapper over the compose utility.
     /// This can be safely sent across threads.
     pub fn composer_nt(&self) -> &Arc<ComposeTestNt> {

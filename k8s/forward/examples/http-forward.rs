@@ -23,7 +23,7 @@ async fn main() -> anyhow::Result<()> {
 
     let request = hyper::Request::builder()
         .method("GET")
-        .uri(&format!("{uri}/v0/nodes"))
+        .uri(format!("{uri}/v0/nodes"))
         .body(kube::client::Body::empty())?;
 
     let result = svc.call(request).await?;
