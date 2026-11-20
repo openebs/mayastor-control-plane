@@ -3,9 +3,7 @@ use crate::{
         registry::{NumRebuilds, Registry},
         resources::{
             operations::{ResourceLifecycle, ResourceOwnerUpdate, ResourceResize},
-            operations_helper::{
-                GuardedOperationsHelper, OperationSequenceGuard, ResourceSpecsLocked,
-            },
+            operations_helper::{GuardedOperationsHelper, OperationSequenceGuard},
             OperationGuardArc, ResourceMutex, ResourceUid, TraceSpan, TraceStrLog,
         },
         scheduling::{
@@ -429,9 +427,28 @@ impl OperationGuardArc<VolumeSpec> {
             self.validate_update_step(registry, result, &spec_clone)
                 .await?;
 
-            // todo: we could ignore it here, since we've already removed it from the nexus
-            //  now remove the replica from the pool
-            let result = self.destroy_replica(registry, remove.spec()).await;
+            // Disown the replica first so the reconciler can garbage collect it if the destroy
+            // below fails. A failure to disown (eg: store error) is returned to the user.
+            let result = async {
+                let owners = ReplicaOwners::from_volume(self.uuid());
+                let mut replica = registry.specs().replica(&remove.spec().uuid).await?;
+                replica.remove_owners(registry, &owners, false).await
+            }
+            .await;
+
+            if result.is_ok() {
+                // The replica is already removed from the nexus and disowned, so a failure to
+                // destroy it must not fail the scale down.
+                if let Err(error) = self.destroy_replica(registry, remove.spec()).await {
+                    self.warn_span(|| {
+                        tracing::warn!(
+                            replica.uuid = %remove.spec().uuid,
+                            error = %error.full_string(),
+                            "Replica destroy failed, deferring it to the reconciler"
+                        )
+                    });
+                }
+            }
 
             self.complete_update(registry, result, spec_clone).await?;
         }
@@ -966,25 +983,19 @@ impl OperationGuardArc<VolumeSpec> {
         }
     }
 
-    /// Disown and if possible destroy the given volume replica.
+    /// Destroy the given volume replica.
     pub(super) async fn destroy_replica(
         &self,
         registry: &Registry,
         replica_spec: &ReplicaSpec,
     ) -> Result<(), SvcError> {
-        match ResourceSpecsLocked::replica_node(registry, replica_spec).await {
-            // Should never happen, but just in case...
-            None => Err(SvcError::Internal {
-                details: "Failed to find the node where a replica lives".to_string(),
-            }),
-            Some(node) => {
-                let destroy_by = ReplicaOwners::from_volume(self.uuid());
-                let mut replica = registry.specs().replica(&replica_spec.uuid).await?;
-                replica
-                    .destroy(registry, &replica.destroy_request(destroy_by, &node))
-                    .await
-            }
-        }
+        let pool = replica_spec.pool_name();
+        let node = &registry.specs().pool(pool)?.node.clone();
+        let destroy_by = ReplicaOwners::from_volume(self.uuid());
+        let mut replica = registry.specs().replica(&replica_spec.uuid).await?;
+        replica
+            .destroy(registry, &replica.destroy_request(destroy_by, node))
+            .await
     }
 
     /// Checks if Nexus is present in registered target list. Returns true if yes.
