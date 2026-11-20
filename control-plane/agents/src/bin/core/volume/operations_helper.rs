@@ -26,7 +26,7 @@ use agents::errors::{NotEnough, SvcError, SvcError::ReplicaRemovalNoCandidates};
 use grpc::operations::volume::traits::PublishVolumeInfo;
 use stor_port::{
     pstor::ObjectKey,
-    transport_api::ErrorChain,
+    transport_api::{ErrorChain, ResourceKind},
     types::v0::{
         store::{
             nexus::{NexusSpec, ReplicaUri},
@@ -463,8 +463,9 @@ impl OperationGuardArc<VolumeSpec> {
         &mut self,
         registry: &Registry,
         mut count: usize,
-    ) -> Result<(), SvcError> {
+    ) -> Result<usize, SvcError> {
         let state = registry.volume_state(self.uuid()).await?;
+        let requested = count;
 
         let mut candidates =
             volume_unused_replica_remove_candidates(self.as_ref(), &state, registry).await?;
@@ -496,7 +497,8 @@ impl OperationGuardArc<VolumeSpec> {
                 }
             }
         }
-        result
+        // the number of replicas removed, or the last error encountered
+        result.map(|_| requested - count)
     }
 
     /// Remove unused replica from the volume
@@ -545,6 +547,44 @@ impl OperationGuardArc<VolumeSpec> {
         Ok(())
     }
 
+    /// Remove a replica from the volume. The child is first removed from the nexus,
+    /// after which the now unused replica is removed from the volume.
+    pub(crate) async fn remove_volume_replica_in_use(
+        &mut self,
+        registry: &Registry,
+        nexus: &mut OperationGuardArc<NexusSpec>,
+        nexus_state: &Nexus,
+        replica_id: &ReplicaId,
+    ) -> Result<(), SvcError> {
+        let child_uri = nexus
+            .as_ref()
+            .children
+            .iter()
+            .find(|c| c.as_replica().is_some_and(|r| r.uuid() == replica_id))
+            .map(|c| c.uri());
+
+        match child_uri {
+            Some(uri) => {
+                nexus
+                    .remove_vol_child_by_uri(&mut Some(&mut *self), registry, nexus_state, &uri)
+                    .await?;
+            }
+            None => {
+                self.remove_unused_volume_replica(registry, replica_id)
+                    .await?
+            }
+        }
+
+        // remove_vol_child_by_uri ignores the volume replica removal result, so verify it.
+        match registry.specs().replica_rsc(replica_id) {
+            Some(replica) if replica.lock().owners.owned_by(self.uuid()) => Err(SvcError::InUse {
+                kind: ResourceKind::Replica,
+                id: replica_id.to_string(),
+            }),
+            _ => Ok(()),
+        }
+    }
+
     /// Attach existing replicas to the given volume nexus until it reaches the required number of
     /// data replicas.
     /// Returns the first encountered error, but tries to add as many as it can until it does so.
@@ -559,20 +599,20 @@ impl OperationGuardArc<VolumeSpec> {
             let nodes = specs.replica_nodes(replicas.clone());
             (replicas.count(), nodes)
         };
-        let volume_children = replicas.min(self.as_ref().num_replicas as usize);
+        let need_spare = self.as_ref().metadata.need_spare();
+        let volume_children =
+            replicas.min(self.as_ref().num_replicas as usize + need_spare as usize);
         let mut nexus_children = nexus.as_ref().children.len();
 
         if self.has_snapshots() {
             registry.verify_nodes_fix(nodes.iter(), &NodeBugFix::NexusRebuildReplicaAncestry)?;
         }
         let replicas = nexus_attach_candidates(self.as_ref(), nexus.as_ref(), registry).await?;
-
         let mut result = Ok(());
         for replica in replicas {
             if nexus_children >= volume_children {
                 break;
             }
-
             if replica.rebuildable() == &Some(false) {
                 if self
                     .remove_unused_volume_replica(registry, &replica.state().uuid)
@@ -591,7 +631,6 @@ impl OperationGuardArc<VolumeSpec> {
                 }
                 continue;
             }
-
             match nexus
                 .attach_replica(registry, replica.state(), self.has_snapshots())
                 .await
@@ -637,7 +676,13 @@ impl OperationGuardArc<VolumeSpec> {
     ) -> Result<(), SvcError> {
         let vol_spec_clone = self.lock().clone();
         let nexus_spec_clone = nexus.lock().clone();
-        let volume_children = vol_spec_clone.num_replicas as usize;
+        let volume_children =
+            vol_spec_clone.num_replicas as usize + self.as_ref().metadata.need_spare() as usize;
+        let unwinding_spare = self
+            .as_ref()
+            .metadata
+            .drain_config()
+            .is_some_and(|config| config.unwind_spare.is_some());
         let mut nexus_replica_children =
             nexus_spec_clone
                 .children
@@ -658,9 +703,12 @@ impl OperationGuardArc<VolumeSpec> {
             if nexus_replica_children <= volume_children {
                 break;
             }
-            let child_uri = match candidate.child_state() {
-                None => break,
-                Some(child) => child.uri.clone(),
+            let child_uri = match (candidate.child_state(), candidate.child_spec()) {
+                (Some(child), _) => child.uri.clone(),
+                // While unwinding a drain's spare, the child of an unreachable replica (which has
+                // no state) may be the one to go, so fall back to the child spec.
+                (None, Some(child)) if unwinding_spare => child.uri(),
+                (None, _) => break,
             };
             match nexus
                 .remove_child_by_uri(registry, nexus_state, &child_uri)

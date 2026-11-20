@@ -16,7 +16,7 @@ use crate::controller::{
 use agents::errors::SvcError;
 use stor_port::types::v0::{
     store::{
-        nexus::NexusSpec, nexus_persistence::NexusInfo, replica::ReplicaSpec,
+        nexus::NexusSpec, nexus_persistence::NexusInfo, pool::UnwindSpare, replica::ReplicaSpec,
         snapshots::replica::ReplicaSnapshot, volume::VolumeSpec,
     },
     transport::{NodeId, PoolId, VolumeState},
@@ -548,22 +548,76 @@ impl ReplicaRemovalCandidates {
         }
     }
 
+    /// Returns true if the replica's nexus child is healthy.
+    fn is_healthy(has_info: bool, item: &ReplicaItem) -> bool {
+        match item.child_info() {
+            Some(info) => info.healthy,
+            None => !has_info,
+        }
+    }
+
+    /// While the spare of a drain is being unwound, the only replica which may be removed, if any:
+    /// - the spare, if all the unrelated replicas (neither moving nor spare) are healthy
+    /// - an unhealthy unrelated replica, but only for a cancelled drain with a healthy spare and
+    ///   no snapshots
+    ///
+    /// Returns `None` if the spare is not being unwound.
+    /// Returns `Option<None>` when unwind is needed ,but we can't unwind now as candidate is not
+    /// found.
+    /// Returns Option<Option<ReplicaItem>> when we find a candidate to unwind.
+    fn unwind_candidate(
+        context: &GetChildForRemovalContext,
+        items: &[ReplicaItem],
+    ) -> Option<Option<ReplicaItem>> {
+        let config = context.spec.metadata.drain_config()?;
+        let unwind = config.unwind_spare.as_ref()?;
+        let has_info = context.nexus_info.is_some();
+        let healthy = |item: &&ReplicaItem| Self::is_healthy(has_info, item);
+        let is_spare = |item: &&ReplicaItem| Some(&item.spec().uuid) == config.spare();
+        let unhealthy_unrelated = items.iter().find(|item| {
+            item.spec().uuid != *config.moving_replica() && !is_spare(item) && !healthy(item)
+        });
+        let candidate = match unhealthy_unrelated {
+            None => items.iter().find(is_spare),
+            Some(unrelated)
+                if *unwind == UnwindSpare::Cancelled
+                    && !context.spec.has_snapshots()
+                    && items.iter().any(|item| is_spare(&item) && healthy(&item)) =>
+            {
+                Some(unrelated)
+            }
+            Some(_) => None,
+        };
+        Some(candidate.cloned())
+    }
+
     fn new(context: GetChildForRemovalContext, items: Vec<ReplicaItem>) -> Self {
         let has_info = context.nexus_info.is_some();
-        let is_healthy = |item: &&ReplicaItem| -> bool {
-            match item.child_info() {
-                Some(info) => info.healthy,
-                None => !has_info,
-            }
+        // replicas were sorted with the least preferred replica at the front
+        // since we're going to "pop" them here, we now need to move the least preferred to the
+        // back and that's why we need the "rev"
+        let (healthy, unhealthy) = match Self::unwind_candidate(&context, &items) {
+            // the unwind has already decided what to remove, so it's the only (unhealthy) candidate
+            Some(candidate) => (vec![], candidate.into_iter().collect()),
+            None => (
+                items
+                    .iter()
+                    .filter(|item| Self::is_healthy(has_info, item))
+                    .rev()
+                    .cloned()
+                    .collect(),
+                items
+                    .iter()
+                    .filter(|item| !Self::is_healthy(has_info, item))
+                    .rev()
+                    .cloned()
+                    .collect(),
+            ),
         };
-        let is_not_healthy = |item: &&ReplicaItem| -> bool { !is_healthy(item) };
         Self {
             context,
-            // replicas were sorted with the least preferred replica at the front
-            // since we're going to "pop" them here, we now need to move the least preferred to the
-            // back and that's why we need the "rev"
-            healthy: items.iter().filter(is_healthy).rev().cloned().collect(),
-            unhealthy: items.iter().filter(is_not_healthy).rev().cloned().collect(),
+            healthy,
+            unhealthy,
         }
     }
 }
