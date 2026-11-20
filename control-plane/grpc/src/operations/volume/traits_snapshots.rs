@@ -188,7 +188,10 @@ impl VolumeSnapshotMeta {
     /// The number of replica snapshots for the current transaction.
     pub fn num_snapshot_replicas(&self) -> u32 {
         if let Some(replica_snap_list) = self.transactions().get(self.txn_id()) {
-            replica_snap_list.len() as u32
+            replica_snap_list
+                .iter()
+                .filter(|r| !r.status().deleted())
+                .count() as u32
         } else {
             0
         }

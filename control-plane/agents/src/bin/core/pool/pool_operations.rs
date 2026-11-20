@@ -650,7 +650,9 @@ impl OperationGuardArc<PoolSpec> {
             let vol_snap = vol_snapshot.lock();
             for txn_replicas in vol_snap.metadata().transactions().values() {
                 for replica_snap in txn_replicas {
-                    if replica_snap.spec().source_id().pool_id() == pool_id {
+                    if !replica_snap.status().deleted()
+                        && replica_snap.spec().source_id().pool_id() == pool_id
+                    {
                         result.push(replica_snap.clone());
                     }
                 }
