@@ -1293,6 +1293,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "dr-store"
+version = "1.0.0"
+
+[[package]]
 name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
