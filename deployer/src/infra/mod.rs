@@ -14,7 +14,7 @@ pub mod nats;
 mod rest;
 mod rustfs;
 mod rwx_vm;
-mod s3;
+pub mod s3;
 
 use crate::ComposeTestNt;
 

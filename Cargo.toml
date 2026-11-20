@@ -52,6 +52,7 @@ pstor = { path = "./utils/pstor" }
 shutdown = { path = "./utils/shutdown" }
 weighted-scoring = { path = "./utils/weighted-scoring" }
 dr-store = { path = "./utils/dr-store" }
+object_store = { version = "0.14.2", features = ["aws"] }
 deployer-cluster = { path = "./utils/deployer-cluster" }
 platform = { path = "./utils/dependencies/platform" }
 events-api = { path = "./utils/dependencies/apis/events" }

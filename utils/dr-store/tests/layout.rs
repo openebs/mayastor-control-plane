@@ -4,7 +4,7 @@
 //! composed the key the way the code does would agree with any change to it, including
 //! the ones a populated bucket cannot survive.
 
-use dr_store::{cluster_cfg, Checksum, Layout};
+use dr_store::{cluster_cfg, Checksum, DrStore, Layout, Store};
 
 const CHECKSUM: &str = "ab12cd34ef567890ab12cd34ef567890ab12cd34ef567890ab12cd34ef567890";
 
@@ -155,5 +155,54 @@ fn reserved_cluster_document() {
     assert_eq!(
         cluster_cfg("", "east", "uid-1"),
         "clusters/east/uid-1/cluster.cfg"
+    );
+}
+
+/// The keys a relationship builds are keys a store accepts, and a side's subtree
+/// actually contains what the layout says it does.
+#[tokio::test]
+async fn keys_round_trip_through_a_store() {
+    let layout = layout();
+    let store = Store::memory(layout.clone());
+    let data = bytes::Bytes::from_static(b"x");
+
+    store
+        .put(&layout.cfg("east", "uid-1"), data.clone())
+        .await
+        .unwrap();
+    store
+        .put(&layout.state("east", "uid-1"), data.clone())
+        .await
+        .unwrap();
+    store
+        .put(&layout.point("east", "uid-1", 1), data.clone())
+        .await
+        .unwrap();
+    store
+        .put(&layout.cfg("west", "uid-2"), data.clone())
+        .await
+        .unwrap();
+    store
+        .put(&layout.chunk(&checksum()), data.clone())
+        .await
+        .unwrap();
+
+    // One side's subtree holds that side's three keys and nothing of the other's.
+    let east = store.list(&layout.side("east", "uid-1")).await.unwrap();
+    assert_eq!(east.len(), 3);
+
+    // The chunk pool is outside both, which is what lets the two sides share it.
+    assert!(!east
+        .iter()
+        .any(|entry| entry.location.as_ref() == layout.chunk(&checksum())));
+
+    // And the one listing on the identity path finds both sides and nothing shared.
+    let all = store.list(&layout.sides()).await.unwrap();
+    assert_eq!(all.len(), 4);
+    assert_eq!(
+        all.iter()
+            .filter(|entry| entry.location.as_ref().ends_with("/dr.cfg"))
+            .count(),
+        2
     );
 }

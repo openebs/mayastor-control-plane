@@ -5,6 +5,23 @@ version = "1.0.0"
 edition = "2021"
 
 [dependencies]
+async-trait = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
 snafu = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+# The s3 backend. Also what the dr poc used, and what carries gcs and azure behind the
+# same trait when they are wanted.
+object_store = { workspace = true }
+# For the one verb object_store has no form of: a conditional delete, signed with its
+# own authorizer.
+http = { workspace = true }
+reqwest = { workspace = true }
 
 [dev-dependencies]
+# The object store the integration test runs against, started by the deployer so that
+# its image and credentials have one definition.
+deployer-cluster = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
