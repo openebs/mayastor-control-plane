@@ -26,6 +26,7 @@ members = [
     "rpc",
     "utils/utils-lib",
     "utils/pstor",
+    "utils/dr-store",
     "utils/pstor-usage",
     "utils/shutdown",
     "utils/weighted-scoring",
@@ -50,6 +51,8 @@ utils = { path = "./utils/utils-lib" }
 pstor = { path = "./utils/pstor" }
 shutdown = { path = "./utils/shutdown" }
 weighted-scoring = { path = "./utils/weighted-scoring" }
+dr-store = { path = "./utils/dr-store" }
+object_store = { version = "0.14.2", features = ["aws"] }
 deployer-cluster = { path = "./utils/deployer-cluster" }
 platform = { path = "./utils/dependencies/platform" }
 events-api = { path = "./utils/dependencies/apis/events" }
