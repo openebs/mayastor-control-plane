@@ -1,8 +1,11 @@
 use deployer_cluster::{Cluster, ClusterBuilder};
 use grpc::operations::dr::{client::DrClient, traits::DrOperations};
-use stor_port::types::v0::transport::{
-    CreateDrClusterPair, DestroyDrClusterPair, DrS3Credentials, DrS3Keys, DrS3Transport,
-    DrTransport, GetDrClusterPair,
+use stor_port::types::v0::{
+    openapi::models,
+    transport::{
+        CreateDrClusterPair, DestroyDrClusterPair, DrS3Credentials, DrS3Keys, DrS3Transport,
+        DrTransport, GetDrClusterPair,
+    },
 };
 
 /// A client for the cluster's dr agent.
@@ -37,13 +40,36 @@ fn create(id: &str, peer: &str, secret: &str) -> CreateDrClusterPair {
     }
 }
 
+/// The store secret a pair carries, as rest reports it.
+fn secret(pair: &models::DrClusterPair) -> String {
+    let models::DrTransport::s3(s3) = pair.transport.clone().expect("a transport");
+    match s3.credentials {
+        Some(models::DrS3Credentials::keys(keys)) => keys.secret_key,
+        other => panic!("expected keys, got {other:?}"),
+    }
+}
+
+/// The pair as a put states it.
+fn put_body(secret: &str) -> models::CreateDrClusterPairBody {
+    models::CreateDrClusterPairBody::new_all(
+        "east",
+        "west",
+        models::DrTransport::s3(models::DrS3Transport::new_all(
+            "http://rustfs:9000",
+            "default",
+            Some("prod".to_string()),
+            Some("us-east-1".to_string()),
+            models::DrS3Credentials::keys(models::DrS3Keys::new("GKde9ade", secret)),
+        )),
+    )
+}
+
 /// The pairs the agent holds: created, amended, read back, surviving a restart, removed.
 #[tokio::test]
 async fn dr_cluster_pair() {
     let cluster = ClusterBuilder::builder()
         // A pair is a record; nothing here touches a volume.
         .with_io_engines(0)
-        .with_rest(false)
         // What `--dr` stands for: the agent, and the store it will work through.
         .with_dr(true)
         .build()
@@ -89,6 +115,37 @@ async fn dr_cluster_pair() {
     // Nothing waits on a restart, and the agent reads its pairs back before it serves.
     dr.wait_ready(None).await.expect("the agent to be serving");
     assert_eq!(dr.get(&id, None).await.unwrap(), amended);
+
+    // The agent answers with the secret - `amended` was compared against it above - and
+    // rest is what withholds it, from every answer that was not asked.
+    let rest = cluster.rest_v00();
+    let api = rest.disaster_recovery_api();
+
+    // A put answers with what it stored, minus the secret.
+    let created = api
+        .put_dr_pair("dr-west", put_body("hunter2"))
+        .await
+        .unwrap();
+    assert_eq!(secret(&created), "");
+
+    // So does a get, and every pair a list answers for.
+    let got = api.get_dr_pair("dr-west", None).await.unwrap();
+    assert_eq!(secret(&got), "");
+    let listed = api.get_dr_pairs(None).await.unwrap();
+    assert!(listed.iter().all(|pair| secret(pair).is_empty()));
+
+    // Only asking for it answers with it.
+    let shown = api.get_dr_pair("dr-west", Some(true)).await.unwrap();
+    assert_eq!(secret(&shown), "hunter2");
+    let listed = api.get_dr_pairs(Some(true)).await.unwrap();
+    assert!(listed.iter().all(|pair| secret(pair) == "hunter2"));
+
+    // Putting the withheld secret back would replace a working credential with nothing.
+    api.put_dr_pair("dr-west", put_body(""))
+        .await
+        .expect_err("a put carrying the empty secret a get answers with");
+    let shown = api.get_dr_pair("dr-west", Some(true)).await.unwrap();
+    assert_eq!(secret(&shown), "hunter2");
 
     // Names the store layout is built from: not empty, and a single path segment.
     dr.create(&create("", "west", "s"), None)

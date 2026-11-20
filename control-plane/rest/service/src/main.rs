@@ -8,7 +8,7 @@ use crate::{
         core_state::CachedCoreState,
         handlers::{liveness, readiness},
     },
-    v0::{CORE_CLIENT, JSON_GRPC_CLIENT},
+    v0::{CORE_CLIENT, DR_PAIR_CLIENT, JSON_GRPC_CLIENT},
 };
 use actix_service::ServiceFactory;
 use actix_web::{
@@ -19,7 +19,10 @@ use actix_web::{
     HttpResponse, HttpServer,
 };
 use clap::Parser;
-use grpc::{client::CoreClient, operations::jsongrpc::client::JsonGrpcClient};
+use grpc::{
+    client::CoreClient,
+    operations::{dr::client::DrClient, jsongrpc::client::JsonGrpcClient},
+};
 use http::Uri;
 use rcgen::generate_simple_self_signed;
 use rustls::{
@@ -69,6 +72,11 @@ pub(crate) struct CliArgs {
     /// The json gRPC Server URL or address to connect to the service.
     #[clap(long, short = 'J')]
     json_grpc: Option<Uri>,
+
+    /// The dr agent's gRPC URL or address. Without it the dr endpoints report the agent
+    /// as unavailable rather than the server refusing to start.
+    #[clap(long, short = 'D')]
+    dr_grpc: Option<Uri>,
 
     /// Path to the TLS server certificate chain file.
     #[clap(long = "tls-cert-file", required_unless_present_any = ["dummy_certificates", "auto_tls"])]
@@ -404,6 +412,17 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Initialize the json grpc client to be used in rest
+    if let Some(dr_grpc) = cli_args.dr_grpc.clone() {
+        // Only this path passes the ca/cert/key files, as core's does.
+        let client = match cli_args.grpc_tls()? {
+            Some(tls) => DrClient::new_with_tls(dr_grpc, cli_args.timeout_opts(), tls).await?,
+            None => DrClient::new(dr_grpc, cli_args.timeout_opts()).await,
+        };
+        DR_PAIR_CLIENT
+            .set(client)
+            .ok()
+            .expect("Expect to be initialised only once");
+    }
     if let Some(json_grpc) = cli_args.json_grpc.clone() {
         JSON_GRPC_CLIENT
             .set(JsonGrpcClient::new(json_grpc, cli_args.timeout_opts()).await)
