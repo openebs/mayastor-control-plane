@@ -19,6 +19,7 @@ async fn rwx() {
     let cluster = ClusterBuilder::builder()
         .with_rest(true)
         .with_io_engines(2)
+        .with_options(|o| o.with_isolated_io_engine(true).with_io_engine_delay(true))
         .with_tmpfs_pool(100 * 1024 * 1024)
         .with_cache_period("1s")
         .with_reconcile_period(Duration::from_secs(1), Duration::from_secs(1))
@@ -181,6 +182,7 @@ async fn run_fio_vol(
             "--numjobs=1",
             "--name=fio",
             "--readwrite=randwrite",
+            "--size=50%",
             "--verify=crc32",
             filename.as_str(),
         ]

@@ -240,6 +240,10 @@ pub struct StartOptions {
     #[clap(long)]
     pub io_engine_interrupt: bool,
 
+    /// Run each io_engine in delay mode.
+    #[clap(long, conflicts_with_all = &["io_engine_interrupt"])]
+    pub io_engine_delay: bool,
+
     /// Run each io_engine with these many cores.
     /// A value of 0 means we'll rely on the default value set by the io-engine.
     #[clap(long, default_value = "0")]
@@ -657,6 +661,11 @@ impl StartOptions {
     #[must_use]
     pub fn with_isolated_io_engine(mut self, isolate: bool) -> Self {
         self.io_engine_isolate = isolate;
+        self
+    }
+    #[must_use]
+    pub fn with_io_engine_delay(mut self, delay: bool) -> Self {
+        self.io_engine_delay = delay;
         self
     }
     #[must_use]
