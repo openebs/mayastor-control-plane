@@ -9,7 +9,7 @@ use std::{
     str::FromStr,
 };
 
-use super::{Attach, AttachParameters, Detach, DeviceError, DeviceName};
+use super::{indexed_nvme_device, Attach, AttachParameters, Detach, DeviceError, DeviceName};
 use crate::{
     config::{config, NvmeConfig, NvmeParseParams},
     dev::util::extract_uuid,
@@ -78,12 +78,24 @@ impl NvmfAttach {
 
     fn get_device(&self) -> Result<Option<Device>, DeviceError> {
         let key: String = format!("uuid.{}", self.uuid);
-        let mut enumerator = Enumerator::new()?;
+        let multipath = utils::check_nvme_core_ana()?;
 
+        // Avoid enumerating every block device when udev has already indexed this
+        // namespace. Still validate its identity, model and live controller.
+        if let Some(device) = indexed_nvme_device(&key) {
+            if matches!(
+                match_device(&device, &key, Some(multipath), &self.warn_bad),
+                Ok(Some(_))
+            ) {
+                return Ok(Some(device));
+            }
+        }
+
+        // The index can be absent or stale while udev processes device events.
+        // Preserve the existing scan and error handling in that case.
+        let mut enumerator = Enumerator::new()?;
         enumerator.match_subsystem("block")?;
         enumerator.match_property("DEVTYPE", "disk")?;
-
-        let multipath = utils::check_nvme_core_ana()?;
 
         let mut first_error = Ok(None);
         for device in enumerator.scan_devices()? {
