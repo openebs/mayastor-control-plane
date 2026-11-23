@@ -91,7 +91,7 @@ impl EtcdStore {
         let mut store = self.store.lock().await;
         let key = key_prefix_obj(StorableObjectType::SwitchOver, API_VERSION);
 
-        let store_entries = store.get_values_prefix(&key).await?;
+        let store_entries = store.get_values_paged_all(&key, 2048).await?;
 
         debug!(count = store_entries.len(), "fetched entries from etcd");
 
