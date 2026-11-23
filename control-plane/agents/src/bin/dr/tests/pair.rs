@@ -157,6 +157,13 @@ async fn dr_cluster_pair() {
     dr.create(&create("slashed", "a/b", "s"), None)
         .await
         .expect_err("a cluster name carrying a separator");
+    dr.create(&create("..", "west", "s"), None)
+        .await
+        .expect_err("an id that is a relative path");
+    // A side name is joined with dots into a chunk reference, so it may not carry one.
+    dr.create(&create("dotted", "a.b", "s"), None)
+        .await
+        .expect_err("a side name carrying a dot");
 
     // Both ends must differ, or neither side can tell its subtree from the other's.
     dr.create(&create("same", "east", "s"), None)
