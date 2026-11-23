@@ -30,9 +30,21 @@ pub(crate) struct Service {
 
 /// A name the store layout and the persistent store key are both built from.
 fn segment(what: &str, name: &str) -> Result<(), SvcError> {
-    if name.is_empty() || name.contains('/') {
+    if name.is_empty() || name.contains('/') || name == "." || name == ".." {
         return Err(SvcError::InvalidDrClusterPair {
-            error: format!("a pair's {what} must not be empty or carry a '/', got '{name}'"),
+            error: format!("a pair's {what} must be a single path segment, got '{name}'"),
+        });
+    }
+    Ok(())
+}
+
+/// A side's name: a segment, and dot-free, since a chunk reference joins side, uid and
+/// sequence with dots and the collector parses them back apart.
+fn side(what: &str, name: &str) -> Result<(), SvcError> {
+    segment(what, name)?;
+    if name.contains('.') {
+        return Err(SvcError::InvalidDrClusterPair {
+            error: format!("a pair's {what} must not carry a '.', got '{name}'"),
         });
     }
     Ok(())
@@ -62,8 +74,8 @@ impl Service {
 
     async fn create(&self, req: &CreateDrClusterPair) -> Result<DrClusterPair, SvcError> {
         segment("id", req.id.as_str())?;
-        segment("cluster", req.cluster.as_str())?;
-        segment("peer", req.peer.as_str())?;
+        side("cluster", req.cluster.as_str())?;
+        side("peer", req.peer.as_str())?;
         // A pair whose two ends carry the same name cannot be told apart in the store, so
         // every key this side wrote would also be the key it expects its peer to have
         // written.

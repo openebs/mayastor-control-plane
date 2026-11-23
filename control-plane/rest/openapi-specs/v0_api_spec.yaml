@@ -2792,23 +2792,24 @@ components:
       description: |-
         Identifier of a dr cluster pair.
 
-        A single path segment: not empty, and carrying no `/`. The path matches the rest of
-        the url so that the id survives a proxy that does not preserve percent-encoding, so
-        an id carrying a `/` would be read as part of the path; the api refuses one.
+        A single path segment: not empty, not `.` or `..`, and carrying no `/`. The path
+        matches the rest of the url so that the id survives a proxy that does not preserve
+        percent-encoding, so an id carrying a `/` would be read as part of the path; the
+        api refuses one.
       example: dr-west
       type: string
     DrClusterId:
       description: |-
         The name of one side's subtree in the store. Each side writes only under its own:
-        `<prefix>/dr/<dr-id>/<cluster>/<clusterUid>/`. A pair names both, so the peer's
-        pair has to mirror them - its `cluster` is this pair's `peer` and the other way
-        about - or neither side looks where the other writes.
+        `<prefix>/dr/<dr-id>/sides/<cluster>/<clusterUid>/`. A pair names both, so the
+        peer's pair has to mirror them - its `cluster` is this pair's `peer` and the other
+        way about - or neither side looks where the other writes.
 
         A label rather than an identity: the uid is what distinguishes two clusters given
         the same name, which is why one cluster can hold both ends of a relationship.
 
-        A single path segment, like the pair's id: not empty, and carrying no `/`, since
-        the store layout is built from it.
+        A single path segment, like the pair's id, and carrying no `.`: the store layout
+        is built from it, and a chunk reference joins side, uid and sequence with dots.
       example: east
       type: string
     DrClusterUid:

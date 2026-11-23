@@ -92,13 +92,14 @@ message Transport {
 
 // The pairing of this cluster with a peer, and the store they share.
 message ClusterPair {
-  // How volumes refer to this pair. A single path segment: not empty, and no `/`, since
-  // the persistent store key is built from it.
+  // How volumes refer to this pair. A single path segment: not empty, not `.` or `..`, and
+  // no `/`, since the persistent store key is built from it.
   string id = 1;
   // The name of this side's subtree in the store: everything this cluster writes goes
-  // under `<prefix>/dr/<dr-id>/<cluster>/<cluster_uid>/`. The peer's own pair has to carry
-  // the same string as its `peer`, or neither side looks where the other writes. A single
-  // path segment, for the same reason: not empty, and no `/`.
+  // under `<prefix>/dr/<dr-id>/sides/<cluster>/<cluster_uid>/`. The peer's own pair has to
+  // carry the same string as its `peer`, or neither side looks where the other writes. A
+  // single path segment, for the same reason, and no `.`: a chunk reference joins side,
+  // uid and sequence with dots.
   string cluster = 2;
   // This cluster's own identity, as core reads it from the platform. Not configured: it is
   // what actually distinguishes two clusters that were given the same name.
@@ -127,7 +128,8 @@ message ClusterPairs {
 // Where the store is, and the credentials for it, are amended; the two names are not -
 // those say which relationship this is, and changing them is a different pair.
 message CreateClusterPairRequest {
-  // How volumes will refer to this pair. A single path segment: not empty, and no `/`.
+  // How volumes will refer to this pair. A single path segment: not empty, not `.` or
+  // `..`, and no `/`.
   string id = 1;
   // The name of this side's subtree in the store. Not a claim about which cluster this
   // is - that is the uid - so a name other than this cluster's own is allowed, which is

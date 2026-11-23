@@ -81,8 +81,8 @@ pub struct DrClusterPair {
     pub id: DrPairId,
     /// The name of this side's subtree in the store.
     ///
-    /// Everything this cluster writes goes under `<prefix>/dr/<dr-id>/<cluster>/<uid>/`,
-    /// and the peer's own pair has to carry the same string as its `peer` - otherwise
+    /// Everything this cluster writes goes under
+    /// `<prefix>/dr/<dr-id>/sides/<cluster>/<uid>/`, and the peer's own pair has to carry the same string as its `peer` - otherwise
     /// neither side looks where the other writes.
     pub cluster: DrClusterId,
     /// The uid of the cluster this pair was created on, which is the one its control plane
