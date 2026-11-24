@@ -3,8 +3,7 @@ use grpc::operations::dr::{client::DrClient, traits::DrOperations};
 use stor_port::types::v0::{
     openapi::models,
     transport::{
-        CreateDrClusterPair, DestroyDrClusterPair, DrS3Credentials, DrS3Keys, DrS3Transport,
-        DrTransport, GetDrClusterPair,
+        CreateDrClusterPair, DestroyDrClusterPair, DrS3Credentials, DrTransport, GetDrClusterPair,
     },
 };
 
@@ -18,26 +17,15 @@ async fn dr_client(cluster: &Cluster) -> DrClient {
     DrClient::new(uri, None).await
 }
 
-fn transport(secret: &str) -> DrTransport {
-    DrTransport::S3(DrS3Transport {
-        endpoint: "http://rustfs:9000".to_string(),
-        bucket: "default".to_string(),
-        prefix: Some("prod".to_string()),
-        region: Some("us-east-1".to_string()),
-        credentials: Some(DrS3Credentials::Keys(DrS3Keys {
-            access_key: "GKde9ade".to_string(),
-            secret_key: secret.to_string(),
-        })),
-    })
-}
-
-fn create(id: &str, peer: &str, secret: &str) -> CreateDrClusterPair {
-    CreateDrClusterPair {
-        id: id.into(),
-        cluster: "east".into(),
-        peer: peer.into(),
-        transport: transport(secret),
-    }
+/// The cluster's pair `id` to `peer`, carrying `secret` for its store.
+fn create(cluster: &Cluster, id: &str, peer: &str, secret: &str) -> CreateDrClusterPair {
+    let mut pair = cluster.dr_pair(id, "east", peer);
+    let DrTransport::S3(s3) = &mut pair.transport;
+    let Some(DrS3Credentials::Keys(keys)) = &mut s3.credentials else {
+        panic!("the cluster's pair to carry keys");
+    };
+    keys.secret_key = secret.to_string();
+    pair
 }
 
 /// The store secret a pair carries, as rest reports it.
@@ -50,16 +38,21 @@ fn secret(pair: &models::DrClusterPair) -> String {
 }
 
 /// The pair as a put states it.
-fn put_body(secret: &str) -> models::CreateDrClusterPairBody {
+fn put_body(cluster: &Cluster, secret: &str) -> models::CreateDrClusterPairBody {
+    let pair = create(cluster, "dr-west", "west", secret);
+    let DrTransport::S3(s3) = pair.transport;
+    let Some(DrS3Credentials::Keys(keys)) = s3.credentials else {
+        panic!("the cluster's pair to carry keys");
+    };
     models::CreateDrClusterPairBody::new_all(
-        "east",
-        "west",
+        pair.cluster.as_str(),
+        pair.peer.as_str(),
         models::DrTransport::s3(models::DrS3Transport::new_all(
-            "http://rustfs:9000",
-            "default",
-            Some("prod".to_string()),
-            Some("us-east-1".to_string()),
-            models::DrS3Credentials::keys(models::DrS3Keys::new("GKde9ade", secret)),
+            s3.endpoint,
+            s3.bucket,
+            s3.prefix,
+            s3.region,
+            models::DrS3Credentials::keys(models::DrS3Keys::new(keys.access_key, keys.secret_key)),
         )),
     )
 }
@@ -79,27 +72,25 @@ async fn dr_cluster_pair() {
     // The cluster waited on the agent's probe as it came up.
     let dr = dr_client(&cluster).await;
 
-    let pair = dr
-        .create_pair(&create("dr-west", "west", "supersecret"), None)
-        .await
-        .unwrap();
+    let asked = create(&cluster, "dr-west", "west", "supersecret");
+    let pair = dr.create_pair(&asked, None).await.unwrap();
     assert_eq!(pair.id.as_str(), "dr-west");
     assert_eq!(pair.peer.as_str(), "west");
     assert!(
         !pair.cluster_uid.as_str().is_empty(),
         "the uid is read from the platform at creation, not left for later"
     );
-    assert_eq!(pair.transport, transport("supersecret"));
+    assert_eq!(pair.transport, asked.transport);
 
     // Create is an upsert: the same ends with a moved store converge rather than failing.
-    let mut moved = create("dr-west", "west", "rotated");
+    let mut moved = create(&cluster, "dr-west", "west", "rotated");
     let DrTransport::S3(s3) = &mut moved.transport;
     s3.bucket = "elsewhere".to_string();
     let amended = dr.create_pair(&moved, None).await.unwrap();
     assert_eq!(amended.transport, moved.transport);
 
     // The two names are not amended: they say which relationship this is.
-    dr.create_pair(&create("dr-west", "north", "supersecret"), None)
+    dr.create_pair(&create(&cluster, "dr-west", "north", "supersecret"), None)
         .await
         .expect_err("a put repointing a pair at a different peer");
 
@@ -126,7 +117,7 @@ async fn dr_cluster_pair() {
 
     // A put answers with what it stored, minus the secret.
     let created = api
-        .put_dr_pair("dr-west", put_body("hunter2"))
+        .put_dr_pair("dr-west", put_body(&cluster, "hunter2"))
         .await
         .unwrap();
     assert_eq!(secret(&created), "");
@@ -144,32 +135,32 @@ async fn dr_cluster_pair() {
     assert!(listed.iter().all(|pair| secret(pair) == "hunter2"));
 
     // Putting the withheld secret back would replace a working credential with nothing.
-    api.put_dr_pair("dr-west", put_body(""))
+    api.put_dr_pair("dr-west", put_body(&cluster, ""))
         .await
         .expect_err("a put carrying the empty secret a get answers with");
     let shown = api.get_dr_pair("dr-west", Some(true)).await.unwrap();
     assert_eq!(secret(&shown), "hunter2");
 
     // Names the store layout is built from: not empty, and a single path segment.
-    dr.create_pair(&create("", "west", "s"), None)
+    dr.create_pair(&create(&cluster, "", "west", "s"), None)
         .await
         .expect_err("an empty id");
-    dr.create_pair(&create("a/b", "west", "s"), None)
+    dr.create_pair(&create(&cluster, "a/b", "west", "s"), None)
         .await
         .expect_err("an id carrying a separator");
-    dr.create_pair(&create("slashed", "a/b", "s"), None)
+    dr.create_pair(&create(&cluster, "slashed", "a/b", "s"), None)
         .await
         .expect_err("a cluster name carrying a separator");
-    dr.create_pair(&create("..", "west", "s"), None)
+    dr.create_pair(&create(&cluster, "..", "west", "s"), None)
         .await
         .expect_err("an id that is a relative path");
     // A side name is joined with dots into a chunk reference, so it may not carry one.
-    dr.create_pair(&create("dotted", "a.b", "s"), None)
+    dr.create_pair(&create(&cluster, "dotted", "a.b", "s"), None)
         .await
         .expect_err("a side name carrying a dot");
 
     // Both ends must differ, or neither side can tell its subtree from the other's.
-    dr.create_pair(&create("same", "east", "s"), None)
+    dr.create_pair(&create(&cluster, "same", "east", "s"), None)
         .await
         .expect_err("a pair whose cluster and peer are the same name");
 
