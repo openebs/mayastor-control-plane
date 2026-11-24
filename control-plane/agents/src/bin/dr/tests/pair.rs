@@ -80,7 +80,7 @@ async fn dr_cluster_pair() {
     let dr = dr_client(&cluster).await;
 
     let pair = dr
-        .create(&create("dr-west", "west", "supersecret"), None)
+        .create_pair(&create("dr-west", "west", "supersecret"), None)
         .await
         .unwrap();
     assert_eq!(pair.id.as_str(), "dr-west");
@@ -95,26 +95,29 @@ async fn dr_cluster_pair() {
     let mut moved = create("dr-west", "west", "rotated");
     let DrTransport::S3(s3) = &mut moved.transport;
     s3.bucket = "elsewhere".to_string();
-    let amended = dr.create(&moved, None).await.unwrap();
+    let amended = dr.create_pair(&moved, None).await.unwrap();
     assert_eq!(amended.transport, moved.transport);
 
     // The two names are not amended: they say which relationship this is.
-    dr.create(&create("dr-west", "north", "supersecret"), None)
+    dr.create_pair(&create("dr-west", "north", "supersecret"), None)
         .await
         .expect_err("a put repointing a pair at a different peer");
 
     let id = GetDrClusterPair {
         id: "dr-west".into(),
     };
-    assert_eq!(dr.get(&id, None).await.unwrap(), amended);
-    assert_eq!(dr.list(None).await.unwrap().entries, vec![amended.clone()]);
+    assert_eq!(dr.get_pair(&id, None).await.unwrap(), amended);
+    assert_eq!(
+        dr.list_pairs(None).await.unwrap().entries,
+        vec![amended.clone()]
+    );
 
     // A pair outlives the agent because it is read back from the persistent store.
     cluster.composer().restart("agent-dr").await.unwrap();
     let dr = dr_client(&cluster).await;
     // Nothing waits on a restart, and the agent reads its pairs back before it serves.
     dr.wait_ready(None).await.expect("the agent to be serving");
-    assert_eq!(dr.get(&id, None).await.unwrap(), amended);
+    assert_eq!(dr.get_pair(&id, None).await.unwrap(), amended);
 
     // The agent answers with the secret - `amended` was compared against it above - and
     // rest is what withholds it, from every answer that was not asked.
@@ -148,35 +151,35 @@ async fn dr_cluster_pair() {
     assert_eq!(secret(&shown), "hunter2");
 
     // Names the store layout is built from: not empty, and a single path segment.
-    dr.create(&create("", "west", "s"), None)
+    dr.create_pair(&create("", "west", "s"), None)
         .await
         .expect_err("an empty id");
-    dr.create(&create("a/b", "west", "s"), None)
+    dr.create_pair(&create("a/b", "west", "s"), None)
         .await
         .expect_err("an id carrying a separator");
-    dr.create(&create("slashed", "a/b", "s"), None)
+    dr.create_pair(&create("slashed", "a/b", "s"), None)
         .await
         .expect_err("a cluster name carrying a separator");
-    dr.create(&create("..", "west", "s"), None)
+    dr.create_pair(&create("..", "west", "s"), None)
         .await
         .expect_err("an id that is a relative path");
     // A side name is joined with dots into a chunk reference, so it may not carry one.
-    dr.create(&create("dotted", "a.b", "s"), None)
+    dr.create_pair(&create("dotted", "a.b", "s"), None)
         .await
         .expect_err("a side name carrying a dot");
 
     // Both ends must differ, or neither side can tell its subtree from the other's.
-    dr.create(&create("same", "east", "s"), None)
+    dr.create_pair(&create("same", "east", "s"), None)
         .await
         .expect_err("a pair whose cluster and peer are the same name");
 
     let destroy = DestroyDrClusterPair {
         id: "dr-west".into(),
     };
-    dr.destroy(&destroy, None).await.unwrap();
-    dr.get(&id, None).await.expect_err("a removed pair");
-    dr.destroy(&destroy, None)
+    dr.destroy_pair(&destroy, None).await.unwrap();
+    dr.get_pair(&id, None).await.expect_err("a removed pair");
+    dr.destroy_pair(&destroy, None)
         .await
         .expect_err("removing what is not there");
-    assert!(dr.list(None).await.unwrap().entries.is_empty());
+    assert!(dr.list_pairs(None).await.unwrap().entries.is_empty());
 }

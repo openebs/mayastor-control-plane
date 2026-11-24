@@ -100,7 +100,7 @@ fn to_models(pair: DrClusterPair, show_secrets: bool) -> models::DrClusterPair {
 impl apis::actix_server::DisasterRecovery for RestApi {
     async fn del_dr_pair(Path(pair_id): Path<String>) -> Result<(), RestError<RestJsonError>> {
         client()?
-            .destroy(&DestroyDrClusterPair { id: pair_id.into() }, None)
+            .destroy_pair(&DestroyDrClusterPair { id: pair_id.into() }, None)
             .await?;
         Ok(())
     }
@@ -110,7 +110,7 @@ impl apis::actix_server::DisasterRecovery for RestApi {
         Query(show_secrets): Query<Option<bool>>,
     ) -> Result<models::DrClusterPair, RestError<RestJsonError>> {
         let pair = client()?
-            .get(&GetDrClusterPair { id: pair_id.into() }, None)
+            .get_pair(&GetDrClusterPair { id: pair_id.into() }, None)
             .await?;
         Ok(to_models(pair, show_secrets.unwrap_or_default()))
     }
@@ -119,7 +119,7 @@ impl apis::actix_server::DisasterRecovery for RestApi {
         Query(show_secrets): Query<Option<bool>>,
     ) -> Result<Vec<models::DrClusterPair>, RestError<RestJsonError>> {
         let show_secrets = show_secrets.unwrap_or_default();
-        let pairs = client()?.list(None).await?;
+        let pairs = client()?.list_pairs(None).await?;
         Ok(pairs
             .entries
             .into_iter()
@@ -132,7 +132,7 @@ impl apis::actix_server::DisasterRecovery for RestApi {
         Body(body): Body<models::CreateDrClusterPairBody>,
     ) -> Result<models::DrClusterPair, RestError<RestJsonError>> {
         let pair = client()?
-            .create(
+            .create_pair(
                 &CreateDrClusterPair {
                     id: pair_id.into(),
                     cluster: body.cluster.into(),

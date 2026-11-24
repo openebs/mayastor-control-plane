@@ -61,7 +61,7 @@ impl dr_grpc_server::DrGrpc for DrServer {
         request: tonic::Request<dr::CreateClusterPairRequest>,
     ) -> Result<tonic::Response<dr::ClusterPairReply>, tonic::Status> {
         let result = match request.into_inner().try_into() {
-            Ok(req) => self.service.create(&req, None).await,
+            Ok(req) => self.service.create_pair(&req, None).await,
             Err(error) => Err(error),
         };
         Ok(Response::new(pair_reply(result)))
@@ -75,7 +75,7 @@ impl dr_grpc_server::DrGrpc for DrServer {
             id: request.into_inner().id.into(),
         };
         Ok(Response::new(pair_reply(
-            self.service.get(&req, None).await,
+            self.service.get_pair(&req, None).await,
         )))
     }
 
@@ -83,7 +83,7 @@ impl dr_grpc_server::DrGrpc for DrServer {
         &self,
         _request: tonic::Request<dr::ListClusterPairsRequest>,
     ) -> Result<tonic::Response<dr::ClusterPairsReply>, tonic::Status> {
-        let reply = match self.service.list(None).await {
+        let reply = match self.service.list_pairs(None).await {
             Ok(pairs) => cluster_pairs_reply::Reply::Pairs(dr::ClusterPairs {
                 entries: pairs.entries.into_iter().map(Into::into).collect(),
             }),
@@ -100,7 +100,12 @@ impl dr_grpc_server::DrGrpc for DrServer {
             id: request.into_inner().id.into(),
         };
         Ok(Response::new(dr::DestroyClusterPairReply {
-            error: self.service.destroy(&req, None).await.err().map(Into::into),
+            error: self
+                .service
+                .destroy_pair(&req, None)
+                .await
+                .err()
+                .map(Into::into),
         }))
     }
 }

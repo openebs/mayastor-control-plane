@@ -72,7 +72,7 @@ impl Service {
         }
     }
 
-    async fn create(&self, req: &CreateDrClusterPair) -> Result<DrClusterPair, SvcError> {
+    async fn create_pair(&self, req: &CreateDrClusterPair) -> Result<DrClusterPair, SvcError> {
         segment("id", req.id.as_str())?;
         side("cluster", req.cluster.as_str())?;
         side("peer", req.peer.as_str())?;
@@ -125,7 +125,7 @@ impl Service {
         Ok(as_transport(spec))
     }
 
-    async fn get(&self, req: &GetDrClusterPair) -> Result<DrClusterPair, SvcError> {
+    async fn get_pair(&self, req: &GetDrClusterPair) -> Result<DrClusterPair, SvcError> {
         let pairs = self.pairs.read().await.get(&req.id).cloned();
         pairs
             .map(as_transport)
@@ -134,7 +134,7 @@ impl Service {
             })
     }
 
-    async fn list(&self) -> Result<DrClusterPairs, SvcError> {
+    async fn list_pairs(&self) -> Result<DrClusterPairs, SvcError> {
         let pairs = self.pairs.read().await;
         let entries = pairs.values().cloned().map(as_transport);
         Ok(DrClusterPairs {
@@ -142,7 +142,7 @@ impl Service {
         })
     }
 
-    async fn destroy(&self, req: &DestroyDrClusterPair) -> Result<(), SvcError> {
+    async fn destroy_pair(&self, req: &DestroyDrClusterPair) -> Result<(), SvcError> {
         let mut pairs = self.pairs.write().await;
         // Destroying what is not there is an error, as it is for every other resource -
         // the plugin's `--ignore-not-found` is what turns it back into a no-op.
@@ -162,32 +162,32 @@ impl DrOperations for Service {
         Ok(true)
     }
 
-    async fn create(
+    async fn create_pair(
         &self,
         req: &CreateDrClusterPair,
         _ctx: Option<Context>,
     ) -> Result<DrClusterPair, ReplyError> {
-        Ok(self.create(req).await?)
+        Ok(self.create_pair(req).await?)
     }
 
-    async fn get(
+    async fn get_pair(
         &self,
         req: &GetDrClusterPair,
         _ctx: Option<Context>,
     ) -> Result<DrClusterPair, ReplyError> {
-        Ok(self.get(req).await?)
+        Ok(self.get_pair(req).await?)
     }
 
-    async fn list(&self, _ctx: Option<Context>) -> Result<DrClusterPairs, ReplyError> {
-        Ok(self.list().await?)
+    async fn list_pairs(&self, _ctx: Option<Context>) -> Result<DrClusterPairs, ReplyError> {
+        Ok(self.list_pairs().await?)
     }
 
-    async fn destroy(
+    async fn destroy_pair(
         &self,
         req: &DestroyDrClusterPair,
         _ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
-        Ok(self.destroy(req).await?)
+        Ok(self.destroy_pair(req).await?)
     }
 }
 

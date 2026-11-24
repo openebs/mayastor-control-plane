@@ -17,21 +17,21 @@ pub trait DrOperations: Send + Sync {
     /// Liveness probe for the dr service.
     async fn probe(&self, ctx: Option<Context>) -> Result<bool, ReplyError>;
     /// Create a pair, or adopt one that already exists with the same terms.
-    async fn create(
+    async fn create_pair(
         &self,
         req: &CreateDrClusterPair,
         ctx: Option<Context>,
     ) -> Result<DrClusterPair, ReplyError>;
     /// Fetch a single pair.
-    async fn get(
+    async fn get_pair(
         &self,
         req: &GetDrClusterPair,
         ctx: Option<Context>,
     ) -> Result<DrClusterPair, ReplyError>;
     /// List the pairs.
-    async fn list(&self, ctx: Option<Context>) -> Result<DrClusterPairs, ReplyError>;
+    async fn list_pairs(&self, ctx: Option<Context>) -> Result<DrClusterPairs, ReplyError>;
     /// Remove a pair.
-    async fn destroy(
+    async fn destroy_pair(
         &self,
         req: &DestroyDrClusterPair,
         ctx: Option<Context>,

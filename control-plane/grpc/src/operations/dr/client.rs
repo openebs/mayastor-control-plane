@@ -92,8 +92,8 @@ impl DrOperations for DrClient {
     }
 
     // Not `skip(self)`: the request carries the store credentials, and `err` logs it.
-    #[tracing::instrument(name = "DrClient::create", level = "debug", skip_all, fields(pair.id = %req.id), err)]
-    async fn create(
+    #[tracing::instrument(name = "DrClient::create_pair", level = "debug", skip_all, fields(pair.id = %req.id), err)]
+    async fn create_pair(
         &self,
         req: &CreateDrClusterPair,
         _ctx: Option<Context>,
@@ -107,8 +107,8 @@ impl DrOperations for DrClient {
         pair(reply)
     }
 
-    #[tracing::instrument(name = "DrClient::get", level = "debug", skip(self), err)]
-    async fn get(
+    #[tracing::instrument(name = "DrClient::get_pair", level = "debug", skip(self), err)]
+    async fn get_pair(
         &self,
         req: &GetDrClusterPair,
         _ctx: Option<Context>,
@@ -123,8 +123,8 @@ impl DrOperations for DrClient {
         pair(reply)
     }
 
-    #[tracing::instrument(name = "DrClient::list", level = "debug", skip(self), err)]
-    async fn list(&self, _ctx: Option<Context>) -> Result<DrClusterPairs, ReplyError> {
+    #[tracing::instrument(name = "DrClient::list_pairs", level = "debug", skip(self), err)]
+    async fn list_pairs(&self, _ctx: Option<Context>) -> Result<DrClusterPairs, ReplyError> {
         let reply = self
             .client()
             .list_cluster_pairs(dr::ListClusterPairsRequest {})
@@ -137,8 +137,8 @@ impl DrOperations for DrClient {
         }
     }
 
-    #[tracing::instrument(name = "DrClient::destroy", level = "debug", skip(self), err)]
-    async fn destroy(
+    #[tracing::instrument(name = "DrClient::destroy_pair", level = "debug", skip(self), err)]
+    async fn destroy_pair(
         &self,
         req: &DestroyDrClusterPair,
         _ctx: Option<Context>,
