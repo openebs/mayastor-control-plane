@@ -879,6 +879,13 @@ impl VolumeSpec {
             .is_some_and(|drain_cfg| drain_cfg.is_spare(replica.clone()))
     }
 
+    /// Returns true if supplied replica id is being moved away by a pool drain.
+    pub fn is_moving_replica(&self, replica: &ReplicaId) -> bool {
+        self.metadata
+            .drain_config()
+            .is_some_and(|drain_cfg| drain_cfg.moving_replica() == replica)
+    }
+
     /// Returns true if it's a single replica volume.
     pub fn is_single_replica(&self) -> bool {
         self.num_replicas == 1

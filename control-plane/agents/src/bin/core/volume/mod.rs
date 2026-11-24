@@ -16,6 +16,7 @@ pub(crate) use operations::MoveReplicaRequest;
 pub(crate) use operations_helper::offline_rebuild_budget;
 pub(crate) use scheduling::volume_pool_candidates;
 pub(crate) use snapshot_operations::DestroyVolumeSnapshotRequest;
+pub(crate) use specs::volume_replica_remove_candidate;
 
 /// Configure the Service and return the builder.
 pub(crate) fn configure(builder: agents::Service) -> agents::Service {

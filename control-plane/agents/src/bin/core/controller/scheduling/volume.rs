@@ -416,6 +416,10 @@ impl GetChildForRemovalContext {
             .collect::<Vec<_>>()
     }
 
+    /// Get the volume spec.
+    pub(crate) fn spec(&self) -> &VolumeSpec {
+        &self.spec
+    }
     /// Get the volume's affinity group.
     pub(crate) fn affinity_group(&self) -> Option<&AffinityGroupRmCtx> {
         self.affinity_group.as_ref()

@@ -339,6 +339,14 @@ impl ChildSorters {
         match Self::sort_by_health(a, b) {
             Ordering::Equal => match Self::sort_by_child(a, b) {
                 Ordering::Equal => {
+                    // A replica being moved away by a pool drain is removed first, though only
+                    // once it is as healthy as the others, so we don't remove it while it's
+                    // needed for IO.
+                    match Self::sort_by_drain(request, a, b) {
+                        Ordering::Equal => {}
+                        ord => return ord,
+                    }
+
                     if let Some(ag) = request.affinity_group() {
                         match (
                             a.ag_restricted_node(ag.restricted_nodes()),
@@ -398,6 +406,17 @@ impl ChildSorters {
             },
             ord => ord,
         }
+    }
+    // remove the replica which a pool drain is moving away first
+    fn sort_by_drain(
+        request: &GetChildForRemovalContext,
+        a: &ReplicaItem,
+        b: &ReplicaItem,
+    ) -> std::cmp::Ordering {
+        let spec = request.spec();
+        let a_moving = spec.is_moving_replica(&a.spec().uuid);
+        let b_moving = spec.is_moving_replica(&b.spec().uuid);
+        b_moving.cmp(&a_moving)
     }
     // sort replicas by their health: prefer healthy replicas over unhealthy
     fn sort_by_health(a: &ReplicaItem, b: &ReplicaItem) -> std::cmp::Ordering {
