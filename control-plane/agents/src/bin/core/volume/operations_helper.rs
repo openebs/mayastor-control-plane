@@ -410,7 +410,7 @@ impl OperationGuardArc<VolumeSpec> {
         };
 
         // Determine which replica is most suitable to be removed
-        let result = volume_replica_remove_candidate(&spec_clone, &state, registry).await;
+        let result = volume_replica_remove_candidate(&spec_clone, &state, registry, false).await;
 
         if let Err(ReplicaRemovalNoCandidates { .. }) = result {
             // The desired number of replicas is already met. This can occur if a replica has been

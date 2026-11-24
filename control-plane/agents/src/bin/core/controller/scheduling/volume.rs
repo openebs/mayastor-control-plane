@@ -19,7 +19,7 @@ use stor_port::types::v0::{
         nexus::NexusSpec, nexus_persistence::NexusInfo, replica::ReplicaSpec,
         snapshots::replica::ReplicaSnapshot, volume::VolumeSpec,
     },
-    transport::{NodeId, PoolId, VolumeState},
+    transport::{NodeId, PoolId, ReplicaId, VolumeState},
 };
 
 use crate::controller::scheduling::{affinity_group::ag_restricted_nodes, ResourceExcReason};
@@ -27,7 +27,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     ops::Deref,
 };
-use stor_port::types::v0::store::volume::AffinityGroupSpec;
+use stor_port::types::v0::store::{pool::DrainConfig, volume::AffinityGroupSpec};
 
 /// Move replica to another pool.
 #[derive(Default, Clone)]
@@ -546,6 +546,63 @@ impl ReplicaRemovalCandidates {
         } else {
             Some(None)
         }
+    }
+
+    /// Returns the moving replica of the drain if it is the one which should be removed now.
+    /// Returns `None` if any unrelated unhealthy replica exists (it takes precedence for removal),
+    /// or if the remaining unrelated healthy replicas are fewer than the desired count minus one.
+    /// Otherwise the moving replica is returned if either:
+    /// 1. `evict_for_drain` is set, the drain was requested without waiting for a spare.
+    /// 2. The spare replica is healthy, meaning the move has completed.
+    pub(crate) fn next_drain_removal_candidate(
+        self,
+        drain_config: DrainConfig,
+        evict_for_drain: bool,
+    ) -> Option<ReplicaItem> {
+        let moving = drain_config.moving_replica();
+        let spare_replica = drain_config.spare();
+        let moving_replica_item = self
+            .unhealthy
+            .iter()
+            .chain(&self.healthy)
+            .find(|r| r.spec().uuid == *moving)
+            .cloned()?;
+        if self.unrelated_unhealthy_count(moving, spare_replica) == 0 {
+            let num_replicas = self.context.spec.num_replicas;
+            if self.unrelated_healthy_count(moving) < (num_replicas - 1) as usize {
+                return None;
+            }
+            if evict_for_drain {
+                return Some(moving_replica_item);
+            }
+            let spare_in_healthy = self
+                .healthy
+                .iter()
+                .find(|r| Some(&r.spec().uuid) == spare_replica);
+            if spare_in_healthy.is_some() {
+                return Some(moving_replica_item);
+            }
+        }
+        None
+    }
+
+    /// Number of unhealthy replicas which are neither the moving nor the spare replica of a drain.
+    fn unrelated_unhealthy_count(&self, moving: &ReplicaId, spare: Option<&ReplicaId>) -> usize {
+        self.unhealthy
+            .iter()
+            .filter(|r| {
+                let id = &r.spec().uuid;
+                id != moving && Some(id) != spare
+            })
+            .count()
+    }
+
+    /// Number of healthy replicas which are not the moving replica of a drain.
+    fn unrelated_healthy_count(&self, moving: &ReplicaId) -> usize {
+        self.healthy
+            .iter()
+            .filter(|r| r.spec().uuid != *moving)
+            .count()
     }
 
     fn new(context: GetChildForRemovalContext, items: Vec<ReplicaItem>) -> Self {

@@ -100,6 +100,7 @@ pub(crate) async fn volume_replica_remove_candidate(
     spec: &VolumeSpec,
     state: &VolumeState,
     registry: &Registry,
+    evict_for_drain: bool,
 ) -> Result<ReplicaItem, SvcError> {
     let mut candidates = scheduling::volume_replica_remove_candidates(
         &GetChildForRemoval::new(spec, state, false),
@@ -109,6 +110,14 @@ pub(crate) async fn volume_replica_remove_candidate(
     .candidates();
 
     spec.trace_span(|| tracing::trace!("Volume Replica removal candidates: {:?}", candidates));
+
+    if let Some(drain_cfg) = spec.metadata.drain_config() {
+        return candidates
+            .next_drain_removal_candidate(drain_cfg, evict_for_drain)
+            .ok_or_else(|| SvcError::ReplicaRemovalNoCandidates {
+                id: spec.uuid_str(),
+            });
+    }
 
     match candidates.next_down() {
         None => Err(SvcError::ReplicaRemovalNoCandidates {

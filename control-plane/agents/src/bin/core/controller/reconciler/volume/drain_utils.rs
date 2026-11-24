@@ -1,6 +1,9 @@
-use crate::controller::{
-    resources::{OperationGuardArc, TraceSpan, TraceStrLog},
-    task_poller::{PollContext, PollResult, PollerState},
+use crate::{
+    controller::{
+        resources::{OperationGuardArc, TraceSpan, TraceStrLog},
+        task_poller::{PollContext, PollResult, PollerState},
+    },
+    volume::volume_replica_remove_candidate,
 };
 use agents::errors::SvcError;
 use stor_port::{
@@ -8,11 +11,10 @@ use stor_port::{
     types::v0::{
         store::{
             nexus::NexusSpec,
-            nexus_persistence::NexusInfo,
             pool::{DrainConfig, DrainProgressOp},
             volume::{OverReplicationRequester, VolumeSpec},
         },
-        transport::{ReplicaId, VolumeStatus},
+        transport::{ReplicaId, VolumeState, VolumeStatus},
     },
 };
 use tracing::{error, info};
@@ -113,14 +115,17 @@ async fn evict_if_applicable(
         .await
         .map(|pool| pool.as_ref().evict_now(drain_cfg.placement_started_at))
     else {
-        return Ok(PollerState::Busy);
+        return Ok(PollerState::Idle);
     };
     if !evict_now {
-        return Ok(PollerState::Busy);
+        return Ok(PollerState::Idle);
     }
     let moving_replica = drain_cfg.moving_replica();
     match context.registry().volume(&volume.as_ref().uuid).await {
         Ok(vol) if vol.state().status == VolumeStatus::Online => {
+            if !moving_replica_removable(context, volume.as_ref(), &vol.state(), true).await? {
+                return Ok(PollerState::Busy);
+            }
             info!(
                 volume.uuid = %volume.as_ref().uuid,
                 replica.uuid = %moving_replica,
@@ -232,53 +237,48 @@ pub(crate) async fn handle_drain_replica_move(
 ) -> PollResult {
     let vol = context.registry().volume(&volume.as_ref().uuid).await?;
     let moving_replica = config.moving_replica();
-    let spare = config.spare();
-    let state = vol.state();
-    let nexus_id = state.target.as_ref().map(|n| &n.uuid);
+    let evict = config.unsafe_evict();
 
-    let nexus_info = context
-        .registry()
-        .nexus_info(Some(&volume.as_ref().uuid), nexus_id, true, None)
-        .await?;
-    let unrelated_unhealthy = unrelated_unhealthy_children(nexus_info, spare, moving_replica);
-    if unrelated_unhealthy.is_empty() {
-        if config.unsafe_evict() {
-            info!(
-                volume.uuid = %volume.as_ref().uuid,
-                replica.uuid = %moving_replica,
-                pool.id = %config.pool,
-                "Unsafe evict drain, destroying moving replica without a spare"
-            );
-            return destroy_moving_replica(nexus, volume, context, moving_replica).await;
-        }
-
-        if vol.spare_online() {
-            info!(
-                volume.uuid = %volume.as_ref().uuid,
-                replica.uuid = %moving_replica,
-                pool.id = %config.pool,
-                "Spare is online, destroying moving replica"
-            );
-            return destroy_moving_replica(nexus, volume, context, moving_replica).await;
-        }
+    // Cheap check first, no point asking the scheduler while the spare is still rebuilding.
+    if !evict && !vol.spare_online() {
+        return Ok(PollerState::Idle);
     }
-    Ok(PollerState::Idle)
+    if !moving_replica_removable(context, volume.as_ref(), &vol.state(), evict).await? {
+        return Ok(PollerState::Idle);
+    }
+    if evict {
+        info!(
+            volume.uuid = %volume.as_ref().uuid,
+            replica.uuid = %moving_replica,
+            pool.id = %config.pool,
+            evict,
+            "Destroying moving replica with spare as drain was requested without spare"
+        );
+    } else {
+        info!(
+            volume.uuid = %volume.as_ref().uuid,
+            replica.uuid = %moving_replica,
+            spare.uuid = ?config.spare(),
+            "Removing the moving replica: its spare replica is healthy, so the move has completed"
+        );
+    }
+    destroy_moving_replica(nexus, volume, context, moving_replica).await
 }
 
-/// This returns list of unhealthy replicas which are not related of drain config. i.e. neither
-/// moving nor spare replica.
-fn unrelated_unhealthy_children(
-    nexus_info: Option<NexusInfo>,
-    spare: Option<&ReplicaId>,
-    moving_replica: &ReplicaId,
-) -> Vec<ReplicaId> {
-    let mut unhealthy = vec![];
-    if let Some(nexus) = nexus_info {
-        for child in nexus.children {
-            if child.uuid != *moving_replica && Some(&child.uuid) != spare && !child.healthy {
-                unhealthy.push(child.uuid);
-            }
+/// Asks the replica removal scheduler whether the moving replica is the one it would remove from
+/// the volume right now.
+async fn moving_replica_removable(
+    context: &PollContext,
+    volume: &VolumeSpec,
+    state: &VolumeState,
+    evict: bool,
+) -> Result<bool, SvcError> {
+    let spec = volume.clone();
+    match volume_replica_remove_candidate(&spec, state, context.registry(), evict).await {
+        Ok(_) => Ok(true),
+        Err(SvcError::ReplicaRemovalNoCandidates { .. } | SvcError::RestrictedReplicaCount {}) => {
+            Ok(false)
         }
+        Err(error) => Err(error),
     }
-    unhealthy
 }
