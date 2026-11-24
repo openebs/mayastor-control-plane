@@ -15,6 +15,14 @@ fn main() {
             ".v1.dr.ClusterPairsReply.reply",
             "#[allow(clippy::large_enum_variant)]",
         )
+        .type_attribute(
+            ".v1.dr.VolumeReply.reply",
+            "#[allow(clippy::large_enum_variant)]",
+        )
+        .type_attribute(
+            ".v1.dr.VolumesReply.reply",
+            "#[allow(clippy::large_enum_variant)]",
+        )
         .compile_protos(
             &[
                 "proto/v1/pool/pool.proto",

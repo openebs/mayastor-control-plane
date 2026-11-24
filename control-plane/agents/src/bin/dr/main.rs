@@ -3,13 +3,13 @@ mod store;
 
 use agents::Service;
 use clap::Parser;
-use grpc::operations::dr::server::DrServer;
+use grpc::{client::CoreClient, operations::dr::server::DrServer};
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use tracing::info;
 use utils::{
     package_description,
     tracing_telemetry::{FmtLayer, FmtStyle, KeyValue},
-    version_info_string, DEFAULT_DR_AGENT_SERVER_ADDR,
+    version_info_string, DEFAULT_DR_AGENT_SERVER_ADDR, DEFAULT_GRPC_CLIENT_ADDR,
 };
 
 #[derive(Debug, Parser)]
@@ -19,13 +19,18 @@ struct Cli {
     #[clap(long, short, default_value = DEFAULT_DR_AGENT_SERVER_ADDR)]
     grpc_endpoint: SocketAddr,
 
-    /// Path to the CA bundle used to authenticate dr-agent gRPC clients.
+    /// Core gRPC server URL or address, which answers whether a volume exists.
+    #[clap(long, short = 'z', default_value = DEFAULT_GRPC_CLIENT_ADDR)]
+    core_grpc: http::Uri,
+
+    /// Path to the CA bundle used to verify the Core gRPC server and authenticate dr-agent
+    /// gRPC clients.
     #[clap(long = "grpc-tls-ca-file")]
     grpc_tls_ca_file: Option<PathBuf>,
-    /// Path to the TLS certificate used by the dr-agent gRPC server.
+    /// Path to the TLS certificate used by the dr-agent gRPC server and client.
     #[clap(long = "grpc-tls-cert-file", requires = "grpc_tls_key_file")]
     grpc_tls_cert_file: Option<PathBuf>,
-    /// Path to the TLS private key used by the dr-agent gRPC server.
+    /// Path to the TLS private key used by the dr-agent gRPC server and client.
     #[clap(long = "grpc-tls-key-file", requires = "grpc_tls_cert_file")]
     grpc_tls_key_file: Option<PathBuf>,
     /// Auto-generate an ephemeral self-signed certificate for the dr-agent gRPC server.
@@ -109,7 +114,14 @@ async fn main() -> anyhow::Result<()> {
     stor_port::platform::init_cluster_info_or_panic().await;
 
     let grpc_tls = cli.grpc_tls()?;
-    let dr = service::new(&cli.store, cli.store_timeout.into()).await?;
+    if grpc_tls.is_some() && cli.core_grpc.scheme_str() != Some("https") {
+        anyhow::bail!("a TLS-enabled Core gRPC client requires an https:// URL");
+    }
+    let core = match grpc_tls.clone() {
+        Some(tls) => CoreClient::new_with_tls(cli.core_grpc.clone(), None, tls).await?,
+        None => CoreClient::new(cli.core_grpc.clone(), None).await,
+    };
+    let dr = service::new(&cli.store, cli.store_timeout.into(), core).await?;
     let service = Service::builder().with_service(DrServer::new(Arc::new(dr)).into_grpc_server());
 
     info!("Starting dr-agent server");

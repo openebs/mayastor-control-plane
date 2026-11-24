@@ -139,6 +139,8 @@ enum ResourceKind {
   AppNode = 22;
   // Dr Cluster Pair
   DrClusterPair = 23;
+  // Dr Volume
+  DrVolume = 24;
 }
 
 // Filter by Node and Replica id

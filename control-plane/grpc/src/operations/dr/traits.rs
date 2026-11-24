@@ -1,17 +1,18 @@
-use crate::{context::Context, dr};
+use crate::{common, context::Context, dr};
+use std::time::Duration;
 use stor_port::{
     transport_api::{ReplyError, ResourceKind},
     types::v0::transport::{
-        CreateDrClusterPair, DestroyDrClusterPair, DrClusterPair, DrClusterPairs, DrS3Credentials,
-        DrS3Keys, DrS3Transport, DrTransport, GetDrClusterPair,
+        CreateDrClusterPair, DestroyDrClusterPair, DisableDrVolume, DrClusterPair, DrClusterPairs,
+        DrId, DrPolicy, DrRole, DrS3Credentials, DrS3Keys, DrS3Transport, DrTransport, DrVolume,
+        DrVolumes, EnableDrVolume, GetDrClusterPair, GetDrVolume, VolumeId,
     },
 };
 
 /// All dr agent operations.
 ///
-/// One trait for one agent: the liveness probe every service here has, and the cluster
-/// pairs it holds. The operations that manage relationships and failover join them as
-/// they are built.
+/// One trait for one agent: the liveness probe every service here has, the cluster pairs
+/// it holds, and the volumes replicated over them. Failover joins them as it is built.
 #[tonic::async_trait]
 pub trait DrOperations: Send + Sync {
     /// Liveness probe for the dr service.
@@ -34,6 +35,26 @@ pub trait DrOperations: Send + Sync {
     async fn destroy_pair(
         &self,
         req: &DestroyDrClusterPair,
+        ctx: Option<Context>,
+    ) -> Result<(), ReplyError>;
+    /// Enable replication on a volume, or amend the policy of one already enabled.
+    async fn enable_volume(
+        &self,
+        req: &EnableDrVolume,
+        ctx: Option<Context>,
+    ) -> Result<DrVolume, ReplyError>;
+    /// Fetch a single volume's entry.
+    async fn get_volume(
+        &self,
+        req: &GetDrVolume,
+        ctx: Option<Context>,
+    ) -> Result<DrVolume, ReplyError>;
+    /// List every volume's entry.
+    async fn list_volumes(&self, ctx: Option<Context>) -> Result<DrVolumes, ReplyError>;
+    /// Disable replication on a volume.
+    async fn disable_volume(
+        &self,
+        req: &DisableDrVolume,
         ctx: Option<Context>,
     ) -> Result<(), ReplyError>;
 }
@@ -185,6 +206,179 @@ impl TryFrom<dr::CreateClusterPairRequest> for CreateDrClusterPair {
                     ReplyError::missing_argument(ResourceKind::DrClusterPair, "transport")
                 })?
                 .try_into()?,
+        })
+    }
+}
+
+// ---- dr volumes --------------------------------------------------------------------------
+
+/// A volume uuid off the wire.
+pub fn volume_id(field: &str, src: &str) -> Result<VolumeId, ReplyError> {
+    VolumeId::try_from(src).map_err(|error| {
+        ReplyError::invalid_argument(ResourceKind::DrVolume, field, error.to_string())
+    })
+}
+
+/// A relationship's uuid off the wire.
+fn dr_id(src: &str) -> Result<DrId, ReplyError> {
+    DrId::try_from(src).map_err(|error| {
+        ReplyError::invalid_argument(ResourceKind::DrVolume, "dr", error.to_string())
+    })
+}
+
+/// A duration on the wire, saturating rather than wrapping: neither end has a use for
+/// one past `i64::MAX` seconds.
+fn duration(src: Duration) -> prost_types::Duration {
+    prost_types::Duration::try_from(src).unwrap_or(prost_types::Duration {
+        seconds: i64::MAX,
+        nanos: 0,
+    })
+}
+
+/// A duration off the wire, which has to be stated and cannot be negative.
+fn duration_from(field: &str, src: Option<prost_types::Duration>) -> Result<Duration, ReplyError> {
+    let src = src.ok_or_else(|| ReplyError::missing_argument(ResourceKind::DrVolume, field))?;
+    Duration::try_from(src).map_err(|error| {
+        ReplyError::invalid_argument(ResourceKind::DrVolume, field, error.to_string())
+    })
+}
+
+impl From<DrRole> for dr::Role {
+    fn from(src: DrRole) -> Self {
+        match src {
+            DrRole::Source => Self::Source,
+            DrRole::Destination => Self::Destination,
+        }
+    }
+}
+
+impl From<dr::Role> for DrRole {
+    fn from(src: dr::Role) -> Self {
+        match src {
+            dr::Role::Source => Self::Source,
+            dr::Role::Destination => Self::Destination,
+        }
+    }
+}
+
+/// A role off the wire, where an unknown value is a newer peer's role this side cannot
+/// act on.
+fn role(src: i32) -> Result<DrRole, ReplyError> {
+    dr::Role::try_from(src).map(Into::into).map_err(|_| {
+        ReplyError::invalid_argument(
+            ResourceKind::DrVolume,
+            "role",
+            format!("unknown role {src}"),
+        )
+    })
+}
+
+impl From<DrPolicy> for dr::Policy {
+    fn from(src: DrPolicy) -> Self {
+        Self {
+            auto_resync: src.auto_resync,
+            schedule: Some(duration(src.schedule)),
+            ttl: Some(duration(src.ttl)),
+            max_lag: src.max_lag.map(duration),
+        }
+    }
+}
+
+impl TryFrom<dr::Policy> for DrPolicy {
+    type Error = ReplyError;
+    fn try_from(src: dr::Policy) -> Result<Self, Self::Error> {
+        Ok(Self {
+            auto_resync: src.auto_resync,
+            schedule: duration_from("policy.schedule", src.schedule)?,
+            ttl: duration_from("policy.ttl", src.ttl)?,
+            max_lag: src
+                .max_lag
+                .map(|lag| duration_from("policy.max_lag", Some(lag)))
+                .transpose()?,
+        })
+    }
+}
+
+/// A policy off the wire, which has to be stated: there is no schedule to default to.
+fn policy(src: Option<dr::Policy>) -> Result<DrPolicy, ReplyError> {
+    src.ok_or_else(|| ReplyError::missing_argument(ResourceKind::DrVolume, "policy"))?
+        .try_into()
+}
+
+impl From<DrVolume> for dr::Volume {
+    fn from(src: DrVolume) -> Self {
+        Self {
+            volume: src.volume.to_string(),
+            dr: src.dr.to_string(),
+            pair: src.pair.to_string(),
+            source_volume: src.source_volume.to_string(),
+            target_volume: src.target_volume.map(|target| target.to_string()),
+            role: dr::Role::from(src.role) as i32,
+            policy: Some(src.policy.into()),
+            status: common::SpecStatus::from(&src.status) as i32,
+        }
+    }
+}
+
+impl TryFrom<dr::Volume> for DrVolume {
+    type Error = ReplyError;
+    fn try_from(src: dr::Volume) -> Result<Self, Self::Error> {
+        Ok(Self {
+            volume: volume_id("volume", &src.volume)?,
+            dr: dr_id(&src.dr)?,
+            pair: src.pair.into(),
+            source_volume: volume_id("source_volume", &src.source_volume)?,
+            target_volume: src
+                .target_volume
+                .map(|target| volume_id("target_volume", &target))
+                .transpose()?,
+            role: role(src.role)?,
+            policy: policy(src.policy)?,
+            status: common::SpecStatus::try_from(src.status)
+                .map_err(|_| {
+                    ReplyError::invalid_argument(
+                        ResourceKind::DrVolume,
+                        "status",
+                        format!("unknown status {}", src.status),
+                    )
+                })?
+                .into(),
+        })
+    }
+}
+
+impl TryFrom<dr::Volumes> for DrVolumes {
+    type Error = ReplyError;
+    fn try_from(src: dr::Volumes) -> Result<Self, Self::Error> {
+        Ok(Self {
+            entries: src
+                .entries
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<_>, ReplyError>>()?,
+        })
+    }
+}
+
+impl From<&EnableDrVolume> for dr::EnableVolumeRequest {
+    fn from(src: &EnableDrVolume) -> Self {
+        Self {
+            volume: src.volume.to_string(),
+            pair: src.pair.to_string(),
+            role: dr::Role::from(src.role) as i32,
+            policy: Some(src.policy.into()),
+        }
+    }
+}
+
+impl TryFrom<dr::EnableVolumeRequest> for EnableDrVolume {
+    type Error = ReplyError;
+    fn try_from(src: dr::EnableVolumeRequest) -> Result<Self, Self::Error> {
+        Ok(Self {
+            volume: volume_id("volume", &src.volume)?,
+            pair: src.pair.into(),
+            role: role(src.role)?,
+            policy: policy(src.policy)?,
         })
     }
 }

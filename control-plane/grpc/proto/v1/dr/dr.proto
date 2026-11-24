@@ -1,14 +1,14 @@
 syntax = "proto3";
 
 import "v1/misc/common.proto";
+import "google/protobuf/duration.proto";
 
 package v1.dr;
 
 // Service for the disaster recovery agent.
 //
-// One surface for the agent: the liveness probe every service here has, and the cluster
-// pairs it holds. The operations that manage relationships and failover join them as they
-// are built.
+// One surface for the agent: the liveness probe every service here has, the cluster pairs
+// it holds, and the volumes replicated over them. Failover joins them as it is built.
 service DrGrpc {
   // Liveness probe.
   rpc Probe (ProbeRequest) returns (ProbeResponse) {}
@@ -20,6 +20,14 @@ service DrGrpc {
   rpc ListClusterPairs (ListClusterPairsRequest) returns (ClusterPairsReply) {}
   // Remove a pair.
   rpc DestroyClusterPair (DestroyClusterPairRequest) returns (DestroyClusterPairReply) {}
+  // Enable replication on a volume, or amend the policy of one already enabled.
+  rpc EnableVolume (EnableVolumeRequest) returns (VolumeReply) {}
+  // Fetch a single volume's entry.
+  rpc GetVolume (GetVolumeRequest) returns (VolumeReply) {}
+  // Fetch every volume's entry.
+  rpc ListVolumes (ListVolumesRequest) returns (VolumesReply) {}
+  // Disable replication on a volume.
+  rpc DisableVolume (DisableVolumeRequest) returns (DisableVolumeReply) {}
 }
 
 // Liveness probe request.
@@ -183,5 +191,121 @@ message ClusterPairsReply {
 // Reply to a destroy, carrying only a failure.
 message DestroyClusterPairReply {
   // Why the pair was not removed. Absent when it was.
+  optional common.ReplyError error = 1;
+}
+
+// Which end of a relationship a volume holds. Fixed when replication is enabled: moving a
+// volume to the other end is failover or failback, not an edit.
+enum Role {
+  // Takes the recovery points and uploads them.
+  Source = 0;
+  // Applies the source's recovery points.
+  Destination = 1;
+}
+
+// How often a volume is replicated, and for how long its points are kept. The part of an
+// entry enabling again may amend.
+message Policy {
+  // Whether a demoted side found to have diverged discards its un-replicated writes rather
+  // than waiting for an operator. Destructive, hence off by default.
+  bool auto_resync = 1;
+  // How often the source takes a recovery point. Not zero.
+  google.protobuf.Duration schedule = 2;
+  // How long recovery points are kept. Not zero.
+  google.protobuf.Duration ttl = 3;
+  // The lag past which the source stops committing. Absent means it never stops.
+  optional google.protobuf.Duration max_lag = 4;
+}
+
+// A volume's part in a dr relationship.
+message Volume {
+  // This cluster's volume, which this entry protects: the source volume on the source,
+  // the target volume on the destination.
+  string volume = 1;
+  // The relationship's id, which the store keys everything under: the source volume's
+  // uuid when replication was enabled. It never changes: a failover swaps the source and
+  // the target, but the id stays.
+  string dr = 2;
+  // The cluster pair the relationship runs over.
+  string pair = 3;
+  // The source volume: the one written to, whose points are uploaded to the store. It is
+  // `volume` on the source.
+  string source_volume = 4;
+  // The target volume: the one the source's points are applied to. It is `volume` on the
+  // destination. Absent while it is not known.
+  optional string target_volume = 5;
+  // Which end of the relationship this volume holds.
+  Role role = 6;
+  // How often, and for how long.
+  Policy policy = 7;
+  // Lifecycle of this entry: Created while replication is enabled, Deleting once it was
+  // disabled and the relationship is waiting to be purged.
+  common.SpecStatus status = 8;
+}
+
+// Every volume's entry.
+message Volumes {
+  // The entries.
+  repeated Volume entries = 1;
+}
+
+// Request type for an EnableVolume request.
+//
+// Repeating it is not an error, and amends the policy. The pair and the role say which
+// relationship this is, so they are not amended: changing them is a different
+// relationship.
+message EnableVolumeRequest {
+  // The volume to protect. It must exist.
+  string volume = 1;
+  // The cluster pair to replicate over. It must exist.
+  string pair = 2;
+  // Which end of the relationship this volume holds.
+  Role role = 3;
+  // How often, and for how long.
+  Policy policy = 4;
+}
+
+// Request type for a GetVolume request.
+message GetVolumeRequest {
+  // The volume whose entry to fetch.
+  string volume = 1;
+}
+
+// Request type for a ListVolumes request.
+message ListVolumesRequest {
+  // Intentionally empty: every entry is returned.
+}
+
+// Request type for a DisableVolume request.
+message DisableVolumeRequest {
+  // The volume whose entry to remove. Removing one that is not there is a not-found.
+  string volume = 1;
+}
+
+// Reply carrying a single volume's entry, or why there is none.
+message VolumeReply {
+  // Either the entry, or the error that stopped it being answered for.
+  oneof reply {
+    // The entry the request addressed.
+    Volume volume = 1;
+    // Why there is no entry to return.
+    common.ReplyError error = 2;
+  }
+}
+
+// Reply carrying every volume's entry, or why there are none.
+message VolumesReply {
+  // Either the entries, or the error that stopped them being listed.
+  oneof reply {
+    // The entries this cluster holds.
+    Volumes volumes = 1;
+    // Why they could not be listed.
+    common.ReplyError error = 2;
+  }
+}
+
+// Reply to a disable, carrying only a failure.
+message DisableVolumeReply {
+  // Why replication was not disabled. Absent when it was.
   optional common.ReplyError error = 1;
 }
