@@ -1,8 +1,13 @@
 use super::*;
 use grpc::operations::dr::traits::DrOperations;
-use stor_port::types::v0::transport::{
-    CreateDrClusterPair, DestroyDrClusterPair, DrClusterPair, DrS3Credentials, DrS3Keys,
-    DrS3Transport, DrTransport, GetDrClusterPair,
+use std::time::Duration;
+use stor_port::types::v0::{
+    openapi::apis::Uuid,
+    transport::{
+        CreateDrClusterPair, DestroyDrClusterPair, DisableDrVolume, DrClusterPair, DrPolicy,
+        DrRole, DrS3Credentials, DrS3Keys, DrS3Transport, DrTransport, DrVolume, EnableDrVolume,
+        GetDrClusterPair, GetDrVolume,
+    },
 };
 
 fn client() -> Result<impl DrOperations + 'static, ReplyError> {
@@ -96,6 +101,55 @@ fn to_models(pair: DrClusterPair, show_secrets: bool) -> models::DrClusterPair {
     )
 }
 
+/// An interval the api states as humantime.
+fn duration(field: &str, src: &str) -> Result<Duration, ReplyError> {
+    humantime::parse_duration(src).map_err(|error| {
+        ReplyError::invalid_argument(ResourceKind::DrVolume, field, error.to_string())
+    })
+}
+
+/// A policy as the control plane holds it.
+fn policy(src: models::DrPolicy) -> Result<DrPolicy, ReplyError> {
+    Ok(DrPolicy {
+        auto_resync: src.auto_resync.unwrap_or_default(),
+        schedule: duration("policy.schedule", &src.schedule)?,
+        ttl: duration("policy.ttl", &src.ttl)?,
+        max_lag: src
+            .max_lag
+            .map(|lag| duration("policy.maxLag", &lag))
+            .transpose()?,
+    })
+}
+
+fn role(src: models::DrRole) -> DrRole {
+    match src {
+        models::DrRole::Source => DrRole::Source,
+        models::DrRole::Destination => DrRole::Destination,
+    }
+}
+
+fn volume_to_models(src: DrVolume) -> models::DrVolume {
+    let humantime = |interval| humantime::format_duration(interval).to_string();
+    models::DrVolume::new_all(
+        src.volume,
+        src.dr,
+        src.pair.to_string(),
+        src.source_volume,
+        src.target_volume.map(Into::into),
+        match src.role {
+            DrRole::Source => models::DrRole::Source,
+            DrRole::Destination => models::DrRole::Destination,
+        },
+        models::DrPolicy::new_all(
+            Some(src.policy.auto_resync),
+            humantime(src.policy.schedule),
+            humantime(src.policy.ttl),
+            src.policy.max_lag.map(humantime),
+        ),
+        models::SpecStatus::from(src.status),
+    )
+}
+
 #[async_trait::async_trait]
 impl apis::actix_server::DisasterRecovery for RestApi {
     async fn del_dr_pair(Path(pair_id): Path<String>) -> Result<(), RestError<RestJsonError>> {
@@ -143,5 +197,54 @@ impl apis::actix_server::DisasterRecovery for RestApi {
             )
             .await?;
         Ok(to_models(pair, false))
+    }
+
+    async fn del_dr_volume(Path(volume_id): Path<Uuid>) -> Result<(), RestError<RestJsonError>> {
+        client()?
+            .disable_volume(
+                &DisableDrVolume {
+                    volume: volume_id.into(),
+                },
+                None,
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn get_dr_volume(
+        Path(volume_id): Path<Uuid>,
+    ) -> Result<models::DrVolume, RestError<RestJsonError>> {
+        let volume = client()?
+            .get_volume(
+                &GetDrVolume {
+                    volume: volume_id.into(),
+                },
+                None,
+            )
+            .await?;
+        Ok(volume_to_models(volume))
+    }
+
+    async fn get_dr_volumes() -> Result<Vec<models::DrVolume>, RestError<RestJsonError>> {
+        let volumes = client()?.list_volumes(None).await?;
+        Ok(volumes.entries.into_iter().map(volume_to_models).collect())
+    }
+
+    async fn put_dr_volume(
+        Path(volume_id): Path<Uuid>,
+        Body(body): Body<models::EnableDrVolumeBody>,
+    ) -> Result<models::DrVolume, RestError<RestJsonError>> {
+        let volume = client()?
+            .enable_volume(
+                &EnableDrVolume {
+                    volume: volume_id.into(),
+                    pair: body.pair.into(),
+                    role: role(body.role),
+                    policy: policy(body.policy)?,
+                },
+                None,
+            )
+            .await?;
+        Ok(volume_to_models(volume))
     }
 }
