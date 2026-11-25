@@ -1,9 +1,9 @@
 use crate::{
-    operations::{Create, Delete, GetWithArgs, ListWithArgs, PluginResult},
+    operations::{Create, Delete, Get, GetWithArgs, List, ListWithArgs, PluginResult},
     resources::{
         utils,
         utils::{optional_cell, CreateRow, GetHeaderRow},
-        DrPairId, Error,
+        DrPairId, Error, VolumeId,
     },
     rest_wrapper::RestClient,
 };
@@ -244,6 +244,176 @@ impl Create for DrPair {
             }
             Err(source) => Err(Error::CreateDrPairError {
                 id: args.pair_id.to_string(),
+                source,
+            }),
+        }
+    }
+}
+
+/// Dr volumes resource.
+#[derive(clap::Args, Debug)]
+pub struct DrVolumes {}
+
+/// Dr volume resource: a volume's dr entry.
+#[derive(clap::Args, Debug)]
+pub struct DrVolume {}
+
+/// Arguments used when getting a dr volume.
+#[derive(Debug, Clone, clap::Args)]
+pub struct GetDrVolumeArgs {
+    /// Id of the volume.
+    pub(crate) volume_id: VolumeId,
+}
+
+/// Arguments used when disabling dr on a volume.
+#[derive(Debug, Clone, clap::Args)]
+pub struct DeleteDrVolumeArgs {
+    /// Id of the volume.
+    pub(crate) volume_id: VolumeId,
+}
+
+/// Which end of the relationship a volume holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum DrRoleArg {
+    /// The volume replication is enabled on, whose points are written to the store.
+    Source,
+    /// A volume the source's points are applied to.
+    Destination,
+}
+
+impl From<DrRoleArg> for openapi::models::DrRole {
+    fn from(role: DrRoleArg) -> Self {
+        match role {
+            DrRoleArg::Source => Self::Source,
+            DrRoleArg::Destination => Self::Destination,
+        }
+    }
+}
+
+/// Arguments used when enabling dr on a volume.
+#[derive(Debug, Clone, clap::Args)]
+pub struct CreateDrVolumeArgs {
+    /// Id of the volume, which must exist.
+    pub(crate) volume_id: VolumeId,
+    /// Id of the dr cluster pair to replicate over, which must exist.
+    #[clap(long)]
+    pub(crate) pair: DrPairId,
+    /// Which end of the relationship this volume holds.
+    #[clap(long, value_enum)]
+    pub(crate) role: DrRoleArg,
+    /// How often the source takes a recovery point, eg: 15m.
+    #[clap(long)]
+    pub(crate) schedule: String,
+    /// How long recovery points are kept, eg: 24h.
+    #[clap(long)]
+    pub(crate) ttl: String,
+    /// The lag past which the source stops committing, eg: 1h. Absent, it never stops.
+    #[clap(long)]
+    pub(crate) max_lag: Option<String>,
+    /// Let a demoted side found to have diverged discard its un-replicated writes, rather
+    /// than wait for an operator. Destructive, hence off unless stated.
+    #[clap(long)]
+    pub(crate) auto_resync: bool,
+}
+
+// CreateRow being implemented for DrVolume creates the rows from the entries returned
+// from the REST call.
+impl CreateRow for openapi::models::DrVolume {
+    fn row(&self) -> Row {
+        row![
+            self.volume,
+            self.dr,
+            self.pair,
+            self.source_volume,
+            optional_cell(self.target_volume.as_ref()),
+            self.role,
+            self.policy.schedule,
+            self.policy.ttl,
+            self.status,
+        ]
+    }
+}
+
+impl GetHeaderRow for openapi::models::DrVolume {
+    fn get_header_row(&self) -> Row {
+        utils::DR_VOLUME_HEADERS.clone()
+    }
+}
+
+#[async_trait(?Send)]
+impl List for DrVolumes {
+    async fn list(output: &utils::OutputFormat) -> PluginResult {
+        match RestClient::dr_api().get_dr_volumes().await {
+            Ok(volumes) => {
+                utils::print_table(output, volumes.into_body());
+                Ok(())
+            }
+            Err(source) => Err(Error::ListDrVolumesError { source }),
+        }
+    }
+}
+
+#[async_trait(?Send)]
+impl Get for DrVolume {
+    type ID = VolumeId;
+    async fn get(id: &Self::ID, output: &utils::OutputFormat) -> PluginResult {
+        match RestClient::dr_api().get_dr_volume(id).await {
+            Ok(volume) => {
+                utils::print_table(output, volume.into_body());
+                Ok(())
+            }
+            Err(source) => Err(Error::GetDrVolumeError {
+                id: id.to_string(),
+                source,
+            }),
+        }
+    }
+}
+
+#[async_trait(?Send)]
+impl Delete for DrVolume {
+    type ID = VolumeId;
+    async fn del(
+        id: &Self::ID,
+        ignore_not_found: bool,
+        _output: &utils::OutputFormat,
+    ) -> PluginResult {
+        match RestClient::dr_api().del_dr_volume(id).await {
+            Ok(_) => Ok(()),
+            Err(source) if ignore_not_found && source.status() == Some(StatusCode::NOT_FOUND) => {
+                Ok(())
+            }
+            Err(source) => Err(Error::DelDrVolumeError {
+                id: id.to_string(),
+                source,
+            }),
+        }
+    }
+}
+
+#[async_trait(?Send)]
+impl Create for DrVolume {
+    type Args = CreateDrVolumeArgs;
+    async fn create(args: &Self::Args, output: &utils::OutputFormat) -> PluginResult {
+        // The intervals are passed as given: rest parses them, and refuses what is not one.
+        let policy = openapi::models::DrPolicy::new_all(
+            args.auto_resync.then_some(true),
+            args.schedule.clone(),
+            args.ttl.clone(),
+            args.max_lag.clone(),
+        );
+        let body =
+            openapi::models::EnableDrVolumeBody::new_all(args.pair.clone(), args.role, policy);
+        match RestClient::dr_api()
+            .put_dr_volume(&args.volume_id, body)
+            .await
+        {
+            Ok(volume) => {
+                utils::print_table(output, volume.into_body());
+                Ok(())
+            }
+            Err(source) => Err(Error::CreateDrVolumeError {
+                id: args.volume_id.to_string(),
                 source,
             }),
         }
