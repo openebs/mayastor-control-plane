@@ -52,9 +52,7 @@ pub(crate) fn rc_path(suffix: &str) -> String {
 
 /// Endpoint of the object store, as reachable *from another container* on the same compose
 /// network, or [`None`] if no store was enabled.
-// Consumed by the dr agent, which is not wired up yet.
-#[allow(dead_code)]
-pub(crate) fn s3_endpoint(options: &StartOptions) -> Option<String> {
+pub fn s3_endpoint(options: &StartOptions) -> Option<String> {
     options.rustfs_enabled().then(|| {
         format!(
             "http://{}.{}:{}",
