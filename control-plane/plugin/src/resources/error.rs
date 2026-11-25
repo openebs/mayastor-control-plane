@@ -142,6 +142,12 @@ pub enum Error {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
+    /// Error when get pool replica info request fails.
+    #[snafu(display("Failed to get the replica info of pool {id}. Error {source}"))]
+    GetPoolReplicasInfoError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
     /// Error when get volume request fails.
     #[snafu(display("Failed to get volume {id}. Error {source}"))]
     GetVolumeError {

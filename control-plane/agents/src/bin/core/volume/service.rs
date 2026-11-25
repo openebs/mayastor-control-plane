@@ -37,8 +37,9 @@ use stor_port::{
         },
         transport::{
             CreateSnapshotVolume, CreateVolume, DestroyShutdownTargets, DestroyVolume, Filter,
-            PublishVolume, RepublishVolume, ResizeVolume, SetVolumeProperty, SetVolumeReplica,
-            ShareVolume, TriggerRebuild, UnpublishVolume, UnshareVolume, Volume, VolumeStatus,
+            GetPoolReplicasInfoResponse, PoolId, PoolReplicaInfo, PublishVolume, RepublishVolume,
+            ResizeVolume, SetVolumeProperty, SetVolumeReplica, ShareVolume, TriggerRebuild,
+            UnpublishVolume, UnshareVolume, Volume, VolumeInfo, VolumeStatus,
         },
     },
 };
@@ -262,6 +263,14 @@ impl VolumeOperations for Service {
         let volume = Context::spawn(async move { service.resize_volume(&request).await }).await??;
         Ok(volume)
     }
+
+    async fn get_pool_replicas_info(
+        &self,
+        pool_id: &PoolId,
+        _ctx: Option<Context>,
+    ) -> Result<GetPoolReplicasInfoResponse, ReplyError> {
+        Ok(self.pool_replicas_info(pool_id).await?)
+    }
 }
 
 impl Service {
@@ -326,6 +335,75 @@ impl Service {
                 false => pagination.map(|p| p.starting_token() + p.max_entries()),
             },
         })
+    }
+
+    /// Get the replicas of the pool which are owned by a volume, each along with its volume.
+    /// Everything is taken from the specs, so neither the pool nor its node need to be online.
+    #[tracing::instrument(level = "info", skip(self), err)]
+    async fn pool_replicas_info(
+        &self,
+        pool_id: &PoolId,
+    ) -> Result<GetPoolReplicasInfoResponse, SvcError> {
+        let node = self.specs().pool(pool_id)?.node.clone();
+
+        let mut replicas = Vec::new();
+        for replica in self.specs().pool_replicas(pool_id) {
+            let (uuid, kind, owner, size, thin, encrypted, protocol) = {
+                let replica = replica.lock();
+                (
+                    replica.uuid.clone(),
+                    replica.kind.clone().unwrap_or_default(),
+                    replica.owners.volume().cloned(),
+                    replica.size,
+                    replica.thin,
+                    replica.encrypted,
+                    replica.share,
+                )
+            };
+            // Replicas which are not owned by a volume are not of interest.
+            let Some(volume_id) = owner else {
+                continue;
+            };
+            // The volume may be getting deleted.
+            let Some(volume) = self.specs().volume_rsc(&volume_id) else {
+                continue;
+            };
+            let volume = {
+                let volume = volume.lock();
+                VolumeInfo {
+                    uuid: volume.uuid.clone(),
+                    size: volume.size,
+                    thin: volume.thin,
+                    encrypted: volume.encrypted,
+                    cluster_size: volume.cluster_size,
+                    num_replicas: volume.num_replicas,
+                    labels: volume.labels.clone(),
+                    topology: volume.topology.clone(),
+                    affinity_group: volume.affinity_group.clone(),
+                }
+            };
+            // The replica state is not there when its node is offline.
+            let usage = self
+                .registry
+                .replica(&uuid)
+                .await
+                .ok()
+                .and_then(|replica| replica.space);
+            replicas.push(PoolReplicaInfo {
+                replica: uuid,
+                kind,
+                volume,
+                pool: pool_id.clone(),
+                node: node.clone(),
+                size,
+                thin,
+                encrypted,
+                protocol,
+                usage,
+            });
+        }
+
+        Ok(GetPoolReplicasInfoResponse { replicas })
     }
 
     /// Create a volume using the given parameters.
