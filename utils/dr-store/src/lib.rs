@@ -12,17 +12,21 @@
 //! in them.
 //!
 //! [`Sides`] publishes and reads what each side says about itself - its [`DrConfig`] and
-//! its [`ClusterState`] - which are the only channel between the two clusters.
+//! its [`ClusterState`] - which are the only channel between the two clusters - and
+//! [`Clusters`] what a cluster says about itself when it is paired, its
+//! [`ClusterConfig`].
 
 #![deny(missing_docs)]
 
 mod checksum;
+mod cluster;
 mod error;
 mod layout;
 mod side;
 mod store;
 
 pub use checksum::{Checksum, ChecksumError};
+pub use cluster::{ClusterConfig, Clusters};
 pub use error::{Error, Operation, Result};
 pub use layout::{Layout, Prefix};
 pub use side::{

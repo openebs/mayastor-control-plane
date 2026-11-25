@@ -6,8 +6,8 @@
 
 use bytes::Bytes;
 use dr_store::{
-    Checksum, ClusterState, DrConfig, DrStore, Error, HashAlgorithm, Layout, Role, Side, Sides,
-    UploadFormat, VERSION,
+    Checksum, ClusterConfig, ClusterState, Clusters, DrConfig, DrStore, Error, HashAlgorithm,
+    Layout, Prefix, Role, Side, Sides, UploadFormat, VERSION,
 };
 
 /// A checksum to address a chunk by. Not of real content - what matters is that it is
@@ -38,6 +38,7 @@ pub async fn suite(store: &dyn DrStore) {
     listing(store).await;
     conditional_delete(store).await;
     sides(store).await;
+    clusters(store).await;
 }
 
 pub async fn verbs(store: &dyn DrStore) {
@@ -256,4 +257,59 @@ pub async fn sides(store: &dyn DrStore) {
     for entry in store.list(layout.root()).await.unwrap() {
         store.delete(entry.location.as_ref()).await.unwrap();
     }
+}
+
+/// A cluster's own document, which is outside every relationship.
+pub async fn clusters(store: &dyn DrStore) {
+    let prefix = &Prefix::new("backups");
+    assert_eq!(
+        store
+            .get_cluster_cfg(prefix, "east", "uid-1")
+            .await
+            .unwrap(),
+        None
+    );
+
+    let east = ClusterConfig::new("east", "uid-1");
+    store.put_cluster_cfg(prefix, &east).await.unwrap();
+    assert_eq!(
+        store
+            .get_cluster_cfg(prefix, "east", "uid-1")
+            .await
+            .unwrap(),
+        Some(east.clone())
+    );
+    // Keyed on the uid as well as the name: another cluster called `east` is another
+    // document.
+    assert_eq!(
+        store
+            .get_cluster_cfg(prefix, "east", "uid-2")
+            .await
+            .unwrap(),
+        None
+    );
+    // Outside every relationship: nothing under one lists it.
+    assert!(store
+        .list(&prefix.relationships())
+        .await
+        .unwrap()
+        .is_empty());
+
+    // Filed under another cluster's key, it is refused rather than taken for that one.
+    let key = prefix.cluster_cfg("west", "uid-2");
+    store
+        .put(&key, serde_json::to_vec(&east).unwrap().into())
+        .await
+        .unwrap();
+    let error = store
+        .get_cluster_cfg(prefix, "west", "uid-2")
+        .await
+        .unwrap_err();
+    assert!(matches!(error, Error::Malformed { .. }), "{error}");
+
+    store.delete(&key).await.unwrap();
+    store
+        .delete(&prefix.cluster_cfg("east", "uid-1"))
+        .await
+        .unwrap();
 }

@@ -341,7 +341,7 @@ pub trait Sides: DrStore {
 
 impl<S: DrStore + ?Sized> Sides for S {}
 
-fn encode<T: Serialize>(document: &T) -> Result<Bytes> {
+pub(crate) fn encode<T: Serialize>(document: &T) -> Result<Bytes> {
     serde_json::to_vec(document)
         .map(Bytes::from)
         .map_err(|error| Error::Config {
@@ -349,7 +349,7 @@ fn encode<T: Serialize>(document: &T) -> Result<Bytes> {
         })
 }
 
-async fn read<T: DeserializeOwned>(
+pub(crate) async fn read<T: DeserializeOwned>(
     store: &(impl DrStore + ?Sized),
     key: &str,
 ) -> Result<Option<T>> {
