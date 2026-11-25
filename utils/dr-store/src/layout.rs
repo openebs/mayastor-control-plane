@@ -10,6 +10,45 @@ use crate::Checksum;
 /// order a store lists in - is numeric order.
 const SEQ_DIGITS: usize = 16;
 
+/// Where a bucket's dr keys start: what every relationship in it, and every cluster
+/// party to one, is filed under.
+///
+/// The keys that belong to no single relationship are built here, and so is each
+/// relationship's [`Layout`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Prefix {
+    lead: String,
+}
+
+impl Prefix {
+    /// The dr keys under `<prefix>` in a bucket. Separators around it are not
+    /// significant: `backups`, `/backups/` and `backups/` are the same prefix.
+    pub fn new(prefix: &str) -> Self {
+        Self { lead: lead(prefix) }
+    }
+
+    /// Relationship `dr`'s subtree.
+    pub fn relationship(&self, dr: &str) -> Layout {
+        let lead = &self.lead;
+        Layout {
+            root: format!("{lead}dr/{dr}/"),
+        }
+    }
+
+    /// Every relationship, as a listing prefix: what discovery walks.
+    pub fn relationships(&self) -> String {
+        let lead = &self.lead;
+        format!("{lead}dr/")
+    }
+
+    /// A cluster's account of itself, outside any relationship. Written only by the
+    /// cluster it describes, when it is paired.
+    pub fn cluster_cfg(&self, cluster: &str, uid: &str) -> String {
+        let lead = &self.lead;
+        format!("{lead}clusters/{cluster}/{uid}/cluster.cfg")
+    }
+}
+
 /// Builds every key in one relationship's subtree.
 ///
 /// Holds the two things that do not change for the life of a relationship - where the
@@ -36,10 +75,7 @@ impl Layout {
     /// relationship: a policy wildcards `<dr-id>` and pins `<side>/<cluster-uid>`,
     /// which every major store's policy language allows.
     pub fn new(prefix: &str, dr: &str) -> Self {
-        let lead = lead(prefix);
-        Self {
-            root: format!("{lead}dr/{dr}/"),
-        }
+        Prefix::new(prefix).relationship(dr)
     }
 
     /// Everything in this relationship, as a listing prefix.
@@ -143,15 +179,6 @@ impl Layout {
         let side = self.side(side, uid);
         format!("{side}pits/")
     }
-}
-
-/// A per-cluster document, outside any relationship.
-///
-/// Reserved: nothing writes one yet. It is here so that the key is defined in the same
-/// place as the rest, rather than invented later beside them.
-pub fn cluster_cfg(prefix: &str, cluster: &str, uid: &str) -> String {
-    let lead = lead(prefix);
-    format!("{lead}clusters/{cluster}/{uid}/cluster.cfg")
 }
 
 /// The bucket prefix as a key's lead: no separators of its own, one after it.

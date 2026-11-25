@@ -37,7 +37,7 @@ pub async fn suite(store: &dyn DrStore) {
 }
 
 pub async fn verbs(store: &dyn DrStore) {
-    let key = store.layout().cfg("east", "uid-1");
+    let key = layout().cfg("east", "uid-1");
     let etag = store.put(&key, bytes("first")).await.unwrap();
     assert!(etag.is_some(), "the store issues a tag on a write");
     assert_eq!(store.get(&key).await.unwrap(), bytes("first"));
@@ -53,7 +53,7 @@ pub async fn verbs(store: &dyn DrStore) {
 
     // What the store says about a key it does not hold, as the one distinction the
     // callers act on.
-    let missing = store.layout().cfg("east", "nobody");
+    let missing = layout().cfg("east", "nobody");
     assert!(store.get(&missing).await.unwrap_err().not_found());
     assert!(store.head(&missing).await.unwrap_err().not_found());
     assert!(store.get_opt(&missing).await.unwrap().is_none());
@@ -65,7 +65,7 @@ pub async fn verbs(store: &dyn DrStore) {
 }
 
 pub async fn listing(store: &dyn DrStore) {
-    let layout = store.layout().clone();
+    let layout = layout();
     for seq in 0..5 {
         store
             .put(&layout.point("east", "uid-1", seq), bytes("x"))
@@ -126,7 +126,7 @@ pub async fn listing(store: &dyn DrStore) {
 }
 
 pub async fn conditional_delete(store: &dyn DrStore) {
-    let key = store.layout().chunk(&checksum());
+    let key = layout().chunk(&checksum());
     let stale = store.put(&key, bytes("x")).await.unwrap().expect("a tag");
     store.put(&key, bytes("y")).await.unwrap();
 
@@ -141,7 +141,7 @@ pub async fn conditional_delete(store: &dyn DrStore) {
     assert!(!store.exists(&key).await.unwrap());
 
     // What a relationship runs before it relies on any of the above.
-    let probe = store.layout().chunk_rm(&checksum());
+    let probe = layout().chunk_rm(&checksum());
     assert!(store.probe_conditional_delete(&probe).await.unwrap());
     assert!(!store.exists(&probe).await.unwrap(), "the probe cleans up");
 }

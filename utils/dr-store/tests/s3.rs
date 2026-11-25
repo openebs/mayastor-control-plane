@@ -38,7 +38,7 @@ async fn s3() {
         .unwrap();
 
     let s3 = cluster.s3();
-    let store = Store::s3(&config(&s3), common::layout()).unwrap();
+    let store = Store::s3(&config(&s3)).unwrap();
 
     common::suite(&store).await;
     denied(&s3).await;
@@ -55,8 +55,8 @@ async fn denied(s3: &S3Access) {
         secret_access_key: "not-the-secret".to_string(),
         ..config(s3)
     };
-    let store = Store::s3(&wrong, common::layout()).unwrap();
-    let key = store.layout().cfg("east", "uid-1");
+    let store = Store::s3(&wrong).unwrap();
+    let key = common::layout().cfg("east", "uid-1");
     let error = store.get(&key).await.unwrap_err();
     // Refused, and told apart from absent: a caller that confused the two would read a
     // bad credential as an empty relationship.

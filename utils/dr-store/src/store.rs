@@ -1,7 +1,4 @@
-use crate::{
-    error::{Error, Operation, Result},
-    layout::Layout,
-};
+use crate::error::{Error, Operation, Result};
 use bytes::Bytes;
 use futures::StreamExt;
 use object_store::{
@@ -52,11 +49,12 @@ impl std::fmt::Debug for S3Config {
 ///
 /// Every verb is idempotent. A key either holds those bytes or it does not, so a retry
 /// of a call whose answer was lost cannot do damage.
+///
+/// It is the bucket, not one relationship in it: a key says where, and the keys come
+/// from [`crate::Prefix`] and [`crate::Layout`]. One store serves every relationship over
+/// a pair, and the documents that belong to the cluster rather than to any of them.
 #[async_trait::async_trait]
 pub trait DrStore: std::fmt::Debug + Send + Sync {
-    /// Where everything in this relationship lives.
-    fn layout(&self) -> &Layout;
-
     /// Read a whole object.
     async fn get(&self, key: &str) -> Result<Bytes>;
 
@@ -133,21 +131,19 @@ pub trait DrStore: std::fmt::Debug + Send + Sync {
     }
 }
 
-/// A relationship's store: the bucket, and where everything in it lives.
+/// A pair's store: the bucket.
 ///
-/// The verbs are `object_store`'s, with this cluster's errors and this relationship's
-/// keys. What it adds is the one verb `object_store` has no form of - see
+/// The verbs are `object_store`'s, with this cluster's errors. What it adds is the one verb `object_store` has no form of - see
 /// [`Store::delete_if_match`].
 #[derive(Clone, Debug)]
 pub struct Store {
     inner: Arc<DynObjectStore>,
-    layout: Layout,
     conditional: Conditional,
 }
 
 impl Store {
     /// A store on a bucket.
-    pub fn s3(config: &S3Config, layout: Layout) -> Result<Self> {
+    pub fn s3(config: &S3Config) -> Result<Self> {
         if config.bucket.is_empty() {
             return Err(Error::Config {
                 reason: "a bucket must be named".to_string(),
@@ -171,7 +167,6 @@ impl Store {
         let conditional = Conditional::signed(config, &s3);
         Ok(Self {
             inner: Arc::new(s3),
-            layout,
             conditional,
         })
     }
@@ -181,11 +176,10 @@ impl Store {
     /// Its conditional delete is emulated rather than evaluated by the store - see
     /// [`Conditional::Emulated`] - so a test of anything that races on one wants a real
     /// store instead.
-    pub fn memory(layout: Layout) -> Self {
+    pub fn memory() -> Self {
         let inner = Arc::new(object_store::memory::InMemory::new());
         Self {
             inner: inner.clone(),
-            layout,
             conditional: Conditional::Emulated(inner),
         }
     }
@@ -193,11 +187,6 @@ impl Store {
 
 #[async_trait::async_trait]
 impl DrStore for Store {
-    /// Where everything in this relationship lives.
-    fn layout(&self) -> &Layout {
-        &self.layout
-    }
-
     /// Read a whole object.
     async fn get(&self, key: &str) -> Result<Bytes> {
         let answer = self
