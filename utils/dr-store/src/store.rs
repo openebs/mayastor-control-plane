@@ -70,6 +70,12 @@ pub trait DrStore: std::fmt::Debug + Send + Sync {
     /// Every key under a prefix, in the store's own order.
     async fn list(&self, prefix: &str) -> Result<Vec<ObjectMeta>>;
 
+    /// The prefixes one level below a prefix, each with its trailing separator.
+    ///
+    /// A delimited listing: what is below each of them is not walked, so the cost is the
+    /// number of names at that level rather than of everything under it.
+    async fn list_dirs(&self, prefix: &str) -> Result<Vec<String>>;
+
     /// As [`DrStore::list`], resuming after a key, exclusive.
     ///
     /// A key rather than a cursor the store issued, so a walk can be resumed by a
@@ -230,6 +236,20 @@ impl DrStore for Store {
     /// sides. [`Store::list_after`] is what walks a prefix that is not.
     async fn list(&self, prefix: &str) -> Result<Vec<ObjectMeta>> {
         collect(prefix, self.inner.list(Some(&path(prefix)))).await
+    }
+
+    /// The prefixes one level below a prefix, each with its trailing separator.
+    async fn list_dirs(&self, prefix: &str) -> Result<Vec<String>> {
+        let listing = self
+            .inner
+            .list_with_delimiter(Some(&path(prefix)))
+            .await
+            .map_err(|error| Error::from_store(Operation::List, prefix, error))?;
+        Ok(listing
+            .common_prefixes
+            .into_iter()
+            .map(|prefix| format!("{prefix}/"))
+            .collect())
     }
 
     /// As [`Store::list`], resuming after a key.

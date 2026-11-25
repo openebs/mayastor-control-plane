@@ -77,6 +77,21 @@ pub async fn listing(store: &dyn DrStore) {
         .await
         .unwrap();
 
+    // One level at a time: the sides, and none of what is under them.
+    let sides = layout.sides();
+    assert_eq!(
+        store.list_dirs(&sides).await.unwrap(),
+        vec![format!("{sides}east/"), format!("{sides}west/")]
+    );
+    assert_eq!(
+        store.list_dirs(&format!("{sides}east/")).await.unwrap(),
+        vec![layout.side("east", "uid-1")]
+    );
+    assert_eq!(
+        store.list_dirs(&layout.cfg("west", "uid-2")).await.unwrap(),
+        Vec::<String>::new()
+    );
+
     // One side's points, and nothing of the other side.
     let points = store.list(&layout.pits("east", "uid-1")).await.unwrap();
     assert_eq!(points.len(), 5);
