@@ -10,29 +10,35 @@ use object_store::{
 use std::sync::Arc;
 
 /// Where the bucket is and who this cluster is to it.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct S3Config {
     /// Endpoint of the s3 api, scheme included.
     pub endpoint: String,
     /// Region the request signature is scoped to. Stores that do not shard by region
     /// still require the signature to name one.
     pub region: String,
-    /// Bucket every key in this relationship lives in.
+    /// Bucket every key lives in.
     pub bucket: String,
+    /// The keys to sign with. Absent means this process's own environment - the
+    /// `AWS_*` variables, a web identity, an instance role - which is the one way to a
+    /// credential that refreshes.
+    pub keys: Option<S3Keys>,
+}
+
+/// A static credential.
+#[derive(Clone)]
+pub struct S3Keys {
     /// The access key id half of the credential.
     pub access_key_id: String,
     /// The secret half. Never logged: see this type's [`std::fmt::Debug`].
     pub secret_access_key: String,
 }
 
-impl std::fmt::Debug for S3Config {
+impl std::fmt::Debug for S3Keys {
     /// Everything but the secret, which must not reach a log even by way of a struct
     /// that happened to be in a span.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("S3Config")
-            .field("endpoint", &self.endpoint)
-            .field("region", &self.region)
-            .field("bucket", &self.bucket)
+        f.debug_struct("S3Keys")
             .field("access_key_id", &self.access_key_id)
             .field("secret_access_key", &"<redacted>")
             .finish()
@@ -149,12 +155,16 @@ impl Store {
                 reason: "a bucket must be named".to_string(),
             });
         }
-        let s3 = AmazonS3Builder::new()
+        let builder = match &config.keys {
+            Some(keys) => AmazonS3Builder::new()
+                .with_access_key_id(&keys.access_key_id)
+                .with_secret_access_key(&keys.secret_access_key),
+            None => AmazonS3Builder::from_env(),
+        };
+        let s3 = builder
             .with_bucket_name(&config.bucket)
             .with_endpoint(&config.endpoint)
             .with_region(&config.region)
-            .with_access_key_id(&config.access_key_id)
-            .with_secret_access_key(&config.secret_access_key)
             // Reached by host and port rather than by bucket name, which is every store
             // that is not aws, and the deployer's among them.
             .with_virtual_hosted_style_request(false)
@@ -418,4 +428,27 @@ impl Signed {
 /// listing prefix is not always a whole path segment.
 fn path(key: &str) -> Path {
     Path::from(key)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A config is logged whole wherever it is in a span, so the secret has to be what
+    /// its debug form leaves out.
+    #[test]
+    fn the_secret_is_not_logged() {
+        let config = S3Config {
+            endpoint: "http://store:9000".to_string(),
+            region: "us-east-1".to_string(),
+            bucket: "dr".to_string(),
+            keys: Some(S3Keys {
+                access_key_id: "access".to_string(),
+                secret_access_key: "hunter2".to_string(),
+            }),
+        };
+        let logged = format!("{config:?}");
+        assert!(logged.contains("access"), "{logged}");
+        assert!(!logged.contains("hunter2"), "{logged}");
+    }
 }

@@ -33,4 +33,4 @@ pub use side::{
     ChunkRef, ClusterState, DrConfig, HashAlgorithm, PitId, Role, Side, Sides, UploadFormat,
     VERSION,
 };
-pub use store::{DrStore, S3Config, Store};
+pub use store::{DrStore, S3Config, S3Keys, Store};
