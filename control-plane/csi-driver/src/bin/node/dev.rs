@@ -31,6 +31,7 @@ use nvmeadm::nvmf_discovery::TrType;
 use std::{
     collections::HashMap,
     convert::TryFrom,
+    os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -48,6 +49,14 @@ pub(crate) use crate::error::DeviceError;
 use crate::match_dev;
 
 pub(crate) type DeviceName = String;
+
+/// udev appends the namespace WWID to this prefix, so lookup can skip the block-device scan.
+const NVME_BY_ID_PREFIX: &str = "/dev/disk/by-id/nvme-";
+
+fn indexed_nvme_device(key: &str) -> Option<udev::Device> {
+    let metadata = std::fs::metadata(format!("{NVME_BY_ID_PREFIX}{key}")).ok()?;
+    udev::Device::from_devnum(udev::DeviceType::Block, metadata.rdev()).ok()
+}
 
 // Could've directly used NvmfAttach object but it contains an AtomicBool that
 // doesn't have Clone implemented.
@@ -111,12 +120,23 @@ impl Device {
     pub(crate) async fn lookup(uuid: &Uuid) -> Result<Option<Box<dyn Detach>>, DeviceError> {
         let nvmf_key: String = format!("uuid.{uuid}");
 
-        let mut enumerator = Enumerator::new()?;
+        let multipath = utils::check_nvme_core_ana()?;
 
+        if let Some(device) = indexed_nvme_device(&nvmf_key) {
+            if let Ok(Some(devname)) =
+                match_dev::match_nvmf_device_valid(&device, &nvmf_key, Some(multipath))
+            {
+                return Ok(Some(Box::new(nvmf::NvmfDetach::new(
+                    devname.to_string(),
+                    uuid,
+                    &device,
+                ))));
+            }
+        }
+
+        let mut enumerator = Enumerator::new()?;
         enumerator.match_subsystem("block")?;
         enumerator.match_property("DEVTYPE", "disk")?;
-
-        let multipath = utils::check_nvme_core_ana()?;
 
         for device in enumerator.scan_devices()? {
             if let Some((devname, path)) = match_dev::match_iscsi_device(&device) {
