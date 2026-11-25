@@ -5,7 +5,10 @@
 //! that is to run one body against both rather than two bodies that agree by eye.
 
 use bytes::Bytes;
-use dr_store::{Checksum, DrStore, Error, Layout};
+use dr_store::{
+    Checksum, ClusterState, DrConfig, DrStore, Error, HashAlgorithm, Layout, Role, Side, Sides,
+    UploadFormat, VERSION,
+};
 
 /// A checksum to address a chunk by. Not of real content - what matters is that it is
 /// the same on both runs.
@@ -34,6 +37,7 @@ pub async fn suite(store: &dyn DrStore) {
     verbs(store).await;
     listing(store).await;
     conditional_delete(store).await;
+    sides(store).await;
 }
 
 pub async fn verbs(store: &dyn DrStore) {
@@ -144,4 +148,112 @@ pub async fn conditional_delete(store: &dyn DrStore) {
     let probe = layout().chunk_rm(&checksum());
     assert!(store.probe_conditional_delete(&probe).await.unwrap());
     assert!(!store.exists(&probe).await.unwrap(), "the probe cleans up");
+}
+
+fn cfg(side: &Side, peer: &str, role: Role) -> DrConfig {
+    DrConfig {
+        version: VERSION,
+        dr: "a1b2c3d4-0000-4000-8000-000000000001".parse().unwrap(),
+        cluster: side.cluster.clone(),
+        uid: side.uid.clone(),
+        peer: peer.to_string(),
+        volume: "a1b2c3d4-0000-4000-8000-000000000002".parse().unwrap(),
+        role,
+        cluster_size: 4 << 20,
+        chunk_size: 4 << 20,
+        upload_format: UploadFormat::SyntheticFull,
+        dedup: true,
+        hash: HashAlgorithm::Blake3,
+        disabled: None,
+    }
+}
+
+/// Publishing and reading what each side says about itself, and finding the peer.
+pub async fn sides(store: &dyn DrStore) {
+    let layout = &layout();
+    let east = Side::new("east", "uid-1");
+    // A loopback: one cluster holding both ends, told apart by the name alone.
+    let west = Side::new("west", "uid-1");
+
+    // Nothing published is an answer, not a failure.
+    assert_eq!(store.list_sides(layout).await.unwrap(), vec![]);
+    assert_eq!(store.get_cfg(layout, &east).await.unwrap(), None);
+    assert_eq!(store.get_state(layout, &east).await.unwrap(), None);
+    assert_eq!(store.find_peer(layout, "west").await.unwrap(), None);
+
+    let source = cfg(&east, "west", Role::Source);
+    store.put_cfg(layout, &source).await.unwrap();
+    assert_eq!(
+        store.get_cfg(layout, &east).await.unwrap(),
+        Some(source.clone())
+    );
+    // A side that has joined is found, and a point under it does not make it two.
+    store
+        .put(&layout.point("east", "uid-1", 0), bytes("x"))
+        .await
+        .unwrap();
+    assert_eq!(store.list_sides(layout).await.unwrap(), vec![east.clone()]);
+    assert_eq!(
+        store.find_peer(layout, "east").await.unwrap(),
+        Some(source.clone())
+    );
+    assert_eq!(store.find_peer(layout, "west").await.unwrap(), None);
+
+    let destination = cfg(&west, "east", Role::Destination);
+    store.put_cfg(layout, &destination).await.unwrap();
+    let mut listed = store.list_sides(layout).await.unwrap();
+    listed.sort();
+    assert_eq!(listed, vec![east.clone(), west.clone()]);
+    assert_eq!(
+        store.find_peer(layout, "west").await.unwrap(),
+        Some(destination)
+    );
+
+    // The state rewritten in place, and read back as written.
+    let mut state = ClusterState::new("east", source.dr, source.volume, Role::Source);
+    store.put_state(layout, &east, &state).await.unwrap();
+    assert_eq!(
+        store.get_state(layout, &east).await.unwrap(),
+        Some(state.clone())
+    );
+    state.head = Some(0);
+    state.head_at = Some(state.observed_at);
+    store.put_state(layout, &east, &state).await.unwrap();
+    assert_eq!(
+        store.get_state(layout, &east).await.unwrap(),
+        Some(state.clone())
+    );
+    assert_eq!(store.get_state(layout, &west).await.unwrap(), None);
+    // Published only under the side it names.
+    let error = store.put_state(layout, &west, &state).await.unwrap_err();
+    assert!(matches!(error, Error::Config { .. }), "{error}");
+
+    // A second cluster answering to the peer's name - a cluster rebuilt under the same
+    // name, say - is refused rather than guessed between.
+    let rebuilt = Side::new("west", "uid-2");
+    store
+        .put_cfg(layout, &cfg(&rebuilt, "east", Role::Destination))
+        .await
+        .unwrap();
+    let error = store.find_peer(layout, "west").await.unwrap_err();
+    assert!(matches!(error, Error::AmbiguousPeer { .. }), "{error}");
+
+    // There and unreadable is an error, never absent: a peer whose document cannot be
+    // read is not a peer that has not joined.
+    let garbled = layout.state("west", "uid-1");
+    store.put(&garbled, bytes("{ not json")).await.unwrap();
+    let error = store.get_state(layout, &west).await.unwrap_err();
+    assert!(matches!(error, Error::Malformed { .. }), "{error}");
+    // As is a document that describes a side other than the one it is filed under.
+    let misfiled = layout.cfg("west", "uid-2");
+    let other = serde_json::to_vec(&source).unwrap();
+    store.put(&misfiled, other.into()).await.unwrap();
+    let error = store.get_cfg(layout, &rebuilt).await.unwrap_err();
+    assert!(matches!(error, Error::Malformed { .. }), "{error}");
+    let error = store.find_peer(layout, "west").await.unwrap_err();
+    assert!(matches!(error, Error::Malformed { .. }), "{error}");
+
+    for entry in store.list(layout.root()).await.unwrap() {
+        store.delete(entry.location.as_ref()).await.unwrap();
+    }
 }

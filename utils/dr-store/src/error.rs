@@ -72,6 +72,19 @@ pub enum Error {
         source: object_store::Error,
     },
 
+    /// An object is there, and is not what its key says it is: it does not parse, or it
+    /// describes a different side from the one whose subtree it is in.
+    ///
+    /// Never read as absent. A peer whose document cannot be read is not a peer that has
+    /// not joined, and treating it as one is how a relationship in use gets torn down.
+    #[snafu(display("'{key}' is malformed: {reason}"))]
+    Malformed { key: String, reason: String },
+
+    /// More than one cluster answers to the name a peer is expected under, and nothing
+    /// says which is the live one.
+    #[snafu(display("More than one cluster answers as peer '{peer}': {uids:?}"))]
+    AmbiguousPeer { peer: String, uids: Vec<String> },
+
     /// The store could not be built from what it was given, or cannot do what was asked
     /// of it at all.
     #[snafu(display("Store configuration: {reason}"))]
