@@ -87,3 +87,5 @@ deployer-cluster = { workspace = true }
 events-api = { workspace = true }
 url = { workspace = true }
 once_cell = { workspace = true }
+# A CA for named credentials to carry, without one checked in.
+rcgen = { workspace = true }

@@ -46,6 +46,14 @@ struct Cli {
     #[clap(long, default_value = utils::STORE_OP_TIMEOUT)]
     store_timeout: humantime::Duration,
 
+    /// Directory the credentials a pair names are mounted under, one directory per name.
+    ///
+    /// Each is a secret, mounted as it is: `accessKey` and `secretKey` to sign with, both
+    /// or neither, and `ca.crt`, the CA certificates of a store whose CA the system does
+    /// not trust. Without it, a pair that names its credentials is refused.
+    #[clap(long)]
+    credentials_dir: Option<PathBuf>,
+
     /// Sends opentelemetry spans to the Jaeger endpoint agent.
     #[clap(long, short)]
     jaeger: Option<String>,
@@ -122,7 +130,13 @@ async fn main() -> anyhow::Result<()> {
         Some(tls) => CoreClient::new_with_tls(cli.core_grpc.clone(), None, tls).await?,
         None => CoreClient::new(cli.core_grpc.clone(), None).await,
     };
-    let dr = service::new(&cli.store, cli.store_timeout.into(), core).await?;
+    let dr = service::new(
+        &cli.store,
+        cli.store_timeout.into(),
+        core,
+        cli.credentials_dir.clone(),
+    )
+    .await?;
     let service = Service::builder().with_service(DrServer::new(Arc::new(dr)).into_grpc_server());
 
     info!("Starting dr-agent server");

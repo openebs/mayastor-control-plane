@@ -16,6 +16,7 @@ fn bucket(cluster: &Cluster) -> Store {
             access_key_id: s3.access_key_id,
             secret_access_key: s3.secret_access_key,
         }),
+        ca: None,
     })
     .expect("the cluster's store")
 }

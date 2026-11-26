@@ -43,14 +43,17 @@ pub struct DrS3Keys {
 /// Absent on the transport means the agent's own environment, which is the single-store
 /// case and the one that keeps instance roles working - those refresh, and a key written
 /// here would not. That default cannot serve two stores at once, which is what `Named`
-/// is for: the pair says which credentials, the agent's environment holds them, and a
-/// cluster can be party to relationships over different stores without any of their
-/// secrets being written down here.
+/// is for: the pair says which credentials, the agent has them mounted, and a cluster
+/// can be party to relationships over different stores without any of their secrets
+/// being written down here. Named credentials can also carry the store's CA, for a store
+/// whose CA the system does not trust.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub enum DrS3Credentials {
     /// Keys carried by the pair, used for this store alone.
     Keys(DrS3Keys),
-    /// A name the agent resolves against its own environment.
+    /// A directory under the agent's `--credentials-dir`: a secret, mounted, holding
+    /// `accessKey` and `secretKey` (both or neither) and, optionally, the store's CA as
+    /// `ca.crt`.
     Named(String),
 }
 

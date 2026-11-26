@@ -37,6 +37,13 @@ fn with_secret(mut pair: CreateDrClusterPair, secret: &str) -> CreateDrClusterPa
     pair
 }
 
+/// The same pair, naming its credentials rather than carrying them.
+fn with_credentials(mut pair: CreateDrClusterPair, name: &str) -> CreateDrClusterPair {
+    let DrTransport::S3(s3) = &mut pair.transport;
+    s3.credentials = Some(DrS3Credentials::Named(name.to_string()));
+    pair
+}
+
 /// The secret the cluster's store takes.
 fn store_secret(cluster: &Cluster) -> String {
     cluster.s3().secret_access_key
@@ -221,6 +228,11 @@ async fn dr_cluster_pair() {
         .await
         .expect_err("a side name carrying a dot");
 
+    // Named credentials are looked up in a directory this agent was given none of.
+    let named = with_credentials(create(&cluster, "dr-named", "west"), "east");
+    let error = dr.create_pair(&named, None).await.unwrap_err();
+    assert_eq!(error.kind, ReplyErrorKind::FailedPrecondition, "{error:?}");
+
     // Both ends must differ, or neither side can tell its subtree from the other's.
     dr.create_pair(&create(&cluster, "same", "east"), None)
         .await
@@ -235,4 +247,120 @@ async fn dr_cluster_pair() {
         .await
         .expect_err("removing what is not there");
     assert!(dr.list_pairs(None).await.unwrap().entries.is_empty());
+}
+
+/// A directory of named credentials on the host, laid out as mounted secrets are.
+struct Credentials(std::path::PathBuf);
+
+impl Credentials {
+    fn new() -> Self {
+        let dir = std::env::temp_dir().join(format!("dr-credentials-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Self(dir)
+    }
+
+    /// A secret called `name`, holding `files`.
+    fn secret(&self, name: &str, files: &[(&str, &str)]) {
+        let dir = self.0.join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        for (file, content) in files {
+            std::fs::write(dir.join(file), content).unwrap();
+        }
+    }
+}
+
+impl Drop for Credentials {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// A pair that names its credentials gets them, and the store's CA, from the secret of
+/// that name mounted under the agent's credentials directory.
+#[tokio::test]
+async fn dr_named_credentials() {
+    let credentials = Credentials::new();
+    let dir = credentials.0.clone();
+    let cluster = ClusterBuilder::builder()
+        .with_io_engines(0)
+        .with_dr(true)
+        .with_options(|options| options.with_dr_credentials_dir(&dir))
+        .build()
+        .await
+        .unwrap();
+    let s3 = cluster.s3();
+    let access = s3.access_key_id.as_str();
+    let secret = s3.secret_access_key.as_str();
+    // As a secret is usually written to a file: with a newline.
+    let secret_line = format!("{secret}\n");
+    let ca = rcgen::generate_simple_self_signed(vec!["rustfs".to_string()])
+        .unwrap()
+        .cert
+        .pem();
+    credentials.secret(
+        "store",
+        &[("accessKey", access), ("secretKey", &secret_line)],
+    );
+    credentials.secret(
+        "private",
+        &[
+            ("accessKey", access),
+            ("secretKey", secret),
+            ("ca.crt", &ca),
+        ],
+    );
+    credentials.secret("wrong", &[("accessKey", access), ("secretKey", "not-it")]);
+    credentials.secret("half", &[("accessKey", access)]);
+    credentials.secret(
+        "garbled",
+        &[
+            ("accessKey", access),
+            ("secretKey", secret),
+            ("ca.crt", "not a certificate"),
+        ],
+    );
+
+    let dr = dr_client(&cluster).await;
+    let bucket = super::bucket(&cluster);
+    let named = |name: &str| with_credentials(create(&cluster, "dr-west", "west"), name);
+
+    let pair = dr.create_pair(&named("store"), None).await.unwrap();
+    // What was published was signed with the named keys.
+    assert!(bucket
+        .get_cluster_cfg(&Prefix::new(""), "east", pair.cluster_uid.as_str())
+        .await
+        .unwrap()
+        .is_some());
+    // The pair records the name, never what it resolved to.
+    let DrTransport::S3(transport) = &pair.transport;
+    assert_eq!(
+        transport.credentials,
+        Some(DrS3Credentials::Named("store".to_string()))
+    );
+
+    // A CA is taken alongside the keys. This store is plain http, so nothing is verified
+    // against it: what this shows is that one is read and accepted.
+    dr.create_pair(&named("private"), None).await.unwrap();
+
+    // Credentials the store refuses, that are not there, that are half there, or whose CA
+    // cannot be read: refused, until the secret is fixed.
+    for name in ["wrong", "missing", "half", "garbled"] {
+        let error = dr.create_pair(&named(name), None).await.unwrap_err();
+        assert_eq!(
+            error.kind,
+            ReplyErrorKind::FailedPrecondition,
+            "{name}: {error:?}"
+        );
+    }
+    // A name is one directory under the credentials directory, and none of the hidden
+    // ones a mounted secret keeps its versions in.
+    for name in ["../store", "..data", ""] {
+        let error = dr.create_pair(&named(name), None).await.unwrap_err();
+        assert_eq!(
+            error.kind,
+            ReplyErrorKind::InvalidArgument,
+            "{name:?}: {error:?}"
+        );
+    }
 }
