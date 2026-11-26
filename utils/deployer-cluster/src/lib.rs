@@ -129,6 +129,30 @@ impl Cluster {
         }
     }
 
+    /// A dr pair `id` between `cluster` and `peer`, over this cluster's own object store
+    /// as the dr agent reaches it.
+    ///
+    /// Only meaningful where the cluster was built `with_dr`.
+    pub fn dr_pair(&self, id: &str, cluster: &str, peer: &str) -> transport::CreateDrClusterPair {
+        use deployer_lib::infra::s3;
+        let endpoint = s3::s3_endpoint(&self.builder.opts).expect("a cluster built with dr");
+        transport::CreateDrClusterPair {
+            id: id.into(),
+            cluster: cluster.into(),
+            peer: peer.into(),
+            transport: transport::DrTransport::S3(transport::DrS3Transport {
+                endpoint,
+                bucket: s3::S3_BUCKET.to_string(),
+                prefix: None,
+                region: Some(s3::S3_REGION.to_string()),
+                credentials: Some(transport::DrS3Credentials::Keys(transport::DrS3Keys {
+                    access_key: s3::S3_ACCESS_KEY_ID.to_string(),
+                    secret_key: s3::S3_SECRET_ACCESS_KEY.to_string(),
+                })),
+            }),
+        }
+    }
+
     /// A reference to our wrapper over the compose utility.
     /// This can be safely sent across threads.
     pub fn composer_nt(&self) -> &Arc<ComposeTestNt> {

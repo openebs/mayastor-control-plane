@@ -29,6 +29,7 @@ pub enum StorableObjectType {
     SwitchOver,
     AppNodeSpec,
     DrClusterPairSpec,
+    DrVolume,
 }
 
 /// Control plane api versions.

@@ -161,6 +161,10 @@ pub enum SvcError {
     DrClusterPairNotFound { id: String },
     #[snafu(display("Invalid dr cluster pair: {error}"))]
     InvalidDrClusterPair { error: String },
+    #[snafu(display("Dr volume '{vol_id}' not found"))]
+    DrVolumeNotFound { vol_id: String },
+    #[snafu(display("Invalid dr volume: {error}"))]
+    InvalidDrVolume { error: String },
     #[snafu(display("Affinity Group '{vol_grp_id}' not found"))]
     AffinityGroupNotFound { vol_grp_id: String },
     #[snafu(display("Volume '{vol_id}' not published"))]
@@ -555,6 +559,8 @@ impl SvcError {
             Self::PoolNotFound { .. } => tonic::Code::NotFound,
             Self::DrClusterPairNotFound { .. } => tonic::Code::NotFound,
             Self::InvalidDrClusterPair { .. } => tonic::Code::InvalidArgument,
+            Self::DrVolumeNotFound { .. } => tonic::Code::NotFound,
+            Self::InvalidDrVolume { .. } => tonic::Code::InvalidArgument,
             Self::ReplicaNotFound { .. } => tonic::Code::NotFound,
             Self::PoolNotLoaded { .. } => tonic::Code::FailedPrecondition,
             Self::ChildNotFound { .. } => tonic::Code::NotFound,
@@ -906,6 +912,18 @@ impl From<SvcError> for ReplyError {
             SvcError::InvalidDrClusterPair { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::DrClusterPair,
+                source,
+                extra,
+            },
+            SvcError::DrVolumeNotFound { .. } => ReplyError {
+                kind: ReplyErrorKind::NotFound,
+                resource: ResourceKind::DrVolume,
+                source,
+                extra,
+            },
+            SvcError::InvalidDrVolume { .. } => ReplyError {
+                kind: ReplyErrorKind::InvalidArgument,
+                resource: ResourceKind::DrVolume,
                 source,
                 extra,
             },

@@ -1,10 +1,15 @@
 use crate::{
     dr,
-    dr::{cluster_pair_reply, cluster_pairs_reply, dr_grpc_server},
-    operations::dr::traits::DrOperations,
+    dr::{cluster_pair_reply, cluster_pairs_reply, dr_grpc_server, volume_reply, volumes_reply},
+    operations::dr::traits::{volume_id, DrOperations},
 };
 use std::sync::Arc;
-use stor_port::types::v0::transport::{DestroyDrClusterPair, GetDrClusterPair};
+use stor_port::{
+    transport_api::ReplyError,
+    types::v0::transport::{
+        DestroyDrClusterPair, DisableDrVolume, DrVolume, GetDrClusterPair, GetDrVolume,
+    },
+};
 use tonic::Response;
 
 /// RPC Dr Server
@@ -44,6 +49,16 @@ fn pair_reply(
     }
 }
 
+/// A single-volume reply, carrying either the entry or why there is none.
+fn volume_reply(result: Result<DrVolume, ReplyError>) -> dr::VolumeReply {
+    dr::VolumeReply {
+        reply: Some(match result {
+            Ok(volume) => volume_reply::Reply::Volume(volume.into()),
+            Err(error) => volume_reply::Reply::Error(error.into()),
+        }),
+    }
+}
+
 #[tonic::async_trait]
 impl dr_grpc_server::DrGrpc for DrServer {
     async fn probe(
@@ -61,7 +76,7 @@ impl dr_grpc_server::DrGrpc for DrServer {
         request: tonic::Request<dr::CreateClusterPairRequest>,
     ) -> Result<tonic::Response<dr::ClusterPairReply>, tonic::Status> {
         let result = match request.into_inner().try_into() {
-            Ok(req) => self.service.create(&req, None).await,
+            Ok(req) => self.service.create_pair(&req, None).await,
             Err(error) => Err(error),
         };
         Ok(Response::new(pair_reply(result)))
@@ -75,7 +90,7 @@ impl dr_grpc_server::DrGrpc for DrServer {
             id: request.into_inner().id.into(),
         };
         Ok(Response::new(pair_reply(
-            self.service.get(&req, None).await,
+            self.service.get_pair(&req, None).await,
         )))
     }
 
@@ -83,7 +98,7 @@ impl dr_grpc_server::DrGrpc for DrServer {
         &self,
         _request: tonic::Request<dr::ListClusterPairsRequest>,
     ) -> Result<tonic::Response<dr::ClusterPairsReply>, tonic::Status> {
-        let reply = match self.service.list(None).await {
+        let reply = match self.service.list_pairs(None).await {
             Ok(pairs) => cluster_pairs_reply::Reply::Pairs(dr::ClusterPairs {
                 entries: pairs.entries.into_iter().map(Into::into).collect(),
             }),
@@ -100,7 +115,64 @@ impl dr_grpc_server::DrGrpc for DrServer {
             id: request.into_inner().id.into(),
         };
         Ok(Response::new(dr::DestroyClusterPairReply {
-            error: self.service.destroy(&req, None).await.err().map(Into::into),
+            error: self
+                .service
+                .destroy_pair(&req, None)
+                .await
+                .err()
+                .map(Into::into),
+        }))
+    }
+
+    async fn enable_volume(
+        &self,
+        request: tonic::Request<dr::EnableVolumeRequest>,
+    ) -> Result<tonic::Response<dr::VolumeReply>, tonic::Status> {
+        let result = match request.into_inner().try_into() {
+            Ok(req) => self.service.enable_volume(&req, None).await,
+            Err(error) => Err(error),
+        };
+        Ok(Response::new(volume_reply(result)))
+    }
+
+    async fn get_volume(
+        &self,
+        request: tonic::Request<dr::GetVolumeRequest>,
+    ) -> Result<tonic::Response<dr::VolumeReply>, tonic::Status> {
+        let result = match volume_id("volume", &request.into_inner().volume) {
+            Ok(volume) => self.service.get_volume(&GetDrVolume { volume }, None).await,
+            Err(error) => Err(error),
+        };
+        Ok(Response::new(volume_reply(result)))
+    }
+
+    async fn list_volumes(
+        &self,
+        _request: tonic::Request<dr::ListVolumesRequest>,
+    ) -> Result<tonic::Response<dr::VolumesReply>, tonic::Status> {
+        let reply = match self.service.list_volumes(None).await {
+            Ok(volumes) => volumes_reply::Reply::Volumes(dr::Volumes {
+                entries: volumes.entries.into_iter().map(Into::into).collect(),
+            }),
+            Err(error) => volumes_reply::Reply::Error(error.into()),
+        };
+        Ok(Response::new(dr::VolumesReply { reply: Some(reply) }))
+    }
+
+    async fn disable_volume(
+        &self,
+        request: tonic::Request<dr::DisableVolumeRequest>,
+    ) -> Result<tonic::Response<dr::DisableVolumeReply>, tonic::Status> {
+        let result = match volume_id("volume", &request.into_inner().volume) {
+            Ok(volume) => {
+                self.service
+                    .disable_volume(&DisableDrVolume { volume }, None)
+                    .await
+            }
+            Err(error) => Err(error),
+        };
+        Ok(Response::new(dr::DisableVolumeReply {
+            error: result.err().map(Into::into),
         }))
     }
 }

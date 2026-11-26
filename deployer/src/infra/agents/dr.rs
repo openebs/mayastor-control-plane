@@ -28,6 +28,11 @@ impl ComponentAction for DrAgent {
             // the persistent store rather than reaching it through core.
             .with_args(vec!["--store", &etcd]);
 
+        // Core answers whether a volume exists. Its client picks TLS from the scheme, so
+        // the scheme has to match how core was started.
+        let scheme = if options.no_grpc_tls { "http" } else { "https" };
+        binary = binary.with_args(vec!["--core-grpc", &format!("{scheme}://core:50051")]);
+
         if let Some(timeout) = &options.store_timeout {
             binary = binary.with_args(vec!["--store-timeout", &timeout.to_string()]);
         }

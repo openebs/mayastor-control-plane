@@ -1,14 +1,18 @@
 use crate::{
     context::{Client, Context, TracedChannel},
     dr,
-    dr::{cluster_pair_reply, cluster_pairs_reply, dr_grpc_client, ProbeRequest},
+    dr::{
+        cluster_pair_reply, cluster_pairs_reply, dr_grpc_client, volume_reply, volumes_reply,
+        ProbeRequest,
+    },
     operations::dr::traits::DrOperations,
 };
 use std::{ops::Deref, time::Duration};
 use stor_port::{
     transport_api::{ReplyError, ResourceKind, TimeoutOptions},
     types::v0::transport::{
-        CreateDrClusterPair, DestroyDrClusterPair, DrClusterPair, DrClusterPairs, GetDrClusterPair,
+        CreateDrClusterPair, DestroyDrClusterPair, DisableDrVolume, DrClusterPair, DrClusterPairs,
+        DrVolume, DrVolumes, EnableDrVolume, GetDrClusterPair, GetDrVolume,
     },
 };
 use tonic::transport::Uri;
@@ -81,6 +85,15 @@ fn pair(reply: dr::ClusterPairReply) -> Result<DrClusterPair, ReplyError> {
     }
 }
 
+/// Unwraps a single-volume reply, which carries either the entry or why there is none.
+fn volume(reply: dr::VolumeReply) -> Result<DrVolume, ReplyError> {
+    match reply.reply {
+        Some(volume_reply::Reply::Volume(volume)) => volume.try_into(),
+        Some(volume_reply::Reply::Error(error)) => Err(error.into()),
+        None => Err(ReplyError::invalid_response(ResourceKind::DrVolume)),
+    }
+}
+
 #[tonic::async_trait]
 impl DrOperations for DrClient {
     #[tracing::instrument(name = "DrClient::probe", level = "debug", skip(self))]
@@ -92,8 +105,8 @@ impl DrOperations for DrClient {
     }
 
     // Not `skip(self)`: the request carries the store credentials, and `err` logs it.
-    #[tracing::instrument(name = "DrClient::create", level = "debug", skip_all, fields(pair.id = %req.id), err)]
-    async fn create(
+    #[tracing::instrument(name = "DrClient::create_pair", level = "debug", skip_all, fields(pair.id = %req.id), err)]
+    async fn create_pair(
         &self,
         req: &CreateDrClusterPair,
         _ctx: Option<Context>,
@@ -107,8 +120,8 @@ impl DrOperations for DrClient {
         pair(reply)
     }
 
-    #[tracing::instrument(name = "DrClient::get", level = "debug", skip(self), err)]
-    async fn get(
+    #[tracing::instrument(name = "DrClient::get_pair", level = "debug", skip(self), err)]
+    async fn get_pair(
         &self,
         req: &GetDrClusterPair,
         _ctx: Option<Context>,
@@ -123,8 +136,8 @@ impl DrOperations for DrClient {
         pair(reply)
     }
 
-    #[tracing::instrument(name = "DrClient::list", level = "debug", skip(self), err)]
-    async fn list(&self, _ctx: Option<Context>) -> Result<DrClusterPairs, ReplyError> {
+    #[tracing::instrument(name = "DrClient::list_pairs", level = "debug", skip(self), err)]
+    async fn list_pairs(&self, _ctx: Option<Context>) -> Result<DrClusterPairs, ReplyError> {
         let reply = self
             .client()
             .list_cluster_pairs(dr::ListClusterPairsRequest {})
@@ -137,8 +150,8 @@ impl DrOperations for DrClient {
         }
     }
 
-    #[tracing::instrument(name = "DrClient::destroy", level = "debug", skip(self), err)]
-    async fn destroy(
+    #[tracing::instrument(name = "DrClient::destroy_pair", level = "debug", skip(self), err)]
+    async fn destroy_pair(
         &self,
         req: &DestroyDrClusterPair,
         _ctx: Option<Context>,
@@ -147,6 +160,66 @@ impl DrOperations for DrClient {
             .client()
             .destroy_cluster_pair(dr::DestroyClusterPairRequest {
                 id: req.id.to_string(),
+            })
+            .await?
+            .into_inner();
+        match reply.error {
+            Some(error) => Err(error.into()),
+            None => Ok(()),
+        }
+    }
+
+    #[tracing::instrument(name = "DrClient::enable_volume", level = "debug", skip(self), err)]
+    async fn enable_volume(
+        &self,
+        req: &EnableDrVolume,
+        _ctx: Option<Context>,
+    ) -> Result<DrVolume, ReplyError> {
+        let request: dr::EnableVolumeRequest = req.into();
+        let reply = self.client().enable_volume(request).await?.into_inner();
+        volume(reply)
+    }
+
+    #[tracing::instrument(name = "DrClient::get_volume", level = "debug", skip(self), err)]
+    async fn get_volume(
+        &self,
+        req: &GetDrVolume,
+        _ctx: Option<Context>,
+    ) -> Result<DrVolume, ReplyError> {
+        let reply = self
+            .client()
+            .get_volume(dr::GetVolumeRequest {
+                volume: req.volume.to_string(),
+            })
+            .await?
+            .into_inner();
+        volume(reply)
+    }
+
+    #[tracing::instrument(name = "DrClient::list_volumes", level = "debug", skip(self), err)]
+    async fn list_volumes(&self, _ctx: Option<Context>) -> Result<DrVolumes, ReplyError> {
+        let reply = self
+            .client()
+            .list_volumes(dr::ListVolumesRequest {})
+            .await?
+            .into_inner();
+        match reply.reply {
+            Some(volumes_reply::Reply::Volumes(volumes)) => volumes.try_into(),
+            Some(volumes_reply::Reply::Error(error)) => Err(error.into()),
+            None => Err(ReplyError::invalid_response(ResourceKind::DrVolume)),
+        }
+    }
+
+    #[tracing::instrument(name = "DrClient::disable_volume", level = "debug", skip(self), err)]
+    async fn disable_volume(
+        &self,
+        req: &DisableDrVolume,
+        _ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        let reply = self
+            .client()
+            .disable_volume(dr::DisableVolumeRequest {
+                volume: req.volume.to_string(),
             })
             .await?
             .into_inner();

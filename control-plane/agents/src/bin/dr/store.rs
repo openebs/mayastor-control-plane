@@ -3,7 +3,7 @@ use stor_port::{
         etcd::Etcd, key_prefix_obj, ObjectKey, StorableObject, StorableObjectType, StoreKv,
         StoreObj, API_VERSION,
     },
-    types::v0::store::{definitions::StoreError, dr::DrClusterPairSpec},
+    types::v0::store::definitions::StoreError,
 };
 
 use futures::lock::Mutex;
@@ -13,16 +13,17 @@ use tracing::error;
 
 /// The dr agent's own handle on the persistent store.
 ///
-/// Core is not in this path: the pair is the dr agent's resource, and the dr agent reads
-/// it on every cycle, so putting it behind another agent's api would buy nothing and cost
-/// a hop. This mirrors what the ha agent does with its switchover requests.
+/// Core is not in this path: the pairs and the volume entries are the dr agent's
+/// resources, and the dr agent reads them on every cycle, so putting them behind another
+/// agent's api would buy nothing and cost a hop. This mirrors what the ha agent does with
+/// its switchover requests.
 #[derive(Debug, Clone)]
-pub(crate) struct PairStore {
+pub(crate) struct Store {
     store: Arc<Mutex<Etcd>>,
     timeout: Duration,
 }
 
-impl PairStore {
+impl Store {
     /// Connect to the persistent store.
     pub(crate) async fn new(endpoint: &Uri, timeout: Duration) -> Result<Self, StoreError> {
         let endpoint = endpoint.to_string();
@@ -34,27 +35,31 @@ impl PairStore {
         })
     }
 
-    /// Write a pair.
-    pub(crate) async fn put(&self, spec: &DrClusterPairSpec) -> Result<(), StoreError> {
+    /// Write an object.
+    pub(crate) async fn put<T: StorableObject>(&self, object: &T) -> Result<(), StoreError> {
         let mut store = self.store.lock().await;
-        timed("put", self.timeout, store.put_obj(spec)).await?
+        timed("put", self.timeout, store.put_obj(object)).await?
     }
 
-    /// Remove a pair.
-    pub(crate) async fn delete(&self, spec: &DrClusterPairSpec) -> Result<(), StoreError> {
+    /// Remove an object.
+    pub(crate) async fn delete<T: StorableObject>(&self, spec: &T) -> Result<(), StoreError> {
         let mut store = self.store.lock().await;
         let key = spec.key().key();
         let delete = store.delete_kv(&key);
         timed("delete", self.timeout, delete).await?
     }
 
-    /// Every pair this cluster has stored.
+    /// Every object of a type this cluster has stored.
     ///
     /// Read once at startup: without it a restarted agent does not know the relationships
     /// it is already party to.
-    pub(crate) async fn list(&self) -> Result<Vec<DrClusterPairSpec>, StoreError> {
+    pub(crate) async fn list<T: StorableObject>(
+        &self,
+        kind: StorableObjectType,
+    ) -> Result<Vec<T>, StoreError> {
         let mut store = self.store.lock().await;
-        let prefix = key_prefix_obj(StorableObjectType::DrClusterPairSpec, API_VERSION);
+        let what = kind.to_string();
+        let prefix = key_prefix_obj(kind, API_VERSION);
         let entries = timed("get", self.timeout, store.get_values_prefix(&prefix)).await??;
         let specs = entries.into_iter().filter_map(|(key, value)| {
             match serde_json::from_value(value) {
@@ -62,7 +67,7 @@ impl PairStore {
                 Err(error) => {
                     // One unreadable entry should not stop the agent starting, but it must
                     // be visible: the relationship it describes will not be served.
-                    error!(%key, %error, "Ignoring an unreadable dr cluster pair");
+                    error!(%key, %error, "Ignoring an unreadable {what}");
                     None
                 }
             }

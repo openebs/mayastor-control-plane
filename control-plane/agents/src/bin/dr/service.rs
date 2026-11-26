@@ -1,14 +1,23 @@
-use crate::store::PairStore;
+use crate::store::Store;
 use agents::errors::SvcError;
-use grpc::{context::Context, operations::dr::traits::DrOperations};
+use grpc::{
+    client::CoreClient,
+    context::Context,
+    operations::{dr::traits::DrOperations, volume::traits::VolumeOperations},
+};
 use std::{collections::HashMap, sync::Arc};
 use stor_port::{
-    transport_api::ReplyError,
+    pstor::StorableObjectType,
+    transport_api::{ReplyError, ResourceKind},
     types::v0::{
-        store::{definitions::StoreError, dr::DrClusterPairSpec},
+        store::{
+            definitions::StoreError,
+            dr::{DrClusterPairSpec, DrVolume, DrVolumeSpec, DrVolumeSpecStatus},
+        },
         transport::{
-            CreateDrClusterPair, DestroyDrClusterPair, DrClusterPair, DrClusterPairs, DrPairId,
-            GetDrClusterPair,
+            CreateDrClusterPair, DestroyDrClusterPair, DisableDrVolume, DrClusterPair,
+            DrClusterPairs, DrPairId, DrPolicy, DrVolume as DrVolumeEntry, DrVolumes,
+            EnableDrVolume, Filter, GetDrClusterPair, GetDrVolume, VolumeId,
         },
     },
 };
@@ -16,16 +25,21 @@ use tokio::sync::RwLock;
 
 /// The disaster recovery agent's service.
 ///
-/// It answers the liveness probe and holds the cluster pairs.
+/// It answers the liveness probe, and holds the cluster pairs and the volume entries
+/// replicated over them.
 ///
-/// The pairs are held in memory and written through to the persistent store, and read back
-/// from it at startup. A cluster has a handful of pairs, so this is a map rather than the
-/// core agent's resource registry: there is no reconciler, nothing to lock against a
-/// background task, and no pagination to serve.
-#[derive(Debug, Clone)]
+/// Both are held in memory and written through to the persistent store, and read back
+/// from it at startup. This is a pair of maps rather than the core agent's resource
+/// registry: there is no reconciler yet, nothing to lock against a background task, and
+/// no pagination to serve.
+///
+/// Where both maps are locked, the pairs are locked first: a volume names a pair, and a
+/// pair is not destroyed while one does.
 pub(crate) struct Service {
     pairs: Arc<RwLock<HashMap<DrPairId, DrClusterPairSpec>>>,
-    store: PairStore,
+    volumes: Arc<RwLock<HashMap<VolumeId, DrVolume>>>,
+    store: Store,
+    core: CoreClient,
 }
 
 /// A name the store layout and the persistent store key are both built from.
@@ -61,18 +75,48 @@ fn as_transport(spec: DrClusterPairSpec) -> DrClusterPair {
     }
 }
 
+/// A volume entry's policy: every interval in it has to be one.
+fn policy(policy: &DrPolicy) -> Result<(), SvcError> {
+    let intervals = [
+        ("schedule", Some(policy.schedule)),
+        ("ttl", Some(policy.ttl)),
+        ("maxLag", policy.max_lag),
+    ];
+    match intervals
+        .into_iter()
+        .find(|(_, interval)| interval.is_some_and(|i| i.is_zero()))
+    {
+        Some((what, _)) => Err(SvcError::InvalidDrVolume {
+            error: format!("a volume's {what} must not be zero"),
+        }),
+        None => Ok(()),
+    }
+}
+
 impl Service {
-    /// Creates a new dr cluster pair service from what the store already holds.
-    pub(crate) fn new(store: PairStore, pairs: Vec<DrClusterPairSpec>) -> Self {
+    /// Creates a new dr service from what the store already holds.
+    pub(crate) fn new(
+        store: Store,
+        core: CoreClient,
+        pairs: Vec<DrClusterPairSpec>,
+        volumes: Vec<DrVolume>,
+    ) -> Self {
         Self {
             pairs: Arc::new(RwLock::new(
                 pairs.into_iter().map(|p| (p.id.clone(), p)).collect(),
             )),
+            volumes: Arc::new(RwLock::new(
+                volumes
+                    .into_iter()
+                    .map(|v| (v.volume().clone(), v))
+                    .collect(),
+            )),
             store,
+            core,
         }
     }
 
-    async fn create(&self, req: &CreateDrClusterPair) -> Result<DrClusterPair, SvcError> {
+    async fn create_pair(&self, req: &CreateDrClusterPair) -> Result<DrClusterPair, SvcError> {
         segment("id", req.id.as_str())?;
         side("cluster", req.cluster.as_str())?;
         side("peer", req.peer.as_str())?;
@@ -125,7 +169,7 @@ impl Service {
         Ok(as_transport(spec))
     }
 
-    async fn get(&self, req: &GetDrClusterPair) -> Result<DrClusterPair, SvcError> {
+    async fn get_pair(&self, req: &GetDrClusterPair) -> Result<DrClusterPair, SvcError> {
         let pairs = self.pairs.read().await.get(&req.id).cloned();
         pairs
             .map(as_transport)
@@ -134,7 +178,7 @@ impl Service {
             })
     }
 
-    async fn list(&self) -> Result<DrClusterPairs, SvcError> {
+    async fn list_pairs(&self) -> Result<DrClusterPairs, SvcError> {
         let pairs = self.pairs.read().await;
         let entries = pairs.values().cloned().map(as_transport);
         Ok(DrClusterPairs {
@@ -142,7 +186,7 @@ impl Service {
         })
     }
 
-    async fn destroy(&self, req: &DestroyDrClusterPair) -> Result<(), SvcError> {
+    async fn destroy_pair(&self, req: &DestroyDrClusterPair) -> Result<(), SvcError> {
         let mut pairs = self.pairs.write().await;
         // Destroying what is not there is an error, as it is for every other resource -
         // the plugin's `--ignore-not-found` is what turns it back into a no-op.
@@ -150,8 +194,111 @@ impl Service {
         let spec = spec.ok_or_else(|| SvcError::DrClusterPairNotFound {
             id: req.id.to_string(),
         })?;
+        // A volume replicating over the pair would lose the store it writes to, and so
+        // would one still waiting to be purged from it.
+        let volumes = self.volumes.read().await;
+        if volumes.values().any(|volume| volume.spec.pair == req.id) {
+            return Err(SvcError::InUse {
+                kind: ResourceKind::DrClusterPair,
+                id: req.id.to_string(),
+            });
+        }
         self.store.delete(&spec).await?;
         pairs.remove(&req.id);
+        Ok(())
+    }
+
+    async fn enable_volume(&self, req: &EnableDrVolume) -> Result<DrVolumeEntry, ReplyError> {
+        policy(&req.policy)?;
+        // Before any lock: core answers for the volume, and a slow answer should not hold
+        // up every other request.
+        self.core
+            .volume()
+            .get(Filter::Volume(req.volume.clone()), false, None, None)
+            .await?;
+
+        let pairs = self.pairs.read().await;
+        if !pairs.contains_key(&req.pair) {
+            return Err(SvcError::DrClusterPairNotFound {
+                id: req.pair.to_string(),
+            }
+            .into());
+        }
+        let mut volumes = self.volumes.write().await;
+        let asked = DrVolumeSpec::new(req.volume.clone(), req.pair.clone(), req.role, req.policy);
+        let entry = match volumes.get(&req.volume) {
+            None => DrVolume { spec: asked },
+            // The relationship is still in the store until both ends have let it go, so
+            // enabling it again now would resume one the peer is tearing down.
+            Some(existing) if !matches!(existing.spec.status, DrVolumeSpecStatus::Created(_)) => {
+                return Err(SvcError::Deleting {
+                    kind: ResourceKind::DrVolume,
+                }
+                .into())
+            }
+            // The pair and the role say which relationship this is; amending them would be
+            // a different one, and everything written under this one would be orphaned.
+            Some(existing)
+                if existing.spec.pair != asked.pair || existing.spec.role != asked.role =>
+            {
+                return Err(SvcError::InvalidDrVolume {
+                    error: format!(
+                        "volume '{}' is the {:?} of relationship '{}' over pair '{}'; disable \
+                         replication to enable a different one",
+                        req.volume, existing.spec.role, existing.spec.dr, existing.spec.pair
+                    ),
+                }
+                .into())
+            }
+            // Repeating the call converges, as for a pair: the policy is what moves.
+            Some(existing) => {
+                let mut entry = existing.clone();
+                entry.spec.policy = req.policy;
+                entry
+            }
+        };
+        // Written before it is published, so an entry this answers for is one a restart
+        // still knows about.
+        self.store.put(&entry).await.map_err(SvcError::from)?;
+        volumes.insert(req.volume.clone(), entry.clone());
+        Ok(entry.into())
+    }
+
+    async fn get_volume(&self, req: &GetDrVolume) -> Result<DrVolumeEntry, SvcError> {
+        let volume = self.volumes.read().await.get(&req.volume).cloned();
+        volume
+            .map(Into::into)
+            .ok_or_else(|| SvcError::DrVolumeNotFound {
+                vol_id: req.volume.to_string(),
+            })
+    }
+
+    async fn list_volumes(&self) -> Result<DrVolumes, SvcError> {
+        let volumes = self.volumes.read().await;
+        let entries = volumes.values().cloned().map(Into::into);
+        Ok(DrVolumes {
+            entries: entries.collect(),
+        })
+    }
+
+    /// Disabling replication marks the entry rather than removing it: the relationship's
+    /// objects are shared with the peer, so they are purged only once both ends have let
+    /// go of it, and the entry is what says this end has.
+    async fn disable_volume(&self, req: &DisableDrVolume) -> Result<(), SvcError> {
+        let mut volumes = self.volumes.write().await;
+        let Some(existing) = volumes.get(&req.volume) else {
+            return Err(SvcError::DrVolumeNotFound {
+                vol_id: req.volume.to_string(),
+            });
+        };
+        // Already let go of: the request is in effect, so repeating it converges.
+        if !matches!(existing.spec.status, DrVolumeSpecStatus::Created(_)) {
+            return Ok(());
+        }
+        let mut entry = existing.clone();
+        entry.spec.status = DrVolumeSpecStatus::Deleting;
+        self.store.put(&entry).await?;
+        volumes.insert(req.volume.clone(), entry);
         Ok(())
     }
 }
@@ -162,42 +309,74 @@ impl DrOperations for Service {
         Ok(true)
     }
 
-    async fn create(
+    async fn create_pair(
         &self,
         req: &CreateDrClusterPair,
         _ctx: Option<Context>,
     ) -> Result<DrClusterPair, ReplyError> {
-        Ok(self.create(req).await?)
+        Ok(self.create_pair(req).await?)
     }
 
-    async fn get(
+    async fn get_pair(
         &self,
         req: &GetDrClusterPair,
         _ctx: Option<Context>,
     ) -> Result<DrClusterPair, ReplyError> {
-        Ok(self.get(req).await?)
+        Ok(self.get_pair(req).await?)
     }
 
-    async fn list(&self, _ctx: Option<Context>) -> Result<DrClusterPairs, ReplyError> {
-        Ok(self.list().await?)
+    async fn list_pairs(&self, _ctx: Option<Context>) -> Result<DrClusterPairs, ReplyError> {
+        Ok(self.list_pairs().await?)
     }
 
-    async fn destroy(
+    async fn destroy_pair(
         &self,
         req: &DestroyDrClusterPair,
         _ctx: Option<Context>,
     ) -> Result<(), ReplyError> {
-        Ok(self.destroy(req).await?)
+        Ok(self.destroy_pair(req).await?)
+    }
+
+    async fn enable_volume(
+        &self,
+        req: &EnableDrVolume,
+        _ctx: Option<Context>,
+    ) -> Result<DrVolumeEntry, ReplyError> {
+        self.enable_volume(req).await
+    }
+
+    async fn get_volume(
+        &self,
+        req: &GetDrVolume,
+        _ctx: Option<Context>,
+    ) -> Result<DrVolumeEntry, ReplyError> {
+        Ok(self.get_volume(req).await?)
+    }
+
+    async fn list_volumes(&self, _ctx: Option<Context>) -> Result<DrVolumes, ReplyError> {
+        Ok(self.list_volumes().await?)
+    }
+
+    async fn disable_volume(
+        &self,
+        req: &DisableDrVolume,
+        _ctx: Option<Context>,
+    ) -> Result<(), ReplyError> {
+        Ok(self.disable_volume(req).await?)
     }
 }
 
-/// Connect to the persistent store, read back the pairs already there, and serve them.
+/// Connect to the persistent store, read back the pairs and volumes already there, and
+/// serve them.
 pub(crate) async fn new(
     store: &http::Uri,
     timeout: std::time::Duration,
+    core: CoreClient,
 ) -> Result<Service, StoreError> {
-    let store = PairStore::new(store, timeout).await?;
-    let pairs = store.list().await?;
+    let store = Store::new(store, timeout).await?;
+    let pairs = store.list(StorableObjectType::DrClusterPairSpec).await?;
     tracing::info!(count = pairs.len(), "Loaded dr cluster pairs");
-    Ok(Service::new(store, pairs))
+    let volumes = store.list(StorableObjectType::DrVolume).await?;
+    tracing::info!(count = volumes.len(), "Loaded dr volumes");
+    Ok(Service::new(store, core, pairs, volumes))
 }

@@ -1,4 +1,7 @@
-use crate::{rpc_impl_string_id, rpc_impl_string_id_inner};
+use crate::{
+    rpc_impl_string_id, rpc_impl_string_id_inner, rpc_impl_string_uuid, rpc_impl_string_uuid_inner,
+    types::v0::{store::SpecStatus, transport::VolumeId},
+};
 
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -144,4 +147,112 @@ pub struct DestroyDrClusterPair {
 pub struct DrClusterPairs {
     /// The pairs.
     pub entries: Vec<DrClusterPair>,
+}
+
+rpc_impl_string_uuid!(
+    DrId,
+    "UUID of a volume's dr relationship: the source volume's uuid when replication was enabled"
+);
+
+/// Which end of a relationship a volume holds.
+///
+/// Fixed when the entry is created: moving a volume from one end to the other is failover
+/// or failback, which are their own operations rather than an edit of the entry.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq)]
+pub enum DrRole {
+    /// Takes the recovery points and uploads them.
+    Source,
+    /// Applies the source's recovery points.
+    Destination,
+}
+
+/// How often a volume is replicated, and for how long its points are kept.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq)]
+pub struct DrPolicy {
+    /// Whether a demoted side found to have diverged discards its un-replicated writes
+    /// rather than waiting for an operator. Destructive, hence off by default.
+    pub auto_resync: bool,
+    /// How often the source takes a recovery point.
+    pub schedule: std::time::Duration,
+    /// How long recovery points are kept.
+    pub ttl: std::time::Duration,
+    /// The lag past which the source stops committing. Absent means it never stops.
+    pub max_lag: Option<std::time::Duration>,
+}
+
+/// A volume's part in a dr relationship: the intent, as the api states it.
+///
+/// One per volume, keyed by its uuid.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct DrVolume {
+    /// This cluster's volume, which this entry protects: the source volume on the source,
+    /// the target volume on the destination.
+    pub volume: VolumeId,
+    /// The relationship's id, which the store keys everything under.
+    ///
+    /// It is the source volume's uuid when replication was enabled, and it never changes:
+    /// a failover swaps the source and the target, but the id stays.
+    pub dr: DrId,
+    /// The cluster pair the relationship runs over.
+    pub pair: DrPairId,
+    /// The source volume: the one written to, whose points are uploaded to the store.
+    /// It is `volume` on the source.
+    pub source_volume: VolumeId,
+    /// The target volume: the one the source's points are applied to. It is `volume` on
+    /// the destination.
+    ///
+    /// Absent while it is not known. For now both volumes carry the same uuid, so it
+    /// always is.
+    pub target_volume: Option<VolumeId>,
+    /// Which end of the relationship this volume holds.
+    ///
+    /// # Warning
+    ///
+    /// What this cluster believes, not a fact: the peer holds its own belief, and after a
+    /// forced failover both can claim to be the source. See [`DrVolumeSpec::role`].
+    ///
+    /// [`DrVolumeSpec::role`]: crate::types::v0::store::dr::DrVolumeSpec::role
+    pub role: DrRole,
+    /// How often, and for how long.
+    pub policy: DrPolicy,
+    /// Lifecycle of this entry: `Created` while replication is enabled, `Deleting` once it
+    /// was disabled and the relationship is waiting to be purged.
+    pub status: SpecStatus<()>,
+}
+
+/// Enable replication on a volume, or amend the policy of one already enabled.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub struct EnableDrVolume {
+    /// The volume to protect. It must exist.
+    pub volume: VolumeId,
+    /// The cluster pair to replicate over. It must exist.
+    pub pair: DrPairId,
+    /// Which end of the relationship this volume holds.
+    pub role: DrRole,
+    /// How often, and for how long.
+    pub policy: DrPolicy,
+}
+
+/// Fetch a single dr volume.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub struct GetDrVolume {
+    /// The volume whose entry to fetch.
+    pub volume: VolumeId,
+}
+
+/// Disable replication on a volume.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub struct DisableDrVolume {
+    /// The volume whose entry to remove.
+    pub volume: VolumeId,
+}
+
+/// Every dr volume.
+///
+/// Not a page yet: one per protected volume, which is a number pagination can be added for
+/// when it matters, as it was for volumes.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct DrVolumes {
+    /// The entries.
+    pub entries: Vec<DrVolume>,
 }

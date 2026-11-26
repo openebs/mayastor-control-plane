@@ -163,6 +163,8 @@ pub enum ResourceKind {
     AppNode,
     /// Dr Cluster Pair.
     DrClusterPair,
+    /// Dr Volume.
+    DrVolume,
 }
 
 /// Error type which is returned over the transport for any operation.
