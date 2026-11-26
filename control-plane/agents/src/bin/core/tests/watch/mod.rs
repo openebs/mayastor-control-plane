@@ -75,6 +75,7 @@ async fn callback_server_liveness(uri: &str) {
 }
 
 #[tokio::test]
+#[ignore = "watch callbacks are disabled: see `CALLBACKS_ENABLED`"]
 async fn watch() {
     let cluster = ClusterBuilder::builder().with_pools(1).build().await;
     let cluster = cluster.unwrap();
