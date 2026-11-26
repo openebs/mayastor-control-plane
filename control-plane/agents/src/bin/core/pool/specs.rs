@@ -305,15 +305,7 @@ impl ResourceSpecs {
     fn pool_snap_count(&self, id: &PoolId) -> u64 {
         let mut snapshots = 0u64;
         for snapshot in self.volume_snapshots.values() {
-            let snapshot = snapshot.lock();
-
-            let transactions = snapshot.metadata().transactions();
-            let this_pool = transactions
-                .values()
-                .flatten()
-                .any(|r| r.spec().source_id().pool_id() == id);
-
-            if this_pool {
+            if snapshot.lock().metadata().has_snapshot_on_pool(id) {
                 snapshots += 1;
             }
         }

@@ -31,7 +31,7 @@ use stor_port::{
             volume::{VolumeOperation, VolumeSpec, VolumeTarget},
         },
         transport::{
-            CreateReplicaSnapshot, DestroyReplicaSnapshot, NodeBugFix, NodeId, SnapshotId,
+            CreateReplicaSnapshot, DestroyReplicaSnapshot, NodeBugFix, NodeId, PoolId, SnapshotId,
             SnapshotParameters, SnapshotTxId, VolumeId,
         },
     },
@@ -296,6 +296,57 @@ impl ResourcePruning for OperationGuardArc<VolumeSnapshot> {
 }
 
 impl OperationGuardArc<VolumeSnapshot> {
+    /// Destroy latest replica snapshot of this volume snapshot which resides on the given pool,
+    /// across all transactions.
+    pub(crate) async fn destroy_pool_snapshots(
+        &mut self,
+        registry: &Registry,
+        pool_id: &PoolId,
+    ) -> Result<(), SvcError> {
+        let mut spec_clone = self
+            .start_update(
+                registry,
+                self.as_ref(),
+                VolumeSnapshotOperation::CleanupPoolSnapshots(pool_id.clone()),
+            )
+            .await?;
+
+        // Only the final transaction is handled here, stale (failed) transactions are left to the
+        // reconciler's garbage collection.
+        let txn = spec_clone.metadata().txn_id().clone();
+        let (on_pool, mut keep): (Vec<_>, Vec<_>) = spec_clone
+            .metadata()
+            .replica_snapshots()
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .partition(|r| r.spec().source_id().pool_id() == pool_id);
+        let failed = Self::destroy_transaction_snapshots(registry, &on_pool).await;
+
+        let mut deleted = spec_clone.metadata().deleted_transactions().clone();
+        for mut snapshot in on_pool {
+            if !failed
+                .iter()
+                .any(|f| f.spec().uuid() == snapshot.spec().uuid())
+            {
+                snapshot.set_status_deleted();
+                deleted.entry(txn.clone()).or_default().push(snapshot);
+            }
+        }
+        keep.extend(failed);
+
+        let mut transactions = spec_clone.metadata().transactions().clone();
+        transactions.insert(txn, keep);
+        {
+            let mut spec = self.lock();
+            spec.set_transactions(transactions.clone());
+            spec.set_deleted_transactions(deleted.clone());
+        }
+        spec_clone.set_transactions(transactions);
+        spec_clone.set_deleted_transactions(deleted);
+        self.complete_update(registry, Ok(()), spec_clone).await
+    }
+
     fn snapshot_params(
         &self,
         replicas: &Vec<ChildItem>,
