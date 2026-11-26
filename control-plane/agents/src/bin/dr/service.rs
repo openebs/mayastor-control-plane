@@ -1,4 +1,4 @@
-use crate::store::Store;
+use crate::{bucket::Bucket, store::Store};
 use agents::errors::SvcError;
 use grpc::{
     client::CoreClient,
@@ -29,7 +29,10 @@ use tokio::sync::RwLock;
 /// replicated over them.
 ///
 /// Both are held in memory and written through to the persistent store, and read back
-/// from it at startup. This is a pair of maps rather than the core agent's resource
+/// from it at startup. What the peer needs of them is written to the pair's bucket first:
+/// a pair puts its cluster's `cluster.cfg` there, and enabling a volume its side's
+/// `dr.cfg` and `state.json`. A request the bucket refuses is not persisted, so nothing
+/// this agent answers for is missing from the bucket. This is a pair of maps rather than the core agent's resource
 /// registry: there is no reconciler yet, nothing to lock against a background task, and
 /// no pagination to serve.
 ///
@@ -131,7 +134,26 @@ impl Service {
                 ),
             });
         }
+        // Decided before the bucket is written and again after: the bucket is not written
+        // under the lock, since a store that is slow to answer should not hold up every
+        // other request, and a concurrent put may have moved the pair meanwhile.
+        let spec = Self::pair_spec(req, &*self.pairs.read().await)?;
+        // The bucket first: a pair whose store refuses it is not a pair.
+        Bucket::open(&spec)?.put_cluster(&spec).await?;
         let mut pairs = self.pairs.write().await;
+        let spec = Self::pair_spec(req, &pairs)?;
+        // Written before it is published, so a pair this answers for is one a restart
+        // still knows about.
+        self.store.put(&spec).await?;
+        pairs.insert(spec.id.clone(), spec.clone());
+        Ok(as_transport(spec))
+    }
+
+    /// The pair a create asks for, against the pairs there are.
+    fn pair_spec(
+        req: &CreateDrClusterPair,
+        pairs: &HashMap<DrPairId, DrClusterPairSpec>,
+    ) -> Result<DrClusterPairSpec, SvcError> {
         let spec = match pairs.get(&req.id) {
             // The two names say which relationship this is, so they are not something a
             // put amends: everything already written under the old ones would be orphaned
@@ -162,11 +184,7 @@ impl Service {
                 req.transport.clone(),
             ),
         };
-        // Written before it is published, so a pair this answers for is one a restart
-        // still knows about.
-        self.store.put(&spec).await?;
-        pairs.insert(spec.id.clone(), spec.clone());
-        Ok(as_transport(spec))
+        Ok(spec)
     }
 
     async fn get_pair(&self, req: &GetDrClusterPair) -> Result<DrClusterPair, SvcError> {
@@ -186,6 +204,9 @@ impl Service {
         })
     }
 
+    /// Destroying a pair leaves its `cluster.cfg` in the bucket: it is keyed on the cluster,
+    /// not the pair, and another pair under the same name over the same bucket publishes the
+    /// same one.
     async fn destroy_pair(&self, req: &DestroyDrClusterPair) -> Result<(), SvcError> {
         let mut pairs = self.pairs.write().await;
         // Destroying what is not there is an error, as it is for every other resource -
@@ -211,20 +232,58 @@ impl Service {
     async fn enable_volume(&self, req: &EnableDrVolume) -> Result<DrVolumeEntry, ReplyError> {
         policy(&req.policy)?;
         // Before any lock: core answers for the volume, and a slow answer should not hold
-        // up every other request.
-        self.core
+        // up every other request. Its geometry is what a matching volume is built from.
+        let volumes = self
+            .core
             .volume()
             .get(Filter::Volume(req.volume.clone()), false, None, None)
             .await?;
+        let cluster_size = match volumes.entries.first() {
+            Some(volume) => volume.spec_ref().cluster_size as u64,
+            None => {
+                return Err(SvcError::VolumeNotFound {
+                    vol_id: req.volume.to_string(),
+                }
+                .into())
+            }
+        };
+
+        // Decided before the bucket is written and again after, as for a pair: the
+        // bucket is not written under the locks.
+        let (pair, entry) = {
+            let pairs = self.pairs.read().await;
+            let volumes = self.volumes.read().await;
+            Self::volume_entry(req, &pairs, &volumes)?
+        };
+        // The bucket first, as for a pair: an entry whose side is not published is not
+        // one the peer can find.
+        Bucket::open(&pair)?
+            .put_side(&pair, &entry.spec, cluster_size)
+            .await?;
 
         let pairs = self.pairs.read().await;
-        if !pairs.contains_key(&req.pair) {
+        let mut volumes = self.volumes.write().await;
+        let (_, entry) = Self::volume_entry(req, &pairs, &volumes)?;
+        // Written before it is published, so an entry this answers for is one a restart
+        // still knows about.
+        self.store.put(&entry).await.map_err(SvcError::from)?;
+        volumes.insert(req.volume.clone(), entry.clone());
+        Ok(entry.into())
+    }
+
+    /// The entry an enable asks for, and the pair it is over, against the pairs and the
+    /// entries there are.
+    fn volume_entry(
+        req: &EnableDrVolume,
+        pairs: &HashMap<DrPairId, DrClusterPairSpec>,
+        volumes: &HashMap<VolumeId, DrVolume>,
+    ) -> Result<(DrClusterPairSpec, DrVolume), ReplyError> {
+        let Some(pair) = pairs.get(&req.pair) else {
             return Err(SvcError::DrClusterPairNotFound {
                 id: req.pair.to_string(),
             }
             .into());
-        }
-        let mut volumes = self.volumes.write().await;
+        };
         let asked = DrVolumeSpec::new(req.volume.clone(), req.pair.clone(), req.role, req.policy);
         let entry = match volumes.get(&req.volume) {
             None => DrVolume { spec: asked },
@@ -257,11 +316,7 @@ impl Service {
                 entry
             }
         };
-        // Written before it is published, so an entry this answers for is one a restart
-        // still knows about.
-        self.store.put(&entry).await.map_err(SvcError::from)?;
-        volumes.insert(req.volume.clone(), entry.clone());
-        Ok(entry.into())
+        Ok((pair.clone(), entry))
     }
 
     async fn get_volume(&self, req: &GetDrVolume) -> Result<DrVolumeEntry, SvcError> {

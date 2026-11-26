@@ -230,6 +230,7 @@ dependencies = [
  "clap",
  "crossbeam-queue",
  "deployer-cluster",
+ "dr-store",
  "dyn-clonable",
  "events-api",
  "futures",

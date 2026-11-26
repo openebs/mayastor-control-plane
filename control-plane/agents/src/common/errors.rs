@@ -165,6 +165,12 @@ pub enum SvcError {
     DrVolumeNotFound { vol_id: String },
     #[snafu(display("Invalid dr volume: {error}"))]
     InvalidDrVolume { error: String },
+    #[snafu(display("Dr cluster pair '{pair}' store: {error}"))]
+    DrStore {
+        pair: String,
+        transient: bool,
+        error: String,
+    },
     #[snafu(display("Affinity Group '{vol_grp_id}' not found"))]
     AffinityGroupNotFound { vol_grp_id: String },
     #[snafu(display("Volume '{vol_id}' not published"))]
@@ -561,6 +567,10 @@ impl SvcError {
             Self::InvalidDrClusterPair { .. } => tonic::Code::InvalidArgument,
             Self::DrVolumeNotFound { .. } => tonic::Code::NotFound,
             Self::InvalidDrVolume { .. } => tonic::Code::InvalidArgument,
+            Self::DrStore { transient, .. } => match transient {
+                true => tonic::Code::Unavailable,
+                false => tonic::Code::FailedPrecondition,
+            },
             Self::ReplicaNotFound { .. } => tonic::Code::NotFound,
             Self::PoolNotLoaded { .. } => tonic::Code::FailedPrecondition,
             Self::ChildNotFound { .. } => tonic::Code::NotFound,
@@ -924,6 +934,17 @@ impl From<SvcError> for ReplyError {
             SvcError::InvalidDrVolume { .. } => ReplyError {
                 kind: ReplyErrorKind::InvalidArgument,
                 resource: ResourceKind::DrVolume,
+                source,
+                extra,
+            },
+            // A store that could not answer is worth asking again; one that refused, or
+            // that the pair cannot reach at all, is not until the pair changes.
+            SvcError::DrStore { transient, .. } => ReplyError {
+                kind: match transient {
+                    true => ReplyErrorKind::Unavailable,
+                    false => ReplyErrorKind::FailedPrecondition,
+                },
+                resource: ResourceKind::DrClusterPair,
                 source,
                 extra,
             },

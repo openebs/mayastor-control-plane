@@ -38,6 +38,7 @@ path = "src/bin/dr/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+dr-store = { workspace = true }
 uuid = { workspace = true, features = ["serde", "v4"] }
 chrono = { workspace = true }
 clap = { workspace = true, features = ["color", "derive", "env", "string"] }
