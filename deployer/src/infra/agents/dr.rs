@@ -11,6 +11,33 @@ use std::str::FromStr;
 pub(crate) const CONTAINER: &str = "agent-dr";
 /// Port the dr agent's gRPC server listens on.
 pub(crate) const GRPC_PORT: u16 = 11700;
+/// Where the host's CA bundle is mounted in the dr agent's container.
+const CA_BUNDLE: &str = "/etc/ssl/certs/ca-certificates.crt";
+
+/// The host's CA bundle, wherever this distribution keeps it, with its symlinks resolved
+/// so that the bind is of the file itself.
+///
+/// The dr agent's http client loads the system's roots when it is built, whatever the
+/// scheme of the store it is for, and refuses to be built without any. A container started
+/// from a host binary has none of its own - the agent's image carries `cacert`, which is
+/// what this stands in for.
+fn ca_bundle() -> Option<std::path::PathBuf> {
+    let configured = ["SSL_CERT_FILE", "NIX_SSL_CERT_FILE"]
+        .iter()
+        .filter_map(|var| std::env::var_os(var).map(std::path::PathBuf::from));
+    let known = [
+        "/etc/ssl/certs/ca-certificates.crt",
+        "/etc/pki/tls/certs/ca-bundle.crt",
+        "/etc/ssl/cert.pem",
+    ]
+    .iter()
+    .map(std::path::PathBuf::from);
+    configured.chain(known).find_map(|path| {
+        std::fs::canonicalize(path)
+            .ok()
+            .filter(|path| path.is_file())
+    })
+}
 
 #[async_trait]
 impl ComponentAction for DrAgent {
@@ -45,6 +72,13 @@ impl ComponentAction for DrAgent {
 
         if !options.no_grpc_tls {
             binary = binary.with_arg("--grpc-auto-tls");
+        }
+
+        // Without it the agent cannot open a pair's store at all.
+        if let Some(bundle) = ca_bundle() {
+            binary = binary
+                .with_bind(&bundle.to_string_lossy(), CA_BUNDLE)
+                .with_env("SSL_CERT_FILE", CA_BUNDLE);
         }
 
         if cfg.container_exists("jaeger") {

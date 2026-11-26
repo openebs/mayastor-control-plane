@@ -13,5 +13,5 @@ use dr_store::Store;
 
 #[tokio::test]
 async fn memory() {
-    common::suite(&Store::memory(common::layout())).await;
+    common::suite(&Store::memory()).await;
 }

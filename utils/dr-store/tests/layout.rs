@@ -4,7 +4,7 @@
 //! composed the key the way the code does would agree with any change to it, including
 //! the ones a populated bucket cannot survive.
 
-use dr_store::{cluster_cfg, Checksum, DrStore, Layout, Store};
+use dr_store::{Checksum, DrStore, Layout, Prefix, Store};
 
 const CHECKSUM: &str = "ab12cd34ef567890ab12cd34ef567890ab12cd34ef567890ab12cd34ef567890";
 
@@ -147,15 +147,21 @@ fn chunks_are_addressed_by_content() {
 }
 
 #[test]
-fn reserved_cluster_document() {
+fn outside_any_relationship() {
+    let prefix = Prefix::new("backups");
     assert_eq!(
-        cluster_cfg("backups", "east", "uid-1"),
+        prefix.cluster_cfg("east", "uid-1"),
         "backups/clusters/east/uid-1/cluster.cfg"
     );
     assert_eq!(
-        cluster_cfg("", "east", "uid-1"),
+        Prefix::new("").cluster_cfg("east", "uid-1"),
         "clusters/east/uid-1/cluster.cfg"
     );
+    // Every relationship is under one listing prefix, and each is a layout of the same
+    // prefix.
+    assert_eq!(prefix.relationships(), "backups/dr/");
+    assert_eq!(prefix.relationship("dr-west"), layout());
+    assert!(layout().root().starts_with(&prefix.relationships()));
 }
 
 /// The keys a relationship builds are keys a store accepts, and a side's subtree
@@ -163,7 +169,7 @@ fn reserved_cluster_document() {
 #[tokio::test]
 async fn keys_round_trip_through_a_store() {
     let layout = layout();
-    let store = Store::memory(layout.clone());
+    let store = Store::memory();
     let data = bytes::Bytes::from_static(b"x");
 
     store

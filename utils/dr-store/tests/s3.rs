@@ -12,15 +12,17 @@
 mod common;
 
 use deployer_cluster::{ClusterBuilder, S3Access};
-use dr_store::{DrStore, Error, S3Config, Store};
+use dr_store::{DrStore, Error, S3Config, S3Keys, Store};
 
 fn config(s3: &S3Access) -> S3Config {
     S3Config {
         endpoint: s3.endpoint.clone(),
         region: s3.region.clone(),
         bucket: s3.bucket.clone(),
-        access_key_id: s3.access_key_id.clone(),
-        secret_access_key: s3.secret_access_key.clone(),
+        keys: Some(S3Keys {
+            access_key_id: s3.access_key_id.clone(),
+            secret_access_key: s3.secret_access_key.clone(),
+        }),
     }
 }
 
@@ -38,7 +40,7 @@ async fn s3() {
         .unwrap();
 
     let s3 = cluster.s3();
-    let store = Store::s3(&config(&s3), common::layout()).unwrap();
+    let store = Store::s3(&config(&s3)).unwrap();
 
     common::suite(&store).await;
     denied(&s3).await;
@@ -52,11 +54,14 @@ async fn s3() {
 /// - which builds its own request and so has its own way to get this wrong - agrees.
 async fn denied(s3: &S3Access) {
     let wrong = S3Config {
-        secret_access_key: "not-the-secret".to_string(),
+        keys: Some(S3Keys {
+            access_key_id: s3.access_key_id.clone(),
+            secret_access_key: "not-the-secret".to_string(),
+        }),
         ..config(s3)
     };
-    let store = Store::s3(&wrong, common::layout()).unwrap();
-    let key = store.layout().cfg("east", "uid-1");
+    let store = Store::s3(&wrong).unwrap();
+    let key = common::layout().cfg("east", "uid-1");
     let error = store.get(&key).await.unwrap_err();
     // Refused, and told apart from absent: a caller that confused the two would read a
     // bad credential as an empty relationship.

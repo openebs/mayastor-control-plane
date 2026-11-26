@@ -6,18 +6,31 @@
 //! an in-memory backend, plus the one verb it has no form of - a conditional delete,
 //! which the design requires and which two of the three stores it measured get wrong.
 //!
-//! [`Layout`] is where the keys come from - the one place that knows the shape of a
-//! relationship's subtree, since that is the one thing a populated bucket cannot be
-//! migrated away from. A [`Checksum`] is what names a chunk in them.
+//! [`Prefix`] and [`Layout`] are where the keys come from - the one place that knows the
+//! shape of the bucket and of a relationship's subtree in it, since that is the one thing
+//! a populated bucket cannot be migrated away from. A [`Checksum`] is what names a chunk
+//! in them.
+//!
+//! [`Sides`] publishes and reads what each side says about itself - its [`DrConfig`] and
+//! its [`ClusterState`] - which are the only channel between the two clusters - and
+//! [`Clusters`] what a cluster says about itself when it is paired, its
+//! [`ClusterConfig`].
 
 #![deny(missing_docs)]
 
 mod checksum;
+mod cluster;
 mod error;
 mod layout;
+mod side;
 mod store;
 
 pub use checksum::{Checksum, ChecksumError};
+pub use cluster::{ClusterConfig, Clusters};
 pub use error::{Error, Operation, Result};
-pub use layout::{cluster_cfg, Layout};
-pub use store::{DrStore, S3Config, Store};
+pub use layout::{Layout, Prefix};
+pub use side::{
+    ChunkRef, ClusterState, DrConfig, HashAlgorithm, PitId, Role, Side, Sides, UploadFormat,
+    VERSION,
+};
+pub use store::{DrStore, S3Config, S3Keys, Store};

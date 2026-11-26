@@ -1,3 +1,4 @@
+mod bucket;
 mod service;
 mod store;
 

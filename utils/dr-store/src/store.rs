@@ -1,7 +1,4 @@
-use crate::{
-    error::{Error, Operation, Result},
-    layout::Layout,
-};
+use crate::error::{Error, Operation, Result};
 use bytes::Bytes;
 use futures::StreamExt;
 use object_store::{
@@ -13,29 +10,35 @@ use object_store::{
 use std::sync::Arc;
 
 /// Where the bucket is and who this cluster is to it.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct S3Config {
     /// Endpoint of the s3 api, scheme included.
     pub endpoint: String,
     /// Region the request signature is scoped to. Stores that do not shard by region
     /// still require the signature to name one.
     pub region: String,
-    /// Bucket every key in this relationship lives in.
+    /// Bucket every key lives in.
     pub bucket: String,
+    /// The keys to sign with. Absent means this process's own environment - the
+    /// `AWS_*` variables, a web identity, an instance role - which is the one way to a
+    /// credential that refreshes.
+    pub keys: Option<S3Keys>,
+}
+
+/// A static credential.
+#[derive(Clone)]
+pub struct S3Keys {
     /// The access key id half of the credential.
     pub access_key_id: String,
     /// The secret half. Never logged: see this type's [`std::fmt::Debug`].
     pub secret_access_key: String,
 }
 
-impl std::fmt::Debug for S3Config {
+impl std::fmt::Debug for S3Keys {
     /// Everything but the secret, which must not reach a log even by way of a struct
     /// that happened to be in a span.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("S3Config")
-            .field("endpoint", &self.endpoint)
-            .field("region", &self.region)
-            .field("bucket", &self.bucket)
+        f.debug_struct("S3Keys")
             .field("access_key_id", &self.access_key_id)
             .field("secret_access_key", &"<redacted>")
             .finish()
@@ -52,11 +55,12 @@ impl std::fmt::Debug for S3Config {
 ///
 /// Every verb is idempotent. A key either holds those bytes or it does not, so a retry
 /// of a call whose answer was lost cannot do damage.
+///
+/// It is the bucket, not one relationship in it: a key says where, and the keys come
+/// from [`crate::Prefix`] and [`crate::Layout`]. One store serves every relationship over
+/// a pair, and the documents that belong to the cluster rather than to any of them.
 #[async_trait::async_trait]
 pub trait DrStore: std::fmt::Debug + Send + Sync {
-    /// Where everything in this relationship lives.
-    fn layout(&self) -> &Layout;
-
     /// Read a whole object.
     async fn get(&self, key: &str) -> Result<Bytes>;
 
@@ -69,6 +73,12 @@ pub trait DrStore: std::fmt::Debug + Send + Sync {
 
     /// Every key under a prefix, in the store's own order.
     async fn list(&self, prefix: &str) -> Result<Vec<ObjectMeta>>;
+
+    /// The prefixes one level below a prefix, each with its trailing separator.
+    ///
+    /// A delimited listing: what is below each of them is not walked, so the cost is the
+    /// number of names at that level rather than of everything under it.
+    async fn list_dirs(&self, prefix: &str) -> Result<Vec<String>>;
 
     /// As [`DrStore::list`], resuming after a key, exclusive.
     ///
@@ -127,32 +137,34 @@ pub trait DrStore: std::fmt::Debug + Send + Sync {
     }
 }
 
-/// A relationship's store: the bucket, and where everything in it lives.
+/// A pair's store: the bucket.
 ///
-/// The verbs are `object_store`'s, with this cluster's errors and this relationship's
-/// keys. What it adds is the one verb `object_store` has no form of - see
+/// The verbs are `object_store`'s, with this cluster's errors. What it adds is the one verb `object_store` has no form of - see
 /// [`Store::delete_if_match`].
 #[derive(Clone, Debug)]
 pub struct Store {
     inner: Arc<DynObjectStore>,
-    layout: Layout,
     conditional: Conditional,
 }
 
 impl Store {
     /// A store on a bucket.
-    pub fn s3(config: &S3Config, layout: Layout) -> Result<Self> {
+    pub fn s3(config: &S3Config) -> Result<Self> {
         if config.bucket.is_empty() {
             return Err(Error::Config {
                 reason: "a bucket must be named".to_string(),
             });
         }
-        let s3 = AmazonS3Builder::new()
+        let builder = match &config.keys {
+            Some(keys) => AmazonS3Builder::new()
+                .with_access_key_id(&keys.access_key_id)
+                .with_secret_access_key(&keys.secret_access_key),
+            None => AmazonS3Builder::from_env(),
+        };
+        let s3 = builder
             .with_bucket_name(&config.bucket)
             .with_endpoint(&config.endpoint)
             .with_region(&config.region)
-            .with_access_key_id(&config.access_key_id)
-            .with_secret_access_key(&config.secret_access_key)
             // Reached by host and port rather than by bucket name, which is every store
             // that is not aws, and the deployer's among them.
             .with_virtual_hosted_style_request(false)
@@ -165,7 +177,6 @@ impl Store {
         let conditional = Conditional::signed(config, &s3);
         Ok(Self {
             inner: Arc::new(s3),
-            layout,
             conditional,
         })
     }
@@ -175,11 +186,10 @@ impl Store {
     /// Its conditional delete is emulated rather than evaluated by the store - see
     /// [`Conditional::Emulated`] - so a test of anything that races on one wants a real
     /// store instead.
-    pub fn memory(layout: Layout) -> Self {
+    pub fn memory() -> Self {
         let inner = Arc::new(object_store::memory::InMemory::new());
         Self {
             inner: inner.clone(),
-            layout,
             conditional: Conditional::Emulated(inner),
         }
     }
@@ -187,11 +197,6 @@ impl Store {
 
 #[async_trait::async_trait]
 impl DrStore for Store {
-    /// Where everything in this relationship lives.
-    fn layout(&self) -> &Layout {
-        &self.layout
-    }
-
     /// Read a whole object.
     async fn get(&self, key: &str) -> Result<Bytes> {
         let answer = self
@@ -230,6 +235,20 @@ impl DrStore for Store {
     /// sides. [`Store::list_after`] is what walks a prefix that is not.
     async fn list(&self, prefix: &str) -> Result<Vec<ObjectMeta>> {
         collect(prefix, self.inner.list(Some(&path(prefix)))).await
+    }
+
+    /// The prefixes one level below a prefix, each with its trailing separator.
+    async fn list_dirs(&self, prefix: &str) -> Result<Vec<String>> {
+        let listing = self
+            .inner
+            .list_with_delimiter(Some(&path(prefix)))
+            .await
+            .map_err(|error| Error::from_store(Operation::List, prefix, error))?;
+        Ok(listing
+            .common_prefixes
+            .into_iter()
+            .map(|prefix| format!("{prefix}/"))
+            .collect())
     }
 
     /// As [`Store::list`], resuming after a key.
@@ -409,4 +428,27 @@ impl Signed {
 /// listing prefix is not always a whole path segment.
 fn path(key: &str) -> Path {
     Path::from(key)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A config is logged whole wherever it is in a span, so the secret has to be what
+    /// its debug form leaves out.
+    #[test]
+    fn the_secret_is_not_logged() {
+        let config = S3Config {
+            endpoint: "http://store:9000".to_string(),
+            region: "us-east-1".to_string(),
+            bucket: "dr".to_string(),
+            keys: Some(S3Keys {
+                access_key_id: "access".to_string(),
+                secret_access_key: "hunter2".to_string(),
+            }),
+        };
+        let logged = format!("{config:?}");
+        assert!(logged.contains("access"), "{logged}");
+        assert!(!logged.contains("hunter2"), "{logged}");
+    }
 }

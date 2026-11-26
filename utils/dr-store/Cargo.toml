@@ -7,10 +7,16 @@ edition = "2021"
 [dependencies]
 async-trait = { workspace = true }
 bytes = { workspace = true }
+chrono = { workspace = true }
 futures = { workspace = true }
 snafu = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+uuid = { workspace = true, features = ["serde"] }
+
+# The side documents, which are json in the store.
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 # The s3 backend. Also what the dr poc used, and what carries gcs and azure behind the
 # same trait when they are wanted.

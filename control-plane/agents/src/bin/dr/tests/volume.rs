@@ -1,12 +1,16 @@
 use deployer_cluster::{Cluster, ClusterBuilder};
-use grpc::operations::dr::{client::DrClient, traits::DrOperations};
+use dr_store::{Prefix, Role, Side, Sides};
+use grpc::operations::{
+    dr::{client::DrClient, traits::DrOperations},
+    volume::traits::VolumeOperations,
+};
 use std::time::Duration;
 use stor_port::types::v0::{
     openapi::models,
     store::SpecStatus,
     transport::{
-        DestroyDrClusterPair, DisableDrVolume, DrPolicy, DrRole, EnableDrVolume, GetDrVolume,
-        VolumeId,
+        DestroyDrClusterPair, DisableDrVolume, DrPolicy, DrRole, EnableDrVolume, Filter,
+        GetDrVolume, VolumeId,
     },
 };
 
@@ -84,7 +88,8 @@ async fn dr_volume() {
     // This would usually pair 2 clusters, but we fake it out with a single cluster for
     // easy local testing with the deployer.
     let dr = dr_client(&cluster).await;
-    dr.create_pair(&cluster.dr_pair("dr-west", "east", "west"), None)
+    let pair = dr
+        .create_pair(&cluster.dr_pair("dr-west", "east", "west"), None)
         .await
         .unwrap();
     dr.create_pair(&cluster.dr_pair("dr-north", "east", "west"), None)
@@ -125,6 +130,38 @@ async fn dr_volume() {
     assert_eq!(source.target_volume, Some(id(SOURCE)));
     assert_eq!(source.status, SpecStatus::Created(()));
 
+    // What the peer finds of it is in the bucket, under the relationship and this side:
+    // who this side is, the volume, and its geometry - and a state with nothing done yet.
+    let bucket = super::bucket(&cluster);
+    let layout = Prefix::new("").relationship(SOURCE);
+    let side = Side::new("east", pair.cluster_uid.as_str());
+    let cfg = bucket
+        .get_cfg(&layout, &side)
+        .await
+        .unwrap()
+        .expect("the side's dr.cfg");
+    assert_eq!(cfg.dr.to_string(), SOURCE);
+    assert_eq!(cfg.volume.to_string(), SOURCE);
+    assert_eq!(cfg.peer, "west");
+    assert_eq!(cfg.role, Role::Source);
+    let volumes = cluster
+        .grpc_client()
+        .volume()
+        .get(Filter::Volume(id(SOURCE)), false, None, None)
+        .await
+        .unwrap();
+    let cluster_size = volumes.entries[0].spec_ref().cluster_size;
+    assert_eq!(cfg.cluster_size, cluster_size as u64);
+    assert_eq!(cfg.disabled, None);
+    let state = bucket
+        .get_state(&layout, &side)
+        .await
+        .unwrap()
+        .expect("the side's state.json");
+    assert_eq!(state.volume.to_string(), SOURCE);
+    assert_eq!(state.role, Role::Source);
+    assert_eq!((state.head, &state.last_applied), (None, &None));
+
     // And so on the destination.
     let destination = dr
         .enable_volume(&enable(DESTINATION, DrRole::Destination), None)
@@ -139,6 +176,8 @@ async fn dr_volume() {
     amended.policy = policy(Duration::from_secs(5 * 60));
     let source = dr.enable_volume(&amended, None).await.unwrap();
     assert_eq!(source.policy, amended.policy);
+    // And leaves the side's progress where it was.
+    assert_eq!(bucket.get_state(&layout, &side).await.unwrap(), Some(state));
 
     // Only the policy can be amended: the role and the pair are fixed once enabled.
     // Changing the role is failover or failback, not a re-enable.

@@ -96,6 +96,21 @@ impl fmt::Display for Checksum {
     }
 }
 
+/// As its text, so a document names a chunk the way its key does.
+impl serde::Serialize for Checksum {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+
+/// From its text, refused unless it is one, as a listed key's is.
+impl<'de> serde::Deserialize<'de> for Checksum {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let text = <std::borrow::Cow<'de, str>>::deserialize(deserializer)?;
+        text.parse().map_err(serde::de::Error::custom)
+    }
+}
+
 impl fmt::Debug for Checksum {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Checksum({self})")
