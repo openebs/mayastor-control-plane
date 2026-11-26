@@ -173,6 +173,31 @@ async fn dr_volume() {
     listed.sort_by(|a, b| a.volume.as_str().cmp(b.volume.as_str()));
     assert_eq!(listed, vec![destination, source.clone()]);
 
+    // Rest answers with the same entry, its intervals as humantime.
+    let rest = cluster.rest_v00();
+    let api = rest.disaster_recovery_api();
+    let rested = api.get_dr_volume(&SOURCE.parse().unwrap()).await.unwrap();
+    assert_eq!(rested.dr.to_string(), SOURCE);
+    assert_eq!(rested.policy.schedule, "5m");
+    assert_eq!(rested.status, models::SpecStatus::Created);
+    // And takes a put in the same terms.
+    let body = models::EnableDrVolumeBody::new_all(
+        "dr-west",
+        models::DrRole::Source,
+        models::DrPolicy::new_all(None, "10m", "1d", Some("1h".to_string())),
+    );
+    let rested = api
+        .put_dr_volume(&SOURCE.parse().unwrap(), body.clone())
+        .await
+        .unwrap();
+    assert_eq!(rested.policy.schedule, "10m");
+    assert_eq!(rested.policy.max_lag.as_deref(), Some("1h"));
+    let mut unparsed = body;
+    unparsed.policy.schedule = "often".to_string();
+    api.put_dr_volume(&SOURCE.parse().unwrap(), unparsed)
+        .await
+        .expect_err("on a schedule that is not humantime");
+
     // Disabling marks the entry rather than removing it: the relationship is purged only
     // once both ends have let go of it.
     let disable = DisableDrVolume { volume: id(SOURCE) };

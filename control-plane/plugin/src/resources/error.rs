@@ -46,6 +46,29 @@ pub enum Error {
         id: String,
         source: openapi::tower::client::Error<openapi::models::RestJsonError>,
     },
+    /// Error when listing dr volumes fails.
+    #[snafu(display("Failed to list dr volumes. Error {source}"))]
+    ListDrVolumesError {
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
+    /// Error when get dr volume request fails.
+    #[snafu(display("Failed to get dr volume {id}. Error {source}"))]
+    GetDrVolumeError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
+    /// Error when disabling dr on a volume fails.
+    #[snafu(display("Failed to disable dr on volume {id}. Error {source}"))]
+    DelDrVolumeError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
+    /// Error when enabling dr on a volume fails.
+    #[snafu(display("Failed to enable dr on volume {id}. Error {source}"))]
+    CreateDrVolumeError {
+        id: String,
+        source: openapi::tower::client::Error<openapi::models::RestJsonError>,
+    },
     /// Error when node cordon request fails.
     #[snafu(display("Failed to get node {id}. Error {source}"))]
     NodeCordonError {

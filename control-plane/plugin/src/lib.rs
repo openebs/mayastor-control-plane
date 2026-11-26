@@ -216,6 +216,10 @@ impl ExecuteOperation for GetResources {
             GetResources::DrPair(args) => {
                 dr::DrPair::get(&args.pair_id, args, &cli_args.output).await
             }
+            GetResources::DrVolumes => dr::DrVolumes::list(&cli_args.output).await,
+            GetResources::DrVolume(args) => {
+                dr::DrVolume::get(&args.volume_id, &cli_args.output).await
+            }
             GetResources::BlockDevices(bdargs) => {
                 blockdevice::BlockDevice::get_blockdevices(
                     &bdargs.node_id(),
@@ -366,6 +370,7 @@ impl ExecuteOperation for CreateResources {
     async fn execute(&self, cli_args: &CliArgs) -> PluginResult {
         match self {
             CreateResources::DrPair(args) => dr::DrPair::create(args, &cli_args.output).await,
+            CreateResources::DrVolume(args) => dr::DrVolume::create(args, &cli_args.output).await,
         }
     }
 }
@@ -410,6 +415,10 @@ impl ExecuteOperation for DeleteArgs {
                     }
                     DeleteResources::DrPair(args) => {
                         dr::DrPair::del(&args.pair_id, self.ignore_not_found, &cli_args.output)
+                            .await
+                    }
+                    DeleteResources::DrVolume(args) => {
+                        dr::DrVolume::del(&args.volume_id, self.ignore_not_found, &cli_args.output)
                             .await
                     }
                 }

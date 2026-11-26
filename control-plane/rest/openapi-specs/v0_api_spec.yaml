@@ -2794,6 +2794,108 @@ paths:
           $ref: '#/components/responses/ServerError'
       security:
         - JWT: [ ]
+  /dr/volumes:
+    get:
+      tags:
+        - DisasterRecovery
+      operationId: get_dr_volumes
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DrVolume'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
+  '/dr/volumes/{volume_id}':
+    put:
+      tags:
+        - DisasterRecovery
+      operationId: put_dr_volume
+      description: |-
+        Enable replication on the volume, or amend the policy of one already enabled.
+        Repeating the call is not an error, so an operator reconciling the same desired
+        state converges rather than failing on the second pass. The pair and the role are
+        not amended: they say which relationship this is.
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+      requestBody:
+        description: Terms of the volume's replication.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnableDrVolumeBody'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrVolume'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
+    get:
+      tags:
+        - DisasterRecovery
+      operationId: get_dr_volume
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrVolume'
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
+    delete:
+      tags:
+        - DisasterRecovery
+      operationId: del_dr_volume
+      description: |-
+        Disable replication on the volume. The entry stays, as `Deleting`, until the
+        relationship is purged from the store, which waits on the other end letting go of it
+        too. Repeating the call is not an error.
+      parameters:
+        - in: path
+          name: volume_id
+          required: true
+          schema:
+            $ref: '#/components/schemas/VolumeId'
+      responses:
+        '204':
+          description: OK
+        '4XX':
+          $ref: '#/components/responses/ClientError'
+        '5XX':
+          $ref: '#/components/responses/ServerError'
+      security:
+        - JWT: [ ]
 components:
   securitySchemes:
     JWT:
@@ -2971,6 +3073,105 @@ components:
       required:
         - cluster
         - peer
+    DrRole:
+      description: |-
+        Which end of a relationship a volume holds. Fixed when replication is enabled:
+        moving a volume to the other end is failover or failback, not an edit.
+      type: string
+      enum:
+        - Source
+        - Destination
+    DrPolicy:
+      description: How often a volume is replicated, and for how long its points are kept.
+      type: object
+      properties:
+        autoResync:
+          description: |-
+            Whether a demoted side found to have diverged discards its un-replicated writes
+            rather than waiting for an operator. Destructive, hence off unless stated.
+          type: boolean
+        schedule:
+          description: How often the source takes a recovery point (humantime, not zero).
+          type: string
+          example: 15m
+        ttl:
+          description: How long recovery points are kept (humantime, not zero).
+          type: string
+          example: 24h
+        maxLag:
+          description: |-
+            The lag past which the source stops committing (humantime, not zero). Absent
+            means it never stops.
+          type: string
+          example: 1h
+      required:
+        - schedule
+        - ttl
+    DrVolume:
+      description: |-
+        A volume's part in a dr relationship. One per volume.
+      type: object
+      properties:
+        volume:
+          description: |-
+            This cluster's volume, which this entry protects: the source volume on the
+            source, the target volume on the destination.
+          allOf:
+            - $ref: '#/components/schemas/VolumeId'
+        dr:
+          description: |-
+            The relationship's id, which the store keys everything under: the source
+            volume's uuid when replication was enabled. It never changes: a failover swaps
+            the source and the target, but the id stays.
+          type: string
+          format: uuid
+          example: 4f2e1a90-6b7c-4d8e-9f01-2a3b4c5d6e7f
+        pair:
+          $ref: '#/components/schemas/DrPairId'
+        sourceVolume:
+          description: |-
+            The source volume: the one written to, whose points are uploaded to the store.
+            It is `volume` on the source.
+          allOf:
+            - $ref: '#/components/schemas/VolumeId'
+        targetVolume:
+          description: |-
+            The target volume: the one the source's points are applied to. It is `volume`
+            on the destination. Absent while it is not known.
+          allOf:
+            - $ref: '#/components/schemas/VolumeId'
+        role:
+          $ref: '#/components/schemas/DrRole'
+        policy:
+          $ref: '#/components/schemas/DrPolicy'
+        status:
+          description: |-
+            Lifecycle of the entry: `Created` while replication is enabled, `Deleting` once
+            it was disabled and the relationship is waiting to be purged.
+          allOf:
+            - $ref: '#/components/schemas/SpecStatus'
+      required:
+        - volume
+        - dr
+        - pair
+        - sourceVolume
+        - role
+        - policy
+        - status
+    EnableDrVolumeBody:
+      description: Terms of a volume's replication. The volume and the pair must exist.
+      type: object
+      properties:
+        pair:
+          $ref: '#/components/schemas/DrPairId'
+        role:
+          $ref: '#/components/schemas/DrRole'
+        policy:
+          $ref: '#/components/schemas/DrPolicy'
+      required:
+        - pair
+        - role
+        - policy
     AppNodeId:
       description: App node identifier.
       example: csi-node-1

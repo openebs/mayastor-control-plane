@@ -78,6 +78,8 @@ lazy_static! {
         "BUCKET",
         "PREFIX"
     ];
+    pub static ref DR_VOLUME_HEADERS: Row =
+        row!["ID", "DR", "PAIR", "SOURCE", "TARGET", "ROLE", "SCHEDULE", "TTL", "STATUS"];
     pub static ref REPLICA_TOPOLOGIES_PREFIX: Row = row!["VOLUME-ID"];
     pub static ref REPLICA_TOPOLOGY_HEADERS: Row = row![
         "REPLICA-ID",

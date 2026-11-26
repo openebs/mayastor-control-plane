@@ -1,7 +1,10 @@
 use crate::resources::{
     app_node::{GetAppNodeArgs, GetAppNodesArgs},
     blockdevice::BlockDeviceArgs,
-    dr::{CreateDrPairArgs, DeleteDrPairArgs, GetDrPairArgs, GetDrPairsArgs},
+    dr::{
+        CreateDrPairArgs, CreateDrVolumeArgs, DeleteDrPairArgs, DeleteDrVolumeArgs, GetDrPairArgs,
+        GetDrPairsArgs, GetDrVolumeArgs,
+    },
     node::{DrainNodeArgs, GetNodeArgs, GetNodesArgs},
     pool::{DrainPoolArgs, GetPoolArgs, GetPoolSmartArgs, GetPoolsArgs, GetPoolsSmartArgs},
     snapshot::VolumeSnapshotArgs,
@@ -80,6 +83,10 @@ pub enum GetResources {
     DrPairs(GetDrPairsArgs),
     /// Get the dr cluster pair with the given ID.
     DrPair(GetDrPairArgs),
+    /// Get every volume's dr entry.
+    DrVolumes,
+    /// Get the dr entry of the volume with the given ID.
+    DrVolume(GetDrVolumeArgs),
     /// Get BlockDevices present on the Node. Lists usable devices by default.
     /// Currently, disks having blobstore pools not created by control-plane are also shown as
     /// usable.
@@ -91,6 +98,8 @@ pub enum GetResources {
 pub enum CreateResources {
     /// Create a dr cluster pair, or adopt the one already under this id.
     DrPair(CreateDrPairArgs),
+    /// Enable dr on a volume, or amend the policy of one already enabled.
+    DrVolume(CreateDrVolumeArgs),
 }
 
 /// The types of resources that support the 'scale' operation.
@@ -330,6 +339,9 @@ pub enum DeleteResources {
     VolumeSnapshot(snapshot::DelVolumeSnapshotArgs),
     /// Deletes the specified dr cluster pair resource.
     DrPair(DeleteDrPairArgs),
+    /// Disable dr on a volume. Its entry stays, as Deleting, until the relationship is
+    /// purged from the store.
+    DrVolume(DeleteDrVolumeArgs),
 }
 
 /// Prompt the user with the given question, and collect a y/n answer.
