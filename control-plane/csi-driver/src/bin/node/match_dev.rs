@@ -96,7 +96,13 @@ pub(super) fn match_nvmf_device<'a>(device: &'a Device, key: &str) -> Option<&'a
     require!(key == id_wwn);
     require!(model_id == device.property_value("ID_MODEL"));
 
-    Some(devname)
+    // A stale udev record must not override a different namespace UUID reported by sysfs.
+    let namespace_uuid = |id: &str| uuid::Uuid::try_parse(id.strip_prefix("uuid.")?).ok();
+    let sysfs_uuid = wwid.and_then(|id| id.to_str()).and_then(namespace_uuid);
+    match (sysfs_uuid, namespace_uuid(key)) {
+        (Some(actual), Some(requested)) if actual != requested => None,
+        _ => Some(devname),
+    }
 }
 
 /// Match the device, if it's a nvmef device, but only if it's a valid block device.
