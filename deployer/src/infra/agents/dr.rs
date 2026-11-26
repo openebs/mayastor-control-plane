@@ -11,6 +11,8 @@ use std::str::FromStr;
 pub(crate) const CONTAINER: &str = "agent-dr";
 /// Port the dr agent's gRPC server listens on.
 pub(crate) const GRPC_PORT: u16 = 11700;
+/// Where the named store credentials are mounted in the dr agent's container.
+const CREDENTIALS_DIR: &str = "/var/run/dr/credentials";
 /// Where the host's CA bundle is mounted in the dr agent's container.
 const CA_BUNDLE: &str = "/etc/ssl/certs/ca-certificates.crt";
 
@@ -72,6 +74,12 @@ impl ComponentAction for DrAgent {
 
         if !options.no_grpc_tls {
             binary = binary.with_arg("--grpc-auto-tls");
+        }
+
+        if let Some(dir) = &options.dr_credentials_dir {
+            binary = binary
+                .with_bind(&dir.to_string_lossy(), CREDENTIALS_DIR)
+                .with_args(vec!["--credentials-dir", CREDENTIALS_DIR]);
         }
 
         // Without it the agent cannot open a pair's store at all.

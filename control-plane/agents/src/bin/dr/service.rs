@@ -5,7 +5,7 @@ use grpc::{
     context::Context,
     operations::{dr::traits::DrOperations, volume::traits::VolumeOperations},
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use stor_port::{
     pstor::StorableObjectType,
     transport_api::{ReplyError, ResourceKind},
@@ -43,6 +43,8 @@ pub(crate) struct Service {
     volumes: Arc<RwLock<HashMap<VolumeId, DrVolume>>>,
     store: Store,
     core: CoreClient,
+    /// Where named credentials are mounted, one directory per name.
+    credentials: Option<PathBuf>,
 }
 
 /// A name the store layout and the persistent store key are both built from.
@@ -101,6 +103,7 @@ impl Service {
     pub(crate) fn new(
         store: Store,
         core: CoreClient,
+        credentials: Option<PathBuf>,
         pairs: Vec<DrClusterPairSpec>,
         volumes: Vec<DrVolume>,
     ) -> Self {
@@ -116,6 +119,7 @@ impl Service {
             )),
             store,
             core,
+            credentials,
         }
     }
 
@@ -139,7 +143,9 @@ impl Service {
         // other request, and a concurrent put may have moved the pair meanwhile.
         let spec = Self::pair_spec(req, &*self.pairs.read().await)?;
         // The bucket first: a pair whose store refuses it is not a pair.
-        Bucket::open(&spec)?.put_cluster(&spec).await?;
+        Bucket::open(&spec, self.credentials.as_deref())?
+            .put_cluster(&spec)
+            .await?;
         let mut pairs = self.pairs.write().await;
         let spec = Self::pair_spec(req, &pairs)?;
         // Written before it is published, so a pair this answers for is one a restart
@@ -257,7 +263,7 @@ impl Service {
         };
         // The bucket first, as for a pair: an entry whose side is not published is not
         // one the peer can find.
-        Bucket::open(&pair)?
+        Bucket::open(&pair, self.credentials.as_deref())?
             .put_side(&pair, &entry.spec, cluster_size)
             .await?;
 
@@ -427,11 +433,12 @@ pub(crate) async fn new(
     store: &http::Uri,
     timeout: std::time::Duration,
     core: CoreClient,
+    credentials: Option<PathBuf>,
 ) -> Result<Service, StoreError> {
     let store = Store::new(store, timeout).await?;
     let pairs = store.list(StorableObjectType::DrClusterPairSpec).await?;
     tracing::info!(count = pairs.len(), "Loaded dr cluster pairs");
     let volumes = store.list(StorableObjectType::DrVolume).await?;
     tracing::info!(count = volumes.len(), "Loaded dr volumes");
-    Ok(Service::new(store, core, pairs, volumes))
+    Ok(Service::new(store, core, credentials, pairs, volumes))
 }

@@ -102,6 +102,11 @@ pub struct StartOptions {
     #[clap(long)]
     pub dr: bool,
 
+    /// A host directory of named store credentials, mounted where the dr agent is told to
+    /// find them: one directory per name, as a mounted secret lays them out.
+    #[clap(long, requires = "dr")]
+    pub dr_credentials_dir: Option<std::path::PathBuf>,
+
     /// Use the elasticsearch service.
     #[clap(short, long)]
     pub elastic: bool,
@@ -617,6 +622,11 @@ impl StartOptions {
     #[must_use]
     pub fn with_dr(mut self, dr: bool) -> Self {
         self.dr = dr;
+        self
+    }
+    #[must_use]
+    pub fn with_dr_credentials_dir(mut self, dir: impl Into<std::path::PathBuf>) -> Self {
+        self.dr_credentials_dir = Some(dir.into());
         self
     }
     #[must_use]

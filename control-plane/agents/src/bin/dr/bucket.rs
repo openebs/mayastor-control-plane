@@ -5,7 +5,7 @@ use dr_store::{
     ClusterConfig, ClusterState, Clusters, DrConfig, HashAlgorithm, Prefix, Role, S3Config, S3Keys,
     Side, Sides, Store, UploadFormat, VERSION,
 };
-use std::time::Duration;
+use std::{path::Path, time::Duration};
 use stor_port::types::v0::{
     store::dr::{DrClusterPairSpec, DrVolumeSpec},
     transport::{DrRole, DrS3Credentials, DrTransport},
@@ -22,6 +22,79 @@ const DEFAULT_REGION: &str = "us-east-1";
 /// an answer, not a hang.
 const TIMEOUT: Duration = Duration::from_secs(30);
 
+/// In a named credential's directory: the access key id.
+pub(crate) const ACCESS_KEY: &str = "accessKey";
+/// In a named credential's directory: the secret access key.
+pub(crate) const SECRET_KEY: &str = "secretKey";
+/// In a named credential's directory: the store's CA certificates, PEM. Named as a
+/// Kubernetes tls secret names its CA, so one can be mounted as it is.
+pub(crate) const CA: &str = "ca.crt";
+
+/// What a pair's named credentials resolve to.
+struct Named {
+    keys: Option<S3Keys>,
+    ca: Option<String>,
+}
+
+impl Named {
+    /// `name`, as the directory `credentials` holds it: a Kubernetes secret, mounted.
+    ///
+    /// Each file is one of the secret's keys. The keys are both or neither - neither is the
+    /// agent's own environment, with only a CA from here - and the CA is optional.
+    ///
+    /// Read when the store is opened, so per request: a secret changed under a running
+    /// agent is what it uses next, as far as the mount has caught up with it.
+    fn read(credentials: Option<&Path>, pair: &str, name: &str) -> Result<Self, SvcError> {
+        if name.is_empty() || name.contains('/') || name.starts_with('.') {
+            return Err(SvcError::InvalidDrClusterPair {
+                error: format!(
+                    "pair '{pair}' names credentials '{name}', which is not a single path \
+                     segment, or starts with a '.'"
+                ),
+            });
+        }
+        let refused = |error: String| SvcError::DrStore {
+            pair: pair.to_string(),
+            transient: false,
+            error: format!("credentials '{name}': {error}"),
+        };
+        let Some(credentials) = credentials else {
+            return Err(refused(
+                "this agent has no credentials directory to find them in".to_string(),
+            ));
+        };
+        let dir = credentials.join(name);
+        if !dir.is_dir() {
+            return Err(refused(format!("no directory {}", dir.display())));
+        }
+        let read = |file: &str| -> Result<Option<String>, SvcError> {
+            match std::fs::read_to_string(dir.join(file)) {
+                Ok(content) => Ok(Some(content)),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                Err(error) => Err(refused(format!("reading {file}: {error}"))),
+            }
+        };
+        // A key written to a file usually ends in a newline, and no key has whitespace.
+        let key = |file: &str| Ok::<_, SvcError>(read(file)?.map(|key| key.trim().to_string()));
+        let keys = match (key(ACCESS_KEY)?, key(SECRET_KEY)?) {
+            (Some(access_key_id), Some(secret_access_key)) => Some(S3Keys {
+                access_key_id,
+                secret_access_key,
+            }),
+            (None, None) => None,
+            _ => {
+                return Err(refused(format!(
+                    "{ACCESS_KEY} and {SECRET_KEY} are both or neither"
+                )))
+            }
+        };
+        Ok(Self {
+            keys,
+            ca: read(CA)?,
+        })
+    }
+}
+
 /// A pair's store, and where its keys start.
 ///
 /// Opened per request rather than held: it is a client, not a connection, so building
@@ -34,27 +107,25 @@ pub(crate) struct Bucket {
 }
 
 impl Bucket {
-    /// The store `pair` names.
-    pub(crate) fn open(pair: &DrClusterPairSpec) -> Result<Self, SvcError> {
+    /// The store `pair` names, with its named credentials found under `credentials`.
+    pub(crate) fn open(
+        pair: &DrClusterPairSpec,
+        credentials: Option<&Path>,
+    ) -> Result<Self, SvcError> {
         let DrTransport::S3(s3) = &pair.transport;
-        let keys = match &s3.credentials {
-            Some(DrS3Credentials::Keys(keys)) => Some(S3Keys {
-                access_key_id: keys.access_key.clone(),
-                secret_access_key: keys.secret_key.clone(),
-            }),
-            // Named credentials are resolved against the agent's environment, which is
-            // what mounting them is - and that is not built yet.
+        let (keys, ca) = match &s3.credentials {
+            Some(DrS3Credentials::Keys(keys)) => (
+                Some(S3Keys {
+                    access_key_id: keys.access_key.clone(),
+                    secret_access_key: keys.secret_key.clone(),
+                }),
+                None,
+            ),
             Some(DrS3Credentials::Named(name)) => {
-                return Err(SvcError::InvalidDrClusterPair {
-                    error: format!(
-                        "pair '{}' names credentials '{name}', and named credentials are not \
-                         supported yet; carry the keys, or leave them out to use the agent's \
-                         own",
-                        pair.id
-                    ),
-                })
+                let named = Named::read(credentials, pair.id.as_str(), name)?;
+                (named.keys, named.ca)
             }
-            None => None,
+            None => (None, None),
         };
         let config = S3Config {
             endpoint: s3.endpoint.clone(),
@@ -64,7 +135,7 @@ impl Bucket {
                 .unwrap_or_else(|| DEFAULT_REGION.to_string()),
             bucket: s3.bucket.clone(),
             keys,
-            ca: None,
+            ca,
         };
         let store = Store::s3(&config).map_err(|error| store_error(&pair.id, error))?;
         Ok(Self {
