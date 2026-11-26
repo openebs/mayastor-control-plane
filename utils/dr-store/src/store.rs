@@ -5,12 +5,12 @@ use object_store::{
     aws::{AmazonS3, AmazonS3Builder, AwsAuthorizer, AwsCredential},
     client::{HttpClient, HttpRequestBody},
     path::Path,
-    DynObjectStore, ObjectMeta, ObjectStoreExt, PutPayload, RetryConfig,
+    ClientOptions, DynObjectStore, ObjectMeta, ObjectStoreExt, PutPayload, RetryConfig,
 };
 use std::sync::Arc;
 
 /// Where the bucket is and who this cluster is to it.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct S3Config {
     /// Endpoint of the s3 api, scheme included.
     pub endpoint: String,
@@ -23,6 +23,24 @@ pub struct S3Config {
     /// `AWS_*` variables, a web identity, an instance role - which is the one way to a
     /// credential that refreshes.
     pub keys: Option<S3Keys>,
+    /// The certificates of the CAs the store's own certificate is signed by, PEM, for a
+    /// store whose CA is not one the system trusts - a private one, on premises. Trusted
+    /// in addition to the system's, for this store alone.
+    pub ca: Option<String>,
+}
+
+impl std::fmt::Debug for S3Config {
+    /// Whether there is a CA rather than the PEM itself, which is kilobytes of noise in
+    /// whatever span the config is in.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("S3Config")
+            .field("endpoint", &self.endpoint)
+            .field("region", &self.region)
+            .field("bucket", &self.bucket)
+            .field("keys", &self.keys)
+            .field("ca", &self.ca.is_some())
+            .finish()
+    }
 }
 
 /// A static credential.
@@ -161,7 +179,20 @@ impl Store {
                 .with_secret_access_key(&keys.secret_access_key),
             None => AmazonS3Builder::from_env(),
         };
+        let mut options = ClientOptions::new();
+        if let Some(pem) = &config.ca {
+            let certificates = object_store::Certificate::from_pem_bundle(pem.as_bytes())
+                .map_err(|error| ca_error(error.to_string()))?;
+            if certificates.is_empty() {
+                return Err(ca_error("it holds no PEM certificate".to_string()));
+            }
+            for certificate in certificates {
+                options = options.with_root_certificate(certificate);
+            }
+        }
         let s3 = builder
+            // First: the options are replaced whole, and the calls below set some of them.
+            .with_client_options(options)
             .with_bucket_name(&config.bucket)
             .with_endpoint(&config.endpoint)
             .with_region(&config.region)
@@ -174,7 +205,7 @@ impl Store {
             .map_err(|error| Error::Config {
                 reason: error.to_string(),
             })?;
-        let conditional = Conditional::signed(config, &s3);
+        let conditional = Conditional::signed(config, &s3)?;
         Ok(Self {
             inner: Arc::new(s3),
             conditional,
@@ -288,6 +319,13 @@ impl DrStore for Store {
     }
 }
 
+/// A store's CA that cannot be trusted as given.
+fn ca_error(reason: String) -> Error {
+    Error::Config {
+        reason: format!("the store's CA: {reason}"),
+    }
+}
+
 /// Drain a listing into keys, with this cluster's error on it.
 async fn collect(
     prefix: &str,
@@ -327,15 +365,26 @@ struct Signed {
 }
 
 impl Conditional {
-    fn signed(config: &S3Config, s3: &AmazonS3) -> Self {
+    fn signed(config: &S3Config, s3: &AmazonS3) -> Result<Self> {
         let endpoint = config.endpoint.trim_end_matches('/');
         let bucket = &config.bucket;
-        Self::Signed(Box::new(Signed {
-            client: HttpClient::new(reqwest::Client::new()),
+        // Trusting what the store's own client does, or a store with a private CA would
+        // take every verb but this one.
+        let roots = match &config.ca {
+            Some(pem) => reqwest::Certificate::from_pem_bundle(pem.as_bytes())
+                .map_err(|error| ca_error(error.to_string()))?,
+            None => Vec::new(),
+        };
+        let client = reqwest::Client::builder()
+            .tls_certs_merge(roots)
+            .build()
+            .map_err(|error| ca_error(error.to_string()))?;
+        Ok(Self::Signed(Box::new(Signed {
+            client: HttpClient::new(client),
             credentials: s3.credentials().clone(),
             region: config.region.clone(),
             base: format!("{endpoint}/{bucket}"),
-        }))
+        })))
     }
 
     async fn delete(&self, key: &str, etag: &str) -> Result<()> {
@@ -446,9 +495,37 @@ mod tests {
                 access_key_id: "access".to_string(),
                 secret_access_key: "hunter2".to_string(),
             }),
+            ca: None,
         };
         let logged = format!("{config:?}");
         assert!(logged.contains("access"), "{logged}");
         assert!(!logged.contains("hunter2"), "{logged}");
+    }
+
+    fn config(ca: &str) -> S3Config {
+        S3Config {
+            endpoint: "https://store:9000".to_string(),
+            region: "us-east-1".to_string(),
+            bucket: "dr".to_string(),
+            keys: None,
+            ca: Some(ca.to_string()),
+        }
+    }
+
+    /// A private CA is trusted by both clients the store holds.
+    #[test]
+    fn a_ca_is_taken() {
+        let ca = rcgen::generate_simple_self_signed(vec!["store".to_string()]).unwrap();
+        Store::s3(&config(&ca.cert.pem())).unwrap();
+    }
+
+    /// A CA that cannot be read is refused when the store is opened, not when it is
+    /// first reached.
+    #[test]
+    fn an_unreadable_ca_is_refused() {
+        for ca in ["", "not a certificate"] {
+            let error = Store::s3(&config(ca)).unwrap_err();
+            assert!(matches!(error, Error::Config { .. }), "{error}");
+        }
     }
 }

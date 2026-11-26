@@ -31,3 +31,5 @@ reqwest = { workspace = true }
 # its image and credentials have one definition.
 deployer-cluster = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+# A CA to trust, without one checked in.
+rcgen = { workspace = true }

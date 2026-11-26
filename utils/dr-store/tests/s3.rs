@@ -23,6 +23,7 @@ fn config(s3: &S3Access) -> S3Config {
             access_key_id: s3.access_key_id.clone(),
             secret_access_key: s3.secret_access_key.clone(),
         }),
+        ca: None,
     }
 }
 

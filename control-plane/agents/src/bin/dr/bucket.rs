@@ -64,6 +64,7 @@ impl Bucket {
                 .unwrap_or_else(|| DEFAULT_REGION.to_string()),
             bucket: s3.bucket.clone(),
             keys,
+            ca: None,
         };
         let store = Store::s3(&config).map_err(|error| store_error(&pair.id, error))?;
         Ok(Self {

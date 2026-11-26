@@ -1378,6 +1378,7 @@ dependencies = [
  "futures",
  "http 1.5.0",
  "object_store",
+ "rcgen",
  "reqwest",
  "serde",
  "serde_json",
