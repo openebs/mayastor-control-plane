@@ -62,14 +62,12 @@ impl Registry {
     }
 
     /// Register new NodeSpec for the given `Register` Request
-    pub(super) async fn register_node_spec(&self, request: &Register) {
+    pub(super) async fn register_node_spec(&self, request: &Register) -> Result<(), SvcError> {
         let automatic = self.config().node_registration().automatic();
-        if automatic {
-            let changed = self.specs().register_node(self, request).await;
-            if changed.unwrap_or(true) {
-                self.update_label_version().await.ok();
-            }
+        if automatic && self.specs().register_node(self, request).await? {
+            self.update_label_version().await.ok();
         }
+        Ok(())
     }
 
     /// Verify if all nodes have the rebuild ancestry fix and error out otherwise.

@@ -170,7 +170,7 @@ impl RegistrationOperations for Service {
     async fn register(&self, req: &dyn RegisterInfo) -> Result<(), ReplyError> {
         let register = req.try_into()?;
         let service = self.clone();
-        Context::spawn(async move { service.register(&register).await }).await?;
+        Context::spawn(async move { service.register(&register).await }).await??;
         Ok(())
     }
 
@@ -178,7 +178,7 @@ impl RegistrationOperations for Service {
     async fn deregister(&self, req: &dyn DeregisterInfo) -> Result<(), ReplyError> {
         let deregister = req.into();
         let service = self.clone();
-        Context::spawn(async move { service.deregister(&deregister).await }).await?;
+        Context::spawn(async move { service.deregister(&deregister).await }).await??;
         Ok(())
     }
 }
@@ -253,9 +253,10 @@ impl Service {
 
     /// Register a new node through the register information.
     #[tracing::instrument(level = "trace", skip(self), fields(node.id = %registration.id))]
-    pub(super) async fn register(&self, registration: &Register) {
-        self.registry.register_node_spec(registration).await;
+    pub(super) async fn register(&self, registration: &Register) -> Result<(), SvcError> {
+        let stored = self.registry.register_node_spec(registration).await;
         self.register_state(registration, false).await;
+        stored
     }
 
     /// Attempt to Register a new node state through the register information.
@@ -330,10 +331,11 @@ impl Service {
 
     /// Deregister a node through the deregister information.
     #[tracing::instrument(level = "debug", skip(self), fields(node.id = %node.id))]
-    pub(super) async fn deregister(&self, node: &Deregister) {
+    pub(super) async fn deregister(&self, node: &Deregister) -> Result<(), SvcError> {
         tracing::error!(node.id=%node.id, "Node is deregistering itself");
 
-        if let Err(error) = self.specs().deregister_node(&self.registry, node).await {
+        let stored = self.specs().deregister_node(&self.registry, node).await;
+        if let Err(error) = &stored {
             tracing::error!(node.id=%node.id, %error, "Failed to deregister node with pstor");
         }
 
@@ -345,6 +347,7 @@ impl Service {
             // maybe nodes should also be registered/deregistered via REST?
             node.write().await.set_status(NodeStatus::Offline);
         }
+        stored
     }
 
     /// Get nodes by filter.

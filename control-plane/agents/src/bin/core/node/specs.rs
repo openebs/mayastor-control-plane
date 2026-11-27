@@ -10,12 +10,13 @@ use crate::controller::{
 };
 use agents::errors::{NodeNotFound, SvcError};
 use snafu::OptionExt;
+use std::sync::Arc;
 use stor_port::{
     transport_api::ResourceKind,
     types::v0::{
         store::{
             node::{NodeLabelOp, NodeLabels, NodeOperation, NodeSpec, NodeUnLabelOp},
-            SpecStatus, SpecTransaction,
+            OperationMode, SpecStatus, SpecTransaction,
         },
         transport::{Deregister, NodeBugFix, NodeId, Register},
     },
@@ -28,57 +29,65 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         node: &Register,
     ) -> Result<bool, SvcError> {
-        let (changed, node) = {
-            let mut specs = self.write();
-            match specs.nodes.get(&node.id) {
-                Some(node_spec) => {
-                    let mut node_spec = node_spec.lock();
-                    // todo: add custom PartialEq?
-                    let changed = node_spec.endpoint() != node.grpc_endpoint
-                        || node_spec.node_nqn() != &node.node_nqn
-                        || node_spec.features() != &node.features
-                        || node_spec.bugfixes() != &node.bugfixes
-                        || node_spec.version() != &node.version
-                        || node_spec.transport_caps() != &node.transport_caps
-                        || node_spec.nvmf_target() != &node.nvmf_target
-                        || node_spec.is_shutdown();
-
-                    if changed {
-                        node_spec.set_endpoint(node.grpc_endpoint);
-                        node_spec.set_nqn(node.node_nqn.clone());
-                        node_spec.set_features(node.features.clone());
-                        node_spec.set_bugfixes(node.bugfixes.clone());
-                        node_spec.set_version(node.version.clone());
-                        node_spec.set_transport_caps(node.transport_caps.clone());
-                        node_spec.set_nvmf_target(node.nvmf_target.clone());
-                        node_spec.set_shutdown(false);
-                    }
-
-                    (changed, node_spec.clone())
-                }
-                None => {
-                    let node = NodeSpec::new(
-                        node.id.clone(),
-                        node.grpc_endpoint,
-                        NodeLabels::new(),
-                        None,
-                        node.node_nqn.clone(),
-                        node.features.clone(),
-                        node.bugfixes.clone(),
-                        node.version.clone(),
-                        false,
-                    )
-                    .with_transport_caps(node.transport_caps.clone())
-                    .with_nvmf_target(node.nvmf_target.clone());
-                    specs.nodes.insert(node.clone());
-                    (true, node)
-                }
-            }
+        let _registration = registry.registration_guard(node.id.as_str()).await;
+        // A routine heartbeat does not need to wait for cordon, drain or purge.
+        let unchanged = {
+            let specs = self.read();
+            !specs.unconfirmed_nodes.contains(&node.id)
+                && specs.nodes.get(&node.id).is_some_and(|spec| {
+                    let spec = spec.lock();
+                    spec.endpoint() == node.grpc_endpoint
+                        && spec.node_nqn() == &node.node_nqn
+                        && spec.features() == &node.features
+                        && spec.bugfixes() == &node.bugfixes
+                        && spec.version() == &node.version
+                        && spec.transport_caps() == &node.transport_caps
+                        && spec.nvmf_target() == &node.nvmf_target
+                        && !spec.is_shutdown()
+                })
         };
-        if changed {
-            registry.store_obj(&node).await?;
+        if unchanged {
+            return Ok(false);
         }
-        Ok(changed)
+
+        match self.guarded_node(&node.id).await {
+            Ok(guard) => {
+                let update = |spec: &mut NodeSpec| {
+                    spec.set_endpoint(node.grpc_endpoint);
+                    spec.set_nqn(node.node_nqn.clone());
+                    spec.set_features(node.features.clone());
+                    spec.set_bugfixes(node.bugfixes.clone());
+                    spec.set_version(node.version.clone());
+                    spec.set_transport_caps(node.transport_caps.clone());
+                    spec.set_nvmf_target(node.nvmf_target.clone());
+                    spec.set_shutdown(false);
+                };
+                let mut next = guard.as_ref().clone();
+                update(&mut next);
+                self.store_node_registration(registry, &next).await?;
+                // Runtime resource counts can change independently during the write.
+                update(&mut guard.lock());
+            }
+            Err(SvcError::NodeNotFound { .. }) => {
+                let spec = NodeSpec::new(
+                    node.id.clone(),
+                    node.grpc_endpoint,
+                    NodeLabels::new(),
+                    None,
+                    node.node_nqn.clone(),
+                    node.features.clone(),
+                    node.bugfixes.clone(),
+                    node.version.clone(),
+                    false,
+                )
+                .with_transport_caps(node.transport_caps.clone())
+                .with_nvmf_target(node.nvmf_target.clone());
+                registry.store_obj(&spec).await?;
+                self.write().nodes.insert(spec);
+            }
+            Err(error) => return Err(error),
+        }
+        Ok(true)
     }
 
     /// Deregister the node by marking it as shutdown.
@@ -87,22 +96,34 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         node: &Deregister,
     ) -> Result<(), SvcError> {
-        let node = {
-            let specs = self.write();
-            let Some(node_spec) = specs.nodes.get(&node.id) else {
-                return Ok(());
-            };
-
-            let mut node_spec = node_spec.lock();
-
-            if node_spec.is_shutdown() {
-                return Ok(());
-            }
-            node_spec.set_shutdown(true);
-            node_spec.clone()
+        let _registration = registry.registration_guard(node.id.as_str()).await;
+        let Some(spec) = self.read().nodes.get(&node.id).cloned() else {
+            return Ok(());
         };
+        // The io-engine may only send this once as it exits. Let a drain or purge finish.
+        let guard = spec.shutdown_guard().await;
+        if !self.current_node(&guard)
+            || (guard.as_ref().is_shutdown() && !self.read().unconfirmed_nodes.contains(&node.id))
+        {
+            return Ok(());
+        }
+        let mut next = guard.as_ref().clone();
+        next.set_shutdown(true);
+        self.store_node_registration(registry, &next).await?;
+        guard.lock().set_shutdown(true);
+        Ok(())
+    }
 
-        registry.store_obj(&node).await
+    /// A write can reach etcd even if its response never reaches the caller.
+    async fn store_node_registration(
+        &self,
+        registry: &Registry,
+        spec: &NodeSpec,
+    ) -> Result<(), SvcError> {
+        self.write().unconfirmed_nodes.insert(spec.id().clone());
+        registry.store_obj(spec).await?;
+        self.write().unconfirmed_nodes.remove(spec.id());
+        Ok(())
     }
 
     /// Get node spec by its `NodeId`
@@ -127,7 +148,22 @@ impl ResourceSpecsLocked {
         node_id: &NodeId,
     ) -> Result<OperationGuardArc<NodeSpec>, SvcError> {
         let node = self.node_rsc(node_id)?;
-        node.operation_guard_wait().await
+        let guard = node.operation_guard_wait().await?;
+        // A purge can remove this spec while the caller waits for the guard.
+        if self.current_node(&guard) {
+            Ok(guard)
+        } else {
+            Err(SvcError::NodeNotFound {
+                node_id: node_id.clone(),
+            })
+        }
+    }
+
+    fn current_node(&self, guard: &OperationGuardArc<NodeSpec>) -> bool {
+        self.read()
+            .nodes
+            .get(guard.as_ref().id())
+            .is_some_and(|node| Arc::ptr_eq(node.immutable_ref(), guard.immutable_ref()))
     }
 
     /// Get all locked node specs
@@ -157,7 +193,7 @@ impl ResourceSpecsLocked {
                 continue;
             }
             if let Ok(mut guard) = node.operation_guard() {
-                if !guard.handle_incomplete_ops(registry).await {
+                if self.current_node(&guard) && !guard.handle_incomplete_ops(registry).await {
                     pending_ops = true;
                 }
             }
@@ -185,6 +221,7 @@ impl ResourceSpecsLocked {
     pub(crate) fn remove_node(&self, id: &NodeId) {
         let mut specs = self.write();
         specs.nodes.remove(id);
+        specs.unconfirmed_nodes.remove(id);
     }
 
     /// On replica creation, update the node's replica count.
@@ -243,6 +280,28 @@ impl ResourceSpecsLocked {
 
         let mut node = node.lock();
         node.metadata.runtime.pool_count = node.metadata.runtime.pool_count.saturating_sub(1);
+    }
+}
+
+impl ResourceMutex<NodeSpec> {
+    /// Wait for the same exclusive guard used by drain, including during a long republish.
+    async fn shutdown_guard(&self) -> OperationGuardArc<NodeSpec> {
+        loop {
+            let mut waiter = match self.try_guard_or_register(OperationMode::Exclusive) {
+                Ok(guard) => return guard,
+                Err(waiter) => waiter,
+            };
+            // A waiter ahead of us can be cancelled after it was woken. Recheck in that
+            // case without adding another entry to the FIFO while the guard is held.
+            while tokio::time::timeout(std::time::Duration::from_secs(1), &mut waiter)
+                .await
+                .is_err()
+            {
+                if let Ok(guard) = self.operation_guard() {
+                    return guard;
+                }
+            }
+        }
     }
 }
 

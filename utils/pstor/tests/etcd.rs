@@ -1,5 +1,8 @@
 use composer::{Binary, Builder, ComposeTest, ContainerSpec};
-use pstor::{etcd::Etcd, Store, StoreKv, StoreKvWatcher, WatchEvent, WatchKey, WatchResult};
+use pstor::{
+    etcd::Etcd, ApiVersion, ObjectKey, StorableObject, Store, StoreKv, StoreKvWatcher, StoreObj,
+    WatchEvent, WatchKey, WatchResult,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     io,
@@ -16,6 +19,30 @@ struct TestStruct {
     name: String,
     value: u64,
     msg: String,
+}
+
+struct TestKey(String);
+
+impl ObjectKey for TestKey {
+    type Kind = &'static str;
+
+    fn version(&self) -> ApiVersion {
+        ApiVersion::V0
+    }
+    fn key_type(&self) -> Self::Kind {
+        "TestStruct"
+    }
+    fn key_uuid(&self) -> String {
+        self.0.clone()
+    }
+}
+
+impl StorableObject for TestStruct {
+    type Key = TestKey;
+
+    fn key(&self) -> Self::Key {
+        TestKey(self.name.clone())
+    }
 }
 
 async fn recv_tmo<T>(tmo: Duration, mut rcv: mpsc::Receiver<T>) -> Result<T, String> {
@@ -123,7 +150,41 @@ async fn etcd() {
     put_hdl.await.unwrap();
     del_hdl.await.unwrap();
 
+    test_obj_cas(ETCD_ENDPOINT, &mut store).await;
     test_kv_watcher(test).await.unwrap()
+}
+
+async fn test_obj_cas(endpoint: &str, unleased: &mut Etcd) {
+    let name = format!("cas-{}", std::process::id());
+    let mut leased = Etcd::new_leased([endpoint], name.clone(), Duration::from_secs(60))
+        .await
+        .unwrap();
+    let mut object = TestStruct {
+        name,
+        value: 1,
+        msg: String::new(),
+    };
+    let key = object.key();
+    unleased.put_obj_cas(&object, 0).await.unwrap();
+    let (_, first_rev) = unleased.get_obj::<TestStruct>(&key).await.unwrap();
+    object.value = 2;
+    leased.put_obj_cas(&object, first_rev).await.unwrap();
+    let (committed, current_rev) = unleased.get_obj::<TestStruct>(&key).await.unwrap();
+    assert_eq!(committed, object);
+
+    object.value = 3;
+    assert!(leased.put_obj_cas(&object, first_rev).await.is_err());
+    assert!(unleased.put_obj_cas(&object, first_rev).await.is_err());
+    let mut stale = leased.clone();
+    leased.revoke().await.unwrap();
+    stale
+        .put_obj_cas(&object, current_rev)
+        .await
+        .expect_err("revoked owner must not write even with the current revision");
+    assert_eq!(
+        unleased.get_obj::<TestStruct>(&key).await.unwrap(),
+        (committed, current_rev)
+    );
 }
 
 async fn test_kv_watcher(_test: ComposeTest) -> Result<(), etcd_client::Error> {

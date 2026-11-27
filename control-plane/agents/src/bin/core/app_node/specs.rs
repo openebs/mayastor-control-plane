@@ -3,7 +3,7 @@ use crate::controller::{
     resources::operations_helper::{ResourceSpecs, ResourceSpecsLocked},
 };
 use agents::errors::SvcError;
-use grpc::operations::{app_node::traits::AppNodeRegisterInfo, PaginatedResult, Pagination};
+use grpc::operations::{PaginatedResult, Pagination};
 use stor_port::{
     pstor::ObjectKey,
     types::v0::{
@@ -60,10 +60,12 @@ impl ResourceSpecsLocked {
         specs.app_nodes.get(id).map(|spec| spec.lock().clone())
     }
 
-    /// Remove the app node spec from registry.
-    fn remove_app_node_spec(&self, id: &AppNodeId) {
+    /// An RPC may time out after etcd commits. Only confirmed cache entries can skip a write.
+    fn mark_app_node_write(&self, id: &AppNodeId) {
         let mut specs = self.write();
-        specs.app_nodes.remove(id);
+        if specs.app_nodes.get(id).is_some() {
+            specs.unconfirmed_app_nodes.insert(id.clone());
+        }
     }
 
     /// Create an app node spec for the incoming request from csi instance.
@@ -72,34 +74,34 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         req: &RegisterAppNode,
     ) -> Result<(), SvcError> {
-        let (changed, spec_to_persist) = {
-            let mut specs = self.write();
-            match specs.app_nodes.get(&req.app_node_id()) {
-                Some(app_node_rsc) => {
-                    let mut app_node_spec = app_node_rsc.lock();
-                    let changed = app_node_spec.endpoint != req.grpc_endpoint()
-                        || app_node_spec.labels != req.labels()
-                        || app_node_spec.transport_caps != req.transport_caps;
-
-                    app_node_spec.endpoint = req.grpc_endpoint();
-                    app_node_spec.transport_caps = req.transport_caps.clone();
-                    (changed, app_node_spec.clone())
+        let _registration = registry.registration_guard(req.id.as_str()).await;
+        let labels = {
+            let specs = self.read();
+            if let Some(node) = specs.app_nodes.get(&req.id) {
+                let spec = node.lock();
+                if spec.endpoint == req.endpoint
+                    && spec.labels == req.labels
+                    && spec.transport_caps == req.transport_caps
+                    && !specs.unconfirmed_app_nodes.contains(&req.id)
+                {
+                    return Ok(());
                 }
-                None => {
-                    let app_node = AppNodeSpec::new(
-                        req.app_node_id().clone(),
-                        req.grpc_endpoint(),
-                        req.labels.clone(),
-                        req.transport_caps.clone(),
-                    );
-                    specs.app_nodes.insert(app_node.clone());
-                    (true, app_node)
-                }
+                spec.labels.clone()
+            } else {
+                req.labels.clone()
             }
         };
-        if changed {
-            registry.store_obj(&spec_to_persist).await?;
-        }
+        let spec = AppNodeSpec::new(
+            req.id.clone(),
+            req.endpoint,
+            labels,
+            req.transport_caps.clone(),
+        );
+        self.mark_app_node_write(&req.id);
+        registry.store_obj(&spec).await?;
+        let mut specs = self.write();
+        specs.app_nodes.insert(spec);
+        specs.unconfirmed_app_nodes.remove(&req.id);
         Ok(())
     }
 
@@ -109,10 +111,14 @@ impl ResourceSpecsLocked {
         registry: &Registry,
         req: &DeregisterAppNode,
     ) -> Result<(), SvcError> {
+        let _registration = registry.registration_guard(req.id.as_str()).await;
+        self.mark_app_node_write(&req.id);
         registry
-            .delete_kv(&<DeregisterAppNode as Into<AppNodeSpecKey>>::into(req.clone()).key())
+            .delete_kv(&AppNodeSpecKey::from(&req.id).key())
             .await?;
-        self.remove_app_node_spec(&req.id);
+        let mut specs = self.write();
+        specs.app_nodes.remove(&req.id);
+        specs.unconfirmed_app_nodes.remove(&req.id);
         Ok(())
     }
 }

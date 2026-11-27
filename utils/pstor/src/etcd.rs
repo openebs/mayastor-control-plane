@@ -380,12 +380,19 @@ impl StoreObj for Etcd {
     ) -> Result<(), Error> {
         let key = object.key().key();
         let obj_value = serde_json::to_vec(object).context(SerialiseValue)?;
-        let cmp = Compare::mod_revision(key.to_string(), CompareOp::Equal, expected_mod_rev);
+        let mut compares = vec![Compare::mod_revision(
+            key.to_string(),
+            CompareOp::Equal,
+            expected_mod_rev,
+        )];
+        if let Some((lease_id, lock_key)) = self.lease_lock()? {
+            compares.push(Compare::lease(lock_key, CompareOp::Equal, lease_id));
+        }
         let put = TxnOp::put(key.to_string(), obj_value, None);
         let get = TxnOp::get(key.to_string(), None);
         let resp = self
             .client
-            .txn(Txn::new().when([cmp]).and_then([put]).or_else([get]))
+            .txn(Txn::new().when(compares).and_then([put]).or_else([get]))
             .await
             .context(Put {
                 key: object.key().key(),
@@ -395,7 +402,7 @@ impl StoreObj for Etcd {
             if let TxnOpResponse::Get(g) = &resp.op_responses()[0] {
                 if let Some(kv) = g.kvs().first() {
                     let mod_rev_found = kv.mod_revision();
-                    tracing::error!("Expected mod_rev: {expected_mod_rev}, Found: {mod_rev_found}");
+                    tracing::error!(%key, expected_mod_rev, mod_rev_found, "Etcd CAS comparison failed");
                 }
             }
             return Err(Error::Put {

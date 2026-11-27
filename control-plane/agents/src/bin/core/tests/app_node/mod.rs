@@ -24,6 +24,8 @@ use stor_port::types::v0::{
 async fn app_node_registration() {
     let cluster = ClusterBuilder::builder()
         .with_rest(false)
+        .with_io_engines(0)
+        .with_store_timeout(std::time::Duration::from_secs(1))
         .build()
         .await
         .unwrap();
@@ -51,16 +53,14 @@ async fn app_node_registration() {
         nvme_rdma_module_loaded: true,
         ana_capable: true,
     };
+    let node_2 = RegisterAppNode::new(
+        "csi-node-2".into(),
+        "10.0.0.1:50052".parse().unwrap(),
+        None,
+        Some(node_2_caps.clone()),
+    );
     node_client
-        .register_app_node(
-            &RegisterAppNode {
-                id: "csi-node-2".into(),
-                endpoint: "10.0.0.1:50052".parse().unwrap(),
-                labels: None,
-                transport_caps: Some(node_2_caps.clone()),
-            },
-            None,
-        )
+        .register_app_node(&node_2, None)
         .await
         .expect("Failed to register app node");
 
@@ -95,12 +95,23 @@ async fn app_node_registration() {
     assert_eq!(app_node.id, "csi-node-1".into());
     assert!(app_node.spec.transport_caps.is_none());
 
-    // csi-node-2 should carry back the caps it registered with.
+    let updated = RegisterAppNode {
+        endpoint: "10.0.0.2:50052".parse().unwrap(),
+        ..node_2.clone()
+    };
+    cluster.composer().pause("etcd").await.unwrap();
+    let result = node_client.register_app_node(&updated, None).await;
+    cluster.composer().thaw("etcd").await.unwrap();
+    result.expect_err("registration succeeded while etcd was paused");
+
+    // A failed update must leave the last persisted registration visible.
     let app_node_2 = node_client
         .get(Filter::AppNode("csi-node-2".into()), None)
         .await
         .expect("Failed to get csi-node-2");
+    assert_eq!(app_node_2.spec.endpoint, node_2.endpoint);
     assert_eq!(app_node_2.spec.transport_caps.as_ref(), Some(&node_2_caps));
+    node_client.register_app_node(&updated, None).await.unwrap();
 
     // Now restart core, to check if the app nodes are loaded from the database.
     cluster.restart_core().await;
@@ -116,11 +127,12 @@ async fn app_node_registration() {
         .expect("Failed to list app nodes after core restart with no pagination");
     assert_eq!(app_nodes.entries.len(), 2);
 
-    // Caps survive an etcd round-trip.
+    // The retried endpoint and transport capabilities survive the restart.
     let app_node_2 = node_client
         .get(Filter::AppNode("csi-node-2".into()), None)
         .await
         .expect("Failed to get csi-node-2 after restart");
+    assert_eq!(app_node_2.spec.endpoint, updated.endpoint);
     assert_eq!(app_node_2.spec.transport_caps.as_ref(), Some(&node_2_caps));
 
     // Deregister one app node.
