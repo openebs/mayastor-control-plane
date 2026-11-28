@@ -938,6 +938,8 @@ impl Deref for ResourceSpecsLocked {
 pub(crate) struct ResourceSpecs {
     pub(crate) volumes: ResourceMutexMap<VolumeId, VolumeSpec>,
     pub(crate) nodes: ResourceMutexMap<NodeId, NodeSpec>,
+    /// Cached nodes whose last registration write was not acknowledged.
+    pub(crate) unconfirmed_nodes: HashSet<NodeId>,
     pub(crate) nexuses: ResourceMutexMap<NexusId, NexusSpec>,
     pub(crate) pools: ResourceMutexMap<PoolId, PoolSpec>,
     pub(crate) replicas: ResourceMutexMap<ReplicaId, ReplicaSpec>,
@@ -945,6 +947,8 @@ pub(crate) struct ResourceSpecs {
     /// Top-level volume snapshots.
     pub(crate) volume_snapshots: ResourceMutexMap<SnapshotId, VolumeSnapshot>,
     pub(crate) app_nodes: ResourceMutexMap<AppNodeId, AppNodeSpec>,
+    /// Cached app nodes whose most recent store write has not been acknowledged.
+    pub(crate) unconfirmed_app_nodes: HashSet<AppNodeId>,
 }
 
 impl ResourceSpecsLocked {

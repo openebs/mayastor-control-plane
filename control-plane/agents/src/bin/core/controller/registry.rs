@@ -30,7 +30,7 @@ use std::{
     collections::HashMap,
     future::Future,
     ops::{Deref, DerefMut},
-    sync::Arc,
+    sync::{Arc, Weak},
 };
 use stor_port::{
     pstor::{
@@ -78,6 +78,8 @@ pub(crate) struct RegistryInner<S: Store> {
     nodes: NodesMapLocked,
     /// spec (aka desired state) of the various resources.
     specs: ResourceSpecsLocked,
+    /// Registration can create or remove the spec, so its lock must outlive the map entry.
+    registrations: parking_lot::Mutex<HashMap<String, Weak<Mutex<()>>>>,
     health: Option<VolumeHealthWatcher>,
     /// period to refresh the cache.
     cache_period: std::time::Duration,
@@ -207,6 +209,7 @@ impl Registry {
             inner: Arc::new(RegistryInner {
                 nodes: Default::default(),
                 specs: ResourceSpecsLocked::new(),
+                registrations: Default::default(),
                 health: if no_volume_health {
                     None
                 } else {
@@ -525,13 +528,34 @@ impl Registry {
         self.encrypted_pools_soft_scheduling
     }
 
-    /// Serialized write to the persistent store.
+    /// Serialize registration and deregistration for a node, including its first and last writes.
+    pub(crate) async fn registration_guard(
+        &self,
+        node_id: &str,
+    ) -> tokio::sync::OwnedMutexGuard<()> {
+        let lock = {
+            let mut registrations = self.registrations.lock();
+            if let Some(lock) = registrations.get(node_id).and_then(Weak::upgrade) {
+                lock
+            } else {
+                registrations.retain(|_, lock| lock.strong_count() > 0);
+                let lock = Arc::new(Mutex::new(()));
+                registrations.insert(node_id.to_owned(), Arc::downgrade(&lock));
+                lock
+            }
+        };
+        lock.lock_owned().await
+    }
+
+    /// Clone the client inside the operation timeout and release the mutex before the RPC.
+    async fn store_handle(&self) -> Etcd {
+        self.store.lock().await.clone()
+    }
+
+    /// Write to the persistent store.
     pub(crate) async fn store_obj<O: StorableObject>(&self, object: &O) -> Result<(), SvcError> {
-        let store = self.store.clone();
         match tokio::time::timeout(self.store_timeout, async move {
-            // todo: is it still necessary to sync updates to the store?
-            //  otherwise should make methods immutable
-            let mut store = store.lock().await;
+            let mut store = self.store_handle().await;
             Self::op_with_threshold(async move { store.put_obj(object).await }).await
         })
         .await
@@ -545,15 +569,14 @@ impl Registry {
         }
     }
 
-    /// Serialized write to the persistent store. Compare and Swap with expected value.
+    /// Write to the persistent store. Compare and Swap with expected value.
     pub(crate) async fn store_obj_cas<O: StorableObject>(
         &self,
         object: &O,
         expected_mod_rev: i64,
     ) -> Result<(), SvcError> {
-        let store = self.store.clone();
         match tokio::time::timeout(self.store_timeout, async move {
-            let mut store = store.lock().await;
+            let mut store = self.store_handle().await;
             Self::op_with_threshold(
                 async move { store.put_obj_cas(object, expected_mod_rev).await },
             )
@@ -570,14 +593,13 @@ impl Registry {
         }
     }
 
-    /// Serialized read from the persistent store.
+    /// Read from the persistent store.
     pub(crate) async fn load_obj<O: StorableObject>(
         &self,
         key: &O::Key,
     ) -> Result<(O, i64), SvcError> {
-        let store = self.store.clone();
         match tokio::time::timeout(self.store_timeout, async move {
-            let mut store = store.lock().await;
+            let mut store = self.store_handle().await;
             Self::op_with_threshold(async move { store.get_obj(key).await }).await
         })
         .await
@@ -591,11 +613,10 @@ impl Registry {
         }
     }
 
-    /// Serialized delete to the persistent store.
+    /// Delete from the persistent store.
     pub(crate) async fn delete_kv<K: StoreKey>(&self, key: &K) -> Result<(), SvcError> {
-        let store = self.store.clone();
         match tokio::time::timeout(self.store_timeout, async move {
-            let mut store = store.lock().await;
+            let mut store = self.store_handle().await;
             Self::op_with_threshold(async move { store.delete_kv(key).await }).await
         })
         .await
@@ -616,12 +637,11 @@ impl Registry {
         }
     }
 
-    /// Serialized delete to the persistent store, with a prefix.
+    /// Delete from the persistent store, with a prefix.
     pub(crate) async fn delete_kv_prefix<K: StoreKey>(&self, key: &K) -> Result<(), SvcError> {
-        let store = self.store.clone();
         match tokio::time::timeout(self.store_timeout, async move {
-            let mut store = store.lock().await;
             let key = key.to_string();
+            let mut store = self.store_handle().await;
             Self::op_with_threshold(async move { store.delete_values_prefix(&key).await }).await
         })
         .await
@@ -663,9 +683,8 @@ impl Registry {
 
     /// Check if the persistent store is currently online.
     pub(crate) async fn store_online(&self) -> bool {
-        let store = self.store.clone();
         tokio::time::timeout(self.store_timeout, async move {
-            store.lock().await.online().await
+            self.store_handle().await.online().await
         })
         .await
         .unwrap_or(false)

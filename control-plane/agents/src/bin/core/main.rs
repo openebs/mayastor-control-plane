@@ -10,6 +10,9 @@ pub(crate) mod nexus;
 pub(crate) mod node;
 /// The pool related operations.
 pub(crate) mod pool;
+#[cfg(test)]
+#[path = "tests/registration.rs"]
+mod registration;
 /// The registry which contains all the resources.
 pub(crate) mod registry;
 /// The volume related operations.
@@ -327,7 +330,11 @@ async fn main() -> anyhow::Result<()> {
     server(cli_args).await
 }
 
-async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
+/// Open the store and initialise the registry from the core configuration.
+async fn new_registry(
+    cli_args: CliArgs,
+    grpc_tls: grpc::tls::IoEngineTls,
+) -> anyhow::Result<controller::registry::Registry> {
     stor_port::platform::init_cluster_info_or_panic().await;
     // Offline rebuilds are also bound by `max_rebuilds`, so an offline cap at or
     // above it never binds and the reservation it was set up to make doesn't
@@ -343,10 +350,6 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         }
     }
     let sim_args: Option<SimArgs> = (&cli_args).try_into()?;
-    let grpc_tls = cli_args.grpc_tls()?;
-    let grpc_auto_tls = cli_args.grpc_auto_tls;
-    let grpc_tls_enforced = cli_args.grpc_enforce_tls;
-    let grpc_server_addr = cli_args.grpc_server_addr;
     let registry = controller::registry::Registry::new(
         cli_args.cache_period.into(),
         cli_args.store.clone(),
@@ -378,10 +381,20 @@ async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
         cli_args.offline_rebuild_grace_period.into(),
         cli_args.max_offline_rebuilds,
         cli_args.max_concurrent_pool_drain,
-        grpc::tls::IoEngineTls::new(grpc_tls.clone(), grpc_tls_enforced),
+        grpc_tls,
         cli_args.pool_replica_move_limit,
     )
     .await?;
+    Ok(registry)
+}
+
+async fn server(cli_args: CliArgs) -> anyhow::Result<()> {
+    let grpc_tls = cli_args.grpc_tls()?;
+    let grpc_auto_tls = cli_args.grpc_auto_tls;
+    let grpc_tls_enforced = cli_args.grpc_enforce_tls;
+    let grpc_server_addr = cli_args.grpc_server_addr;
+    let io_engine_tls = grpc::tls::IoEngineTls::new(grpc_tls.clone(), grpc_tls_enforced);
+    let registry = new_registry(cli_args, io_engine_tls).await?;
 
     let service = agents::Service::builder()
         .with_shared_state(
